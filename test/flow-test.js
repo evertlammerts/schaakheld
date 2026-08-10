@@ -150,15 +150,23 @@ ok('game: 6 more plies clean', !crashed && (session.over || session.S.hist.lengt
 /* undo and speurbril on a controlled fresh game: 1. e4 + reply, then undo */
 drainTimers(); /* flush stale timers from the previous game first */
 startGame(1);
+/* speurbril on the start position: nothing is attacked, so no tip is spent */
+var tipsBefore = session.tips;
+useTip();
+ok('tip: nothing attacked keeps the tip and explains', session.tips === tipsBefore &&
+  __els.bubble.innerHTML.indexOf('speurbril') >= 0);
 onCell(20); onCell(52);
 drainTimers();
 var h = session.S.hist.length;
 ok('game: kid to move after reply', session.S.turn === 'w' && h === 2 && !session.over);
 undoMove();
 ok('game: undo removes 2 plies', session.S.hist.length === h - 2);
-var tipsBefore = session.tips;
+/* speurbril with real attacks: e4 and d5 pawns attack each other */
+session.S = parseFEN('6k1/8/8/3p4/4P3/8/8/6K1 w - - 0 1');
+BD.mode = 'move';
+tipsBefore = session.tips;
 useTip();
-ok('game: tip consumed, spy set', session.tips === tipsBefore - 1 && BD.spy.size >= 0);
+ok('tip: consumed with both pawns glowing', session.tips === tipsBefore - 1 && BD.spy.size === 2);
 drainTimers();
 /* blunder guard */
 P.guard = true;
@@ -180,5 +188,16 @@ onKidMove(ra8);
 drainTimers();
 ok('mate: game over, kid wins', session.over === true && P.wins === winsBefore + 1);
 ok('mate: victory modal', __els.modalBox.innerHTML.indexOf('GEWONNEN') >= 0);
+
+/* ---------- reset flow (last: it wipes the profile) ---------- */
+goHome();
+fire(__els.resetBtn, 'click');
+ok('reset: confirm modal shown', __els.modalBox.innerHTML.indexOf('Alles wissen') >= 0);
+fire(__els.rstNo, 'click');
+ok('reset: cancel keeps profile', P.wins > 0 && __els.overlay.classList.contains('hidden'));
+fire(__els.resetBtn, 'click');
+fire(__els.rstGo, 'click');
+ok('reset: profile wiped and name asked again', P.xp === 0 && P.stars === 0 &&
+  P.name === '' && P.wins === 0 && __els.modalBox.innerHTML.indexOf('Hoi! Ik ben Turbo') >= 0);
 
 print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');

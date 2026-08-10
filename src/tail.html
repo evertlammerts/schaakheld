@@ -4,10 +4,11 @@ const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
 /* ---------- profile ---------- */
+const DEFAULT_P = { name: '', xp: 0, sound: true, guard: true, predict: true,
+  wins: 0, stars: 0, streak: 0, best: 0 };
 let P;
 try { P = JSON.parse(localStorage.getItem('schaakheld1')) || {}; } catch (e) { P = {}; }
-P = Object.assign({ name: '', xp: 0, sound: true, guard: true, predict: true,
-  wins: 0, stars: 0, streak: 0, best: 0 }, P);
+P = Object.assign({}, DEFAULT_P, P);
 function saveP() { try { localStorage.setItem('schaakheld1', JSON.stringify(P)); } catch (e) {} }
 
 const LEVELS = [
@@ -733,6 +734,7 @@ function gameActions() {
     { label: '↩ Zet terug', cls: 'plain small', fn: undoMove, id: 'undo' },
     { label: '👀 Speurbril (' + session.tips + ')', cls: 'plain small', fn: useTip, id: 'tip' }
   ]);
+  if (actionBtns.tip) actionBtns.tip.title = 'Laat alle aangevallen stukken even oplichten. Drie keer per potje.';
 }
 
 function kidTurn() {
@@ -919,15 +921,20 @@ function undoMove() {
 
 function useTip() {
   if (!session || session.kind !== 'game' || session.tips <= 0 || BD.mode !== 'move') return;
+  const S = session.S;
+  const spy = new Set([...attackedPieces(S, 'w'), ...attackedPieces(S, 'b')]);
+  if (spy.size === 0) {
+    say('De speurbril laat alle stukken oplichten die aangevallen worden. Maar nu wordt er nog níks aangevallen, alles staat veilig! Je bril blijft op zak. 👓');
+    return;
+  }
   session.tips--;
   if (actionBtns.tip) {
     actionBtns.tip.textContent = '👀 Speurbril (' + session.tips + ')';
     if (session.tips === 0) actionBtns.tip.disabled = true;
   }
-  const S = session.S;
-  BD.spy = new Set([...attackedPieces(S, 'w'), ...attackedPieces(S, 'b')]);
+  BD.spy = spy;
   renderBoard();
-  say('Paarse randjes = die stukken worden aangevallen! Kijk snel! 👀');
+  say('Paarse randjes = die stukken worden aangevallen! Kijk snel, hij werkt maar even! 👀');
   setTimeout(() => { BD.spy.clear(); if (session && session.kind === 'game') renderBoard(); }, 4500);
 }
 
@@ -998,6 +1005,21 @@ document.querySelectorAll('.mode-card').forEach(b => {
   });
 });
 $('backBtn').addEventListener('click', goHome);
+$('resetBtn').addEventListener('click', () => {
+  showModal('<div class="m-emoji">🗑️</div><h2>Alles wissen?</h2>' +
+    '<p>Je naam, je <b>' + P.stars + '</b> sterren en je level gaan dan weg.<br>Weet je het heel zeker?</p>' +
+    '<div class="m-btns"><button class="btn coral" id="rstGo">Ja, wis alles</button>' +
+    '<button class="btn plain" id="rstNo">Nee, bewaren!</button></div>');
+  $('rstNo').addEventListener('click', closeModal);
+  $('rstGo').addEventListener('click', () => {
+    try { localStorage.removeItem('schaakheld1'); } catch (e) {}
+    P = Object.assign({}, DEFAULT_P);
+    saveP();
+    updateHud();
+    closeModal();
+    askName();
+  });
+});
 $('sndBtn').addEventListener('click', () => { P.sound = !P.sound; saveP(); updateHud(); if (P.sound) snd.select(); });
 $('predictSkip').addEventListener('click', () => resolvePredict(null));
 $('tglGuard').addEventListener('click', () => { P.guard = !P.guard; saveP(); updateToggles(); });
