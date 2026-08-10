@@ -107,18 +107,32 @@ ok('best3: auto-reveal after 2 wrong', session.phase === 'review' && session.ear
 /* ---------- game: predict, guard, mate ---------- */
 startGame(2);
 ok('game: started, white to move', session.kind === 'game' && session.S.turn === 'w');
-P.guard = false; P.predict = true;
-/* kid plays e2-e4 via board clicks */
+P.guard = false; P.predict = false;
+/* kid plays e2-e4 via board clicks; no predict, Turbo replies by himself */
 onCell(20); /* e2 */
 ok('game: pawn selected', BD.sel === 20 && BD.dots.has(52));
 onCell(52); /* e4 */
 drainTimers();
-ok('game: predict bar shown', BD.mode === 'predict' && !!session.pending);
-var xpBefore = P.xp;
-resolvePredict(session.pending.from); /* correct prediction */
-drainTimers();
-ok('game: predict bonus +15', P.xp - xpBefore >= 15);
 ok('game: turbo replied', session.S.hist.length === 2 && session.S.turn === 'w');
+/* predict window, driven directly: correct guess pays out */
+var pm = pickMove(session.S, 2);
+askPredict(pm);
+ok('predict: bar shown, timer armed', BD.mode === 'predict' &&
+  !!session.pending && !!session.predictTimer);
+var xpBefore = P.xp;
+resolvePredict(pm.from); /* correct prediction */
+ok('predict: bonus +15', P.xp - xpBefore >= 15);
+ok('predict: bar hidden again', __els.predictBar.classList.contains('hidden'));
+/* predict timeout: no tap needed, the move plays by itself, no bonus */
+var pm2 = pickMove(session.S, 2);
+var hBefore = session.S.hist.length;
+var xpB2 = P.xp;
+askPredict(pm2);
+drainTimers(); /* fires the window timeout -> auto-resolve */
+ok('predict: timeout auto-plays, no bonus', session.S.hist.length === hBefore + 1 && P.xp === xpB2);
+/* double-resolve is harmless */
+resolvePredict(0);
+ok('predict: double resolve is a no-op', session.S.hist.length === hBefore + 1);
 /* several more plies without predict/guard */
 P.predict = false;
 var crashed = false;

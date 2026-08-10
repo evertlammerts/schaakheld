@@ -832,24 +832,36 @@ function turboTurn() {
     if (!session || session.kind !== 'game' || session.over) return;
     const m = pickMove(S, session.level);
     if (!m) { const st = gameStatus(S); if (st.over) endGame(st); return; }
-    if (P.predict && legalMoves(S).length > 3) askPredict(m);
+    if (P.predict && legalMoves(S).length > 3 && Math.random() < 0.35) askPredict(m);
     else doTurboMove(m);
   }, 80);
 }
 
+/* Non-blocking predict window: guessing is optional, Turbo plays by himself
+   when the timer runs out. Tapping a green piece counts as the prediction. */
+const PREDICT_MS = 4000;
 function askPredict(m) {
   session.pending = m;
   BD.mode = 'predict';
   $('predictBar').classList.remove('hidden');
   say('Denk vooruit: wat is Turbo van plan? 🔮');
+  const t = $('predictTimer');
+  t.style.transition = 'none';
+  t.style.width = '100%';
+  void t.offsetWidth;
+  t.style.transition = 'width ' + PREDICT_MS + 'ms linear';
+  t.style.width = '0%';
+  session.predictTimer = setTimeout(() => resolvePredict(null), PREDICT_MS + 100);
 }
 
 function resolvePredict(sq) {
+  if (!session || session.kind !== 'game' || !session.pending) return;
+  clearTimeout(session.predictTimer);
   const m = session.pending;
   session.pending = null;
   BD.mode = 'off';
   $('predictBar').classList.add('hidden');
-  if (sq != null && m) {
+  if (sq != null) {
     if (sq === m.from) {
       addXP(15, 'Goed voorspeld! 🔮');
       snd.star();
