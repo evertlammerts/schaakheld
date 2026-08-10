@@ -121,6 +121,65 @@
     display: flex; gap: 7px; align-items: center;
   }
   .stat-chip b { font-variant-numeric: tabular-nums; }
+  .home-card {
+    background: var(--card); border-radius: 22px; padding: 16px 18px;
+    box-shadow: var(--shadow); margin-top: 14px;
+  }
+  .card-title { font-size: 15px; font-weight: bold; color: var(--ink-soft); margin-bottom: 10px; letter-spacing: .3px; }
+  .card-sub { font-weight: normal; font-size: 12px; }
+
+  .mission {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+    border-radius: 14px; background: var(--cream); margin: 6px 0; font-size: 14.5px;
+  }
+  .mission .m-name { flex: 1; line-height: 1.3; }
+  .mission .m-prog { font-variant-numeric: tabular-nums; color: var(--ink-soft); font-size: 13px; white-space: nowrap; font-weight: bold; }
+  .mission.done { background: var(--leaf-soft); }
+  .mission.done .m-prog { color: var(--leaf-deep); }
+  .mission .m-bar { display: block; height: 6px; background: rgba(23,69,111,.1); border-radius: 99px; overflow: hidden; margin-top: 5px; }
+  .mission .m-bar i { display: block; height: 100%; background: var(--sun); border-radius: 99px; }
+  .mission.done .m-bar i { background: var(--leaf); }
+
+  .level-path { display: flex; align-items: flex-start; }
+  .lp-node {
+    display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1;
+    position: relative; font-size: 11px; color: var(--ink-soft); text-align: center;
+  }
+  .lp-node .lp-g {
+    width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 22px; background: #E4EEF6; position: relative; z-index: 1;
+  }
+  .lp-node::before {
+    content: ''; position: absolute; top: 20px; right: 50%; width: 100%; height: 4px;
+    background: #E4EEF6; z-index: 0;
+  }
+  .lp-node:first-child::before { display: none; }
+  .lp-node.done .lp-g { background: var(--leaf-soft); }
+  .lp-node.done::before, .lp-node.current::before { background: var(--leaf); }
+  .lp-node.current .lp-g { background: var(--sun); box-shadow: 0 3px 0 var(--sun-deep); animation: bob 2s ease-in-out infinite; }
+  .lp-node.locked { opacity: .55; }
+  .lp-node .lp-xp { font-size: 10px; font-variant-numeric: tabular-nums; }
+
+  .theme-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .theme-sw {
+    border: none; cursor: pointer; width: 66px; border-radius: 14px; padding: 7px 4px;
+    background: var(--cream); display: flex; flex-direction: column; align-items: center;
+    gap: 4px; font-size: 11px; color: var(--ink); font-weight: bold;
+  }
+  .theme-sw .sw { width: 46px; height: 30px; border-radius: 8px; box-shadow: inset 0 0 0 2px rgba(23,69,111,.15); }
+  .theme-sw.sel { box-shadow: 0 0 0 3px var(--sun); }
+  .theme-sw.locked { opacity: .45; }
+
+  .badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .badge {
+    background: var(--cream); border-radius: 14px; padding: 10px 12px;
+    display: flex; gap: 10px; align-items: center;
+  }
+  .badge .b-e { font-size: 26px; }
+  .badge .b-n { font-size: 13px; font-weight: bold; }
+  .badge .b-d { font-size: 11.5px; color: var(--ink-soft); line-height: 1.3; }
+  .badge.locked { opacity: .5; filter: grayscale(1); }
+
   .home-foot { margin-top: 26px; text-align: center; }
   .reset-btn {
     border: none; cursor: pointer; background: none;
@@ -468,6 +527,22 @@
         <span class="mc-title">Potje tegen Turbo</span>
         <span class="mc-sub">Een echte partij! Met denk-meter en voorspel-bonus.</span>
       </button>
+    </div>
+    <div class="home-card">
+      <div class="card-title">🎯 Missies van vandaag</div>
+      <div id="missionList"></div>
+    </div>
+    <div class="home-card">
+      <div class="card-title">🗺️ Jouw weg naar Grootmeester</div>
+      <div id="levelPath" class="level-path"></div>
+    </div>
+    <div class="home-card">
+      <div class="card-title">🎨 Bordkleuren <span class="card-sub">(nieuw bord bij elk level!)</span></div>
+      <div id="themeRow" class="theme-row"></div>
+    </div>
+    <div class="home-card">
+      <div class="card-title">🏆 Trofeeënkast</div>
+      <div id="badgeGrid" class="badge-grid"></div>
     </div>
     <div class="stats-row">
       <span class="stat-chip">⭐ Sterren: <b id="statStars">0</b></span>

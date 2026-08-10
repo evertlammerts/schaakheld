@@ -9,6 +9,17 @@ function ok(name, cond) {
 ok('init: name modal open', !__els.overlay.classList.contains('hidden'));
 P.name = 'Testkind'; closeModal();
 
+/* close any queued LEVEL OMHOOG modals so later modal assertions see past them */
+function closeLevelUps() {
+  var guard = 0;
+  while (guard++ < 8 && !__els.overlay.classList.contains('hidden') &&
+    __els.modalBox.innerHTML.indexOf('LEVEL OMHOOG') >= 0) fire(__els.lvlOk, 'click');
+}
+/* mark today's missions done up front so mission XP never skews exact XP checks */
+ensureDay();
+dayMissions().forEach(function (m) { P.day.done[m.id] = true; });
+P.day.allDone = true;
+
 /* ---------- scan drill: 5 perfect rounds ---------- */
 var xp0 = P.xp, stars0 = P.stars;
 startDrill('scan');
@@ -24,9 +35,12 @@ while (session && session.kind === 'scan' && session.round <= 5 && rounds < 10) 
   nextRound();
   drainTimers();
 }
+closeLevelUps();
 ok('scan: summary modal', __els.modalBox.innerHTML.indexOf('Rondje klaar') >= 0);
 ok('scan: 15 stars earned', P.stars - stars0 === 15);
-ok('scan: xp increased 150', P.xp - xp0 === 150);
+ok('scan: xp 150 + streak bonuses 15', P.xp - xp0 === 165);
+ok('scan: perfect rounds counted', P.c.perfectScans === 5);
+ok('badge: vuurpijl bij 5 op een rij', !!P.badges.vlam);
 closeModal();
 
 /* ---------- scan explanations: Oscar's screenshot scenario ---------- */
@@ -184,6 +198,7 @@ useTip();
 ok('tip: consumed with both pawns glowing', session.tips === tipsBefore - 1 && BD.spy.size === 2);
 drainTimers();
 /* blunder guard */
+closeLevelUps();
 P.guard = true;
 session.S = parseFEN('7k/8/8/8/7r/8/8/KQ6 w - - 0 1');
 BD.mode = 'move';
@@ -201,8 +216,44 @@ var winsBefore = P.wins;
 var ra8 = legalMoves(session.S).find(m => m.from === 0 && m.to === 112);
 onKidMove(ra8);
 drainTimers();
+closeLevelUps();
 ok('mate: game over, kid wins', session.over === true && P.wins === winsBefore + 1);
 ok('mate: victory modal', __els.modalBox.innerHTML.indexOf('GEWONNEN') >= 0);
+ok('badge: eerste potje en winnaar', !!P.badges.potje && !!P.badges.winst);
+
+/* ---------- gamification: badges, missions, themes, modal queue ---------- */
+P.c.predictHits = 5;
+checkBadges();
+ok('badge: orakel via teller', !!P.badges.orakel);
+/* fresh day: three missions complete plus the day bonus */
+P.day = { date: 'gisteren' };
+ensureDay();
+ok('missions: nieuwe dag reset', P.day.date === todayStr() && !P.day.allDone &&
+  dayMissions().length === 3);
+var xpM = P.xp;
+['wins', 'stars', 'perfectScans', 'predictHits', 'safeCorrect', 'best3Gold', 'patience']
+  .forEach(function (k) { bumpDay(k, 99); });
+ok('missions: 3 klaar + dagbonus', P.day.allDone === true && P.xp - xpM === 3 * 40 + 50);
+/* themes lock on level */
+var xpSave = P.xp;
+P.xp = 0; P.theme = 'munt';
+pickTheme('oceaan');
+ok('theme: op slot onder level Paard', P.theme === 'munt');
+P.xp = 200;
+pickTheme('oceaan');
+ok('theme: ontgrendeld vanaf Paard', P.theme === 'oceaan');
+P.xp = xpSave;
+/* modal queue keeps order */
+modalQueue = []; modalOpen = false;
+__els.overlay.classList.add('hidden');
+showModal('<p>EEN</p>');
+showModal('<p>TWEE</p>');
+ok('modal queue: eerste zichtbaar, tweede wacht', __els.modalBox.innerHTML.indexOf('EEN') >= 0 &&
+  modalQueue.length === 1);
+closeModal();
+ok('modal queue: tweede komt daarna', __els.modalBox.innerHTML.indexOf('TWEE') >= 0);
+closeModal();
+ok('modal queue: leeg en dicht', modalOpen === false && __els.overlay.classList.contains('hidden'));
 
 /* ---------- reset flow (last: it wipes the profile) ---------- */
 goHome();
@@ -214,5 +265,8 @@ fire(__els.resetBtn, 'click');
 fire(__els.rstGo, 'click');
 ok('reset: profile wiped and name asked again', P.xp === 0 && P.stars === 0 &&
   P.name === '' && P.wins === 0 && __els.modalBox.innerHTML.indexOf('Hoi! Ik ben Turbo') >= 0);
+ok('reset: badges, tellers en dag ook gewist', Object.keys(P.badges).length === 0 &&
+  P.c.gamesPlayed === 0 && P.theme === 'munt' &&
+  P.day && P.day.date === todayStr() && P.day.stars === 0 && !P.day.allDone);
 
 print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');

@@ -29,7 +29,10 @@ function makeEl(id) {
   el.appendChild = c => { el.children.push(c); return c; };
   el.querySelectorAll = () => [];
   el.querySelector = () => null;
-  el.addEventListener = (t, fn) => { (el._ev[t] = el._ev[t] || []).push(fn); };
+  /* keep only the latest handler per type: real DOM nodes are recreated per
+     innerHTML write, the shim caches them, so accumulation is a shim artifact */
+  el.addEventListener = (t, fn) => { el._ev[t] = [fn]; };
+  el.style.setProperty = function () {};
   el.getBoundingClientRect = () => ({ left: 0, top: 0, right: 100, bottom: 20, width: 40, height: 40 });
   el.remove = () => {};
   el.closest = () => makeEl('closest' + (elc++));
@@ -46,6 +49,7 @@ var document = {
   querySelectorAll() { return []; },
   querySelector() { return makeEl('_q' + (elc++)); },
   body: makeEl('body'),
+  documentElement: makeEl('documentElement'),
   addEventListener() {}
 };
 var window = globalThis;
