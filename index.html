@@ -1659,11 +1659,17 @@ function scanCheck() {
   awardRound(stars, msgs[stars]);
 }
 
+/* Kid points from centipawns, consistent with the Puntenwijzer (queen 950 -> 9). */
+function ptsNL(cp) {
+  const n = Math.round(cp / 100 - 0.001);
+  return n + (n === 1 ? ' punt' : ' punten');
+}
+
 /* Explain, per wrongly marked or missed square, WHY - so the kid can learn from it. */
 function scanExplanations(task, bad, missed) {
   const S = session.S, out = [];
   const nm = sq => S.board[sq] ? (NAME_NL[S.board[sq].toLowerCase()] + ' op ' + alg(sq)) : ('veld ' + alg(sq));
-  const pts = cp => { const n = Math.round(cp / 100); return n + (n === 1 ? ' punt' : ' punten'); };
+  const pts = ptsNL;
   if (task.type === 'attacked') {
     for (const sq of missed) {
       const a = findAttacker(S, sq, 'b');
@@ -1820,6 +1826,52 @@ function buildBest3() {
   return true;
 }
 
+/* Why is each option good or bad? Computed on the base position, kid language. */
+function best3Explanations(task) {
+  const S = task.S;
+  const matBase = material(S);
+  /* position with black to move, to ask: was this piece capturable before the move? */
+  const fenBlack = toFEN(S).replace(' w ', ' b ').replace(/ [a-h][36] /, ' - ');
+  const lines = [];
+  task.options.forEach((o, i) => {
+    const isBest = o === task.best;
+    const name = moveNameNL(S, o.m);
+    let hangingBefore = 0;
+    try { hangingBefore = seeSquare(parseFEN(fenBlack), o.m.from); } catch (e) {}
+    makeMove(S, o.m);
+    const st = gameStatus(S);
+    const chk = !st.over && inCheck(S);
+    const after = forcedMaterial(S);
+    let replyName = null, mateThreat = false;
+    if (!st.over) {
+      const rs = rootScores(S, 2);
+      if (rs.length) {
+        replyName = moveNameNL(S, rs[0].m);
+        mateThreat = rs[0].score > 50000;
+      }
+    }
+    unmakeMove(S);
+    const delta = after - matBase;
+    let why;
+    if (st.over && st.result === 'w') why = 'SCHAAKMAT! Meteen gewonnen!';
+    else if (mateThreat) why = 'levensgevaarlijk: daarna kan Turbo je zelfs mat zetten!';
+    else if (delta >= 90) why = 'die levert je ' + ptsNL(delta) + ' op' + (chk ? ' én geeft schaak' : '') + '!';
+    else if (delta <= -90) why = 'Turbo speelt dan ' + replyName + ' en dat kost je ' + ptsNL(-delta) + '.';
+    else if (isBest && hangingBefore >= 90)
+      why = 'die redt je ' + NAME_NL[S.board[o.m.from].toLowerCase()] + ': die stond aangevallen en kon verloren gaan!';
+    else if (isBest && chk) why = 'veilig én je geeft schaak: Turbo moet eerst zijn koning redden.';
+    else if (isBest) why = 'veilig en actief: geen stuk komt in gevaar en je stukken gaan beter staan.';
+    else why = 'niet meteen fout, maar de gouden zet doet meer.';
+    lines.push((isBest ? '🥇 ' : '▫️ ') + 'ABC'[i] + ': ' + name + '. ' + why.charAt(0).toUpperCase() + why.slice(1));
+  });
+  return lines;
+}
+
+function showBest3Explanation(lines) {
+  setTask('<b>Zo zit het:</b><div class="sub">' +
+    lines.map(e => '<div class="expl-line">' + e + '</div>').join('') + '</div>');
+}
+
 function pickOption(i) {
   if (!session || session.phase !== 'choose') return;
   const b = document.querySelector('.opt-btn[data-i="' + i + '"]');
@@ -1843,11 +1895,13 @@ function best3Confirm() {
   if (o === t.best) {
     session.phase = 'review';
     btn.classList.add('right');
+    const lines = best3Explanations(t);
     BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-leaf' }];
     playMove(o.m, () => {
+      showBest3Explanation(lines);
       awardRound(session.tries === 1 ? 3 : 1, session.tries === 1 ?
-        'GOUD! 🥇 Meteen de beste zet gevonden!' :
-        'Ja! Díe is het! Goed doorgedacht! 🎉');
+        'GOUD! 🥇 Meteen de beste zet gevonden! Lees maar waarom die zo goed is. 👇' :
+        'Ja! Díe is het! Goed doorgedacht! Kijk hieronder waarom. 👇');
     });
   } else {
     session.phase = 'busy';
@@ -1873,9 +1927,11 @@ function best3Confirm() {
                 const bi = t.options.indexOf(t.best);
                 const bb = document.querySelector('.opt-btn[data-i="' + bi + '"]');
                 if (bb) bb.classList.add('right');
+                const lines = best3Explanations(t);
                 BD.arrows = [{ from: t.best.m.from, to: t.best.m.to, cls: 'a-leaf' }];
                 playMove(t.best.m, () => {
-                  awardRound(0, 'De beste was: <b>' + bb.textContent.slice(1) + '</b>. Volgende keer heb jij hem! 💪');
+                  showBest3Explanation(lines);
+                  awardRound(0, 'De beste was: <b>' + bb.textContent.slice(1) + '</b>. Hieronder zie je waarom. Volgende keer heb jij hem! 💪');
                 });
               } else {
                 session.phase = 'choose';

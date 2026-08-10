@@ -94,6 +94,8 @@ pickOption(bi);
 best3Confirm();
 drainTimers();
 ok('best3: correct on 2nd try = 1 star', session.earned === 1 && session.phase === 'review');
+ok('best3: explanation shown on correct', __els.taskBox.innerHTML.indexOf('Zo zit het') >= 0 &&
+  __els.taskBox.innerHTML.indexOf('🥇') >= 0);
 /* wrong-wrong -> auto reveal */
 nextRound();
 drainTimers();
@@ -103,6 +105,19 @@ earnedBefore = session.earned;
 pickOption(w1); best3Confirm(); drainTimers();
 pickOption(w2); best3Confirm(); drainTimers();
 ok('best3: auto-reveal after 2 wrong', session.phase === 'review' && session.earned === earnedBefore);
+ok('best3: explanation shown on reveal', __els.taskBox.innerHTML.indexOf('🥇') >= 0);
+/* deterministic explanation content: Qb4?? hangs the queen, Qb2+ is safe with check */
+var eS = parseFEN('7k/8/8/8/7r/8/8/KQ6 w - - 0 1');
+var eMoves = legalMoves(eS);
+var eBad = eMoves.find(function (m) { return m.from === 1 && m.to === 49; });
+var eGood = eMoves.find(function (m) { return m.from === 1 && m.to === 17; });
+var eTask = { S: eS, options: [{ m: eBad, score: 0 }, { m: eGood, score: 0 }], best: null };
+eTask.best = eTask.options[1];
+var eLines = best3Explanations(eTask);
+ok('best3 expl: hanging queen costs 9 points', eLines[0].indexOf('kost je') >= 0 &&
+  eLines[0].indexOf('9 punten') >= 0);
+ok('best3 expl: best line marked gold', eLines[1].indexOf('🥇') === 0);
+ok('best3 expl: board untouched', eS.hist.length === 0 && toFEN(eS) === '7k/8/8/8/7r/8/8/KQ6 w - - 0 1');
 
 /* ---------- game: predict, guard, mate ---------- */
 startGame(2);
