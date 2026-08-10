@@ -30,8 +30,14 @@ ruil wel of niet gunstig is. Onder het bord staat een puntenwijzer
 ## Spelen
 
 Open `index.html` in een browser. Meer is er niet: geen dependencies, geen
-server, geen build-tooling. Voortgang (sterren, levels, instellingen) staat
-in localStorage.
+server, geen build-tooling. Voortgang (sterren, levels, trofeeën,
+instellingen) staat in localStorage.
+
+De site is een PWA: één keer online openen, daarna werkt alles offline
+(vliegtuigstand incluis). Op een iPad of telefoon: "Zet op beginscherm",
+dan opent hij als echte app met het schildpad-icoon. De service worker
+haalt online altijd de nieuwste versie op en valt offline terug op de
+cache.
 
 ## Bouwen en testen
 

@@ -1,3 +1,5 @@
 artifact.html
 .tmp-ui.js
 .DS_Store
+.tmp-sw-shim.js
+.tmp-sw.js

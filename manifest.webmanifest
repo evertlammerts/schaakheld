@@ -1,0 +1,16 @@
+{
+  "name": "SchaakHeld",
+  "short_name": "SchaakHeld",
+  "description": "Vrolijke schaaktrainer met Turbo de Schildpad: leer het bord overzien en vooruitdenken.",
+  "lang": "nl",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#BCE4F6",
+  "theme_color": "#BCE4F6",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512-mask.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

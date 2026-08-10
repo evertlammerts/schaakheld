@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#BCE4F6">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="SchaakHeld">
 <title>SchaakHeld · Train je schaakbrein met Turbo</title>
 <style>
   :root {
@@ -2655,6 +2662,12 @@ renderHome();
 $('homeBubble').textContent = pick(HOME_LINES);
 showScreen('home');
 if (!P.name) askName();
+
+/* PWA: op GitHub Pages cachet de service worker de app voor offline gebruik.
+   In omgevingen zonder sw.js (zoals het Claude-artifact) faalt dit stil. */
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
+}
 </script>
 </body>
 </html>

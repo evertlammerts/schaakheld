@@ -1354,4 +1354,10 @@ renderHome();
 $('homeBubble').textContent = pick(HOME_LINES);
 showScreen('home');
 if (!P.name) askName();
+
+/* PWA: op GitHub Pages cachet de service worker de app voor offline gebruik.
+   In omgevingen zonder sw.js (zoals het Claude-artifact) faalt dit stil. */
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
+}
 </script>

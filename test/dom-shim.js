@@ -53,6 +53,8 @@ var document = {
   addEventListener() {}
 };
 var window = globalThis;
+var navigator = {};
+var location = { protocol: 'file:' };
 var innerWidth = 900, innerHeight = 700;
 var addEventListener = function () {};
 var matchMedia = function () { return { matches: true }; };

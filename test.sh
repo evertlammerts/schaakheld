@@ -16,3 +16,29 @@ fi
 sed '$ s@</script>@@' src/tail.html > .tmp-ui.js
 "$JSC" test/run-flow.js
 rm -f .tmp-ui.js
+
+# PWA-bestanden: manifest parseert, sw.js registreert zijn listeners zonder
+# fouten (onder een mini-shim), en de iconen zijn echte PNG's.
+python3 -c "import json; json.load(open('manifest.webmanifest'))" || { echo "FAIL manifest"; exit 1; }
+[ -f sw.js ] || { echo "FAIL sw.js ontbreekt (draai ./build.sh)"; exit 1; }
+grep -q '__VERSION__' sw.js && { echo "FAIL sw.js versie niet ingevuld"; exit 1; }
+cat > .tmp-sw-shim.js <<'SHIM'
+var self = { addEventListener: function () {}, skipWaiting: function () {},
+  clients: { claim: function () {} }, location: { origin: '' } };
+var caches = { open: function () { return Promise.resolve(); },
+  keys: function () { return Promise.resolve([]); },
+  match: function () { return Promise.resolve(); }, delete: function () {} };
+SHIM
+cat .tmp-sw-shim.js sw.js > .tmp-sw.js
+"$JSC" .tmp-sw.js || { echo "FAIL sw.js"; exit 1; }
+rm -f .tmp-sw-shim.js .tmp-sw.js
+for icon in icon-180.png icon-192.png icon-512.png icon-512-mask.png; do
+  python3 -c "
+import sys, struct, zlib
+d = open('$icon', 'rb').read()
+assert d[:8] == b'\x89PNG\r\n\x1a\n', 'geen PNG'
+w, h = struct.unpack('>II', d[16:24])
+assert w == h and w in (180, 192, 512), 'gekke maat: %dx%d' % (w, h)
+" || { echo "FAIL $icon"; exit 1; }
+done
+echo "PWA-checks ok"

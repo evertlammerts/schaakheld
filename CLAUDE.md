@@ -7,13 +7,20 @@ README.md voor de spelvormen en de opbouw.
 
 ## Bouwen
 
-- `./build.sh` bouwt uit `src/` twee bestanden:
-  - `index.html`: standalone met doctype en viewport (GitHub Pages).
+- `./build.sh` bouwt uit `src/` drie bestanden:
+  - `index.html`: standalone met doctype, viewport en PWA-tags (GitHub
+    Pages).
   - `artifact.html`: kale concat voor het Claude-artifact. De
     artifact-runtime voegt zelf doctype/head/body toe, dus dit bestand mag
     die niet bevatten.
-- Bewerk nooit `index.html` of `artifact.html` direct. Altijd `src/`
-  aanpassen en opnieuw bouwen.
+  - `sw.js`: service worker uit `src/sw.js`. De cacheversie is een hash
+    van `index.html`, dus een vergeten versie-bump bestaat niet. Wel na
+    elke src-wijziging opnieuw bouwen en de gegenereerde bestanden mee
+    committen, anders serveert Pages een oude cacheversie.
+- Bewerk nooit `index.html`, `artifact.html` of `sw.js` direct. Altijd
+  `src/` aanpassen en opnieuw bouwen.
+- App-iconen komen uit `tools/make-icons.py` (pure stdlib, reproduceerbaar);
+  gegenereerde PNG's staan in de repo-root en worden meegecommit.
 
 ## Testen
 
