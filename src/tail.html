@@ -1,0 +1,1015 @@
+/* ============================== UI ============================== */
+const $ = id => document.getElementById(id);
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+/* ---------- profile ---------- */
+let P;
+try { P = JSON.parse(localStorage.getItem('schaakheld1')) || {}; } catch (e) { P = {}; }
+P = Object.assign({ name: '', xp: 0, sound: true, guard: true, predict: true,
+  wins: 0, stars: 0, streak: 0, best: 0 }, P);
+function saveP() { try { localStorage.setItem('schaakheld1', JSON.stringify(P)); } catch (e) {} }
+
+const LEVELS = [
+  { n: 'Pion', g: '♟︎', xp: 0 }, { n: 'Paard', g: '♞︎', xp: 120 }, { n: 'Loper', g: '♝︎', xp: 300 },
+  { n: 'Toren', g: '♜︎', xp: 600 }, { n: 'Dame', g: '♛︎', xp: 1000 }, { n: 'Koning', g: '♚︎', xp: 1600 },
+  { n: 'Grootmeester', g: '🏆', xp: 2400 }
+];
+function levelIdx(xp) { let i = 0; for (let k = 0; k < LEVELS.length; k++) if (xp >= LEVELS[k].xp) i = k; return i; }
+
+function updateHud() {
+  $('xpNum').textContent = P.xp;
+  const li = levelIdx(P.xp), L = LEVELS[li], next = LEVELS[li + 1];
+  $('lvlGlyph').textContent = L.g;
+  $('lvlName').textContent = L.n;
+  $('xpFill').style.width = (next ? (P.xp - L.xp) / (next.xp - L.xp) * 100 : 100) + '%';
+  $('statStars').textContent = P.stars;
+  $('statWins').textContent = P.wins;
+  $('statStreak').textContent = P.best;
+  $('heyName').textContent = P.name || 'kampioen';
+  $('sndBtn').textContent = P.sound ? '🔊' : '🔇';
+}
+
+function floatXP(txt) {
+  const r = $('xpNum').getBoundingClientRect();
+  const d = document.createElement('div');
+  d.className = 'xp-float';
+  d.textContent = txt;
+  d.style.left = Math.max(8, r.left - 60) + 'px';
+  d.style.top = (r.bottom + 8) + 'px';
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 1500);
+}
+
+function addXP(n, label) {
+  const before = levelIdx(P.xp);
+  P.xp += n;
+  saveP();
+  floatXP('+' + n + ' ⭐ ' + (label || ''));
+  updateHud();
+  const after = levelIdx(P.xp);
+  if (after > before) {
+    const L = LEVELS[after];
+    snd.level(); celebrate();
+    showToast('⬆️ Level omhoog: ' + L.g + ' ' + L.n + '!', true);
+  }
+}
+
+/* ---------- sound (tiny WebAudio synth) ---------- */
+let AC = null;
+function ac() {
+  if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+  if (AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function beep(f, dur, type, g, delay) {
+  if (!P.sound) return;
+  try {
+    const a = ac(), t = a.currentTime + (delay || 0);
+    const o = a.createOscillator(), gn = a.createGain();
+    o.type = type || 'triangle';
+    o.frequency.value = f;
+    gn.gain.setValueAtTime(g || 0.09, t);
+    gn.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(gn); gn.connect(a.destination);
+    o.start(t); o.stop(t + dur + 0.03);
+  } catch (e) {}
+}
+const snd = {
+  select() { beep(660, .05, 'triangle', .04); },
+  move() { beep(320, .07, 'triangle', .09); },
+  cap() { beep(250, .07, 'square', .07); beep(175, .1, 'square', .07, .06); },
+  good() { [523, 659, 784].forEach((f, i) => beep(f, .13, 'triangle', .09, i * .09)); },
+  bad() { beep(240, .18, 'sine', .1); beep(196, .24, 'sine', .1, .14); },
+  star() { beep(880, .08, 'triangle', .07); beep(1175, .14, 'triangle', .07, .08); },
+  win() { [523, 659, 784, 1047, 1319].forEach((f, i) => beep(f, .17, 'triangle', .1, i * .12)); },
+  level() { [392, 523, 659, 784].forEach((f, i) => beep(f, .15, 'square', .05, i * .11)); },
+  check() { beep(587, .09, 'square', .08); beep(587, .09, 'square', .08, .13); }
+};
+
+/* ---------- confetti ---------- */
+const fx = $('fx'), fctx = fx.getContext('2d');
+let parts = [], fxRunning = false;
+function sizeFx() { fx.width = innerWidth; fx.height = innerHeight; }
+addEventListener('resize', sizeFx); sizeFx();
+const FX_COLS = ['#FFC53D', '#FF6F59', '#46B466', '#6FC7EE', '#B08CE8', '#FFFDF4'];
+function burst(x, y, n) {
+  if (RM) return;
+  for (let i = 0; i < n; i++) {
+    parts.push({ x, y, vx: (Math.random() - .5) * 10, vy: -Math.random() * 9 - 3,
+      size: 5 + Math.random() * 6, color: pick(FX_COLS),
+      rot: Math.random() * 6.3, vr: (Math.random() - .5) * .3, life: 70 + Math.random() * 40 });
+  }
+  if (!fxRunning) { fxRunning = true; requestAnimationFrame(fxLoop); }
+}
+function fxLoop() {
+  fctx.clearRect(0, 0, fx.width, fx.height);
+  parts = parts.filter(p => p.life > 0 && p.y < fx.height + 30);
+  if (!parts.length) { fxRunning = false; return; }
+  for (const p of parts) {
+    p.vy += .22; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.life--;
+    fctx.save();
+    fctx.translate(p.x, p.y); fctx.rotate(p.rot);
+    fctx.globalAlpha = Math.min(1, p.life / 30);
+    fctx.fillStyle = p.color;
+    fctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * .6);
+    fctx.restore();
+  }
+  requestAnimationFrame(fxLoop);
+}
+function celebrate() {
+  burst(innerWidth * .5, innerHeight * .35, 80);
+  burst(innerWidth * .2, innerHeight * .3, 50);
+  burst(innerWidth * .8, innerHeight * .3, 50);
+}
+function burstCenter() { burst(innerWidth * .5, innerHeight * .4, 45); }
+
+/* ---------- board ---------- */
+const boardEl = $('board'), arrowsEl = $('arrows');
+const cellEls = {};
+(function buildBoard() {
+  for (let rank = 7; rank >= 0; rank--) {
+    for (let file = 0; file < 8; file++) {
+      const sq = rank * 16 + file;
+      const b = document.createElement('button');
+      b.className = 'cell ' + (((rank + file) % 2 === 1) ? 'light' : 'dark');
+      if (file === 0) { const c = document.createElement('span'); c.className = 'coord rank'; c.textContent = rank + 1; b.appendChild(c); }
+      if (rank === 0) { const c = document.createElement('span'); c.className = 'coord file'; c.textContent = 'abcdefgh'[file]; b.appendChild(c); }
+      b.addEventListener('click', () => onCell(sq));
+      boardEl.appendChild(b);
+      cellEls[sq] = b;
+    }
+  }
+})();
+
+const BD = { mode: 'off', sel: null, dots: new Set(), marks: new Set(), last: null,
+  check: null, glow: new Set(), spy: new Set(), result: null, arrows: [] };
+function clearSel() { BD.sel = null; BD.dots.clear(); }
+function clearBD() {
+  BD.mode = 'off'; BD.sel = null; BD.dots.clear(); BD.marks.clear();
+  BD.last = null; BD.check = null; BD.glow.clear(); BD.spy.clear();
+  BD.result = null; BD.arrows = [];
+}
+
+function renderBoard() {
+  const S = session && session.S;
+  for (let sq = 0; sq < 128; sq++) {
+    if (sq & 0x88) continue;
+    const el = cellEls[sq];
+    const rank = sq >> 4, file = sq & 15;
+    let cls = 'cell ' + (((rank + file) % 2 === 1) ? 'light' : 'dark');
+    if (BD.last && (BD.last[0] === sq || BD.last[1] === sq)) cls += ' last';
+    if (BD.sel === sq) cls += ' sel';
+    if (BD.dots.has(sq)) cls += (S && S.board[sq]) ? ' ring' : ' dot';
+    if (BD.marks.has(sq)) cls += ' mark';
+    if (BD.glow.has(sq)) cls += ' hero-pc';
+    if (BD.spy.has(sq)) cls += ' spy';
+    if (BD.result) {
+      if (BD.result.good.has(sq)) cls += ' good';
+      if (BD.result.bad.has(sq)) cls += ' bad';
+      if (BD.result.missed.has(sq)) cls += ' missed';
+    }
+    if (BD.check === sq) cls += ' check';
+    el.className = cls;
+    el.querySelectorAll('.pc').forEach(e => e.remove());
+    const p = S ? S.board[sq] : null;
+    if (p) {
+      const s = document.createElement('span');
+      s.className = 'pc ' + (isWhitePiece(p) ? 'w' : 't');
+      s.textContent = GLYPH[p.toLowerCase()];
+      el.appendChild(s);
+    }
+  }
+  renderArrows();
+}
+
+function renderArrows() {
+  let h = '';
+  for (const a of BD.arrows) {
+    const fxp = (a.from & 15) * 100 + 50, fyp = (7 - (a.from >> 4)) * 100 + 50;
+    const txp = (a.to & 15) * 100 + 50, typ = (7 - (a.to >> 4)) * 100 + 50;
+    const dx = txp - fxp, dy = typ - fyp, len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    const sx = fxp + ux * 24, sy = fyp + uy * 24;
+    const ex = txp - ux * 30, ey = typ - uy * 30;
+    const px = -uy, py = ux;
+    h += '<line class="' + a.cls + '" x1="' + sx + '" y1="' + sy + '" x2="' + ex + '" y2="' + ey + '"></line>';
+    h += '<polygon class="' + a.cls + '" points="' + (txp - ux * 4) + ',' + (typ - uy * 4) + ' ' +
+      (ex + px * 17) + ',' + (ey + py * 17) + ' ' + (ex - px * 17) + ',' + (ey - py * 17) + '"></polygon>';
+  }
+  arrowsEl.innerHTML = h;
+}
+
+function animateMove(m, done) {
+  if (RM) { done(); return; }
+  const fromEl = cellEls[m.from], toEl = cellEls[m.to];
+  const pc = fromEl.querySelector('.pc');
+  if (!pc) { done(); return; }
+  const frame = fromEl.closest('.board-frame');
+  const fr = fromEl.getBoundingClientRect(), tr = toEl.getBoundingClientRect(), br = frame.getBoundingClientRect();
+  const g = document.createElement('span');
+  g.className = 'ghost';
+  g.style.width = fr.width + 'px'; g.style.height = fr.height + 'px';
+  g.style.left = (fr.left - br.left) + 'px'; g.style.top = (fr.top - br.top) + 'px';
+  g.appendChild(pc.cloneNode(true));
+  frame.appendChild(g);
+  pc.style.visibility = 'hidden';
+  requestAnimationFrame(() => {
+    g.style.transform = 'translate(' + (tr.left - fr.left) + 'px,' + (tr.top - fr.top) + 'px)';
+  });
+  setTimeout(() => { g.remove(); done(); }, 245);
+}
+
+/* Animate + apply a move on session.S, update highlights and sound. */
+function playMove(m, cb) {
+  const S = session.S;
+  const wasCap = isCapture(S, m);
+  animateMove(m, () => {
+    if (wasCap) snd.cap(); else snd.move();
+    makeMove(S, m);
+    BD.last = [m.from, m.to];
+    BD.check = inCheck(S) ? S.kings[S.turn] : null;
+    renderBoard();
+    if (cb) cb();
+  });
+}
+
+/* ---------- panel helpers ---------- */
+function say(txt) { $('bubble').innerHTML = txt; }
+function setTask(html) {
+  const t = $('taskBox');
+  if (html == null) { t.classList.add('hidden'); return; }
+  t.innerHTML = html;
+  t.classList.remove('hidden');
+}
+function setOptions(html) {
+  const o = $('optionsBox');
+  if (html == null) { o.classList.add('hidden'); o.innerHTML = ''; return; }
+  o.innerHTML = html;
+  o.classList.remove('hidden');
+}
+const actionBtns = {};
+function setActions(list) {
+  const row = $('actionRow');
+  row.innerHTML = '';
+  for (const k in actionBtns) delete actionBtns[k];
+  for (const a of list) {
+    const b = document.createElement('button');
+    b.className = 'btn ' + (a.cls || 'sun');
+    b.textContent = a.label;
+    b.disabled = !!a.disabled;
+    b.addEventListener('click', a.fn);
+    if (a.id) actionBtns[a.id] = b;
+    row.appendChild(b);
+  }
+}
+function spin(show, txt) {
+  if (txt) $('spinTxt').textContent = txt;
+  $('spin').classList.toggle('hidden', !show);
+}
+function showModal(html) { $('modalBox').innerHTML = html; $('overlay').classList.remove('hidden'); }
+function closeModal() { $('overlay').classList.add('hidden'); }
+function showToast(txt, gold) {
+  const t = $('toast');
+  const n = t.cloneNode(false);
+  n.textContent = txt;
+  n.className = 'toast' + (gold ? ' gold' : '');
+  t.replaceWith(n);
+  setTimeout(() => n.classList.add('hidden'), 1700);
+}
+function showScreen(name) {
+  $('scr-home').classList.toggle('hidden', name !== 'home');
+  $('scr-play').classList.toggle('hidden', name !== 'play');
+}
+
+/* ---------- copy ---------- */
+const HOME_LINES = [
+  'Ik ben Turbo. Ik ben langzaam… en daarom win ik bijna altijd! Eerst kijken, dan denken, dan doen! 🐢',
+  'Wist je dat? Grootmeesters kijken éérst naar het hele bord. Net als schildpadden. 🐢',
+  'Snelle zetten zijn vaak foute zetten. Doe maar lekker rustig aan!',
+  'Vandaag weer wat sterren verdienen? Kies maar een spel!',
+  'Mijn geheim: bij elke zet denk ik "wat kan mijn tegenstander hierna doen?" 🤫'
+];
+const THINK_LINES = [
+  'Neem je tijd… kijk éérst het hele bord rond! 👀',
+  'Stop – kijk – denk – doe! 🐢',
+  'Welke van jouw stukken worden aangevallen? Check het even!',
+  'Wat zou ik hierna willen doen? Denk vooruit!',
+  'Langzaam denken = snel winnen! 🐢',
+  'Zie je een goede zet? Zoek eerst of er een nóg betere is!',
+  'Kijk ook naar de randen van het bord. Daar gebeurt ook wat!'
+];
+const SPIN_LINES = ['Turbo zet de stukken klaar… 🐢', 'Turbo poetst het bord… ✨', 'Turbo verzint een opdracht… 💭'];
+const MODE_TITLES = { scan: '🔍 Speurogen', safe: '🕵️ Valstrik-detector', best3: '🥇 De Beste Zet', game: '🏆 Potje tegen Turbo' };
+
+/* ---------- session ---------- */
+let session = null;
+
+function goHome() {
+  session = null;
+  clearBD();
+  closeModal();
+  spin(false);
+  $('predictBar').classList.add('hidden');
+  $('patience').classList.add('hidden');
+  stopPatience();
+  showScreen('home');
+  $('homeBubble').textContent = pick(HOME_LINES);
+  updateHud();
+}
+
+/* ---------- drills ---------- */
+function startDrill(kind) {
+  session = { kind, S: null, round: 0, earned: 0, task: null, phase: 'idle', lastType: null };
+  showScreen('play');
+  $('modeTitle').textContent = MODE_TITLES[kind];
+  $('gameInfo').classList.add('hidden');
+  $('patience').classList.add('hidden');
+  $('predictBar').classList.add('hidden');
+  $('drillStars').classList.remove('hidden');
+  setTask(null); setOptions(null);
+  updateDrillStars();
+  nextRound();
+}
+
+function updateDrillStars() {
+  if (!session || session.kind === 'game') return;
+  $('drillStars').innerHTML = '⭐ Sterren dit rondje: <b>' + session.earned + '</b>' +
+    (P.streak >= 2 ? ' &nbsp;·&nbsp; 🔥 <b>' + P.streak + '</b> op een rij!' : '');
+}
+
+function nextRound() {
+  if (!session || session.kind === 'game') return;
+  clearBD();
+  session.S = null;
+  renderBoard();
+  setOptions(null);
+  session.round++;
+  if (session.round > 5) { drillSummary(); return; }
+  $('roundChip').textContent = 'Opdracht ' + session.round + ' van 5';
+  setActions([]);
+  spin(true, pick(SPIN_LINES));
+  setTimeout(() => {
+    if (!session || session.kind === 'game') { spin(false); return; }
+    let ok = false;
+    try { ok = buildRound(); } catch (e) { ok = false; }
+    spin(false);
+    if (!ok) {
+      say('Oeps, dat lukte even niet. Nog een keer proberen!');
+      session.round--;
+      setActions([{ label: 'Opnieuw 🔁', cls: 'sun', fn: nextRound }]);
+    }
+  }, 60);
+}
+
+function buildRound() {
+  const kind = session.kind;
+  if (kind === 'scan') return buildScan();
+  if (kind === 'safe') return buildSafe();
+  if (kind === 'best3') return buildBest3();
+  return false;
+}
+
+/* --- scan drill --- */
+const SCAN_TYPES = ['attacked', 'capture', 'mobility', 'free'];
+function buildScan() {
+  let type = pick(SCAN_TYPES);
+  if (type === session.lastType) type = pick(SCAN_TYPES);
+  session.lastType = type;
+  const task = genScanTask(type);
+  if (!task) return false;
+  session.task = task;
+  session.S = task.S;
+  session.phase = 'marking';
+  BD.mode = 'mark';
+  if (type === 'mobility') BD.glow.add(task.extra);
+  renderBoard();
+  let main, sub;
+  if (type === 'attacked') {
+    main = 'Tik al jóuw witte stukken aan die Turbo aanvalt!';
+    sub = 'Een stuk is aangevallen als een groen stuk het zou kunnen slaan. Kijk bij élk wit stuk!';
+  } else if (type === 'capture') {
+    main = 'Tik alle gróene stukken aan die jij nu kunt slaan!';
+    sub = 'Kijk bij al je witte stukken: wat kunnen ze pakken?';
+  } else if (type === 'mobility') {
+    main = 'Waar kan jouw ' + NAME_NL[task.S.board[task.extra].toLowerCase()] + ' op ' +
+      alg(task.extra) + ' allemaal naartoe? Tik álle velden aan!';
+    sub = 'Het glimmende stuk. Vergeet de verre velden niet!';
+  } else {
+    main = 'Welk groen stuk kun je met WINST slaan? Tik het aan!';
+    sub = 'Helemaal gratis is het mooiste! Maar een goede ruil telt ook: dan win jij méér punten dan Turbo terugpakt. Soms zijn er twee!';
+  }
+  setTask('<b>' + main + '</b><div class="sub">' + sub + '</div>');
+  say(pick(['Speuren maar! Neem rustig de tijd. 🔍', 'Kijk het héle bord rond, hoekje voor hoekje!', 'Echte speurneuzen missen niks! 👀']));
+  setActions([{ label: 'Klaar! ✔', cls: 'leaf', fn: scanCheck }]);
+  return true;
+}
+
+function scanCheck() {
+  if (!session || session.phase !== 'marking') return;
+  session.phase = 'review';
+  BD.mode = 'off';
+  const T = new Set(session.task.targets);
+  const good = new Set(), bad = new Set(), missed = new Set();
+  for (const sq of BD.marks) (T.has(sq) ? good : bad).add(sq);
+  for (const sq of T) if (!BD.marks.has(sq)) missed.add(sq);
+  BD.marks.clear();
+  BD.result = { good, bad, missed };
+  renderBoard();
+  const errs = bad.size + missed.size;
+  const stars = errs === 0 ? 3 : (errs === 1 ? 2 : (good.size >= Math.ceil(T.size / 2) ? 1 : 0));
+  const msgs = {
+    3: 'PERFECT gespeurd! Alles gevonden! 🎉',
+    2: 'Bijna perfect! Eéntje fout. Turbo legt het uit! 👇',
+    1: 'Goed geprobeerd! Turbo legt uit wat je miste. 👇',
+    0: 'Geen zorgen, zo leer je het! Turbo legt alles uit. 👇'
+  };
+  const expl = scanExplanations(session.task, bad, missed);
+  if (expl.length) {
+    setTask('<b>Zo zit het:</b><div class="sub">' +
+      expl.map(e => '<div class="expl-line">' + e + '</div>').join('') + '</div>');
+  }
+  awardRound(stars, msgs[stars]);
+}
+
+/* Explain, per wrongly marked or missed square, WHY - so the kid can learn from it. */
+function scanExplanations(task, bad, missed) {
+  const S = session.S, out = [];
+  const nm = sq => S.board[sq] ? (NAME_NL[S.board[sq].toLowerCase()] + ' op ' + alg(sq)) : ('veld ' + alg(sq));
+  const pts = cp => { const n = Math.round(cp / 100); return n + (n === 1 ? ' punt' : ' punten'); };
+  if (task.type === 'attacked') {
+    for (const sq of missed) {
+      const a = findAttacker(S, sq, 'b');
+      out.push('🔴 Gemist: jouw ' + nm(sq) + ' wordt aangevallen' +
+        (a >= 0 ? ' door de ' + nm(a) : '') + '.');
+    }
+    for (const sq of bad) {
+      const p = S.board[sq];
+      if (!p) out.push('✖ Op ' + alg(sq) + ' staat geen stuk.');
+      else if (colorOf(p) === 'b') out.push('✖ De ' + nm(sq) + ' is van Turbo. Tik jóuw witte stukken aan!');
+      else out.push('✖ Jouw ' + nm(sq) + ' wordt door niemand aangevallen. Die staat veilig!');
+    }
+  } else if (task.type === 'capture') {
+    for (const sq of missed) {
+      const m = legalMoves(S).find(x => (x.to === sq && S.board[x.to]) ||
+        (x.flags === 'e' && x.to - 16 === sq));
+      if (m) out.push('🔴 Gemist: jouw ' + nm(m.from) + ' kan de ' + nm(sq) + ' slaan!');
+    }
+    for (const sq of bad) {
+      const p = S.board[sq];
+      if (!p) out.push('✖ Op ' + alg(sq) + ' staat geen stuk.');
+      else if (colorOf(p) === 'w') out.push('✖ De ' + nm(sq) + ' is van jou. Tik de groene stukken aan!');
+      else out.push('✖ Bij de ' + nm(sq) + ' kan geen enkel wit stuk nu komen.');
+    }
+  } else if (task.type === 'mobility') {
+    const hn = NAME_NL[S.board[task.extra].toLowerCase()];
+    if (missed.size) out.push('🔴 De rode velden: daar kon je ' + hn + ' óók naartoe. Tel ze eens na!');
+    for (const sq of bad) {
+      const p = S.board[sq];
+      if (sq === task.extra)
+        out.push('✖ Dat is je ' + hn + ' zelf! Tik de velden aan waar hij naartoe kan.');
+      else if (p && colorOf(p) === 'w')
+        out.push('✖ Op ' + alg(sq) + ' staat je eigen ' + NAME_NL[p.toLowerCase()] + '. Daar mag je niet gaan staan.');
+      else if (pseudoMoves(S).some(m => m.from === task.extra && m.to === sq))
+        out.push('✖ Naar ' + alg(sq) + ' mag nu niet: dan staat je eigen koning schaak!');
+      else
+        out.push('✖ Naar ' + alg(sq) + ' kan een ' + hn + ' niet: zo springt hij niet, of iets staat in de weg.');
+    }
+  } else { /* free / winst */
+    const det = task.details || [];
+    for (const sq of missed) {
+      const d = det.find(x => x.sq === sq);
+      if (!d) continue;
+      if (d.gain >= d.victim - 30)
+        out.push('🔴 Gemist: de ' + nm(sq) + ' staat helemaal gratis! Jouw ' + nm(d.move.from) +
+          ' kan hem slaan en niemand kan terugpakken.');
+      else
+        out.push('🔴 Gemist: de ' + nm(sq) + ' slaan is een goede ruil! Jouw ' + nm(d.move.from) +
+          ' pakt ' + pts(d.victim) + '. Turbo slaat terug en pakt maar ' + pts(d.victim - d.gain) +
+          '. Winst voor jou!');
+    }
+    for (const sq of bad) {
+      const p = S.board[sq];
+      if (!p) out.push('✖ Op ' + alg(sq) + ' staat geen stuk.');
+      else if (colorOf(p) === 'w') out.push('✖ De ' + nm(sq) + ' is van jou!');
+      else if (!legalMoves(S).some(x => x.to === sq && S.board[x.to]))
+        out.push('✖ De ' + nm(sq) + ': geen enkel wit stuk kan hem nu slaan.');
+      else {
+        const dfd = findAttacker(S, sq, 'b');
+        out.push('✖ De ' + nm(sq) + ' is goed verdedigd' +
+          (dfd >= 0 ? ' door de ' + nm(dfd) : '') +
+          ': als jij slaat, pakt Turbo terug en verlies jij méér punten dan je wint.');
+      }
+    }
+  }
+  return out.slice(0, 5);
+}
+
+/* --- safe/trap drill --- */
+function buildSafe() {
+  const wantTrap = Math.random() < 0.5;
+  const task = genSafeTask(wantTrap);
+  if (!task) return false;
+  session.task = task;
+  session.S = task.S;
+  session.phase = 'answer';
+  BD.mode = 'off';
+  BD.arrows = [{ from: task.move.from, to: task.move.to, cls: 'a-sun' }];
+  renderBoard();
+  setTask('Jij (wit) wilt deze zet doen:<br><b>' + moveNameNL(task.S, task.move) + '</b>' +
+    '<div class="sub">Denk éérst vooruit: wat kan Turbo dáárna allemaal doen?</div>');
+  say('Is dit veilig? Of pakt Turbo dan iets van je af? 🤔');
+  setOptions('<div class="answer-row">' +
+    '<button id="ansSafe" class="btn leaf">✅ Veilig!</button>' +
+    '<button id="ansTrap" class="btn coral">⚠️ Valstrik!</button></div>');
+  $('ansSafe').addEventListener('click', () => safeAnswer(false));
+  $('ansTrap').addEventListener('click', () => safeAnswer(true));
+  setActions([]);
+  return true;
+}
+
+function safeAnswer(saidTrap) {
+  if (!session || session.phase !== 'answer') return;
+  session.phase = 'review';
+  setOptions(null);
+  const t = session.task;
+  const correct = saidTrap === t.trap;
+  BD.arrows = [];
+  if (t.trap) {
+    const pn = moveNameNL2After(t);
+    playMove(t.move, () => {
+      setTimeout(() => {
+        BD.arrows = [{ from: t.punish.from, to: t.punish.to, cls: 'a-coral' }];
+        renderBoard();
+        setTimeout(() => {
+          playMove(t.punish, () => {
+            awardRound(correct ? 3 : 0, correct ?
+              'Goed gezien, detective! 🕵️ Het wás een valstrik: <b>' + pn + '</b>.' :
+              'Oei, het was een valstrik! Kijk: <b>' + pn + '</b>. Denk eraan: eerst kijken wat Turbo terug kan doen!');
+          });
+        }, 650);
+      }, 500);
+    });
+  } else {
+    playMove(t.move, () => {
+      awardRound(correct ? 3 : 0, correct ?
+        'Klopt! Deze zet is veilig. Turbo kan niks afpakken. 🎉' :
+        'Deze was juist véilig! Turbo kon niks pakken. Niet overal spoken zien 😉');
+    });
+  }
+}
+/* Name of the punishing reply (computed on the position after the candidate move). */
+function moveNameNL2After(t) {
+  makeMove(t.S, t.move);
+  const pn = moveNameNL(t.S, t.punish);
+  unmakeMove(t.S);
+  return pn;
+}
+
+/* --- best-of-three drill --- */
+function buildBest3() {
+  const task = genBest3();
+  if (!task) return false;
+  session.task = task;
+  session.S = task.S;
+  session.phase = 'choose';
+  session.tries = 0;
+  session.picked = null;
+  BD.mode = 'off';
+  renderBoard();
+  setTask('<b>Welke zet is de BESTE voor wit?</b>' +
+    '<div class="sub">Tik een zet aan om hem op het bord te zien. Denk bij élke zet: wat doet Turbo daarna? Kies pas als je alle drie hebt bekeken!</div>');
+  say('Kijk eerst alle drie! Pas kiezen als je zeker bent. 🐢');
+  let h = '';
+  task.options.forEach((o, i) => {
+    h += '<button class="opt-btn" data-i="' + i + '"><span class="opt-tag">' + 'ABC'[i] + '</span><span>' +
+      moveNameNL(task.S, o.m) + '</span></button>';
+  });
+  setOptions(h);
+  document.querySelectorAll('.opt-btn').forEach(b => {
+    b.addEventListener('click', () => pickOption(+b.dataset.i));
+  });
+  setActions([{ label: 'Deze kies ik! 🎯', cls: 'sun', fn: best3Confirm, id: 'confirm', disabled: true }]);
+  return true;
+}
+
+function pickOption(i) {
+  if (!session || session.phase !== 'choose') return;
+  const b = document.querySelector('.opt-btn[data-i="' + i + '"]');
+  if (!b || b.classList.contains('wrong')) return;
+  snd.select();
+  session.picked = i;
+  document.querySelectorAll('.opt-btn').forEach(x => x.classList.remove('picked'));
+  b.classList.add('picked');
+  const o = session.task.options[i];
+  BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-sun' }];
+  renderBoard();
+  if (actionBtns.confirm) actionBtns.confirm.disabled = false;
+}
+
+function best3Confirm() {
+  if (!session || session.phase !== 'choose' || session.picked == null) return;
+  const t = session.task, i = session.picked, o = t.options[i];
+  const btn = document.querySelector('.opt-btn[data-i="' + i + '"]');
+  session.tries++;
+  if (actionBtns.confirm) actionBtns.confirm.disabled = true;
+  if (o === t.best) {
+    session.phase = 'review';
+    btn.classList.add('right');
+    BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-leaf' }];
+    playMove(o.m, () => {
+      awardRound(session.tries === 1 ? 3 : 1, session.tries === 1 ?
+        'GOUD! 🥇 Meteen de beste zet gevonden!' :
+        'Ja! Díe is het! Goed doorgedacht! 🎉');
+    });
+  } else {
+    session.phase = 'busy';
+    btn.classList.add('wrong');
+    btn.classList.remove('picked');
+    say('Hmm… kijk wat er dán gebeurt! 👀');
+    BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-coral' }];
+    const S = session.S;
+    playMove(o.m, () => {
+      const reply = rootScores(S, 2)[0];
+      const pn = moveNameNL(S, reply.m);
+      setTimeout(() => {
+        BD.arrows = [{ from: reply.m.from, to: reply.m.to, cls: 'a-coral' }];
+        renderBoard();
+        setTimeout(() => {
+          playMove(reply.m, () => {
+            setTimeout(() => {
+              unmakeMove(S); unmakeMove(S);
+              BD.arrows = []; BD.last = null; BD.check = null;
+              renderBoard();
+              if (session.tries >= 2) {
+                session.phase = 'review';
+                const bi = t.options.indexOf(t.best);
+                const bb = document.querySelector('.opt-btn[data-i="' + bi + '"]');
+                if (bb) bb.classList.add('right');
+                BD.arrows = [{ from: t.best.m.from, to: t.best.m.to, cls: 'a-leaf' }];
+                playMove(t.best.m, () => {
+                  awardRound(0, 'De beste was: <b>' + bb.textContent.slice(1) + '</b>. Volgende keer heb jij hem! 💪');
+                });
+              } else {
+                session.phase = 'choose';
+                session.picked = null;
+                say('Die was niet top: Turbo doet dan <b>' + pn + '</b>. Probeer een andere! 🤔');
+              }
+            }, 900);
+          });
+        }, 650);
+      }, 500);
+    });
+  }
+}
+
+/* --- shared drill scoring --- */
+function awardRound(stars, msg) {
+  if (!session || session.kind === 'game') return;
+  session.earned += stars;
+  if (stars >= 2) { P.streak++; if (P.streak > P.best) P.best = P.streak; }
+  else P.streak = 0;
+  P.stars += stars;
+  saveP();
+  if (stars > 0) addXP(stars * 10, '⭐'.repeat(stars));
+  if (stars === 3) { snd.good(); burstCenter(); }
+  else if (stars > 0) snd.star();
+  else snd.bad();
+  say(msg);
+  updateDrillStars();
+  updateHud();
+  setActions([{ label: 'Volgende ▶', cls: 'sun', fn: nextRound }]);
+}
+
+function drillSummary() {
+  const e = session.earned;
+  const emoji = e >= 12 ? '🤩' : (e >= 7 ? '😃' : '🙂');
+  const line = e >= 12 ? 'WAUW! Jij hebt echte speurogen!' :
+    (e >= 7 ? 'Lekker bezig! Je wordt steeds sterker.' : 'Goed geoefend! Oefenen maakt je supersterk.');
+  if (e >= 12) { snd.win(); celebrate(); } else snd.good();
+  const kind = session.kind;
+  showModal('<div class="m-emoji">' + emoji + '</div><h2>Rondje klaar!</h2>' +
+    '<p>Je verdiende <b>' + e + '</b> van de 15 sterren.<br>' + line + '</p>' +
+    '<div class="m-btns"><button class="btn sun" id="mAgain">Nog een rondje! 🔁</button>' +
+    '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>');
+  $('mAgain').addEventListener('click', () => { closeModal(); startDrill(kind); });
+  $('mHome').addEventListener('click', goHome);
+}
+
+/* ---------- game vs Turbo ---------- */
+const TURBO_NAMES = { 1: '🍼 Baby Turbo', 2: '🐢 Turbo', 3: '🚀 Super Turbo' };
+
+function startGameFlow() {
+  showModal('<div class="m-emoji">🐢</div><h2>Tegen wie speel je?</h2><div class="m-btns">' +
+    '<button class="btn plain lvl-btn" data-lvl="1"><span class="l-emoji">🍼</span><span><b>Baby Turbo</b><span class="l-sub">Doet soms een dutje. Lekker oefenen!</span></span></button>' +
+    '<button class="btn plain lvl-btn" data-lvl="2"><span class="l-emoji">🐢</span><span><b>Turbo</b><span class="l-sub">Denkt al best goed na.</span></span></button>' +
+    '<button class="btn plain lvl-btn" data-lvl="3"><span class="l-emoji">🚀</span><span><b>Super Turbo</b><span class="l-sub">Kijkt ver vooruit. Pittig!</span></span></button>' +
+    '</div>');
+  document.querySelectorAll('.lvl-btn').forEach(b => {
+    b.addEventListener('click', () => { closeModal(); startGame(+b.dataset.lvl); });
+  });
+}
+
+function startGame(level) {
+  session = { kind: 'game', S: newGame(), level, tips: 3, over: false, pending: null };
+  showScreen('play');
+  $('modeTitle').textContent = MODE_TITLES.game;
+  $('roundChip').textContent = TURBO_NAMES[level];
+  clearBD();
+  renderBoard();
+  setTask(null); setOptions(null);
+  $('drillStars').classList.add('hidden');
+  $('gameInfo').classList.remove('hidden');
+  $('patience').classList.remove('hidden');
+  $('predictBar').classList.add('hidden');
+  updateTrays();
+  updateToggles();
+  gameActions();
+  kidTurn();
+}
+
+function gameActions() {
+  setActions([
+    { label: '↩ Zet terug', cls: 'plain small', fn: undoMove, id: 'undo' },
+    { label: '👀 Speurbril (' + session.tips + ')', cls: 'plain small', fn: useTip, id: 'tip' }
+  ]);
+}
+
+function kidTurn() {
+  if (!session || session.kind !== 'game' || session.over) return;
+  BD.mode = 'move';
+  startPatience();
+  if (inCheck(session.S)) {
+    snd.check();
+    showToast('SCHAAK! 😱');
+    say('Je staat schaak! Red je koning! 👑');
+  } else say(pick(THINK_LINES));
+}
+
+function onCell(sq) {
+  if (!session) return;
+  if (BD.mode === 'mark') {
+    if (session.phase !== 'marking') return;
+    if (BD.marks.has(sq)) BD.marks.delete(sq); else BD.marks.add(sq);
+    snd.select();
+    renderBoard();
+    return;
+  }
+  if (BD.mode === 'predict') {
+    const p = session.S.board[sq];
+    if (p && colorOf(p) === 'b') resolvePredict(sq);
+    return;
+  }
+  if (BD.mode !== 'move') return;
+  const S = session.S;
+  if (S.turn !== 'w') return;
+  const p = S.board[sq];
+  if (BD.sel == null) {
+    if (p && colorOf(p) === 'w') trySelect(sq);
+    return;
+  }
+  if (sq === BD.sel) { clearSel(); renderBoard(); return; }
+  if (BD.dots.has(sq)) {
+    const mv = legalMoves(S).filter(m => m.from === BD.sel && m.to === sq);
+    const m = mv.find(x => x.promo === 'q') || mv[0];
+    clearSel();
+    renderBoard();
+    onKidMove(m);
+    return;
+  }
+  if (p && colorOf(p) === 'w') trySelect(sq);
+  else { clearSel(); renderBoard(); }
+}
+
+function trySelect(sq) {
+  const tg = legalMoves(session.S).filter(m => m.from === sq);
+  if (!tg.length) { clearSel(); renderBoard(); return; }
+  BD.sel = sq;
+  BD.dots = new Set(tg.map(m => m.to));
+  snd.select();
+  renderBoard();
+}
+
+function onKidMove(m) {
+  BD.mode = 'off';
+  const S = session.S;
+  if (P.guard) {
+    const bl = blunderCheck(S, m);
+    if (bl) {
+      snd.bad();
+      showModal('<div class="m-emoji">🐢❗</div><h2>Wacht even!</h2>' +
+        '<p>Deze zet kan je een stuk kosten!<br>Kijk nog eens goed: wat kan Turbo hierna állemaal doen?</p>' +
+        '<div class="m-btns"><button class="btn sun" id="gLook">🔍 Ik kijk nog even</button>' +
+        '<button class="btn coral" id="gGo">Toch doen! 😤</button></div>');
+      $('gLook').addEventListener('click', () => { closeModal(); BD.mode = 'move'; renderBoard(); });
+      $('gGo').addEventListener('click', () => { closeModal(); commitKid(m); });
+      return;
+    }
+  }
+  commitKid(m);
+}
+
+function commitKid(m) {
+  if (!session || session.kind !== 'game') return;
+  stopPatience();
+  if (patFull) addXP(5, 'Denk-bonus! 🐢');
+  const S = session.S;
+  playMove(m, () => {
+    if (!session || session.kind !== 'game') return;
+    updateTrays();
+    const st = gameStatus(S);
+    if (st.over) { endGame(st); return; }
+    if (inCheck(S)) { snd.check(); showToast('SCHAAK! 👑', true); }
+    say('Hmm… nu ik! 💭');
+    setTimeout(turboTurn, 450);
+  });
+}
+
+function turboTurn() {
+  if (!session || session.kind !== 'game' || session.over) return;
+  const S = session.S;
+  setTimeout(() => {
+    if (!session || session.kind !== 'game' || session.over) return;
+    const m = pickMove(S, session.level);
+    if (!m) { const st = gameStatus(S); if (st.over) endGame(st); return; }
+    if (P.predict && legalMoves(S).length > 3) askPredict(m);
+    else doTurboMove(m);
+  }, 80);
+}
+
+function askPredict(m) {
+  session.pending = m;
+  BD.mode = 'predict';
+  $('predictBar').classList.remove('hidden');
+  say('Denk vooruit: wat is Turbo van plan? 🔮');
+}
+
+function resolvePredict(sq) {
+  const m = session.pending;
+  session.pending = null;
+  BD.mode = 'off';
+  $('predictBar').classList.add('hidden');
+  if (sq != null && m) {
+    if (sq === m.from) {
+      addXP(15, 'Goed voorspeld! 🔮');
+      snd.star();
+      showToast('🔮 Goed voorspeld!', true);
+    } else say('Goede gok! Maar kijk wat ik écht doe… 🐢');
+  }
+  doTurboMove(m);
+}
+
+function doTurboMove(m) {
+  if (!session || session.kind !== 'game' || !m) return;
+  const S = session.S;
+  playMove(m, () => {
+    if (!session || session.kind !== 'game') return;
+    updateTrays();
+    const st = gameStatus(S);
+    if (st.over) { endGame(st); return; }
+    kidTurn();
+  });
+}
+
+/* patience meter */
+let patT0 = 0, patRAF = 0, patFull = false;
+const PAT_MS = 12000;
+function startPatience() {
+  patFull = false;
+  const track = $('patTrack');
+  track.classList.remove('full');
+  patT0 = performance.now();
+  cancelAnimationFrame(patRAF);
+  const step = () => {
+    const f = Math.min(1, (performance.now() - patT0) / PAT_MS);
+    $('patFill').style.width = (f * 100) + '%';
+    $('patTurtle').style.left = 'calc(' + (f * 100) + '% - ' + Math.round(f * 28) + 'px)';
+    if (f >= 1) { patFull = true; track.classList.add('full'); return; }
+    patRAF = requestAnimationFrame(step);
+  };
+  patRAF = requestAnimationFrame(step);
+}
+function stopPatience() { cancelAnimationFrame(patRAF); }
+
+function undoMove() {
+  if (!session || session.kind !== 'game' || session.over || BD.mode !== 'move') return;
+  const S = session.S;
+  if (S.hist.length < 2) return;
+  unmakeMove(S); unmakeMove(S);
+  clearSel();
+  BD.last = null;
+  BD.check = inCheck(S) ? S.kings[S.turn] : null;
+  renderBoard();
+  updateTrays();
+  say('Oké! Kijk nog eens goed. Wat is hier slim? 🐢');
+  startPatience();
+}
+
+function useTip() {
+  if (!session || session.kind !== 'game' || session.tips <= 0 || BD.mode !== 'move') return;
+  session.tips--;
+  if (actionBtns.tip) {
+    actionBtns.tip.textContent = '👀 Speurbril (' + session.tips + ')';
+    if (session.tips === 0) actionBtns.tip.disabled = true;
+  }
+  const S = session.S;
+  BD.spy = new Set([...attackedPieces(S, 'w'), ...attackedPieces(S, 'b')]);
+  renderBoard();
+  say('Paarse randjes = die stukken worden aangevallen! Kijk snel! 👀');
+  setTimeout(() => { BD.spy.clear(); if (session && session.kind === 'game') renderBoard(); }, 4500);
+}
+
+const PTS = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+function updateTrays() {
+  if (!session || session.kind !== 'game') return;
+  const S = session.S;
+  let kid = '', tur = '', dk = 0, dt = 0;
+  for (const u of S.hist) {
+    if (!u.cap) continue;
+    const t = u.cap.toLowerCase();
+    if (isWhitePiece(u.cap)) { tur += '<span class="pc w">' + GLYPH[t] + '</span>'; dt += PTS[t] || 0; }
+    else { kid += '<span class="pc t">' + GLYPH[t] + '</span>'; dk += PTS[t] || 0; }
+  }
+  $('trayKid').innerHTML = kid || '<span style="opacity:.4">nog niks</span>';
+  $('trayTurbo').innerHTML = tur || '<span style="opacity:.4">nog niks</span>';
+  const diff = dk - dt;
+  $('matKid').textContent = diff > 0 ? '+' + diff + ' punten! 😃' : '';
+  $('matTurbo').textContent = diff < 0 ? '+' + (-diff) + ' punten 😬' : '';
+}
+
+function updateToggles() {
+  $('tglGuard').classList.toggle('on', P.guard);
+  $('tglPredict').classList.toggle('on', P.predict);
+}
+
+function endGame(st) {
+  if (!session || session.kind !== 'game') return;
+  session.over = true;
+  BD.mode = 'off';
+  stopPatience();
+  renderBoard();
+  const drawTxt = { pat: 'Pat! De koning kan nergens meer heen, maar staat geen schaak.',
+    '50': 'Vijftig zetten zonder slaan of pionzet.', materiaal: 'Te weinig stukken om mat te zetten.' };
+  let emoji, h, p, xp;
+  if (st.result === 'w') {
+    emoji = '🏆'; h = 'JE HEBT GEWONNEN!';
+    p = 'Schaakmat! Turbo buigt voor jou. Wat een partij!';
+    xp = 100; P.wins++;
+    snd.win(); celebrate();
+  } else if (st.result === 'b') {
+    emoji = '🐢'; h = 'Turbo wint dit potje';
+    p = 'Schaakmat… maar goed volgehouden! Van elke partij word je slimmer.';
+    xp = 15; snd.bad();
+  } else {
+    emoji = '🤝'; h = 'Gelijkspel!';
+    p = drawTxt[st.reason] || 'Niemand wint, niemand verliest.';
+    xp = 30; snd.good();
+  }
+  addXP(xp, st.result === 'w' ? 'Gewonnen! 🏆' : 'Goed gespeeld!');
+  saveP();
+  const lvl = session.level;
+  setTimeout(() => {
+    showModal('<div class="m-emoji">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p>' +
+      '<div class="m-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
+      '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>');
+    $('mAgain').addEventListener('click', () => { closeModal(); startGame(lvl); });
+    $('mHome').addEventListener('click', goHome);
+  }, 900);
+}
+
+/* ---------- init & wiring ---------- */
+document.querySelectorAll('.mode-card').forEach(b => {
+  b.addEventListener('click', () => {
+    const mode = b.dataset.mode;
+    if (mode === 'game') startGameFlow();
+    else startDrill(mode);
+  });
+});
+$('backBtn').addEventListener('click', goHome);
+$('sndBtn').addEventListener('click', () => { P.sound = !P.sound; saveP(); updateHud(); if (P.sound) snd.select(); });
+$('predictSkip').addEventListener('click', () => resolvePredict(null));
+$('tglGuard').addEventListener('click', () => { P.guard = !P.guard; saveP(); updateToggles(); });
+$('tglPredict').addEventListener('click', () => { P.predict = !P.predict; saveP(); updateToggles(); });
+
+function askName() {
+  showModal('<div class="m-emoji">🐢</div><h2>Hoi! Ik ben Turbo!</h2>' +
+    '<p>Samen worden we schaakhelden.<br>Hoe heet jij?</p>' +
+    '<input id="nameInp" maxlength="14" placeholder="Jouw naam" autocomplete="off">' +
+    '<div class="m-btns"><button class="btn sun" id="nameGo">Start! 🚀</button></div>');
+  const go = () => {
+    const v = $('nameInp').value.trim();
+    P.name = v || 'kampioen';
+    saveP();
+    updateHud();
+    closeModal();
+  };
+  $('nameGo').addEventListener('click', go);
+  $('nameInp').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  setTimeout(() => $('nameInp').focus(), 300);
+}
+
+updateHud();
+$('homeBubble').textContent = pick(HOME_LINES);
+showScreen('home');
+if (!P.name) askName();
+</script>
