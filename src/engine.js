@@ -634,6 +634,14 @@ function genBest3(rng) {
       picks.push(pool.splice(i, 1)[0]);
     }
     const options = [best, picks[0], picks[1]];
+    /* Herkeuring op diepte 3: de "beste" moet ook dieper bekeken duidelijk
+       beter zijn, anders mist de opdracht een truc die pas later komt. */
+    for (const o of options) {
+      makeMove(S, o.m);
+      o.deep = -search(S, 2, -Infinity, Infinity, 1);
+      unmakeMove(S);
+    }
+    if (!(best.deep >= -250 && options.slice(1).every(o => best.deep - o.deep >= 180))) continue;
     for (let i = options.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [options[i], options[j]] = [options[j], options[i]];

@@ -1,4 +1,11 @@
 /* ============================== UI ============================== */
+/* Op http kan de service worker niet installeren en werkt offline dus nooit.
+   GitHub Pages dwingt https niet altijd af, dus doen we het zelf. */
+if (typeof location !== 'undefined' && location.protocol === 'http:' &&
+  location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+  location.replace('https://' + location.host + location.pathname + location.search);
+}
+
 const $ = id => document.getElementById(id);
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -6,7 +13,7 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 /* ---------- profile ---------- */
 function defaultP() {
   return { name: '', xp: 0, sound: true, guard: true, predict: true,
-    wins: 0, stars: 0, streak: 0, best: 0,
+    wins: 0, stars: 0, streak: 0, best: 0, lastLevel: null,
     theme: 'munt', badges: {}, day: null,
     c: { gamesPlayed: 0, winsL2: 0, winsL3: 0, perfectScans: 0, safeCorrect: 0,
       best3Gold: 0, predictHits: 0, patienceBonus: 0 } };
@@ -18,12 +25,54 @@ P.c = Object.assign(defaultP().c, P.c || {});
 P.badges = P.badges || {};
 function saveP() { try { localStorage.setItem('schaakheld1', JSON.stringify(P)); } catch (e) {} }
 
+/* Levels met meesterproeven: sterren verzamelen alleen is niet genoeg, voor de
+   hogere rangen moet je ook iets bewijzen. Dat maakt de rang farm-proof. */
 const LEVELS = [
-  { n: 'Pion', g: '♟︎', xp: 0 }, { n: 'Paard', g: '♞︎', xp: 120 }, { n: 'Loper', g: '♝︎', xp: 300 },
-  { n: 'Toren', g: '♜︎', xp: 600 }, { n: 'Dame', g: '♛︎', xp: 1000 }, { n: 'Koning', g: '♚︎', xp: 1600 },
-  { n: 'Grootmeester', g: '🏆', xp: 2400 }
+  { n: 'Pion', g: '♟︎', xp: 0 },
+  { n: 'Paard', g: '♞︎', xp: 150 },
+  { n: 'Loper', g: '♝︎', xp: 400,
+    gate: { txt: '5 perfecte speurrondes', done: () => P.c.perfectScans >= 5,
+      prog: () => Math.min(P.c.perfectScans, 5) + '/5' } },
+  { n: 'Toren', g: '♜︎', xp: 900,
+    gate: { txt: 'versla Turbo 🐢', done: () => P.c.winsL2 >= 1,
+      prog: () => Math.min(P.c.winsL2, 1) + '/1' } },
+  { n: 'Dame', g: '♛︎', xp: 1800,
+    gate: { txt: 'versla Turbo 🐢 3 keer', done: () => P.c.winsL2 >= 3,
+      prog: () => Math.min(P.c.winsL2, 3) + '/3' } },
+  { n: 'Koning', g: '♚︎', xp: 3200,
+    gate: { txt: 'versla Super Turbo 🚀', done: () => P.c.winsL3 >= 1,
+      prog: () => Math.min(P.c.winsL3, 1) + '/1' } },
+  { n: 'Grootmeester', g: '🏆', xp: 5500,
+    gate: { txt: 'versla Super Turbo 🚀 5 keer', done: () => P.c.winsL3 >= 5,
+      prog: () => Math.min(P.c.winsL3, 5) + '/5' } }
 ];
-function levelIdx(xp) { let i = 0; for (let k = 0; k < LEVELS.length; k++) if (xp >= LEVELS[k].xp) i = k; return i; }
+function levelIdx(xp) {
+  let i = 0;
+  for (let k = 1; k < LEVELS.length; k++) {
+    const L = LEVELS[k];
+    if (xp >= L.xp && (!L.gate || L.gate.done())) i = k;
+    else break;
+  }
+  return i;
+}
+
+/* Level-up kan ook zonder XP-verandering (een meesterproef halen), dus we
+   vergelijken met de laatst gevierde rang in plaats van voor/na addXP. */
+function checkLevelUp() {
+  const cur = levelIdx(P.xp);
+  if (P.lastLevel == null || cur < P.lastLevel) { P.lastLevel = cur; saveP(); return; }
+  if (cur === P.lastLevel) return;
+  P.lastLevel = cur;
+  saveP();
+  const L = LEVELS[cur];
+  const th = THEMES.find(t => t.lvl === cur);
+  snd.level(); celebrate();
+  showModal('<div class="m-emoji">' + L.g + '</div><h2>LEVEL OMHOOG!</h2>' +
+    '<p>Je bent nu een echte <b>' + L.n + '</b>!' +
+    (th ? '<br><br>🎨 Nieuw bord ontgrendeld: <b>' + th.naam + '</b>!<br>Kies hem op het startscherm.' : '') +
+    '</p><div class="m-btns"><button class="btn sun" id="lvlOk">Super! 🎉</button></div>',
+    () => $('lvlOk').addEventListener('click', closeModal));
+}
 
 function updateHud() {
   $('xpNum').textContent = P.xp;
@@ -50,22 +99,11 @@ function floatXP(txt) {
 }
 
 function addXP(n, label) {
-  const before = levelIdx(P.xp);
   P.xp += n;
   saveP();
   floatXP('+' + n + ' ⭐ ' + (label || ''));
   updateHud();
-  const after = levelIdx(P.xp);
-  if (after > before) {
-    const L = LEVELS[after];
-    const th = THEMES.find(t => t.lvl === after);
-    snd.level(); celebrate();
-    showModal('<div class="m-emoji">' + L.g + '</div><h2>LEVEL OMHOOG!</h2>' +
-      '<p>Je bent nu een echte <b>' + L.n + '</b>!' +
-      (th ? '<br><br>🎨 Nieuw bord ontgrendeld: <b>' + th.naam + '</b>!<br>Kies hem op het startscherm.' : '') +
-      '</p><div class="m-btns"><button class="btn sun" id="lvlOk">Super! 🎉</button></div>',
-      () => $('lvlOk').addEventListener('click', closeModal));
-  }
+  checkLevelUp();
 }
 
 /* ---------- sound (tiny WebAudio synth) ---------- */
@@ -332,6 +370,13 @@ const THINK_LINES = [
   'Kijk ook naar de randen van het bord. Daar gebeurt ook wat!'
 ];
 const SPIN_LINES = ['Turbo zet de stukken klaar… 🐢', 'Turbo poetst het bord… ✨', 'Turbo verzint een opdracht… 💭'];
+const LOSS_TIPS = [
+  'Turbo’s geheim: rokeer vroeg, dan is je koning veilig.',
+  'Turbo’s geheim: eerst het centrum, dan pas aanvallen.',
+  'Turbo’s geheim: elk stuk doet mee. Thuisblijvers verliezen.',
+  'Turbo’s geheim: kijk bij elke zet wat de ander terug kan doen.',
+  'Turbo’s geheim: ruil alleen als je evenveel of meer punten krijgt.'
+];
 const MODE_TITLES = { scan: '🔍 Speurogen', safe: '🕵️ Valstrik-detector', best3: '🥇 De Beste Zet', game: '🏆 Potje tegen Turbo' };
 
 /* ---------- session ---------- */
@@ -668,6 +713,8 @@ function best3Explanations(task) {
       why = 'die redt je ' + NAME_NL[S.board[o.m.from].toLowerCase()] + ': die stond aangevallen en kon verloren gaan!';
     else if (isBest && chk) why = 'veilig én je geeft schaak: Turbo moet eerst zijn koning redden.';
     else if (isBest) why = 'veilig en actief: geen stuk komt in gevaar en je stukken gaan beter staan.';
+    else if (task.best.deep != null && o.deep != null && task.best.deep - o.deep >= 250)
+      why = 'pas op: niet meteen, maar een paar zetten later kost deze je tóch wat. Turbo ziet een truc!';
     else why = 'niet meteen fout, maar de gouden zet doet meer.';
     lines.push((isBest ? '🥇 ' : '▫️ ') + 'ABC'[i] + ': ' + name + '. ' + why.charAt(0).toUpperCase() + why.slice(1));
   });
@@ -800,6 +847,15 @@ function drillSummary() {
 /* ---------- game vs Turbo ---------- */
 const TURBO_NAMES = { 1: '🍼 Baby Turbo', 2: '🐢 Turbo', 3: '🚀 Super Turbo' };
 
+/* Winst-XP per sterkte; vanaf de derde winst per dag op dezelfde sterkte nog
+   maar een fooi, zodat Baby Turbo verslaan geen XP-fabriek is. */
+const WIN_XP = { 1: 40, 2: 100, 3: 180 };
+const TIRED_XP = 15;
+function gameWinXP(level) {
+  ensureDay();
+  return (P.day.winsByLvl[level] || 0) >= 2 ? TIRED_XP : WIN_XP[level];
+}
+
 function startGameFlow() {
   showModal('<div class="m-emoji">🐢</div><h2>Tegen wie speel je?</h2><div class="m-btns">' +
     '<button class="btn plain lvl-btn" data-lvl="1"><span class="l-emoji">🍼</span><span><b>Baby Turbo</b><span class="l-sub">Doet soms een dutje. Lekker oefenen!</span></span></button>' +
@@ -846,7 +902,43 @@ function kidTurn() {
     snd.check();
     showToast('SCHAAK! 😱');
     say('Je staat schaak! Red je koning! 👑');
-  } else say(pick(THINK_LINES));
+  } else say(coachSay());
+}
+
+/* Strategie-coach: kijkt naar de stelling en geeft gerichte tips over de
+   basisprincipes (centrum, ontwikkelen, rokade, dame, hangende stukken).
+   Niets van toepassing? Dan een gewone denk-aanmoediging. */
+function coachTips(S) {
+  const tips = [];
+  const ply = S.hist.length;
+  if (ply <= 20 && (S.castle.K || S.castle.Q) &&
+    legalMoves(S).some(m => m.flags === 'K' || m.flags === 'Q'))
+    tips.push('Coach-tip: je kunt rokeren! Koning veilig in de hoek, toren in het spel. 🏰');
+  if (ply <= 8 && S.board[sqFromAlg('e2')] === 'P' && S.board[sqFromAlg('d2')] === 'P')
+    tips.push('Coach-tip: zet een pion in het midden (e4 of d4). Wie het centrum heeft, is de baas! 🎯');
+  const home = ['b1', 'g1', 'c1', 'f1'].filter(a => {
+    const p = S.board[sqFromAlg(a)];
+    return p === 'N' || p === 'B';
+  });
+  if (ply >= 4 && ply <= 16 && home.length >= 3)
+    tips.push('Coach-tip: haal je paarden en lopers van de achterste rij. Thuisblijvers doen niet mee! 🐎');
+  const q = piecesOf(S, 'w').find(sq => S.board[sq] === 'Q');
+  if (ply <= 10 && q != null && q !== sqFromAlg('d1') && home.length >= 2)
+    tips.push('Coach-tip: je dame zo vroeg is riskant, Turbo jaagt erop. Eerst je kleine stukken! 👸');
+  if (attackedPieces(S, 'w').some(sq => findAttacker(S, sq, 'w') < 0))
+    tips.push('Coach-tip: een stuk van jou wordt aangevallen en niemand verdedigt het. Speuren maar! 👀');
+  return tips;
+}
+
+function coachSay() {
+  const tips = coachTips(session.S).filter(t => t !== session.lastTip);
+  if (tips.length && Math.random() < 0.75) {
+    const t = pick(tips);
+    session.lastTip = t;
+    return t;
+  }
+  session.lastTip = null;
+  return pick(THINK_LINES);
 }
 
 function onCell(sq) {
@@ -971,6 +1063,7 @@ function resolvePredict(sq) {
   BD.mode = 'off';
   $('predictBar').classList.add('hidden');
   if (sq != null) {
+    bumpDay('predictTries', 1);
     if (sq === m.from) {
       addXP(15, 'Goed voorspeld! 🔮');
       P.c.predictHits++;
@@ -1084,14 +1177,19 @@ function endGame(st) {
   if (st.result === 'w') {
     emoji = '🏆'; h = 'JE HEBT GEWONNEN!';
     p = 'Schaakmat! Turbo buigt voor jou. Wat een partij!';
-    xp = 100; P.wins++;
+    P.wins++;
     if (session.level === 2) P.c.winsL2++;
     if (session.level === 3) P.c.winsL3++;
+    ensureDay();
+    xp = gameWinXP(session.level);
+    if (xp === TIRED_XP) p += '<br><small>Deze Turbo is moe van al dat verliezen: kleine bonus. Probeer een sterkere Turbo, of kom morgen terug!</small>';
+    P.day.winsByLvl[session.level] = (P.day.winsByLvl[session.level] || 0) + 1;
     bumpDay('wins', 1);
     snd.win(); celebrate();
   } else if (st.result === 'b') {
     emoji = '🐢'; h = 'Turbo wint dit potje';
-    p = 'Schaakmat… maar goed volgehouden! Van elke partij word je slimmer.';
+    p = 'Schaakmat… maar goed volgehouden! Van elke partij word je slimmer.<br><small>💡 ' +
+      pick(LOSS_TIPS) + '</small>';
     xp = 15; snd.bad();
   } else {
     emoji = '🤝'; h = 'Gelijkspel!';
@@ -1176,6 +1274,7 @@ const BADGES = [
 ];
 
 function checkBadges() {
+  checkLevelUp();
   for (const b of BADGES) {
     if (!P.badges[b.id] && b.chk()) {
       P.badges[b.id] = true;
@@ -1201,13 +1300,13 @@ function renderBadges() {
 /* Daily missions: three per day, picked from the pool with a date seed so the
    set is the same all day. Purely a bonus: skipping a day costs nothing. */
 const MISSIONS = [
-  { id: 'win1', e: '🏆', n: 'Win een potje van Turbo', t: 1, k: 'wins' },
-  { id: 'ster12', e: '⭐', n: 'Verdien 12 sterren', t: 12, k: 'stars' },
-  { id: 'scan3', e: '🔍', n: '3 perfecte speurrondes', t: 3, k: 'perfectScans' },
-  { id: 'voorspel2', e: '🔮', n: 'Voorspel 2 zetten van Turbo', t: 2, k: 'predictHits' },
-  { id: 'valstrik3', e: '🕵️', n: 'Ontmasker 3 valstrikken', t: 3, k: 'safeCorrect' },
-  { id: 'goud2', e: '🥇', n: '2 keer goud bij De Beste Zet', t: 2, k: 'best3Gold' },
-  { id: 'denk3', e: '🐢', n: 'Verdien 3 denk-bonussen', t: 3, k: 'patience' }
+  { id: 'win1', e: '🏆', n: 'Win een potje van Turbo', sub: 'Maakt niet uit tegen welke Turbo.', t: 1, k: 'wins' },
+  { id: 'ster12', e: '⭐', n: 'Verdien 12 sterren', sub: 'Sterren verdien je in alle oefenspellen.', t: 12, k: 'stars' },
+  { id: 'scan3', e: '🔍', n: '3 perfecte speurrondes', sub: 'Perfect = drie sterren bij Speurogen.', t: 3, k: 'perfectScans' },
+  { id: 'voorspel3', e: '🔮', n: 'Doe 3 voorspellingen', sub: 'Tik tijdens het paarse balkje het stuk aan dat Turbo gaat spelen. Raden mag!', t: 3, k: 'predictTries' },
+  { id: 'valstrik3', e: '🕵️', n: 'Ontmasker 3 valstrikken', sub: 'Goed antwoorden bij de Valstrik-detector.', t: 3, k: 'safeCorrect' },
+  { id: 'goud2', e: '🥇', n: '2 keer goud bij De Beste Zet', sub: 'Goud = meteen de beste zet kiezen.', t: 2, k: 'best3Gold' },
+  { id: 'denk3', e: '🐢', n: 'Verdien 3 denk-bonussen', sub: 'Wacht in een potje tot de denk-meter vol is en zet dan pas.', t: 3, k: 'patience' }
 ];
 const MISSION_XP = 40, ALL_MISSIONS_XP = 50;
 
@@ -1217,26 +1316,43 @@ function todayStr() {
     String(d.getDate()).padStart(2, '0');
 }
 
+function freshDay(t) {
+  return { date: t, wins: 0, stars: 0, perfectScans: 0, predictHits: 0, predictTries: 0,
+    safeCorrect: 0, best3Gold: 0, patience: 0, winsByLvl: { 1: 0, 2: 0, 3: 0 },
+    done: {}, allDone: false };
+}
+
 function ensureDay() {
   const t = todayStr();
   if (!P.day || P.day.date !== t) {
-    P.day = { date: t, wins: 0, stars: 0, perfectScans: 0, predictHits: 0,
-      safeCorrect: 0, best3Gold: 0, patience: 0, done: {}, allDone: false };
+    P.day = freshDay(t);
     saveP();
+  } else {
+    /* oudere dag-objecten kunnen velden missen na een app-update */
+    P.day = Object.assign(freshDay(t), P.day);
+    P.day.winsByLvl = Object.assign({ 1: 0, 2: 0, 3: 0 }, P.day.winsByLvl || {});
   }
+}
+
+/* FNV-1a over de datum plus een murmur-mixer per keuze: buurdagen krijgen zo
+   echt verschillende missiesets (de oude hash koos twee dagen bijna hetzelfde). */
+function missionsFor(date) {
+  let h = 2166136261 >>> 0;
+  for (const ch of date) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const picks = [];
+  const pool = MISSIONS.slice();
+  while (picks.length < 3 && pool.length) {
+    h ^= h >>> 16; h = Math.imul(h, 0x85EBCA6B) >>> 0;
+    h ^= h >>> 13; h = Math.imul(h, 0xC2B2AE35) >>> 0;
+    h ^= h >>> 16;
+    picks.push(pool.splice(h % pool.length, 1)[0]);
+  }
+  return picks;
 }
 
 function dayMissions() {
   ensureDay();
-  let h = 0;
-  for (const ch of P.day.date) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const picks = [];
-  const pool = MISSIONS.slice();
-  while (picks.length < 3 && pool.length) {
-    h = (h * 1103515245 + 12345) >>> 0;
-    picks.push(pool.splice(h % pool.length, 1)[0]);
-  }
-  return picks;
+  return missionsFor(P.day.date);
 }
 
 function bumpDay(key, n) {
@@ -1270,10 +1386,11 @@ function renderMissions() {
   if (!list) return;
   ensureDay();
   list.innerHTML = dayMissions().map(m => {
-    const cur = Math.min(P.day[m.k], m.t);
+    const cur = Math.min(P.day[m.k] || 0, m.t);
     const done = !!P.day.done[m.id];
     return '<div class="mission' + (done ? ' done' : '') + '"><span>' + m.e + '</span>' +
       '<span class="m-name">' + m.n +
+      '<span class="m-sub">' + m.sub + '</span>' +
       '<span class="m-bar"><i style="width:' + Math.round(cur / m.t * 100) + '%"></i></span></span>' +
       '<span class="m-prog">' + (done ? '✔ +' + MISSION_XP + ' ⭐' : cur + '/' + m.t) + '</span></div>';
   }).join('') + (P.day.allDone ?
@@ -1290,6 +1407,18 @@ function renderLevelPath() {
     return '<div class="lp-node ' + cls + '"><span class="lp-g">' + L.g + '</span>' +
       '<span>' + L.n + '</span><span class="lp-xp">' + (i <= cur ? '✔' : L.xp + ' ⭐') + '</span></div>';
   }).join('');
+  const nxt = $('lpNext');
+  if (!nxt) return;
+  if (cur >= LEVELS.length - 1) {
+    nxt.innerHTML = '🏆 Jij bent Grootmeester. Hoger bestaat niet!';
+    return;
+  }
+  const N = LEVELS[cur + 1];
+  const parts = [];
+  if (P.xp < N.xp) parts.push('nog <b>' + (N.xp - P.xp) + '</b> ⭐');
+  if (N.gate && !N.gate.done()) parts.push('meesterproef: <b>' + N.gate.txt + '</b> (' + N.gate.prog() + ')');
+  nxt.innerHTML = 'Volgende: ' + N.g + ' <b>' + N.n + '</b>. ' +
+    (parts.length ? 'Daarvoor moet je: ' + parts.join(' én ') + '.' : 'Je bent er bijna!');
 }
 
 function renderHome() {

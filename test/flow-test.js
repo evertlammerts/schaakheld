@@ -149,8 +149,11 @@ askPredict(pm);
 ok('predict: bar shown, timer armed', BD.mode === 'predict' &&
   !!session.pending && !!session.predictTimer);
 var xpBefore = P.xp;
+ensureDay();
+var ptBefore = P.day.predictTries;
 resolvePredict(pm.from); /* correct prediction */
 ok('predict: bonus +15', P.xp - xpBefore >= 15);
+ok('predict: poging geteld voor missie', P.day.predictTries === ptBefore + 1);
 ok('predict: bar hidden again', __els.predictBar.classList.contains('hidden'));
 /* predict timeout: no tap needed, the move plays by itself, no bonus */
 var pm2 = pickMove(session.S, 2);
@@ -234,6 +237,44 @@ var xpM = P.xp;
 ['wins', 'stars', 'perfectScans', 'predictHits', 'safeCorrect', 'best3Gold', 'patience']
   .forEach(function (k) { bumpDay(k, 99); });
 ok('missions: 3 klaar + dagbonus', P.day.allDone === true && P.xp - xpM === 3 * 40 + 50);
+/* gates: meesterproeven remmen pure XP-farm */
+var gSave = { xp: P.xp, ps: P.c.perfectScans, w2: P.c.winsL2, w3: P.c.winsL3 };
+P.xp = 10000; P.c.perfectScans = 0; P.c.winsL2 = 0; P.c.winsL3 = 0;
+ok('gate: zonder proeven blijf je Paard', levelIdx(P.xp) === 1);
+P.c.perfectScans = 5;
+ok('gate: Loper na 5 perfecte rondes', levelIdx(P.xp) === 2);
+P.c.winsL2 = 1;
+ok('gate: Toren na winst op Turbo', levelIdx(P.xp) === 3);
+P.c.winsL2 = 3;
+ok('gate: Dame na 3 keer Turbo', levelIdx(P.xp) === 4);
+P.c.winsL3 = 5;
+ok('gate: Grootmeester na 5 keer Super Turbo', levelIdx(P.xp) === 6);
+P.xp = 700;
+ok('gate: xp-drempel telt ook nog', levelIdx(P.xp) === 2);
+P.xp = gSave.xp; P.c.perfectScans = gSave.ps; P.c.winsL2 = gSave.w2; P.c.winsL3 = gSave.w3;
+
+/* afnemende winst-xp per dag per sterkte */
+ensureDay();
+P.day.winsByLvl = { 1: 0, 2: 0, 3: 0 };
+ok('winxp: eerste winst betaalt vol', gameWinXP(1) === 40 && gameWinXP(2) === 100 && gameWinXP(3) === 180);
+P.day.winsByLvl[1] = 2;
+ok('winxp: derde babywinst is een fooi', gameWinXP(1) === 15 && gameWinXP(2) === 100);
+
+/* missies: echte variatie tussen opeenvolgende dagen */
+var sigs = {};
+['2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15']
+  .forEach(function (d) {
+    sigs[missionsFor(d).map(function (m) { return m.id; }).sort().join('+')] = 1;
+  });
+ok('missies: gevarieerde sets over 6 dagen', Object.keys(sigs).length >= 4);
+
+/* coach ziet de basisprincipes */
+var cT = coachTips(parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQK2R w KQkq - 0 1'));
+ok('coach: ziet rokade-kans', cT.some(function (t) { return t.indexOf('rokeren') >= 0; }));
+ok('coach: ziet centrum-tip', cT.some(function (t) { return t.indexOf('centrum') >= 0; }));
+var hT = coachTips(parseFEN('6k1/8/8/8/8/2b5/8/R5K1 w - - 0 1'));
+ok('coach: ziet onverdedigd stuk', hT.some(function (t) { return t.indexOf('aangevallen') >= 0; }));
+
 /* themes lock on level */
 var xpSave = P.xp;
 P.xp = 0; P.theme = 'munt';

@@ -27,6 +27,8 @@ self.addEventListener('fetch', e => {
       caches.open(VERSION).then(c => c.put(e.request, copy)).catch(() => {});
       return resp;
     }).catch(() => caches.match(e.request).then(hit =>
-      hit || (e.request.mode === 'navigate' ? caches.match('./') : undefined)))
+      hit || (e.request.mode === 'navigate'
+        ? caches.match('./').then(root => root || caches.match('./index.html'))
+        : undefined)))
   );
 });

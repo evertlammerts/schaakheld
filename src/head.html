@@ -136,6 +136,7 @@
   .mission .m-prog { font-variant-numeric: tabular-nums; color: var(--ink-soft); font-size: 13px; white-space: nowrap; font-weight: bold; }
   .mission.done { background: var(--leaf-soft); }
   .mission.done .m-prog { color: var(--leaf-deep); }
+  .mission .m-sub { display: block; font-size: 11.5px; font-weight: normal; color: var(--ink-soft); margin-top: 2px; line-height: 1.3; }
   .mission .m-bar { display: block; height: 6px; background: rgba(23,69,111,.1); border-radius: 99px; overflow: hidden; margin-top: 5px; }
   .mission .m-bar i { display: block; height: 100%; background: var(--sun); border-radius: 99px; }
   .mission.done .m-bar i { background: var(--leaf); }
@@ -159,6 +160,10 @@
   .lp-node.current .lp-g { background: var(--sun); box-shadow: 0 3px 0 var(--sun-deep); animation: bob 2s ease-in-out infinite; }
   .lp-node.locked { opacity: .55; }
   .lp-node .lp-xp { font-size: 10px; font-variant-numeric: tabular-nums; }
+  .lp-next {
+    margin-top: 12px; font-size: 13.5px; line-height: 1.4; color: var(--ink-soft);
+    background: var(--cream); border-radius: 12px; padding: 9px 12px;
+  }
 
   .theme-row { display: flex; gap: 10px; flex-wrap: wrap; }
   .theme-sw {
@@ -535,6 +540,7 @@
     <div class="home-card">
       <div class="card-title">🗺️ Jouw weg naar Grootmeester</div>
       <div id="levelPath" class="level-path"></div>
+      <div id="lpNext" class="lp-next"></div>
     </div>
     <div class="home-card">
       <div class="card-title">🎨 Bordkleuren <span class="card-sub">(nieuw bord bij elk level!)</span></div>

@@ -2,7 +2,7 @@
    internet is), cache als vangnet (vliegtuigstand). VERSION wordt door
    build.sh gevuld met een hash van index.html, dus elke release krijgt
    vanzelf een nieuwe cache; een vergeten versie-bump kan niet. */
-const VERSION = 'schaakheld-170bdf1945a8';
+const VERSION = 'schaakheld-31a064623e75';
 const ASSETS = ['./', './index.html', './manifest.webmanifest',
   './icon-180.png', './icon-192.png', './icon-512.png', './icon-512-mask.png'];
 
@@ -27,6 +27,8 @@ self.addEventListener('fetch', e => {
       caches.open(VERSION).then(c => c.put(e.request, copy)).catch(() => {});
       return resp;
     }).catch(() => caches.match(e.request).then(hit =>
-      hit || (e.request.mode === 'navigate' ? caches.match('./') : undefined)))
+      hit || (e.request.mode === 'navigate'
+        ? caches.match('./').then(root => root || caches.match('./index.html'))
+        : undefined)))
   );
 });
