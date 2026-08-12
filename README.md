@@ -19,6 +19,10 @@ De app traint twee vaardigheden die jonge schakers vaak overslaan:
   tegenstander daarna iets af? Bij een fout speelt Turbo de straf voor.
 - **De Beste Zet.** Drie kandidaat-zetten, kies de beste. Bij een verkeerde
   keuze zie je wat er dan gebeurt, en mag je opnieuw.
+- **Turbo's Trucendoos.** Vind de vork, penning, spies, aftrekaanval of
+  matzet in een gegenereerde stelling. Dezelfde patronen worden overal in
+  de app benoemd zodra ze op het bord verschijnen, en het Trucenboekje op
+  het startscherm houdt bij hoe vaak je ze al gespot hebt.
 - **Potje tegen Turbo.** Een echte partij op drie sterktes. Met een
   denk-meter die geduld beloont, een voorspel-bonus (raad welk stuk Turbo
   gaat spelen), een blunder-alarm dat waarschuwt zonder voor te zeggen,

@@ -651,6 +651,176 @@ function genBest3(rng) {
   return null;
 }
 
+/* --- tactical pattern detection: fork, pin, skewer, discovered attack --- */
+
+const SLIDER_DIRS = { b: B_DIR, r: R_DIR, q: Q_DIR };
+
+/* Juicy fork targets of the piece on sq: enemy pieces it attacks that are the
+   king, worth more than the attacker, or undefended. */
+function forkTargets(S, sq) {
+  const p = S.board[sq];
+  if (!p) return [];
+  const by = colorOf(p), enemy = other(by), av = VAL[p.toLowerCase()];
+  const out = [];
+  for (const t of piecesOf(S, enemy)) {
+    if (!pieceAttacksSq(S, sq, t)) continue;
+    const tp = S.board[t].toLowerCase();
+    if (tp === 'k' || VAL[tp] > av || findAttacker(S, t, enemy) < 0) out.push(t);
+  }
+  return out;
+}
+
+/* Pins and skewers along the rays of the slider on sq.
+   Pin: cheaper enemy piece in front of a more valuable one (or the king).
+   Skewer: the valuable piece (or king) stands in front and must move. */
+function raysPinSkewer(S, sq) {
+  const res = { pins: [], skewers: [] };
+  const p = S.board[sq];
+  if (!p) return res;
+  const t = p.toLowerCase();
+  if (!'brq'.includes(t)) return res;
+  const by = colorOf(p);
+  for (const d of SLIDER_DIRS[t]) {
+    let f = sq + d, front = -1;
+    while (!(f & 0x88)) {
+      if (S.board[f]) {
+        if (front < 0) {
+          if (colorOf(S.board[f]) === by) break;
+          front = f;
+        } else {
+          if (colorOf(S.board[f]) === by) break;
+          const fv = S.board[front].toLowerCase(), bv = S.board[f].toLowerCase();
+          if (bv === 'k' || VAL[bv] > VAL[fv]) res.pins.push({ front, back: f });
+          else if (fv === 'k' || VAL[fv] > VAL[bv]) res.skewers.push({ front, back: f });
+          break;
+        }
+      }
+      f += d;
+    }
+  }
+  return res;
+}
+
+/* Attacks by friendly sliders that got unveiled because fromSq was vacated.
+   Call on the position AFTER the move. */
+function discoveredFrom(S, fromSq, by) {
+  const out = [];
+  for (const sq of piecesOf(S, by)) {
+    const pt = S.board[sq].toLowerCase();
+    if (!'brq'.includes(pt)) continue;
+    for (const d of SLIDER_DIRS[pt]) {
+      let f = sq + d, seenFrom = false;
+      while (!(f & 0x88)) {
+        if (f === fromSq) { seenFrom = true; f += d; continue; }
+        if (S.board[f]) {
+          if (seenFrom && colorOf(S.board[f]) !== by) {
+            const tp = S.board[f].toLowerCase();
+            out.push({ from: sq, target: f, isKing: tp === 'k', val: VAL[tp] });
+          }
+          break;
+        }
+        f += d;
+      }
+    }
+  }
+  return out;
+}
+
+/* All patterns the move m (from position S, before the move) would create. */
+function patternsAfterMove(S, m) {
+  makeMove(S, m);
+  const res = {
+    safe: seeSquare(S, m.to) <= 0,
+    fork: forkTargets(S, m.to),
+    pin: null, skewer: null,
+    discovered: discoveredFrom(S, m.from, other(S.turn)).filter(x => x.isKing || x.val >= 300),
+    mate: false
+  };
+  const ps = raysPinSkewer(S, m.to);
+  res.pin = ps.pins[0] || null;
+  res.skewer = ps.skewers[0] || null;
+  if (legalMoves(S).length === 0 && inCheck(S)) res.mate = true;
+  unmakeMove(S);
+  return res;
+}
+
+/* Does move m match the asked pattern type, convincingly enough for a drill? */
+function patternMatches(S, m, type, info) {
+  info = info || patternsAfterMove(S, m);
+  if (type === 'mat1') return info.mate;
+  if (type === 'vork') return info.safe && info.fork.length >= 2;
+  if (type === 'penning') {
+    if (!info.safe || !info.pin) return false;
+    makeMove(S, m);
+    const bk = S.board[info.pin.back].toLowerCase();
+    const fv = VAL[S.board[info.pin.front].toLowerCase()];
+    const bv = bk === 'k' ? 100000 : VAL[bk];
+    unmakeMove(S);
+    return bk === 'k' || bv - fv >= 400;
+  }
+  if (type === 'spies') {
+    if (!info.safe || !info.skewer) return false;
+    makeMove(S, m);
+    const ft = S.board[info.skewer.front].toLowerCase();
+    unmakeMove(S);
+    return ft === 'k' || ft === 'q';
+  }
+  if (type === 'aftrek')
+    return info.discovered.length >= 1 && (info.safe || info.discovered.some(x => x.isKing));
+  return false;
+}
+
+/* Drill generator: a position where white has a move that creates the pattern. */
+function genPatternTask(type, rng) {
+  rng = rng || Math.random;
+  if (type === 'mat1') return genMate1Task(rng);
+  for (let tries = 0; tries < 150; tries++) {
+    const S = randomPosition({ noise: 260, minPlies: 10, maxPlies: 26, maxImbalance: 700 }, rng);
+    if (inCheck(S)) continue;
+    const answers = [];
+    for (const m of legalMoves(S)) {
+      const info = patternsAfterMove(S, m);
+      if (patternMatches(S, m, type, info)) answers.push({ m, info });
+    }
+    if (answers.length >= 1 && answers.length <= 3)
+      return { S, type, answers };
+  }
+  return null;
+}
+
+/* Mate-in-1: noisy selfplay until white mates, then step one move back. */
+function genMate1Task(rng) {
+  rng = rng || Math.random;
+  for (let att = 0; att < 25; att++) {
+    const S = newGame();
+    let found = false;
+    for (let i = 0; i < 140; i++) {
+      /* white plays stronger than black, so white mates in most games */
+      const list = rootScores(S, S.turn === 'w' ? 2 : 1);
+      if (!list.length) break;
+      const margin = S.turn === 'w' ? 100 : 250;
+      const top = list.filter(x => x.score >= list[0].score - margin).slice(0, S.turn === 'w' ? 3 : 5);
+      makeMove(S, top[Math.floor(rng() * top.length)].m);
+      const st = gameStatus(S);
+      if (st.over) {
+        if (st.reason === 'mat' && st.result === 'w') { unmakeMove(S); found = true; }
+        break;
+      }
+    }
+    if (!found) continue;
+    const answers = [];
+    for (const m of legalMoves(S)) {
+      makeMove(S, m);
+      const st = gameStatus(S);
+      unmakeMove(S);
+      if (st.over && st.reason === 'mat') answers.push({ m, info: null });
+    }
+    S.hist = [];
+    if (answers.length) return { S, type: 'mat1', answers };
+  }
+  return null;
+}
+
 /* --- Dutch names --- */
 
 const NAME_NL = { p: 'pion', n: 'paard', b: 'loper', r: 'toren', q: 'dame', k: 'koning' };
@@ -674,5 +844,6 @@ if (typeof module !== 'undefined') {
     inCheck, isCapture, perft, material, evalWhite, rootScores, forcedMaterial, pickMove,
     blunderCheck, gameStatus, randomPosition, piecesOf, attackedPieces, captureTargets,
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
-    genSafeTask, genBest3, moveNameNL };
+    genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
+    patternsAfterMove, patternMatches, genPatternTask, genMate1Task };
 }

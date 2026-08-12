@@ -113,7 +113,19 @@
   .mc-scan { background: #FFF3D0; }
   .mc-safe { background: var(--coral-soft); }
   .mc-best { background: #E0F1FD; }
+  .mc-trucs { background: #F1E7FF; }
   .mc-game { background: var(--leaf-soft); }
+
+  .pat-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    border-radius: 14px; background: var(--cream); margin: 6px 0;
+  }
+  .pat-row .pat-e { font-size: 24px; }
+  .pat-row .pat-mid { flex: 1; font-size: 13.5px; line-height: 1.3; }
+  .pat-row .pat-les { display: block; font-size: 11.5px; color: var(--ink-soft); }
+  .pat-row .pat-count { font-size: 12px; font-weight: bold; color: var(--leaf-deep); white-space: nowrap; }
+  .pat-row.pat-locked { opacity: .6; }
+  .pat-row.pat-locked .pat-count { color: var(--ink-soft); font-weight: normal; }
   .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
   .stat-chip {
     background: var(--card); border-radius: 999px; padding: 8px 16px;
@@ -540,11 +552,20 @@
         <span class="mc-title">De Beste Zet</span>
         <span class="mc-sub">Drie zetten. Denk vooruit en kies de beste!</span>
       </button>
+      <button class="mode-card mc-trucs" data-mode="trucs">
+        <span class="mc-emoji">🎒</span>
+        <span class="mc-title">Turbo's Trucendoos</span>
+        <span class="mc-sub">Vind de vork, penning, spies of matzet!</span>
+      </button>
       <button class="mode-card mc-game" data-mode="game">
         <span class="mc-emoji">🏆</span>
         <span class="mc-title">Potje tegen Turbo</span>
         <span class="mc-sub">Een echte partij! Met denk-meter en voorspel-bonus.</span>
       </button>
+    </div>
+    <div class="home-card">
+      <div class="card-title">📖 Trucenboekje <span class="card-sub">(spot ze in het echt!)</span></div>
+      <div id="patBook"></div>
     </div>
     <div class="home-card">
       <div class="card-title">🎯 Missies van vandaag</div>

@@ -133,6 +133,41 @@ ok('best3 expl: hanging queen costs 9 points', eLines[0].indexOf('kost je') >= 0
 ok('best3 expl: best line marked gold', eLines[1].indexOf('🥇') === 0);
 ok('best3 expl: board untouched', eS.hist.length === 0 && toFEN(eS) === '7k/8/8/8/7r/8/8/KQ6 w - - 0 1');
 
+/* ---------- trucendrills ---------- */
+startDrill('trucs');
+drainTimers();
+ok('trucs: taak gegenereerd', !!(session.task && session.task.answers.length >= 1 &&
+  session.phase === 'puzzle'));
+/* deterministische succes-ronde: vork-stelling injecteren */
+var fS = parseFEN('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1');
+var fM = legalMoves(fS).find(function (m) { return alg(m.from) === 'b5' && alg(m.to) === 'c7'; });
+session.S = fS;
+session.task = { S: fS, type: 'vork', answers: [{ m: fM, info: null }], hintUsed: false };
+session.phase = 'puzzle';
+session.tries = 0;
+BD.mode = 'puzzle';
+var earnedB = session.earned, vorkB = (P.c.pat.vork || 0), trucsB = P.day.trucs || 0;
+puzzleAttempt(fM);
+drainTimers();
+ok('trucs: vork goed = 3 sterren', session.earned - earnedB === 3 && session.phase === 'review');
+ok('trucs: boekje en dagteller lopen', P.c.pat.vork === vorkB + 1 && P.day.trucs === trucsB + 1);
+/* fout-fout = onthulling met 0 sterren, bord blijft intact tot de onthulling */
+var fS2 = parseFEN('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1');
+var fM2 = legalMoves(fS2).find(function (m) { return alg(m.from) === 'b5' && alg(m.to) === 'c7'; });
+var badM = legalMoves(fS2).find(function (m) { return m.from === 4; });
+session.S = fS2;
+session.task = { S: fS2, type: 'vork', answers: [{ m: fM2, info: null }], hintUsed: false };
+session.phase = 'puzzle';
+session.tries = 0;
+BD.mode = 'puzzle';
+earnedB = session.earned;
+puzzleAttempt(badM);
+ok('trucs: fout telt poging, bord intact', session.tries === 1 && fS2.hist.length === 0);
+puzzleAttempt(badM);
+drainTimers();
+ok('trucs: na 2 fouten onthulling', session.phase === 'review' && session.earned === earnedB &&
+  fS2.hist.length === 1);
+
 /* ---------- game: predict, guard, mate ---------- */
 startGame(2);
 ok('game: started, white to move', session.kind === 'game' && session.S.turn === 'w');
@@ -227,6 +262,18 @@ ok('wolk: dromer-trofee', !!P.badges.wolk);
 exitCloud();
 ok('wolk: terug naar echt, bord intact', session.S === realS && toFEN(session.S) === realFen &&
   BD.mode === 'move' && !session.cloud && realS.hist.length === 0);
+/* patroon-duiding in de partij: kid speelt een vork, Turbo benoemt hem */
+P.guard = false; P.predict = false;
+session.S = parseFEN('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1');
+BD.mode = 'move';
+var vorkG = P.c.pat.vork || 0;
+commitKid(legalMoves(session.S).find(function (m) {
+  return alg(m.from) === 'b5' && alg(m.to) === 'c7';
+}));
+ok('duiding: vork benoemd in partij', P.c.pat.vork === vorkG + 1 &&
+  __els.bubble.innerHTML.indexOf('VORK') >= 0);
+drainTimers();
+
 /* blunder guard */
 closeLevelUps();
 P.guard = true;
@@ -261,7 +308,8 @@ ensureDay();
 ok('missions: nieuwe dag reset', P.day.date === todayStr() && !P.day.allDone &&
   dayMissions().length === 3);
 var xpM = P.xp;
-['wins', 'stars', 'perfectScans', 'predictHits', 'safeCorrect', 'best3Gold', 'patience']
+['wins', 'stars', 'perfectScans', 'predictHits', 'predictTries', 'safeCorrect',
+  'best3Gold', 'patience', 'cloud', 'trucs']
   .forEach(function (k) { bumpDay(k, 99); });
 ok('missions: 3 klaar + dagbonus', P.day.allDone === true && P.xp - xpM === 3 * 40 + 50);
 /* gates: meesterproeven remmen pure XP-farm */

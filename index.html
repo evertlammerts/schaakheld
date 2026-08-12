@@ -125,7 +125,19 @@
   .mc-scan { background: #FFF3D0; }
   .mc-safe { background: var(--coral-soft); }
   .mc-best { background: #E0F1FD; }
+  .mc-trucs { background: #F1E7FF; }
   .mc-game { background: var(--leaf-soft); }
+
+  .pat-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    border-radius: 14px; background: var(--cream); margin: 6px 0;
+  }
+  .pat-row .pat-e { font-size: 24px; }
+  .pat-row .pat-mid { flex: 1; font-size: 13.5px; line-height: 1.3; }
+  .pat-row .pat-les { display: block; font-size: 11.5px; color: var(--ink-soft); }
+  .pat-row .pat-count { font-size: 12px; font-weight: bold; color: var(--leaf-deep); white-space: nowrap; }
+  .pat-row.pat-locked { opacity: .6; }
+  .pat-row.pat-locked .pat-count { color: var(--ink-soft); font-weight: normal; }
   .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
   .stat-chip {
     background: var(--card); border-radius: 999px; padding: 8px 16px;
@@ -554,11 +566,20 @@
         <span class="mc-title">De Beste Zet</span>
         <span class="mc-sub">Drie zetten. Denk vooruit en kies de beste!</span>
       </button>
+      <button class="mode-card mc-trucs" data-mode="trucs">
+        <span class="mc-emoji">🎒</span>
+        <span class="mc-title">Turbo's Trucendoos</span>
+        <span class="mc-sub">Vind de vork, penning, spies of matzet!</span>
+      </button>
       <button class="mode-card mc-game" data-mode="game">
         <span class="mc-emoji">🏆</span>
         <span class="mc-title">Potje tegen Turbo</span>
         <span class="mc-sub">Een echte partij! Met denk-meter en voorspel-bonus.</span>
       </button>
+    </div>
+    <div class="home-card">
+      <div class="card-title">📖 Trucenboekje <span class="card-sub">(spot ze in het echt!)</span></div>
+      <div id="patBook"></div>
     </div>
     <div class="home-card">
       <div class="card-title">🎯 Missies van vandaag</div>
@@ -1310,6 +1331,176 @@ function genBest3(rng) {
   return null;
 }
 
+/* --- tactical pattern detection: fork, pin, skewer, discovered attack --- */
+
+const SLIDER_DIRS = { b: B_DIR, r: R_DIR, q: Q_DIR };
+
+/* Juicy fork targets of the piece on sq: enemy pieces it attacks that are the
+   king, worth more than the attacker, or undefended. */
+function forkTargets(S, sq) {
+  const p = S.board[sq];
+  if (!p) return [];
+  const by = colorOf(p), enemy = other(by), av = VAL[p.toLowerCase()];
+  const out = [];
+  for (const t of piecesOf(S, enemy)) {
+    if (!pieceAttacksSq(S, sq, t)) continue;
+    const tp = S.board[t].toLowerCase();
+    if (tp === 'k' || VAL[tp] > av || findAttacker(S, t, enemy) < 0) out.push(t);
+  }
+  return out;
+}
+
+/* Pins and skewers along the rays of the slider on sq.
+   Pin: cheaper enemy piece in front of a more valuable one (or the king).
+   Skewer: the valuable piece (or king) stands in front and must move. */
+function raysPinSkewer(S, sq) {
+  const res = { pins: [], skewers: [] };
+  const p = S.board[sq];
+  if (!p) return res;
+  const t = p.toLowerCase();
+  if (!'brq'.includes(t)) return res;
+  const by = colorOf(p);
+  for (const d of SLIDER_DIRS[t]) {
+    let f = sq + d, front = -1;
+    while (!(f & 0x88)) {
+      if (S.board[f]) {
+        if (front < 0) {
+          if (colorOf(S.board[f]) === by) break;
+          front = f;
+        } else {
+          if (colorOf(S.board[f]) === by) break;
+          const fv = S.board[front].toLowerCase(), bv = S.board[f].toLowerCase();
+          if (bv === 'k' || VAL[bv] > VAL[fv]) res.pins.push({ front, back: f });
+          else if (fv === 'k' || VAL[fv] > VAL[bv]) res.skewers.push({ front, back: f });
+          break;
+        }
+      }
+      f += d;
+    }
+  }
+  return res;
+}
+
+/* Attacks by friendly sliders that got unveiled because fromSq was vacated.
+   Call on the position AFTER the move. */
+function discoveredFrom(S, fromSq, by) {
+  const out = [];
+  for (const sq of piecesOf(S, by)) {
+    const pt = S.board[sq].toLowerCase();
+    if (!'brq'.includes(pt)) continue;
+    for (const d of SLIDER_DIRS[pt]) {
+      let f = sq + d, seenFrom = false;
+      while (!(f & 0x88)) {
+        if (f === fromSq) { seenFrom = true; f += d; continue; }
+        if (S.board[f]) {
+          if (seenFrom && colorOf(S.board[f]) !== by) {
+            const tp = S.board[f].toLowerCase();
+            out.push({ from: sq, target: f, isKing: tp === 'k', val: VAL[tp] });
+          }
+          break;
+        }
+        f += d;
+      }
+    }
+  }
+  return out;
+}
+
+/* All patterns the move m (from position S, before the move) would create. */
+function patternsAfterMove(S, m) {
+  makeMove(S, m);
+  const res = {
+    safe: seeSquare(S, m.to) <= 0,
+    fork: forkTargets(S, m.to),
+    pin: null, skewer: null,
+    discovered: discoveredFrom(S, m.from, other(S.turn)).filter(x => x.isKing || x.val >= 300),
+    mate: false
+  };
+  const ps = raysPinSkewer(S, m.to);
+  res.pin = ps.pins[0] || null;
+  res.skewer = ps.skewers[0] || null;
+  if (legalMoves(S).length === 0 && inCheck(S)) res.mate = true;
+  unmakeMove(S);
+  return res;
+}
+
+/* Does move m match the asked pattern type, convincingly enough for a drill? */
+function patternMatches(S, m, type, info) {
+  info = info || patternsAfterMove(S, m);
+  if (type === 'mat1') return info.mate;
+  if (type === 'vork') return info.safe && info.fork.length >= 2;
+  if (type === 'penning') {
+    if (!info.safe || !info.pin) return false;
+    makeMove(S, m);
+    const bk = S.board[info.pin.back].toLowerCase();
+    const fv = VAL[S.board[info.pin.front].toLowerCase()];
+    const bv = bk === 'k' ? 100000 : VAL[bk];
+    unmakeMove(S);
+    return bk === 'k' || bv - fv >= 400;
+  }
+  if (type === 'spies') {
+    if (!info.safe || !info.skewer) return false;
+    makeMove(S, m);
+    const ft = S.board[info.skewer.front].toLowerCase();
+    unmakeMove(S);
+    return ft === 'k' || ft === 'q';
+  }
+  if (type === 'aftrek')
+    return info.discovered.length >= 1 && (info.safe || info.discovered.some(x => x.isKing));
+  return false;
+}
+
+/* Drill generator: a position where white has a move that creates the pattern. */
+function genPatternTask(type, rng) {
+  rng = rng || Math.random;
+  if (type === 'mat1') return genMate1Task(rng);
+  for (let tries = 0; tries < 150; tries++) {
+    const S = randomPosition({ noise: 260, minPlies: 10, maxPlies: 26, maxImbalance: 700 }, rng);
+    if (inCheck(S)) continue;
+    const answers = [];
+    for (const m of legalMoves(S)) {
+      const info = patternsAfterMove(S, m);
+      if (patternMatches(S, m, type, info)) answers.push({ m, info });
+    }
+    if (answers.length >= 1 && answers.length <= 3)
+      return { S, type, answers };
+  }
+  return null;
+}
+
+/* Mate-in-1: noisy selfplay until white mates, then step one move back. */
+function genMate1Task(rng) {
+  rng = rng || Math.random;
+  for (let att = 0; att < 25; att++) {
+    const S = newGame();
+    let found = false;
+    for (let i = 0; i < 140; i++) {
+      /* white plays stronger than black, so white mates in most games */
+      const list = rootScores(S, S.turn === 'w' ? 2 : 1);
+      if (!list.length) break;
+      const margin = S.turn === 'w' ? 100 : 250;
+      const top = list.filter(x => x.score >= list[0].score - margin).slice(0, S.turn === 'w' ? 3 : 5);
+      makeMove(S, top[Math.floor(rng() * top.length)].m);
+      const st = gameStatus(S);
+      if (st.over) {
+        if (st.reason === 'mat' && st.result === 'w') { unmakeMove(S); found = true; }
+        break;
+      }
+    }
+    if (!found) continue;
+    const answers = [];
+    for (const m of legalMoves(S)) {
+      makeMove(S, m);
+      const st = gameStatus(S);
+      unmakeMove(S);
+      if (st.over && st.reason === 'mat') answers.push({ m, info: null });
+    }
+    S.hist = [];
+    if (answers.length) return { S, type: 'mat1', answers };
+  }
+  return null;
+}
+
 /* --- Dutch names --- */
 
 const NAME_NL = { p: 'pion', n: 'paard', b: 'loper', r: 'toren', q: 'dame', k: 'koning' };
@@ -1333,7 +1524,8 @@ if (typeof module !== 'undefined') {
     inCheck, isCapture, perft, material, evalWhite, rootScores, forcedMaterial, pickMove,
     blunderCheck, gameStatus, randomPosition, piecesOf, attackedPieces, captureTargets,
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
-    genSafeTask, genBest3, moveNameNL };
+    genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
+    patternsAfterMove, patternMatches, genPatternTask, genMate1Task };
 }
 /* ============================== UI ============================== */
 /* Op http kan de service worker niet installeren en werkt offline dus nooit.
@@ -1353,12 +1545,13 @@ function defaultP() {
     wins: 0, stars: 0, streak: 0, best: 0, lastLevel: null,
     theme: 'munt', badges: {}, day: null,
     c: { gamesPlayed: 0, winsL2: 0, winsL3: 0, perfectScans: 0, safeCorrect: 0,
-      best3Gold: 0, predictHits: 0, patienceBonus: 0, cloudUsed: 0 } };
+      best3Gold: 0, predictHits: 0, patienceBonus: 0, cloudUsed: 0, pat: {} } };
 }
 let P;
 try { P = JSON.parse(localStorage.getItem('schaakheld1')) || {}; } catch (e) { P = {}; }
 P = Object.assign(defaultP(), P);
 P.c = Object.assign(defaultP().c, P.c || {});
+P.c.pat = P.c.pat || {};
 P.badges = P.badges || {};
 function saveP() { try { localStorage.setItem('schaakheld1', JSON.stringify(P)); } catch (e) {} }
 
@@ -1714,7 +1907,80 @@ const LOSS_TIPS = [
   'Turbo’s geheim: kijk bij elke zet wat de ander terug kan doen.',
   'Turbo’s geheim: ruil alleen als je evenveel of meer punten krijgt.'
 ];
-const MODE_TITLES = { scan: '🔍 Speurogen', safe: '🕵️ Valstrik-detector', best3: '🥇 De Beste Zet', game: '🏆 Potje tegen Turbo' };
+const MODE_TITLES = { scan: '🔍 Speurogen', safe: '🕵️ Valstrik-detector', best3: '🥇 De Beste Zet',
+  trucs: '🎒 Turbo’s Trucendoos', game: '🏆 Potje tegen Turbo' };
+
+/* ---------- patronen: benoemen wat er op het bord gebeurt ---------- */
+const PATTERNS = {
+  vork: { e: '🍴', n: 'Vork', les: 'Eén stuk valt twee dingen tegelijk aan. Er kan er maar één ontsnappen!' },
+  penning: { e: '📌', n: 'Penning', les: 'Een stuk kan niet weg, want er staat iets belangrijkers achter.' },
+  spies: { e: '🍢', n: 'Spies', les: 'Het belangrijke stuk staat voorop en moet vluchten. Jij pakt wat erachter staat.' },
+  aftrek: { e: '🎭', n: 'Aftrekaanval', les: 'Je verplaatst één stuk, en het stuk erachter valt ineens aan. Twee dreigingen tegelijk!' },
+  mat1: { e: '👑', n: 'Matzet', les: 'De koning staat schaak en kan nergens meer heen. Schaakmat!' }
+};
+
+function patName(S, sq) { return NAME_NL[S.board[sq].toLowerCase()]; }
+
+/* Welk patroon maakt zet m (op positie S, vóór de zet)? Voor de duiding. */
+function patternCallout(S, m) {
+  const info = patternsAfterMove(S, m);
+  if (info.mate) return null;
+  const disKing = info.discovered.find(x => x.isKing);
+  if (disKing) {
+    return { key: 'aftrek', info,
+      what: 'AFTREKSCHAAK! 🎭 Het stuk erachter geeft ineens schaak!',
+      squares: [disKing.from, disKing.target] };
+  }
+  if (info.safe && info.fork.length >= 2) {
+    const names = info.fork.map(t => patName(S, t));
+    return { key: 'vork', info,
+      what: 'VORK! 🍴 Eén zet valt ' + names.join(' én ') + ' tegelijk aan!',
+      squares: info.fork.slice() };
+  }
+  if (info.safe && info.skewer) {
+    makeMove(S, m);
+    const ft = S.board[info.skewer.front].toLowerCase();
+    unmakeMove(S);
+    if (ft === 'k' || ft === 'q') {
+      return { key: 'spies', info,
+        what: 'SPIES! 🍢 De ' + NAME_NL[ft] + ' moet vluchten, en dan pak je wat erachter staat!',
+        squares: [info.skewer.front, info.skewer.back] };
+    }
+  }
+  if (info.safe && info.pin && patternMatches(S, m, 'penning', info)) {
+    return { key: 'penning', info,
+      what: 'PENNING! 📌 De ' + patName(S, info.pin.front) + ' kan niet meer weg!',
+      squares: [info.pin.front, info.pin.back] };
+  }
+  if (info.safe && info.discovered.length) {
+    const d = info.discovered[0];
+    return { key: 'aftrek', info,
+      what: 'AFTREKAANVAL! 🎭 Het stuk erachter valt ineens aan!',
+      squares: [d.from, d.target] };
+  }
+  return null;
+}
+
+function countPattern(key) {
+  P.c.pat = P.c.pat || {};
+  P.c.pat[key] = (P.c.pat[key] || 0) + 1;
+  saveP();
+  checkBadges();
+  renderPatBook();
+}
+
+function renderPatBook() {
+  const el = $('patBook');
+  if (!el) return;
+  const pat = (P.c && P.c.pat) || {};
+  el.innerHTML = Object.keys(PATTERNS).map(k => {
+    const p = PATTERNS[k];
+    const n = pat[k] || 0;
+    return '<div class="pat-row' + (n ? '' : ' pat-locked') + '"><span class="pat-e">' + p.e + '</span>' +
+      '<span class="pat-mid"><b>' + p.n + '</b><span class="pat-les">' + p.les + '</span></span>' +
+      '<span class="pat-count">' + (n ? n + '× gespot' : 'nog niet gespot') + '</span></div>';
+  }).join('');
+}
 
 /* ---------- session ---------- */
 let session = null;
@@ -1784,7 +2050,102 @@ function buildRound() {
   if (kind === 'scan') return buildScan();
   if (kind === 'safe') return buildSafe();
   if (kind === 'best3') return buildBest3();
+  if (kind === 'trucs') return buildTrucs();
   return false;
+}
+
+/* --- trucendrills: vind de vork/penning/spies/aftrek/matzet --- */
+const TRUC_TYPES = ['vork', 'vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat1'];
+const TRUC_TEXTS = {
+  vork: ['Vind de VORK! 🍴', 'Speel een zet die twee stukken van Turbo tegelijk aanvalt. Kies wel een veilig veld!'],
+  penning: ['Zet een PENNING! 📌', 'Zet een stuk van Turbo vast: het mag niet meer weg, omdat er iets belangrijkers achter staat.'],
+  spies: ['Zet een SPIES! 🍢', 'Val de koning of dame aan zodat die moet vluchten, en pak daarna wat erachter staat.'],
+  aftrek: ['AFTREKAANVAL! 🎭', 'Verplaats een stuk zodat het stuk erachter ineens aanvalt.'],
+  mat1: ['SCHAAKMAT in één zet! 👑', 'Turbo’s koning kan nergens meer heen. Vind de winnende zet!']
+};
+
+function buildTrucs() {
+  let type = pick(TRUC_TYPES);
+  if (type === session.lastType) type = pick(TRUC_TYPES);
+  let task = genPatternTask(type);
+  if (!task) task = genPatternTask('vork') || genPatternTask('mat1');
+  if (!task) return false;
+  session.lastType = task.type;
+  session.task = task;
+  session.S = task.S;
+  session.phase = 'puzzle';
+  session.tries = 0;
+  task.hintUsed = false;
+  BD.mode = 'puzzle';
+  renderBoard();
+  const tx = TRUC_TEXTS[task.type];
+  setTask('<b>' + tx[0] + '</b><div class="sub">' + tx[1] + '<br>' + PATTERNS[task.type].e + ' ' +
+    PATTERNS[task.type].les + '</div>');
+  say(pick(['Deze truc zit verstopt in het bord. Vind hem! 🎒',
+    'Echte schakers zien deze meteen… jij straks ook! 🐢',
+    'Speur rustig. De truc is er, beloofd!']));
+  setActions([{ label: '💡 Hint', cls: 'plain small', fn: trucHint, id: 'hint' }]);
+  return true;
+}
+
+function trucHint() {
+  if (!session || session.phase !== 'puzzle') return;
+  const t = session.task;
+  if (t.hintUsed) return;
+  t.hintUsed = true;
+  BD.glow.add(t.answers[0].m.from);
+  renderBoard();
+  say('Psst… kijk eens goed naar dat glimmende stuk! (Je kunt nu nog maximaal 2 sterren halen.)');
+  if (actionBtns.hint) actionBtns.hint.disabled = true;
+}
+
+function puzzleAttempt(m) {
+  if (!session || session.phase !== 'puzzle') return;
+  const t = session.task;
+  const type = t.type;
+  const info = patternsAfterMove(session.S, m);
+  if (patternMatches(session.S, m, type, info)) {
+    session.phase = 'review';
+    BD.mode = 'off';
+    const co = type === 'mat1' ? null : patternCallout(session.S, m);
+    playMove(m, () => {
+      if (co) BD.spy = new Set(co.squares);
+      BD.glow.clear();
+      renderBoard();
+      countPattern(type);
+      bumpDay('trucs', 1);
+      const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
+      awardRound(stars, (type === 'mat1' ? 'SCHAAKMAT! 👑 Turbo kan geen kant meer op!' :
+        (co ? co.what : 'Gevonden!')) + ' Zo herken je een ' + PATTERNS[type].n.toLowerCase() + '!');
+    });
+    return;
+  }
+  session.tries++;
+  clearSel();
+  renderBoard();
+  snd.bad();
+  const near = (type !== 'mat1' && patternMatches(session.S, m, type,
+    Object.assign({}, info, { safe: true })) && !info.safe) ?
+    'Bijna! Dat lijkt op een ' + PATTERNS[type].n.toLowerCase() +
+    ', maar Turbo kan je stuk daar zó pakken. Zoek een véilig veld!' : null;
+  if (session.tries >= 2) {
+    session.phase = 'review';
+    BD.mode = 'off';
+    const ans = t.answers[0];
+    const name = moveNameNL(session.S, ans.m);
+    const co = type === 'mat1' ? null : patternCallout(session.S, ans.m);
+    BD.arrows = [{ from: ans.m.from, to: ans.m.to, cls: 'a-leaf' }];
+    playMove(ans.m, () => {
+      if (co) BD.spy = new Set(co.squares);
+      BD.glow.clear();
+      renderBoard();
+      awardRound(0, 'Kijk: <b>' + name + '</b>. ' + (co ? co.what : 'Dát is hem!') +
+        ' Volgende keer zie jij hem! 💪');
+    });
+  } else {
+    say(near || pick(['Die doet iets anders. Probeer nog eens! Denk aan: ' + PATTERNS[type].les.toLowerCase(),
+      'Nog niet de truc! Kijk naar álle stukken van Turbo. Nog één poging!']));
+  }
 }
 
 /* --- scan drill --- */
@@ -2028,6 +2389,7 @@ function best3Explanations(task) {
   task.options.forEach((o, i) => {
     const isBest = o === task.best;
     const name = moveNameNL(S, o.m);
+    const co = isBest ? patternCallout(S, o.m) : null;
     let hangingBefore = 0;
     try { hangingBefore = seeSquare(parseFEN(fenBlack), o.m.from); } catch (e) {}
     makeMove(S, o.m);
@@ -2056,6 +2418,8 @@ function best3Explanations(task) {
     else if (task.best.deep != null && o.deep != null && task.best.deep - o.deep >= 250)
       why = 'pas op: niet meteen, maar een paar zetten later kost deze je tóch wat. Turbo ziet een truc!';
     else why = 'niet meteen fout, maar de gouden zet doet meer.';
+    if (co) why = PATTERNS[co.key].e + ' een echte ' + PATTERNS[co.key].n.toUpperCase() + '! ' +
+      why.charAt(0).toUpperCase() + why.slice(1);
     lines.push((isBest ? '🥇 ' : '▫️ ') + 'ABC'[i] + ': ' + name + '. ' + why.charAt(0).toUpperCase() + why.slice(1));
   });
   return lines;
@@ -2326,7 +2690,7 @@ function exitCloud() {
   say('En, plan klaar? Doe je zet in het écht! 🐢');
 }
 
-function kidTurn() {
+function kidTurn(quiet) {
   if (!session || session.kind !== 'game' || session.over) return;
   BD.mode = 'move';
   startPatience();
@@ -2334,7 +2698,7 @@ function kidTurn() {
     snd.check();
     showToast('SCHAAK! 😱');
     say('Je staat schaak! Red je koning! 👑');
-  } else say(coachSay());
+  } else if (!quiet) say(coachSay());
 }
 
 /* Strategie-coach: kijkt naar de stelling en geeft gerichte tips over de
@@ -2387,6 +2751,27 @@ function onCell(sq) {
     if (p && colorOf(p) === 'b') resolvePredict(sq);
     return;
   }
+  if (BD.mode === 'puzzle') {
+    if (session.phase !== 'puzzle') return;
+    const S = session.S;
+    const p = S.board[sq];
+    if (BD.sel == null) {
+      if (p && colorOf(p) === 'w') trySelect(sq);
+      return;
+    }
+    if (sq === BD.sel) { clearSel(); renderBoard(); return; }
+    if (BD.dots.has(sq)) {
+      const mv = legalMoves(S).filter(m => m.from === BD.sel && m.to === sq);
+      const m = mv.find(x => x.promo === 'q') || mv[0];
+      clearSel();
+      renderBoard();
+      puzzleAttempt(m);
+      return;
+    }
+    if (p && colorOf(p) === 'w') trySelect(sq);
+    else { clearSel(); renderBoard(); }
+    return;
+  }
   if (BD.mode === 'cloud') {
     if (session.cloud && session.cloud.over) return;
     const S = session.S;
@@ -2402,8 +2787,16 @@ function onCell(sq) {
       clearSel();
       renderBoard();
       BD.mode = 'off';
+      const co = patternCallout(S, m);
       playMove(m, () => {
-        if (session && session.cloud) { BD.mode = 'cloud'; cloudMoveDone(); }
+        if (session && session.cloud) {
+          BD.mode = 'cloud';
+          cloudMoveDone();
+          if (co && !session.cloud.over) {
+            countPattern(co.key);
+            say('In je droom: een ' + co.what + ' Onthoud die! ☁️');
+          }
+        }
       });
       return;
     }
@@ -2471,14 +2864,30 @@ function commitKid(m) {
     checkBadges();
   }
   const S = session.S;
+  const co = patternCallout(S, m);
   playMove(m, () => {
     if (!session || session.kind !== 'game') return;
     updateTrays();
     const st = gameStatus(S);
     if (st.over) { endGame(st); return; }
     if (inCheck(S)) { snd.check(); showToast('SCHAAK! 👑', true); }
-    say('Hmm… nu ik! 💭');
-    setTimeout(turboTurn, 450);
+    if (co) {
+      countPattern(co.key);
+      if ((session.patXP || 0) < 3) {
+        session.patXP = (session.patXP || 0) + 1;
+        addXP(10, 'Truc: ' + PATTERNS[co.key].n + '! ' + PATTERNS[co.key].e);
+      }
+      say('Dat is een ' + co.what + ' Goed gezien van jou! 🌟');
+      BD.spy = new Set(co.squares);
+      renderBoard();
+      setTimeout(() => {
+        if (session && session.kind === 'game') { BD.spy.clear(); renderBoard(); }
+      }, 3500);
+      setTimeout(turboTurn, 1100);
+    } else {
+      say('Hmm… nu ik! 💭');
+      setTimeout(turboTurn, 450);
+    }
   });
 }
 
@@ -2535,12 +2944,22 @@ function resolvePredict(sq) {
 function doTurboMove(m) {
   if (!session || session.kind !== 'game' || !m) return;
   const S = session.S;
+  const co = patternCallout(S, m);
   playMove(m, () => {
     if (!session || session.kind !== 'game') return;
     updateTrays();
     const st = gameStatus(S);
     if (st.over) { endGame(st); return; }
-    kidTurn();
+    if (co) {
+      countPattern(co.key);
+      say('Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢');
+      BD.spy = new Set(co.squares);
+      renderBoard();
+      setTimeout(() => {
+        if (session && session.kind === 'game') { BD.spy.clear(); renderBoard(); }
+      }, 3500);
+      kidTurn(true);
+    } else kidTurn();
   });
 }
 
@@ -2725,6 +3144,7 @@ const BADGES = [
   { id: 'orakel', e: '🔮', n: 'Orakel', d: 'Voorspel 5 zetten van Turbo', chk: () => P.c.predictHits >= 5 },
   { id: 'zen', e: '🧘', n: 'Denkmeester', d: 'Verdien 20 denk-bonussen', chk: () => P.c.patienceBonus >= 20 },
   { id: 'wolk', e: '☁️', n: 'Dromer', d: 'Denk vooruit in de denkwolk', chk: () => (P.c.cloudUsed || 0) >= 1 },
+  { id: 'trucs', e: '🎒', n: 'Trucenmeester', d: 'Spot 10 trucs (vork, penning, spies…)', chk: () => Object.values(P.c.pat || {}).reduce((a, b) => a + b, 0) >= 10 },
   { id: 'sterren', e: '🌟', n: 'Sterrenregen', d: 'Verzamel 100 sterren', chk: () => P.stars >= 100 },
   { id: 'vlam', e: '🔥', n: 'Vuurpijl', d: '5 goede antwoorden op een rij', chk: () => P.best >= 5 },
   { id: 'koning', e: '👑', n: 'Koningskind', d: 'Bereik level Koning', chk: () => levelIdx(P.xp) >= 5 }
@@ -2764,7 +3184,8 @@ const MISSIONS = [
   { id: 'valstrik3', e: '🕵️', n: 'Ontmasker 3 valstrikken', sub: 'Goed antwoorden bij de Valstrik-detector.', t: 3, k: 'safeCorrect' },
   { id: 'goud2', e: '🥇', n: '2 keer goud bij De Beste Zet', sub: 'Goud = meteen de beste zet kiezen.', t: 2, k: 'best3Gold' },
   { id: 'denk3', e: '🐢', n: 'Verdien 3 denk-bonussen', sub: 'Wacht in een potje tot de denk-meter vol is en zet dan pas.', t: 3, k: 'patience' },
-  { id: 'wolk2', e: '☁️', n: 'Denk 2 keer vooruit in de denkwolk', sub: 'In een potje: knop ☁️ Denkwolk. Probeer daar een plan uit.', t: 2, k: 'cloud' }
+  { id: 'wolk2', e: '☁️', n: 'Denk 2 keer vooruit in de denkwolk', sub: 'In een potje: knop ☁️ Denkwolk. Probeer daar een plan uit.', t: 2, k: 'cloud' },
+  { id: 'truc3', e: '🎒', n: 'Doe 3 trucendrills goed', sub: 'Vind de vork, penning of matzet in Turbo’s Trucendoos.', t: 3, k: 'trucs' }
 ];
 const MISSION_XP = 40, ALL_MISSIONS_XP = 50;
 
@@ -2776,7 +3197,7 @@ function todayStr() {
 
 function freshDay(t) {
   return { date: t, wins: 0, stars: 0, perfectScans: 0, predictHits: 0, predictTries: 0,
-    safeCorrect: 0, best3Gold: 0, patience: 0, cloud: 0, winsByLvl: { 1: 0, 2: 0, 3: 0 },
+    safeCorrect: 0, best3Gold: 0, patience: 0, cloud: 0, trucs: 0, winsByLvl: { 1: 0, 2: 0, 3: 0 },
     done: {}, allDone: false };
 }
 
@@ -2881,6 +3302,7 @@ function renderLevelPath() {
 
 function renderHome() {
   updateHud();
+  renderPatBook();
   renderMissions();
   renderLevelPath();
   renderThemes();

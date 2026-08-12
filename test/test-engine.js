@@ -63,6 +63,64 @@ check('pieceAttacksSq: a1 rook blocked from a8', E.pieceAttacksSq(oS, E.sqFromAl
 /* Attacked pieces: same position, black view -> knight attacked. */
 check('attacked black', E.attackedPieces(fS, 'b').map(E.alg).join(','), 'e5');
 
+/* Pattern detection: fork, pin, skewer, discovered attack, mate-in-1. */
+{
+  /* Nb5-c7+ forks Ke8 and Ra8 */
+  const S = E.parseFEN('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1');
+  const m = E.legalMoves(S).find(x => E.alg(x.from) === 'b5' && E.alg(x.to) === 'c7');
+  const info = E.patternsAfterMove(S, m);
+  check('fork: Nc7+ hits king and rook', info.fork.length === 2 && info.safe, true);
+  check('fork: matches vork drill', E.patternMatches(S, m, 'vork', info), true);
+  check('fork: board untouched', E.toFEN(S), 'r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1');
+}
+{
+  /* Bb5 pins Nc6 against Ke8 */
+  const S = E.parseFEN('4k3/8/2n5/1B6/8/8/8/4K3 w - - 0 1');
+  const ps = E.raysPinSkewer(S, E.sqFromAlg('b5'));
+  check('pin: bishop pins knight to king', ps.pins.length === 1 &&
+    E.alg(ps.pins[0].front) === 'c6' && E.alg(ps.pins[0].back) === 'e8', true);
+}
+{
+  /* Re1 skewers Ke5 in front of Qe8 */
+  const S = E.parseFEN('4q3/8/8/4k3/8/8/8/4R1K1 b - - 0 1');
+  const ps = E.raysPinSkewer(S, E.sqFromAlg('e1'));
+  check('skewer: rook skewers king and queen', ps.skewers.length === 1 &&
+    E.alg(ps.skewers[0].front) === 'e5' && E.alg(ps.skewers[0].back) === 'e8', true);
+}
+{
+  /* Ne5 moves away and unveils Bb2 hitting Qh8 */
+  const S = E.parseFEN('4k2q/8/8/4N3/8/8/1B6/4K3 w - - 0 1');
+  const m = E.legalMoves(S).find(x => E.alg(x.from) === 'e5' && E.alg(x.to) === 'c4');
+  const info = E.patternsAfterMove(S, m);
+  check('discovered: bishop unveiled on queen', info.discovered.some(x => E.alg(x.target) === 'h8'), true);
+  check('discovered: matches aftrek drill', E.patternMatches(S, m, 'aftrek', info), true);
+}
+{
+  /* mate-in-1 recognized as pattern */
+  const S = E.parseFEN('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1');
+  const m = E.legalMoves(S).find(x => x.from === 0 && x.to === 112);
+  check('mate1: Ra8# matches', E.patternMatches(S, m, 'mat1'), true);
+}
+
+/* Pattern drill generators produce solvable tasks. */
+for (const type of ['vork', 'mat1']) {
+  const t0g = Date.now();
+  let okc = 0;
+  for (let i = 0; i < 3; i++) {
+    const task = E.genPatternTask(type);
+    if (task && task.answers.length >= 1 &&
+      E.patternMatches(task.S, task.answers[0].m, type, task.answers[0].info || undefined)) okc++;
+  }
+  console.log('pattern:' + type + '  ' + okc + '/3 ok, avg ' + Math.round((Date.now() - t0g) / 3) + 'ms');
+  check('pattern gen ' + type, okc, 3);
+}
+{
+  const t0g = Date.now();
+  const task = E.genPatternTask('penning') || E.genPatternTask('spies') || E.genPatternTask('aftrek');
+  console.log('pattern:zeldzamere types  ' + (task ? task.type : 'geen') + ' in ' + (Date.now() - t0g) + 'ms');
+  check('pattern gen rare type found one', !!task, true);
+}
+
 /* AI plays a full game at each level without crashing. */
 for (const lvl of [1, 2, 3]) {
   const S = E.newGame();
