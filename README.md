@@ -21,7 +21,9 @@ De app traint twee vaardigheden die jonge schakers vaak overslaan:
   keuze zie je wat er dan gebeurt, en mag je opnieuw.
 - **Potje tegen Turbo.** Een echte partij op drie sterktes. Met een
   denk-meter die geduld beloont, een voorspel-bonus (raad welk stuk Turbo
-  gaat spelen) en een blunder-alarm dat waarschuwt zonder voor te zeggen.
+  gaat spelen), een blunder-alarm dat waarschuwt zonder voor te zeggen,
+  een strategie-coach en een denkwolk: een droomkopie van het bord waarop
+  je vrij vooruit mag proberen (ook Turbo's stukken) voordat je echt zet.
 
 Fouten worden altijd uitgelegd: wie valt aan, wie verdedigt, en waarom een
 ruil wel of niet gunstig is. Onder het bord staat een puntenwijzer

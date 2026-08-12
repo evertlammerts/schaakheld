@@ -321,6 +321,19 @@
   #arrows line { stroke-width: 13; stroke-linecap: round; opacity: .85; }
   #arrows polygon { opacity: .85; }
 
+  .cloudbar {
+    width: var(--bw); background: #EAF0FF; border: 2px dashed #9DB4E8; border-radius: 16px;
+    padding: 9px 14px; font-size: 14.5px; color: #44578C; line-height: 1.4;
+  }
+  .cloudbar.hidden { display: none; }
+  .cloudbar .cloud-sub { font-size: 12.5px; opacity: .85; }
+  .board-frame.cloud {
+    box-shadow: 0 0 0 4px #9DB4E8, 0 12px 34px rgba(90, 120, 200, .35);
+    background: #EAF0FF;
+  }
+  .board-frame.cloud .cell.light { background: #F0F4FF; }
+  .board-frame.cloud .cell.dark { background: #92A9DC; }
+
   .patience { width: var(--bw); display: flex; align-items: center; gap: 8px; }
   .patience.hidden { display: none; }
   .pat-track {
@@ -589,6 +602,8 @@
           </div>
           <div class="predict-track"><i id="predictTimer"></i></div>
         </div>
+        <div id="cloudBar" class="cloudbar hidden">☁️ <b>DENKWOLK</b> <span id="cloudDepth"></span><br>
+          <span class="cloud-sub">Hier mag alles: schuif ook Turbo's stukken. Niks telt echt!</span></div>
         <div class="board-frame">
           <div id="board"></div>
           <svg id="arrows" viewBox="0 0 800 800"></svg>
@@ -1338,7 +1353,7 @@ function defaultP() {
     wins: 0, stars: 0, streak: 0, best: 0, lastLevel: null,
     theme: 'munt', badges: {}, day: null,
     c: { gamesPlayed: 0, winsL2: 0, winsL3: 0, perfectScans: 0, safeCorrect: 0,
-      best3Gold: 0, predictHits: 0, patienceBonus: 0 } };
+      best3Gold: 0, predictHits: 0, patienceBonus: 0, cloudUsed: 0 } };
 }
 let P;
 try { P = JSON.parse(localStorage.getItem('schaakheld1')) || {}; } catch (e) { P = {}; }
@@ -1711,6 +1726,9 @@ function goHome() {
   spin(false);
   $('predictBar').classList.add('hidden');
   $('patience').classList.add('hidden');
+  $('cloudBar').classList.add('hidden');
+  const cloudFrame = document.querySelector('.board-frame');
+  if (cloudFrame) cloudFrame.classList.remove('cloud');
   stopPatience();
   showScreen('home');
   $('homeBubble').textContent = pick(HOME_LINES);
@@ -2210,10 +2228,102 @@ function startGame(level) {
 
 function gameActions() {
   setActions([
+    { label: '☁️ Denkwolk', cls: 'plain small', fn: enterCloud, id: 'cloudBtn' },
     { label: '↩ Zet terug', cls: 'plain small', fn: undoMove, id: 'undo' },
     { label: '👀 Speurbril (' + session.tips + ')', cls: 'plain small', fn: useTip, id: 'tip' }
   ]);
   if (actionBtns.tip) actionBtns.tip.title = 'Laat alle aangevallen stukken even oplichten. Drie keer per potje.';
+  if (actionBtns.cloudBtn) actionBtns.cloudBtn.title = 'Oefenbord: probeer zetten uit zonder dat het telt.';
+}
+
+/* ---------- denkwolk: vrij vooruitdenken op een droomkopie van het bord ---------- */
+function enterCloud() {
+  if (!session || session.kind !== 'game' || session.over || BD.mode !== 'move') return;
+  session.cloud = { realS: session.S, realLast: BD.last, over: false, counted: false };
+  session.S = parseFEN(toFEN(session.S));
+  clearSel();
+  BD.last = null;
+  BD.mode = 'cloud';
+  const frame = document.querySelector('.board-frame');
+  if (frame) frame.classList.add('cloud');
+  $('cloudBar').classList.remove('hidden');
+  updateCloudBar();
+  renderBoard();
+  cloudActions();
+  snd.select();
+  say('Welkom in mijn denkwolk! ☁️ Probeer je plan: schuif je eigen stukken én die van mij. Kijk wat er gebeurt!');
+}
+
+function updateCloudBar() {
+  const n = session.S.hist.length;
+  $('cloudDepth').textContent = n ? '· ' + n + (n === 1 ? ' zet' : ' zetten') + ' diep' : '';
+}
+
+function cloudActions() {
+  setActions([
+    { label: '🌤 Terug naar echt', cls: 'sun', fn: exitCloud, id: 'cloudExit' },
+    { label: '↩ Stapje terug', cls: 'plain small', fn: cloudUndo, id: 'cloudUndoBtn' },
+    { label: '🐢 Wat zou Turbo doen?', cls: 'plain small', fn: cloudTurbo, id: 'cloudTurboBtn' }
+  ]);
+}
+
+function cloudMoveDone() {
+  const c = session.cloud;
+  updateCloudBar();
+  if (!c.counted && session.S.hist.length > 0) {
+    c.counted = true;
+    P.c.cloudUsed = (P.c.cloudUsed || 0) + 1;
+    bumpDay('cloud', 1);
+    checkBadges();
+  }
+  const st = gameStatus(session.S);
+  c.over = st.over;
+  if (st.over) {
+    if (st.reason === 'mat') {
+      say(st.result === 'w' ?
+        'Schaakmat in je droom! 🌟 Onthoud dit plan en doe het straks in het echt!' :
+        'Oei, in deze droom ga jíj mat. 😅 Fijn dat je dat hier ontdekt: stapje terug en probeer wat anders!');
+    } else say('Deze droom eindigt in gelijkspel. Stapje terug en probeer een ander plan!');
+  }
+}
+
+function cloudTurbo() {
+  if (!session || !session.cloud || session.cloud.over || BD.mode !== 'cloud') return;
+  const m = pickMove(session.S, session.level);
+  if (!m) return;
+  BD.mode = 'off';
+  say('Dit zou ík hier doen! 🐢 Kijk maar.');
+  playMove(m, () => {
+    if (session && session.cloud) { BD.mode = 'cloud'; cloudMoveDone(); }
+  });
+}
+
+function cloudUndo() {
+  if (!session || !session.cloud || !session.S.hist.length) return;
+  unmakeMove(session.S);
+  clearSel();
+  BD.last = null;
+  BD.check = inCheck(session.S) ? session.S.kings[session.S.turn] : null;
+  session.cloud.over = false;
+  BD.mode = 'cloud';
+  renderBoard();
+  updateCloudBar();
+}
+
+function exitCloud() {
+  if (!session || !session.cloud) return;
+  session.S = session.cloud.realS;
+  BD.last = session.cloud.realLast;
+  session.cloud = null;
+  clearSel();
+  BD.check = inCheck(session.S) ? session.S.kings[session.S.turn] : null;
+  BD.mode = 'move';
+  const frame = document.querySelector('.board-frame');
+  if (frame) frame.classList.remove('cloud');
+  $('cloudBar').classList.add('hidden');
+  renderBoard();
+  gameActions();
+  say('En, plan klaar? Doe je zet in het écht! 🐢');
 }
 
 function kidTurn() {
@@ -2275,6 +2385,30 @@ function onCell(sq) {
   if (BD.mode === 'predict') {
     const p = session.S.board[sq];
     if (p && colorOf(p) === 'b') resolvePredict(sq);
+    return;
+  }
+  if (BD.mode === 'cloud') {
+    if (session.cloud && session.cloud.over) return;
+    const S = session.S;
+    const p = S.board[sq];
+    if (BD.sel == null) {
+      if (p && colorOf(p) === S.turn) trySelect(sq);
+      return;
+    }
+    if (sq === BD.sel) { clearSel(); renderBoard(); return; }
+    if (BD.dots.has(sq)) {
+      const mv = legalMoves(S).filter(m => m.from === BD.sel && m.to === sq);
+      const m = mv.find(x => x.promo === 'q') || mv[0];
+      clearSel();
+      renderBoard();
+      BD.mode = 'off';
+      playMove(m, () => {
+        if (session && session.cloud) { BD.mode = 'cloud'; cloudMoveDone(); }
+      });
+      return;
+    }
+    if (p && colorOf(p) === S.turn) trySelect(sq);
+    else { clearSel(); renderBoard(); }
     return;
   }
   if (BD.mode !== 'move') return;
@@ -2590,6 +2724,7 @@ const BADGES = [
   { id: 'goudzoeker', e: '🥇', n: 'Goudzoeker', d: '10 keer meteen de beste zet', chk: () => P.c.best3Gold >= 10 },
   { id: 'orakel', e: '🔮', n: 'Orakel', d: 'Voorspel 5 zetten van Turbo', chk: () => P.c.predictHits >= 5 },
   { id: 'zen', e: '🧘', n: 'Denkmeester', d: 'Verdien 20 denk-bonussen', chk: () => P.c.patienceBonus >= 20 },
+  { id: 'wolk', e: '☁️', n: 'Dromer', d: 'Denk vooruit in de denkwolk', chk: () => (P.c.cloudUsed || 0) >= 1 },
   { id: 'sterren', e: '🌟', n: 'Sterrenregen', d: 'Verzamel 100 sterren', chk: () => P.stars >= 100 },
   { id: 'vlam', e: '🔥', n: 'Vuurpijl', d: '5 goede antwoorden op een rij', chk: () => P.best >= 5 },
   { id: 'koning', e: '👑', n: 'Koningskind', d: 'Bereik level Koning', chk: () => levelIdx(P.xp) >= 5 }
@@ -2628,7 +2763,8 @@ const MISSIONS = [
   { id: 'voorspel3', e: '🔮', n: 'Doe 3 voorspellingen', sub: 'Tik tijdens het paarse balkje het stuk aan dat Turbo gaat spelen. Raden mag!', t: 3, k: 'predictTries' },
   { id: 'valstrik3', e: '🕵️', n: 'Ontmasker 3 valstrikken', sub: 'Goed antwoorden bij de Valstrik-detector.', t: 3, k: 'safeCorrect' },
   { id: 'goud2', e: '🥇', n: '2 keer goud bij De Beste Zet', sub: 'Goud = meteen de beste zet kiezen.', t: 2, k: 'best3Gold' },
-  { id: 'denk3', e: '🐢', n: 'Verdien 3 denk-bonussen', sub: 'Wacht in een potje tot de denk-meter vol is en zet dan pas.', t: 3, k: 'patience' }
+  { id: 'denk3', e: '🐢', n: 'Verdien 3 denk-bonussen', sub: 'Wacht in een potje tot de denk-meter vol is en zet dan pas.', t: 3, k: 'patience' },
+  { id: 'wolk2', e: '☁️', n: 'Denk 2 keer vooruit in de denkwolk', sub: 'In een potje: knop ☁️ Denkwolk. Probeer daar een plan uit.', t: 2, k: 'cloud' }
 ];
 const MISSION_XP = 40, ALL_MISSIONS_XP = 50;
 
@@ -2640,7 +2776,7 @@ function todayStr() {
 
 function freshDay(t) {
   return { date: t, wins: 0, stars: 0, perfectScans: 0, predictHits: 0, predictTries: 0,
-    safeCorrect: 0, best3Gold: 0, patience: 0, winsByLvl: { 1: 0, 2: 0, 3: 0 },
+    safeCorrect: 0, best3Gold: 0, patience: 0, cloud: 0, winsByLvl: { 1: 0, 2: 0, 3: 0 },
     done: {}, allDone: false };
 }
 

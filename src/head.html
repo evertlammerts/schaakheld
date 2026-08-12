@@ -309,6 +309,19 @@
   #arrows line { stroke-width: 13; stroke-linecap: round; opacity: .85; }
   #arrows polygon { opacity: .85; }
 
+  .cloudbar {
+    width: var(--bw); background: #EAF0FF; border: 2px dashed #9DB4E8; border-radius: 16px;
+    padding: 9px 14px; font-size: 14.5px; color: #44578C; line-height: 1.4;
+  }
+  .cloudbar.hidden { display: none; }
+  .cloudbar .cloud-sub { font-size: 12.5px; opacity: .85; }
+  .board-frame.cloud {
+    box-shadow: 0 0 0 4px #9DB4E8, 0 12px 34px rgba(90, 120, 200, .35);
+    background: #EAF0FF;
+  }
+  .board-frame.cloud .cell.light { background: #F0F4FF; }
+  .board-frame.cloud .cell.dark { background: #92A9DC; }
+
   .patience { width: var(--bw); display: flex; align-items: center; gap: 8px; }
   .patience.hidden { display: none; }
   .pat-track {
@@ -575,6 +588,8 @@
           </div>
           <div class="predict-track"><i id="predictTimer"></i></div>
         </div>
+        <div id="cloudBar" class="cloudbar hidden">☁️ <b>DENKWOLK</b> <span id="cloudDepth"></span><br>
+          <span class="cloud-sub">Hier mag alles: schuif ook Turbo's stukken. Niks telt echt!</span></div>
         <div class="board-frame">
           <div id="board"></div>
           <svg id="arrows" viewBox="0 0 800 800"></svg>

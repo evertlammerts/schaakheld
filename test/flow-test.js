@@ -200,6 +200,33 @@ tipsBefore = session.tips;
 useTip();
 ok('tip: consumed with both pawns glowing', session.tips === tipsBefore - 1 && BD.spy.size === 2);
 drainTimers();
+/* denkwolk: vrij vooruitdenken op een droomkopie, echt bord blijft onaangeraakt */
+var realS = session.S;
+var realFen = toFEN(realS);
+enterCloud();
+ok('wolk: sandbox actief op kopie', !!session.cloud && session.S !== realS &&
+  toFEN(session.S) === realFen && BD.mode === 'cloud');
+onCell(sqFromAlg('e4'));
+ok('wolk: wit stuk selecteerbaar', BD.sel === sqFromAlg('e4'));
+onCell(sqFromAlg('d5')); /* exd5 */
+drainTimers();
+ok('wolk: witte zet gespeeld', session.S.hist.length === 1);
+onCell(sqFromAlg('g8'));
+ok('wolk: ook Turbo-stuk schuifbaar', BD.sel === sqFromAlg('g8'));
+onCell(sqFromAlg('f7')); /* Kf7 */
+drainTimers();
+ok('wolk: zwarte zet gespeeld', session.S.hist.length === 2);
+var cloudPlies = session.S.hist.length;
+cloudTurbo();
+drainTimers();
+ok('wolk: turbo-hulp speelt een zet', session.S.hist.length === cloudPlies + 1);
+cloudUndo();
+ok('wolk: stapje terug', session.S.hist.length === cloudPlies);
+ok('wolk: teller en dagmissie lopen', P.c.cloudUsed >= 1 && P.day.cloud >= 1);
+ok('wolk: dromer-trofee', !!P.badges.wolk);
+exitCloud();
+ok('wolk: terug naar echt, bord intact', session.S === realS && toFEN(session.S) === realFen &&
+  BD.mode === 'move' && !session.cloud && realS.hist.length === 0);
 /* blunder guard */
 closeLevelUps();
 P.guard = true;
