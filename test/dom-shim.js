@@ -54,6 +54,13 @@ var document = {
 };
 var window = globalThis;
 var navigator = {};
+/* in-memory localStorage so profile save/load and de CRDT-doc round-trip echt draaien */
+var localStorage = {
+  _m: {},
+  getItem(k) { return k in this._m ? this._m[k] : null; },
+  setItem(k, v) { this._m[k] = String(v); },
+  removeItem(k) { delete this._m[k]; }
+};
 var location = { protocol: 'file:' };
 var innerWidth = 900, innerHeight = 700;
 var addEventListener = function () {};

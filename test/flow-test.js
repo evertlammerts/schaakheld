@@ -371,6 +371,92 @@ ok('modal queue: tweede komt daarna', __els.modalBox.innerHTML.indexOf('TWEE') >
 closeModal();
 ok('modal queue: leeg en dicht', modalOpen === false && __els.overlay.classList.contains('hidden'));
 
+/* ---------- profiel-CRDT: doc, migratie, merge en sync ---------- */
+/* doc en weergave lopen gelijk (predictHits niet: die is hierboven met opzet
+   rechtstreeks in P gezet en dus alleen weergave) */
+ok('crdt: som van bijdragen = weergave', ['xp', 'stars', 'wins', 'c.gamesPlayed',
+  'c.perfectScans', 'c.winsL2', 'c.winsL3'].every(function (k) {
+  return cntSum(DOC.cnt[k] || {}) === +getPath(P, k);
+}));
+ok('crdt: alle bijdragen op dit apparaat', Object.keys(DOC.cnt.xp).length === 1 &&
+  DOC.cnt.xp[DEV] === P.xp);
+ok('crdt: trofeeen in het doc', Object.keys(P.badges).every(function (b) {
+  return DOC.set.badges[b] === true;
+}));
+
+/* round-trip door localStorage: herladen verliest niets */
+saveP();
+var stored = JSON.parse(localStorage.getItem('schaakheld1'));
+ok('crdt: opgeslagen doc is v2', stored.v === 2 && !!stored.cnt && !!stored.set);
+var rt = { xp: P.xp, stars: P.stars, wins: P.wins, badges: Object.keys(P.badges).length,
+  theme: P.theme, best: P.best, streak: P.streak };
+loadProfile();
+ok('crdt: herladen verliest niets', P.xp === rt.xp && P.stars === rt.stars &&
+  P.wins === rt.wins && Object.keys(P.badges).length === rt.badges &&
+  P.theme === rt.theme && P.best === rt.best && P.streak === rt.streak);
+
+/* migratie via loadProfile: een oud plat profiel in localStorage wordt bij de
+   eerste start na de update een v2-doc, zonder verlies */
+var docSave = JSON.stringify(DOC);
+localStorage.setItem('schaakheld1', JSON.stringify({ name: 'Oscar', xp: 120, stars: 7,
+  badges: { winst: true }, c: { gamesPlayed: 3, pat: { vork: 2 } } }));
+loadProfile();
+ok('migratie: oud profiel geladen', P.xp === 120 && P.stars === 7 && P.name === 'Oscar' &&
+  P.c.gamesPlayed === 3 && P.c.pat.vork === 2 && P.badges.winst === true);
+ok('migratie: bijdragen op dit apparaat, doc is v2', DOC.v === 2 && DOC.cnt.xp[DEV] === 120);
+saveP();
+ok('migratie: opgeslagen als v2', JSON.parse(localStorage.getItem('schaakheld1')).v === 2);
+localStorage.setItem('schaakheld1', docSave);
+loadProfile(); /* terug naar het testprofiel van hierboven */
+
+/* migratie: oud plat profiel wordt de bijdrage van het opgegeven apparaat */
+var legacy = { name: 'Oscar', xp: 120, stars: 7, wins: 2, best: 4, streak: 2,
+  theme: 'oceaan', badges: { winst: true },
+  c: { gamesPlayed: 3, winsL2: 1, pat: { vork: 2 } } };
+var mig = migrateLegacy(legacy, 'ipadA');
+var mv = viewFromDoc(mig);
+ok('migratie: tellers, trofeeen en voorkeuren mee', mv.xp === 120 && mv.stars === 7 &&
+  mv.wins === 2 && mv.c.gamesPlayed === 3 && mv.c.winsL2 === 1 && mv.c.pat.vork === 2 &&
+  mv.badges.winst === true && mv.name === 'Oscar' && mv.theme === 'oceaan' &&
+  mv.best === 4 && mv.streak === 2);
+ok('migratie: bijdrage op het opgegeven apparaat', mig.cnt.xp.ipadA === 120);
+
+/* merge: het memo-voorbeeld, +50 op A en +30 op B moet +80 zijn */
+var dA = migrateLegacy({ xp: 50, best: 3, name: 'Oscar', badges: { vlam: true } }, 'ipadA');
+var dB = migrateLegacy({ xp: 30, best: 5, name: 'Oskar', badges: { raket: true } }, 'ipadB');
+dB.lww.name.t = dA.lww.name.t + 1000; /* B is later aangepast */
+var dM = viewFromDoc(mergeDoc(dA, dB));
+ok('merge: tellers tellen op', dM.xp === 80);
+ok('merge: trofeeen verenigd', dM.badges.vlam === true && dM.badges.raket === true);
+ok('merge: nieuwste naam wint', dM.name === 'Oskar');
+ok('merge: beste reeks is max', dM.best === 5);
+var dBA = viewFromDoc(mergeDoc(dB, dA));
+ok('merge: commutatief', dBA.xp === dM.xp && dBA.name === dM.name && dBA.best === dM.best &&
+  JSON.stringify(Object.keys(dBA.badges).sort()) === JSON.stringify(Object.keys(dM.badges).sort()));
+ok('merge: idempotent', viewFromDoc(mergeDoc(dA, dA)).xp === 50);
+/* heen en weer blijven dragen convergeert en verliest nooit iets */
+var dA2 = mergeDoc(dA, dB), dB2 = mergeDoc(dB, dA2), dA3 = mergeDoc(dA2, dB2);
+ok('merge: heen en weer stabiel', viewFromDoc(dA3).xp === 80 &&
+  JSON.stringify(dA3.cnt) === JSON.stringify(mergeDoc(dA3, dB2).cnt));
+/* per apparaat wint de hoogste stand, dubbel gezien wordt niet dubbel geteld */
+var dup = mergeDoc(dA2, dB);
+ok('merge: per apparaat max, geen dubbeltelling', viewFromDoc(dup).xp === 80);
+
+/* sync op het live profiel: alleen andermans bijdragen komen erbij */
+var xpNow = P.xp;
+var remote = emptyDoc();
+remote.cnt.xp = { andereipad: 100 };
+remote.set.badges.raket = true;
+ok('sync: remote doc toegepast', applyRemoteDoc(remote) === true);
+ok('sync: xp van het andere apparaat erbij', P.xp === xpNow + 100);
+ok('sync: trofee van het andere apparaat erbij', P.badges.raket === true);
+ok('sync: lastLevel herberekend, geen feestmodal', P.lastLevel === levelIdx(P.xp) &&
+  __els.overlay.classList.contains('hidden'));
+applyRemoteDoc(remote);
+ok('sync: dubbel toepassen verandert niets', P.xp === xpNow + 100);
+ok('sync: kapot doc geweigerd', applyRemoteDoc({ hoi: 1 }) === false &&
+  applyRemoteDoc(null) === false && P.xp === xpNow + 100);
+
 /* ---------- reset flow (last: it wipes the profile) ---------- */
 goHome();
 fire(__els.resetBtn, 'click');

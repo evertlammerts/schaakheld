@@ -22,6 +22,18 @@ README.md voor de spelvormen en de opbouw.
 - App-iconen komen uit `tools/make-icons.py` (pure stdlib, reproduceerbaar);
   gegenereerde PNG's staan in de repo-root en worden meegecommit.
 
+## Profiel
+
+- Het profiel is een state-based CRDT (`DOC`, de waarheid in localStorage)
+  met een platte weergave (`P`) waar de UI uit leest. Tellers schrijf je met
+  `bump(pad, n)`, naam/thema/instellingen met `setPref`, trofeeen met
+  `addBadge`. Nooit rechtstreeks `P.xp += n` schrijven: dat raakt alleen de
+  weergave en is weg na herladen. Streak, lastLevel en dagmissies zijn
+  bewust per apparaat; die schrijven wel direct in `P` en `saveP()` neemt ze
+  mee.
+- Ontwerp en achtergrond: memo
+  `~/projects/memos/schaakheld/2026-08-14-multiplayer-en-sync-ontwerp.md`.
+
 ## Testen
 
 - `./test.sh` draait alles headless onder jsc. Beide suites moeten groen

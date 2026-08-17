@@ -10,7 +10,19 @@ const $ = id => document.getElementById(id);
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
-/* ---------- profile ---------- */
+/* ---------- profile ----------
+   Het profiel leeft in twee vormen. DOC is de waarheid en staat in
+   localStorage: een state-based CRDT die zonder conflicten samengaat met het
+   profiel van een ander apparaat (tweede iPad, straks de server). P is de
+   platte weergave die de rest van de UI leest. Schrijven gaat via bump,
+   setPref en addBadge, nooit rechtstreeks in P. Alleen de lokale velden
+   (streak, lastLevel, day) schrijft de UI direct; die neemt saveP mee.
+   - Tellers (xp, sterren, wins, c.*): G-Counter, per teller een map
+     {apparaatId: bijdrage}. Weergave is de som, merge is per apparaat max.
+     Zo telt +50 op de ene iPad en +30 op de andere op tot +80.
+   - Trofeeen: G-Set, merge is vereniging.
+   - Naam, thema, instellingen: last-write-wins met timestamp.
+   - Streak, lastLevel en dagmissies zijn per apparaat en mergen niet. */
 function defaultP() {
   return { name: '', xp: 0, sound: true, guard: true, predict: true,
     wins: 0, stars: 0, streak: 0, best: 0, lastLevel: null,
@@ -18,13 +30,176 @@ function defaultP() {
     c: { gamesPlayed: 0, winsL2: 0, winsL3: 0, perfectScans: 0, safeCorrect: 0,
       best3Gold: 0, predictHits: 0, patienceBonus: 0, cloudUsed: 0, pat: {} } };
 }
-let P;
-try { P = JSON.parse(localStorage.getItem('schaakheld1')) || {}; } catch (e) { P = {}; }
-P = Object.assign(defaultP(), P);
-P.c = Object.assign(defaultP().c, P.c || {});
-P.c.pat = P.c.pat || {};
-P.badges = P.badges || {};
-function saveP() { try { localStorage.setItem('schaakheld1', JSON.stringify(P)); } catch (e) {} }
+const COUNTERS = ['xp', 'wins', 'stars', 'c.gamesPlayed', 'c.winsL2', 'c.winsL3',
+  'c.perfectScans', 'c.safeCorrect', 'c.best3Gold', 'c.predictHits',
+  'c.patienceBonus', 'c.cloudUsed'];
+const PREFS = ['name', 'sound', 'guard', 'predict', 'theme'];
+
+function newDevId() {
+  try { return crypto.randomUUID(); } catch (e) {
+    let s = '';
+    for (let i = 0; i < 32; i++) s += Math.floor(Math.random() * 16).toString(16);
+    return s;
+  }
+}
+const DEV = (() => {
+  try {
+    let d = localStorage.getItem('schaakheld-dev');
+    if (!d) { d = newDevId(); localStorage.setItem('schaakheld-dev', d); }
+    return d;
+  } catch (e) { return newDevId(); }
+})();
+
+function emptyDoc() {
+  return { v: 2, cnt: {}, set: { badges: {} }, lww: {}, max: { best: 0 },
+    loc: { streak: 0, lastLevel: null, day: null } };
+}
+function normDoc(raw) {
+  const d = Object.assign(emptyDoc(), raw);
+  d.cnt = d.cnt || {};
+  d.set = Object.assign({ badges: {} }, d.set);
+  d.lww = d.lww || {};
+  d.max = Object.assign({ best: 0 }, d.max);
+  d.loc = Object.assign({ streak: 0, lastLevel: null, day: null }, d.loc);
+  return d;
+}
+
+function getPath(o, p) {
+  let cur = o;
+  for (const k of p.split('.')) cur = cur == null ? undefined : cur[k];
+  return cur;
+}
+function setPath(o, p, v) {
+  const ks = p.split('.');
+  let cur = o;
+  for (let i = 0; i < ks.length - 1; i++) cur = cur[ks[i]] = cur[ks[i]] || {};
+  cur[ks[ks.length - 1]] = v;
+}
+function cntSum(m) {
+  let s = 0;
+  for (const dev in m) { const n = +m[dev]; if (isFinite(n) && n > 0) s += n; }
+  return s;
+}
+
+/* Een oud plat profiel wordt eenmalig een doc: alles wat behaald is wordt de
+   bijdrage van dit apparaat. Twee apparaten met eigen historie tellen na de
+   eerste merge dus gewoon op. */
+function migrateLegacy(o, dev) {
+  const d = emptyDoc();
+  o = Object.assign(defaultP(), o || {});
+  o.c = Object.assign(defaultP().c, o.c || {});
+  const pat = o.c.pat || {};
+  for (const p of COUNTERS) {
+    const v = +getPath(o, p);
+    if (v > 0) d.cnt[p] = { [dev]: v };
+  }
+  for (const k in pat) if (+pat[k] > 0) d.cnt['c.pat.' + k] = { [dev]: +pat[k] };
+  for (const k in (o.badges || {})) if (o.badges[k]) d.set.badges[k] = true;
+  const t = Date.now();
+  for (const f of PREFS) d.lww[f] = { v: o[f], t };
+  d.max.best = +o.best || 0;
+  d.loc = { streak: +o.streak || 0, lastLevel: o.lastLevel == null ? null : o.lastLevel,
+    day: o.day || null };
+  return d;
+}
+
+/* Platte weergave uit het doc. Onbekende tellerpaden (nieuwere appversie op
+   een ander apparaat) blijven in het doc bewaard maar doen hier niet mee. */
+function viewFromDoc(d) {
+  const p = defaultP();
+  for (const path in d.cnt) {
+    if (COUNTERS.includes(path) || path.startsWith('c.pat.')) setPath(p, path, cntSum(d.cnt[path]));
+  }
+  for (const k in d.set.badges) if (d.set.badges[k]) p.badges[k] = true;
+  for (const f of PREFS) if (d.lww[f]) p[f] = d.lww[f].v;
+  p.best = +d.max.best || 0;
+  p.streak = +d.loc.streak || 0;
+  p.lastLevel = d.loc.lastLevel == null ? null : d.loc.lastLevel;
+  p.day = d.loc.day || null;
+  return p;
+}
+
+let DOC, P;
+function loadProfile() {
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem('schaakheld1')); } catch (e) {}
+  if (raw && raw.v === 2) DOC = normDoc(raw);
+  else if (raw) DOC = migrateLegacy(raw, DEV);
+  else DOC = emptyDoc();
+  P = viewFromDoc(DOC);
+}
+loadProfile();
+
+function saveP() {
+  DOC.loc.streak = P.streak;
+  DOC.loc.lastLevel = P.lastLevel;
+  DOC.loc.day = P.day;
+  if (P.best > DOC.max.best) DOC.max.best = P.best;
+  try { localStorage.setItem('schaakheld1', JSON.stringify(DOC)); } catch (e) {}
+}
+
+/* Alle tellers gaan hierdoorheen: de bijdrage van dit apparaat groeit mee en
+   mag nooit krimpen, anders klopt de merge niet meer. */
+function bump(path, n) {
+  if (!(n > 0)) return;
+  const m = DOC.cnt[path] || (DOC.cnt[path] = {});
+  m[DEV] = (+m[DEV] || 0) + n;
+  setPath(P, path, (+getPath(P, path) || 0) + n);
+  saveP();
+}
+function setPref(f, v) {
+  DOC.lww[f] = { v, t: Date.now() };
+  P[f] = v;
+  saveP();
+}
+function addBadge(id) {
+  DOC.set.badges[id] = true;
+  P.badges[id] = true;
+  saveP();
+}
+
+/* Merge is idempotent, commutatief en associatief: heen en weer syncen of
+   dezelfde overdracht twee keer toepassen kan nooit iets kwijtmaken. De
+   lokale velden komen altijd uit het eigen doc. */
+function foldCnt(src, out) {
+  for (const path in src) {
+    for (const dev in src[path]) {
+      const n = +src[path][dev];
+      if (!isFinite(n) || n <= 0) continue;
+      const m = out[path] || (out[path] = {});
+      if (n > (+m[dev] || 0)) m[dev] = n;
+    }
+  }
+}
+function mergeDoc(a, b) {
+  const out = emptyDoc();
+  foldCnt(a.cnt, out.cnt);
+  foldCnt(b.cnt, out.cnt);
+  Object.assign(out.set.badges, a.set.badges, b.set.badges);
+  for (const f in Object.assign({}, a.lww, b.lww)) {
+    const x = a.lww[f], y = b.lww[f];
+    /* bij gelijke timestamp beslist de waarde, zodat beide kanten
+       hetzelfde kiezen */
+    const win = !x ? y : (!y ? x : (y.t > x.t || (y.t === x.t && String(y.v) > String(x.v)) ? y : x));
+    out.lww[f] = { v: win.v, t: win.t };
+  }
+  out.max.best = Math.max(+a.max.best || 0, +b.max.best || 0);
+  out.loc = JSON.parse(JSON.stringify(a.loc));
+  return out;
+}
+
+/* Voegt het profiel van een ander apparaat bij het onze. lastLevel is
+   afgeleid en wordt herberekend, zodat elders verdiende levels hier niet
+   alsnog een stapel feestmodals geven. De aanroeper ververst zelf de UI. */
+function applyRemoteDoc(remote) {
+  if (!remote || remote.v !== 2) return false;
+  saveP();
+  DOC = mergeDoc(DOC, normDoc(remote));
+  P = viewFromDoc(DOC);
+  P.lastLevel = levelIdx(P.xp);
+  saveP();
+  return true;
+}
 
 /* Levels met meesterproeven: sterren verzamelen alleen is niet genoeg, voor de
    hogere rangen moet je ook iets bewijzen. Dat maakt de rang farm-proof. */
@@ -100,8 +275,7 @@ function floatXP(txt) {
 }
 
 function addXP(n, label) {
-  P.xp += n;
-  saveP();
+  bump('xp', n);
   floatXP('+' + n + ' ⭐ ' + (label || ''));
   updateHud();
   checkLevelUp();
@@ -433,9 +607,7 @@ function patternCallout(S, m) {
 }
 
 function countPattern(key) {
-  P.c.pat = P.c.pat || {};
-  P.c.pat[key] = (P.c.pat[key] || 0) + 1;
-  saveP();
+  bump('c.pat.' + key, 1);
   checkBadges();
   renderPatBook();
 }
@@ -667,7 +839,7 @@ function scanCheck() {
   renderBoard();
   const errs = bad.size + missed.size;
   const stars = errs === 0 ? 3 : (errs === 1 ? 2 : (good.size >= Math.ceil(T.size / 2) ? 1 : 0));
-  if (stars === 3) { P.c.perfectScans++; bumpDay('perfectScans', 1); }
+  if (stars === 3) { bump('c.perfectScans', 1); bumpDay('perfectScans', 1); }
   const msgs = {
     3: 'PERFECT gespeurd! Alles gevonden! 🎉',
     2: 'Bijna perfect! Eéntje fout. Turbo legt het uit! 👇',
@@ -790,7 +962,7 @@ function safeAnswer(saidTrap) {
   setOptions(null);
   const t = session.task;
   const correct = saidTrap === t.trap;
-  if (correct) { P.c.safeCorrect++; bumpDay('safeCorrect', 1); }
+  if (correct) { bump('c.safeCorrect', 1); bumpDay('safeCorrect', 1); }
   BD.arrows = [];
   if (t.trap) {
     const pn = moveNameNL2After(t);
@@ -924,7 +1096,7 @@ function best3Confirm() {
   if (o === t.best) {
     session.phase = 'review';
     btn.classList.add('right');
-    if (session.tries === 1) { P.c.best3Gold++; bumpDay('best3Gold', 1); }
+    if (session.tries === 1) { bump('c.best3Gold', 1); bumpDay('best3Gold', 1); }
     const lines = best3Explanations(t);
     BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-leaf' }];
     playMove(o.m, () => {
@@ -987,7 +1159,7 @@ function awardRound(stars, msg) {
     else if (P.streak === 5) addXP(10, '🔥 5 op een rij!');
     else if (P.streak === 8) addXP(20, '🔥 ON FIRE!');
   } else P.streak = 0;
-  P.stars += stars;
+  bump('stars', stars);
   saveP();
   if (stars > 0) {
     addXP(stars * 10, '⭐'.repeat(stars));
@@ -1107,7 +1279,7 @@ function cloudMoveDone() {
   updateCloudBar();
   if (!c.counted && session.S.hist.length > 0) {
     c.counted = true;
-    P.c.cloudUsed = (P.c.cloudUsed || 0) + 1;
+    bump('c.cloudUsed', 1);
     bumpDay('cloud', 1);
     checkBadges();
   }
@@ -1330,7 +1502,7 @@ function commitKid(m) {
   stopPatience();
   if (patFull) {
     addXP(5, 'Denk-bonus! 🐢');
-    P.c.patienceBonus++;
+    bump('c.patienceBonus', 1);
     bumpDay('patience', 1);
     checkBadges();
   }
@@ -1402,7 +1574,7 @@ function resolvePredict(sq) {
     bumpDay('predictTries', 1);
     if (sq === m.from) {
       addXP(15, 'Goed voorspeld! 🔮');
-      P.c.predictHits++;
+      bump('c.predictHits', 1);
       bumpDay('predictHits', 1);
       checkBadges();
       snd.star();
@@ -1518,14 +1690,14 @@ function endGame(st) {
   renderBoard();
   const drawTxt = { pat: 'Pat! De koning kan nergens meer heen, maar staat geen schaak.',
     '50': 'Vijftig zetten zonder slaan of pionzet.', materiaal: 'Te weinig stukken om mat te zetten.' };
-  P.c.gamesPlayed++;
+  bump('c.gamesPlayed', 1);
   let emoji, h, p, xp;
   if (st.result === 'w') {
     emoji = '🏆'; h = 'JE HEBT GEWONNEN!';
     p = 'Schaakmat! Turbo buigt voor jou. Wat een partij!';
-    P.wins++;
-    if (session.level === 2) P.c.winsL2++;
-    if (session.level === 3) P.c.winsL3++;
+    bump('wins', 1);
+    if (session.level === 2) bump('c.winsL2', 1);
+    if (session.level === 3) bump('c.winsL3', 1);
     ensureDay();
     xp = gameWinXP(session.level);
     if (xp === TIRED_XP) p += '<br><small>Deze Turbo is moe van al dat verliezen: kleine bonus. Probeer een sterkere Turbo, of kom morgen terug!</small>';
@@ -1581,8 +1753,7 @@ function pickTheme(id) {
     showToast('🔒 Vanaf level ' + LEVELS[th.lvl].n + '!');
     return;
   }
-  P.theme = id;
-  saveP();
+  setPref('theme', id);
   applyTheme();
   renderThemes();
   snd.select();
@@ -1625,8 +1796,7 @@ function checkBadges() {
   checkLevelUp();
   for (const b of BADGES) {
     if (!P.badges[b.id] && b.chk()) {
-      P.badges[b.id] = true;
-      saveP();
+      addBadge(b.id);
       snd.win();
       burstCenter();
       showToast('🏆 Trofee verdiend: ' + b.e + ' ' + b.n + '!', true);
@@ -1797,7 +1967,8 @@ $('resetBtn').addEventListener('click', () => {
       $('rstNo').addEventListener('click', closeModal);
       $('rstGo').addEventListener('click', () => {
         try { localStorage.removeItem('schaakheld1'); } catch (e) {}
-        P = defaultP();
+        DOC = emptyDoc();
+        P = viewFromDoc(DOC);
         saveP();
         applyTheme();
         renderHome();
@@ -1806,10 +1977,10 @@ $('resetBtn').addEventListener('click', () => {
       });
     });
 });
-$('sndBtn').addEventListener('click', () => { P.sound = !P.sound; saveP(); updateHud(); if (P.sound) snd.select(); });
+$('sndBtn').addEventListener('click', () => { setPref('sound', !P.sound); updateHud(); if (P.sound) snd.select(); });
 $('predictSkip').addEventListener('click', () => resolvePredict(null));
-$('tglGuard').addEventListener('click', () => { P.guard = !P.guard; saveP(); updateToggles(); });
-$('tglPredict').addEventListener('click', () => { P.predict = !P.predict; saveP(); updateToggles(); });
+$('tglGuard').addEventListener('click', () => { setPref('guard', !P.guard); updateToggles(); });
+$('tglPredict').addEventListener('click', () => { setPref('predict', !P.predict); updateToggles(); });
 
 function askName() {
   showModal('<div class="m-emoji">🐢</div><h2>Hoi! Ik ben Turbo!</h2>' +
@@ -1818,8 +1989,7 @@ function askName() {
     '<div class="m-btns"><button class="btn sun" id="nameGo">Start! 🚀</button></div>', () => {
       const go = () => {
         const v = $('nameInp').value.trim();
-        P.name = v || 'kampioen';
-        saveP();
+        setPref('name', v || 'kampioen');
         updateHud();
         closeModal();
       };
