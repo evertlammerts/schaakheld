@@ -110,6 +110,33 @@
     border: 6px solid transparent; border-right-color: #F0E3C0;
   }
   .mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  /* de twee potjes zijn de hoofdactie: iets groter en altijd twee-op-een-rij
+     tot het echt smal wordt */
+  .mode-grid.games { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .mode-grid.games .mode-card { padding: 22px; }
+  .mode-grid.games .mode-card .mc-emoji { font-size: 46px; }
+  .grid-label { font-size: 14px; font-weight: bold; color: var(--ink-soft);
+    letter-spacing: .3px; margin: 20px 2px 10px; }
+  #view-spelen .grid-label:first-of-type { margin-top: 8px; }
+  /* onderbalk met de twee tabs (Spelen / Ik), duim-bereikbaar op de telefoon */
+  #scr-home { padding-bottom: 96px; }
+  .tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    display: flex; gap: 10px; justify-content: center;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 249, 236, .94); backdrop-filter: blur(10px);
+    border-top: 2px solid rgba(23, 69, 111, .07);
+  }
+  .tab {
+    flex: 1 1 0; max-width: 240px; padding: 13px 12px; border: none; cursor: pointer;
+    border-radius: 18px; font: inherit; font-weight: 800; font-size: 17px;
+    background: transparent; color: var(--ink-soft); transition: transform .1s ease, background .15s ease;
+  }
+  .tab.on { background: var(--sun); color: var(--ink); box-shadow: 0 4px 14px rgba(232, 147, 12, .3); }
+  .tab:active { transform: translateY(1px); }
+  .home-view { animation: fadeUp .18s ease; }
+  .home-view.hidden { display: none; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
   .mode-card {
     border: none; cursor: pointer; text-align: left;
     border-radius: 22px; padding: 18px;
@@ -540,6 +567,7 @@
     <span class="logo-txt">Schaak<em>Held</em></span>
   </div>
   <div class="hud">
+    <button id="setBtn" class="icon-btn" title="Instellingen">⚙️</button>
     <button id="sndBtn" class="icon-btn" title="Geluid aan/uit">🔊</button>
     <div class="xp-chip">
       <span class="xp-glyph" id="lvlGlyph">♟︎</span>
@@ -554,75 +582,87 @@
 
 <main>
   <section id="scr-home" class="screen">
-    <div class="hero">
-      <div class="hero-turtle">🐢</div>
-      <div class="hero-txt">
-        <h1>Hoi <span id="heyName">kampioen</span>! 👋</h1>
-        <div class="bubble" id="homeBubble">Ik ben Turbo. Ik ben langzaam… en daarom win ik bijna altijd! 🐢 Eerst kijken, dan denken, dan pas doen!</div>
+    <!-- Tab 1: Spelen — alleen kiezen wat je gaat doen -->
+    <div id="view-spelen" class="home-view">
+      <div class="hero">
+        <div class="hero-turtle">🐢</div>
+        <div class="hero-txt">
+          <h1>Hoi <span id="heyName">kampioen</span>! 👋</h1>
+          <div class="bubble" id="homeBubble">Ik ben Turbo. Ik ben langzaam… en daarom win ik bijna altijd! 🐢 Eerst kijken, dan denken, dan pas doen!</div>
+        </div>
+      </div>
+      <div class="grid-label">🏆 Een potje spelen</div>
+      <div class="mode-grid games">
+        <button class="mode-card mc-game" data-mode="game">
+          <span class="mc-emoji">🏆</span>
+          <span class="mc-title">Potje tegen Turbo</span>
+          <span class="mc-sub">Een echte partij! Met denk-meter en voorspel-bonus.</span>
+        </button>
+        <button class="mode-card mc-online" data-mode="online">
+          <span class="mc-emoji">🤝</span>
+          <span class="mc-title">Samen spelen</span>
+          <span class="mc-sub">Een potje tegen een maatje, hier naast je of ver weg!</span>
+        </button>
+      </div>
+      <div class="grid-label">🎯 Oefenen</div>
+      <div class="mode-grid drills">
+        <button class="mode-card mc-scan" data-mode="scan">
+          <span class="mc-emoji">🔍</span>
+          <span class="mc-title">Speurogen</span>
+          <span class="mc-sub">Zie jij álles op het bord? Vind de aangevallen stukken!</span>
+        </button>
+        <button class="mode-card mc-safe" data-mode="safe">
+          <span class="mc-emoji">🕵️</span>
+          <span class="mc-title">Valstrik-detector</span>
+          <span class="mc-sub">Is die zet veilig… of trap je in een valstrik?</span>
+        </button>
+        <button class="mode-card mc-best" data-mode="best3">
+          <span class="mc-emoji">🥇</span>
+          <span class="mc-title">De Beste Zet</span>
+          <span class="mc-sub">Drie zetten. Denk vooruit en kies de beste!</span>
+        </button>
+        <button class="mode-card mc-trucs" data-mode="trucs">
+          <span class="mc-emoji">🎒</span>
+          <span class="mc-title">Turbo's Trucendoos</span>
+          <span class="mc-sub">Vind de vork, penning, spies of matzet!</span>
+        </button>
       </div>
     </div>
-    <div class="mode-grid">
-      <button class="mode-card mc-scan" data-mode="scan">
-        <span class="mc-emoji">🔍</span>
-        <span class="mc-title">Speurogen</span>
-        <span class="mc-sub">Zie jij álles op het bord? Vind de aangevallen stukken!</span>
-      </button>
-      <button class="mode-card mc-safe" data-mode="safe">
-        <span class="mc-emoji">🕵️</span>
-        <span class="mc-title">Valstrik-detector</span>
-        <span class="mc-sub">Is die zet veilig… of trap je in een valstrik?</span>
-      </button>
-      <button class="mode-card mc-best" data-mode="best3">
-        <span class="mc-emoji">🥇</span>
-        <span class="mc-title">De Beste Zet</span>
-        <span class="mc-sub">Drie zetten. Denk vooruit en kies de beste!</span>
-      </button>
-      <button class="mode-card mc-trucs" data-mode="trucs">
-        <span class="mc-emoji">🎒</span>
-        <span class="mc-title">Turbo's Trucendoos</span>
-        <span class="mc-sub">Vind de vork, penning, spies of matzet!</span>
-      </button>
-      <button class="mode-card mc-game" data-mode="game">
-        <span class="mc-emoji">🏆</span>
-        <span class="mc-title">Potje tegen Turbo</span>
-        <span class="mc-sub">Een echte partij! Met denk-meter en voorspel-bonus.</span>
-      </button>
-      <button class="mode-card mc-online" data-mode="online">
-        <span class="mc-emoji">🤝</span>
-        <span class="mc-title">Samen spelen</span>
-        <span class="mc-sub">Een potje tegen een maatje, hier naast je of ver weg!</span>
-      </button>
+
+    <!-- Tab 2: Ik — voortgang, trofeeën, instellingen -->
+    <div id="view-ik" class="home-view hidden">
+      <div class="stats-row">
+        <span class="stat-chip">⭐ Sterren: <b id="statStars">0</b></span>
+        <span class="stat-chip">🏆 Potjes gewonnen: <b id="statWins">0</b></span>
+        <span class="stat-chip">🔥 Beste reeks: <b id="statStreak">0</b></span>
+      </div>
+      <div class="home-card">
+        <div class="card-title">🎯 Missies van vandaag</div>
+        <div id="missionList"></div>
+      </div>
+      <div class="home-card">
+        <div class="card-title">🗺️ Jouw weg naar Grootmeester</div>
+        <div id="levelPath" class="level-path"></div>
+        <div id="lpNext" class="lp-next"></div>
+      </div>
+      <div class="home-card">
+        <div class="card-title">🏆 Trofeeënkast</div>
+        <div id="badgeGrid" class="badge-grid"></div>
+      </div>
+      <div class="home-card">
+        <div class="card-title">📖 Trucenboekje <span class="card-sub">(spot ze in het echt!)</span></div>
+        <div id="patBook"></div>
+      </div>
+      <div class="home-card">
+        <div class="card-title">🎨 Bordkleuren <span class="card-sub">(nieuw bord bij elk level!)</span></div>
+        <div id="themeRow" class="theme-row"></div>
+      </div>
     </div>
-    <div class="home-card">
-      <div class="card-title">📖 Trucenboekje <span class="card-sub">(spot ze in het echt!)</span></div>
-      <div id="patBook"></div>
-    </div>
-    <div class="home-card">
-      <div class="card-title">🎯 Missies van vandaag</div>
-      <div id="missionList"></div>
-    </div>
-    <div class="home-card">
-      <div class="card-title">🗺️ Jouw weg naar Grootmeester</div>
-      <div id="levelPath" class="level-path"></div>
-      <div id="lpNext" class="lp-next"></div>
-    </div>
-    <div class="home-card">
-      <div class="card-title">🎨 Bordkleuren <span class="card-sub">(nieuw bord bij elk level!)</span></div>
-      <div id="themeRow" class="theme-row"></div>
-    </div>
-    <div class="home-card">
-      <div class="card-title">🏆 Trofeeënkast</div>
-      <div id="badgeGrid" class="badge-grid"></div>
-    </div>
-    <div class="stats-row">
-      <span class="stat-chip">⭐ Sterren: <b id="statStars">0</b></span>
-      <span class="stat-chip">🏆 Potjes gewonnen: <b id="statWins">0</b></span>
-      <span class="stat-chip">🔥 Beste reeks: <b id="statStreak">0</b></span>
-    </div>
-    <div class="home-foot">
-      <button id="linkBtn" class="reset-btn">🔑 Speel ook op een ander apparaat</button>
-      <button id="resetBtn" class="reset-btn">🗑️ Alles wissen en opnieuw beginnen</button>
-    </div>
+
+    <nav class="tabbar">
+      <button id="tabSpelen" class="tab on" data-tab="spelen">▶ Spelen</button>
+      <button id="tabIk" class="tab" data-tab="ik">🏆 Ik</button>
+    </nav>
   </section>
 
   <section id="scr-play" class="screen hidden">
@@ -3396,6 +3436,7 @@ function goHome() {
   if (cloudFrame) cloudFrame.classList.remove('cloud', 'flip');
   stopPatience();
   showScreen('home');
+  showHomeTab('spelen'); /* terug op het startscherm sta je weer op Spelen */
   $('homeBubble').textContent = pick(HOME_LINES);
   renderHome();
 }
@@ -4763,6 +4804,31 @@ function renderHome() {
   renderBadges();
 }
 
+/* twee tabs op het startscherm: Spelen (kiezen wat je doet) en Ik
+   (voortgang, trofeeën). Zo blijft het startscherm rustig. */
+function showHomeTab(name) {
+  const ik = name === 'ik';
+  $('view-spelen').classList.toggle('hidden', ik);
+  $('view-ik').classList.toggle('hidden', !ik);
+  $('tabSpelen').classList.toggle('on', !ik);
+  $('tabIk').classList.toggle('on', ik);
+  if (ik) renderHome(); /* Ik-inhoud vers, voortgang kan net veranderd zijn */
+  try { window.scrollTo(0, 0); } catch (e) {}
+}
+
+/* instellingen achter het tandwiel: koppelen en wissen stonden eerst los
+   op het startscherm en maakten het druk */
+function openSettings() {
+  showModal('<div class="m-emoji">⚙️</div><h2>Instellingen</h2>' +
+    '<div class="m-btns"><button class="btn sun" id="setLink">🔑 Speel op een ander apparaat</button>' +
+    '<button class="btn plain" id="setReset">🗑️ Alles wissen</button>' +
+    '<button class="btn plain" id="setClose">Klaar</button></div>', () => {
+      $('setLink').addEventListener('click', () => { closeModal(); linkShareFlow(); });
+      $('setReset').addEventListener('click', () => { closeModal(); confirmReset(); });
+      $('setClose').addEventListener('click', closeModal);
+    });
+}
+
 /* ---------- init & wiring ---------- */
 document.querySelectorAll('.mode-card').forEach(b => {
   b.addEventListener('click', () => {
@@ -4773,8 +4839,10 @@ document.querySelectorAll('.mode-card').forEach(b => {
   });
 });
 $('backBtn').addEventListener('click', goHome);
-$('linkBtn').addEventListener('click', () => { linkShareFlow(); });
-$('resetBtn').addEventListener('click', () => {
+$('setBtn').addEventListener('click', openSettings);
+$('tabSpelen').addEventListener('click', () => showHomeTab('spelen'));
+$('tabIk').addEventListener('click', () => showHomeTab('ik'));
+function confirmReset() {
   showModal('<div class="m-emoji">🗑️</div><h2>Alles wissen?</h2>' +
     '<p>Je naam, je <b>' + P.stars + '</b> sterren, je level en je trofeeën gaan dan weg.<br>Weet je het heel zeker?</p>' +
     '<div class="m-btns"><button class="btn coral" id="rstGo">Ja, wis alles</button>' +
@@ -4795,11 +4863,12 @@ $('resetBtn').addEventListener('click', () => {
         saveP();
         applyTheme();
         renderHome();
+        showHomeTab('spelen');
         closeModal();
         askName();
       });
     });
-});
+}
 $('sndBtn').addEventListener('click', () => { setPref('sound', !P.sound); updateHud(); if (P.sound) snd.select(); });
 $('predictSkip').addEventListener('click', () => resolvePredict(null));
 $('tglGuard').addEventListener('click', () => { setPref('guard', !P.guard); updateToggles(); });

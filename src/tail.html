@@ -1586,6 +1586,7 @@ function goHome() {
   if (cloudFrame) cloudFrame.classList.remove('cloud', 'flip');
   stopPatience();
   showScreen('home');
+  showHomeTab('spelen'); /* terug op het startscherm sta je weer op Spelen */
   $('homeBubble').textContent = pick(HOME_LINES);
   renderHome();
 }
@@ -2953,6 +2954,31 @@ function renderHome() {
   renderBadges();
 }
 
+/* twee tabs op het startscherm: Spelen (kiezen wat je doet) en Ik
+   (voortgang, trofeeën). Zo blijft het startscherm rustig. */
+function showHomeTab(name) {
+  const ik = name === 'ik';
+  $('view-spelen').classList.toggle('hidden', ik);
+  $('view-ik').classList.toggle('hidden', !ik);
+  $('tabSpelen').classList.toggle('on', !ik);
+  $('tabIk').classList.toggle('on', ik);
+  if (ik) renderHome(); /* Ik-inhoud vers, voortgang kan net veranderd zijn */
+  try { window.scrollTo(0, 0); } catch (e) {}
+}
+
+/* instellingen achter het tandwiel: koppelen en wissen stonden eerst los
+   op het startscherm en maakten het druk */
+function openSettings() {
+  showModal('<div class="m-emoji">⚙️</div><h2>Instellingen</h2>' +
+    '<div class="m-btns"><button class="btn sun" id="setLink">🔑 Speel op een ander apparaat</button>' +
+    '<button class="btn plain" id="setReset">🗑️ Alles wissen</button>' +
+    '<button class="btn plain" id="setClose">Klaar</button></div>', () => {
+      $('setLink').addEventListener('click', () => { closeModal(); linkShareFlow(); });
+      $('setReset').addEventListener('click', () => { closeModal(); confirmReset(); });
+      $('setClose').addEventListener('click', closeModal);
+    });
+}
+
 /* ---------- init & wiring ---------- */
 document.querySelectorAll('.mode-card').forEach(b => {
   b.addEventListener('click', () => {
@@ -2963,8 +2989,10 @@ document.querySelectorAll('.mode-card').forEach(b => {
   });
 });
 $('backBtn').addEventListener('click', goHome);
-$('linkBtn').addEventListener('click', () => { linkShareFlow(); });
-$('resetBtn').addEventListener('click', () => {
+$('setBtn').addEventListener('click', openSettings);
+$('tabSpelen').addEventListener('click', () => showHomeTab('spelen'));
+$('tabIk').addEventListener('click', () => showHomeTab('ik'));
+function confirmReset() {
   showModal('<div class="m-emoji">🗑️</div><h2>Alles wissen?</h2>' +
     '<p>Je naam, je <b>' + P.stars + '</b> sterren, je level en je trofeeën gaan dan weg.<br>Weet je het heel zeker?</p>' +
     '<div class="m-btns"><button class="btn coral" id="rstGo">Ja, wis alles</button>' +
@@ -2985,11 +3013,12 @@ $('resetBtn').addEventListener('click', () => {
         saveP();
         applyTheme();
         renderHome();
+        showHomeTab('spelen');
         closeModal();
         askName();
       });
     });
-});
+}
 $('sndBtn').addEventListener('click', () => { setPref('sound', !P.sound); updateHud(); if (P.sound) snd.select(); });
 $('predictSkip').addEventListener('click', () => resolvePredict(null));
 $('tglGuard').addEventListener('click', () => { setPref('guard', !P.guard); updateToggles(); });

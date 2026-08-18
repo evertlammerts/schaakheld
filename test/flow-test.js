@@ -503,17 +503,33 @@ var mSamen = viewFromDoc(mergeDoc(mLeeg, mOscar));
 ok('migratie: echte keuze wint van latere default', mSamen.name === 'Oscar' &&
   mSamen.theme === 'oceaan' && mSamen.xp === 15);
 
+/* ---------- startscherm-tabs (Spelen / Ik) ---------- */
+goHome();
+ok('tabs: start op Spelen', !__els['view-spelen'].classList.contains('hidden') &&
+  __els['view-ik'].classList.contains('hidden') && __els.tabSpelen.classList.contains('on'));
+showHomeTab('ik');
+ok('tabs: Ik toont voortgang, Spelen verborgen', __els['view-spelen'].classList.contains('hidden') &&
+  !__els['view-ik'].classList.contains('hidden') && __els.tabIk.classList.contains('on'));
+showHomeTab('spelen');
+ok('tabs: terug op Spelen', !__els['view-spelen'].classList.contains('hidden') &&
+  __els.tabSpelen.classList.contains('on'));
+
 /* ---------- reset flow (wipes the profile) ---------- */
 goHome();
 ACC = { id: 'testaccountid123', secret: 'testsecret-1234567890' };
 saveAcc();
 saveP();
 var preResetDoc = localStorage.getItem('schaakheld1');
-fire(__els.resetBtn, 'click');
+/* wissen zit nu achter het tandwiel (⚙️ Instellingen) */
+fire(__els.setBtn, 'click');
+ok('instellingen: koppelen en wissen achter het tandwiel',
+  __els.modalBox.innerHTML.indexOf('Instellingen') >= 0 && !!__els.setReset);
+fire(__els.setReset, 'click');
 ok('reset: confirm modal shown', __els.modalBox.innerHTML.indexOf('Alles wissen') >= 0);
 fire(__els.rstNo, 'click');
 ok('reset: cancel keeps profile', P.wins > 0 && __els.overlay.classList.contains('hidden'));
-fire(__els.resetBtn, 'click');
+fire(__els.setBtn, 'click');
+fire(__els.setReset, 'click');
 fire(__els.rstGo, 'click');
 ok('reset: profile wiped and name asked again', P.xp === 0 && P.stars === 0 &&
   P.name === '' && P.wins === 0 && __els.modalBox.innerHTML.indexOf('Hoi! Ik ben Turbo') >= 0);
