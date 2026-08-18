@@ -537,6 +537,44 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('qr: matrix met zoek- en timingpatronen', qm.length === 21 && qm[0][0] === 1 &&
     qm[20][0] === 1 && qm[0][20] === 1 && qm[9][6] === 0 && qm[6][9] === 0 && qm[6][8] === 1);
 
+  /* de in-app scanner: onze eigen encoder moet door de gevendorde jsQR-
+     decoder heen te lezen zijn (rond-trip), zodat scannen echt werkt */
+  var toRGBA = function (m, scale, quiet) {
+    var n = m.length, size = (n + 2 * quiet) * scale;
+    var data = new Uint8ClampedArray(size * size * 4);
+    for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) {
+      var mx = Math.floor(x / scale) - quiet, my = Math.floor(y / scale) - quiet;
+      var dark = mx >= 0 && my >= 0 && mx < n && my < n && m[my][mx];
+      var v = dark ? 0 : 255, idx = (y * size + x) * 4;
+      data[idx] = data[idx + 1] = data[idx + 2] = v; data[idx + 3] = 255;
+    }
+    return { data: data, width: size, height: size };
+  };
+  var linkUrl = 'https://x/schaakheld/#SHLINK1:A1b2C3d4E5f6G7h8.z9Y8x7W6v5U4t3S2r1Q0';
+  var img = toRGBA(QR.qrMatrix(linkUrl), 4, 4);
+  var dec = jsQR(img.data, img.width, img.height);
+  ok('scan: jsQR leest onze eigen koppel-QR terug', !!dec && dec.data === linkUrl);
+
+  /* de payload-verwerkers dispatchen los van het URL-fragment (dat is wat de
+     scanner ze voert): geldig -> true (opent de bevestiging via een fetch),
+     kapot -> false */
+  ACC = null;
+  ok('scan: geldige koppel-payload geaccepteerd', handleLinkString('A1b2C3d4E5f6G7h8.z9Y8x7W6v5U4t3S2r1Q0') === true);
+  for (var sq = 0; sq < 12; sq++) await null; /* confirmLinkFlow-fetch + modal laten draaien */
+  closeModal();
+  ok('scan: kapotte payload geweigerd', handleLinkString('geen-punt-hierin') === false);
+  ok('scan: speel-payload opent "Meespelen?"', handlePlayString('zW_Mn7fF3mkK0q-UYDaVbw.G2brQ9_TwApaNNOCYGMTIw') === true &&
+    __els.modalBox.innerHTML.indexOf('Meespelen') >= 0);
+  fire(__els.mpNee, 'click');
+
+  /* zonder camera (geen navigator.mediaDevices in de shim) valt de scanner
+     netjes terug op een uitleg in plaats van te crashen */
+  openScanner('play');
+  ok('scan: zonder camera nette terugval', $('scanHint').textContent.indexOf('camera niet toe') >= 0 &&
+    __els.modalBox.innerHTML.indexOf('scanVid') >= 0);
+  fire(__els.scanTerug, 'click');
+  closeModal();
+
   /* apparaat A: voortgang plus delen */
   ok('link: nog geen account', ACC === null);
   setPref('name', 'Oscar');

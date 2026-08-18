@@ -485,14 +485,9 @@ async function confirmLinkFlow(acc) {
     });
 }
 
-/* QR-route: de camera-app opent de PWA met de credentials in het
-   fragment; dat halen we meteen uit de adresbalk en de historie */
-function checkLinkFragment() {
-  let h = '';
-  try { h = location.hash || ''; } catch (e) {}
-  if (h.indexOf('#' + LINK_PREFIX) !== 0) return false;
-  const rest = h.slice(LINK_PREFIX.length + 1);
-  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+/* verwerkt de inhoud van een koppel-QR ("id.secret", het stuk na SHLINK1:),
+   of die nu uit het URL-fragment komt of uit de in-app scanner */
+function handleLinkString(rest) {
   const dot = rest.indexOf('.');
   if (dot < 0) return false;
   const acc = { id: rest.slice(0, dot), secret: rest.slice(dot + 1) };
@@ -501,18 +496,33 @@ function checkLinkFragment() {
   return true;
 }
 
+/* QR-route via het adres: de camera-app opent de PWA met de credentials in
+   het fragment; dat halen we meteen uit de adresbalk en de historie. Werkt
+   alleen als de app níet als los home-scherm-app draait (dan opent de scan
+   in Safari); daarvoor is de in-app scanner. */
+function checkLinkFragment() {
+  let h = '';
+  try { h = location.hash || ''; } catch (e) {}
+  if (h.indexOf('#' + LINK_PREFIX) !== 0) return false;
+  const rest = h.slice(('#' + LINK_PREFIX).length);
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  return handleLinkString(rest);
+}
+
 /* woordroute: kiezer met suggesties uit de (publieke) lijst; dat kost
    geen entropie en voorkomt typefouten */
 function linkEntryFlow() {
   const gekozen = [];
   showModal('<div class="m-emoji">🔑</div><h2>Profiel ophalen</h2>' +
-    '<p>Vraag op het andere apparaat een koppelcode (🔑 onderaan het startscherm).<br>' +
-    'Scan de QR daar met de camera van dit apparaat, of typ hier de vier woorden:</p>' +
+    '<p>Vraag op het andere apparaat een koppelcode (🔑 onderaan het startscherm).</p>' +
+    '<div class="m-btns"><button class="btn sun" id="linkScan">📷 Scan de QR</button></div>' +
+    '<p>…of typ hier de vier woorden:</p>' +
     '<div id="wordChips" style="min-height:1.5em;font-weight:700"></div>' +
     '<input id="wordInp" maxlength="10" autocomplete="off" placeholder="typ een woord…">' +
     '<div id="wordSugg" style="min-height:2.2em"></div>' +
     '<div class="m-btns"><button class="btn sun" id="linkGo" disabled>Koppel! 🔑</button>' +
     '<button class="btn plain" id="linkTerug">Terug</button></div>', () => {
+      $('linkScan').addEventListener('click', () => { closeModal(); openScanner('link'); });
       const upd = () => {
         $('wordChips').textContent = gekozen.join(' - ');
         $('linkGo').disabled = gekozen.length !== 4;
@@ -917,10 +927,12 @@ function mpVerlaat() {
 function mpFlow() {
   showModal('<div class="m-emoji">🤝</div><h2>Samen spelen</h2>' +
     '<p>Zijn jullie bij elkaar in de kamer?</p>' +
-    '<div class="m-btns"><button class="btn sun" id="mpHier">📷 Ja, hier naast me</button>' +
+    '<div class="m-btns"><button class="btn sun" id="mpToon">📱 Ik laat een code zien</button>' +
+    '<button class="btn sun" id="mpScan">📷 Ik scan de code</button>' +
     '<button class="btn plain" id="mpVer">🎈 Nee, ver weg</button>' +
     '<button class="btn plain" id="mpTerug">Terug</button></div>', () => {
-      $('mpHier').addEventListener('click', () => { closeModal(); mpHostQR(); });
+      $('mpToon').addEventListener('click', () => { closeModal(); mpHostQR(); });
+      $('mpScan').addEventListener('click', () => { closeModal(); openScanner('play'); });
       $('mpVer').addEventListener('click', () => { closeModal(); mpWordFlow(); });
       $('mpTerug').addEventListener('click', closeModal);
     });
@@ -950,13 +962,9 @@ async function mpHostQR() {
     });
 }
 
-/* gast: de speel-QR opent de app met kamer en stoeltoken in het fragment */
-function checkPlayFragment() {
-  let h = '';
-  try { h = location.hash || ''; } catch (e) {}
-  if (h.indexOf('#' + PLAY_PREFIX) !== 0) return false;
-  const rest = h.slice(PLAY_PREFIX.length + 1);
-  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+/* verwerkt de inhoud van een speel-QR ("room.seat", het stuk na SHPLAY1:),
+   uit het fragment of uit de in-app scanner */
+function handlePlayString(rest) {
   const dot = rest.indexOf('.');
   if (dot < 0) return false;
   const room = rest.slice(0, dot), seat = rest.slice(dot + 1);
@@ -975,6 +983,85 @@ function checkPlayFragment() {
       $('mpNee').addEventListener('click', closeModal);
     });
   return true;
+}
+
+/* gast: de speel-QR opent de app met kamer en stoeltoken in het fragment */
+function checkPlayFragment() {
+  let h = '';
+  try { h = location.hash || ''; } catch (e) {}
+  if (h.indexOf('#' + PLAY_PREFIX) !== 0) return false;
+  const rest = h.slice(('#' + PLAY_PREFIX).length);
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  return handlePlayString(rest);
+}
+
+/* ---------- in-app QR-scanner ----------
+   Nodig omdat een QR scannen met de iOS-camera de link in Safari opent, niet
+   in de geinstalleerde home-scherm-app (die zijn eigen opslag heeft). Met
+   getUserMedia scannen we in de app zelf, zodat het resultaat in de app
+   belandt. De decoder is jsQR (src/jsqr.js); iOS Safari heeft geen
+   BarcodeDetector. `kind` is 'link' (🔑) of 'play' (🤝). */
+let scanStream = null, scanRAF = 0;
+function stopScan() {
+  if (scanRAF) { cancelAnimationFrame(scanRAF); scanRAF = 0; }
+  if (scanStream) {
+    try { scanStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    scanStream = null;
+  }
+}
+function openScanner(kind) {
+  const prefix = kind === 'play' ? PLAY_PREFIX : LINK_PREFIX;
+  const ander = kind === 'play' ? LINK_PREFIX : PLAY_PREFIX;
+  const titel = kind === 'play' ? 'Scan de speel-QR 🤝' : 'Scan de koppel-QR 🔑';
+  const terug = kind === 'play' ? mpFlow : linkEntryFlow;
+  const gum = navigator.mediaDevices && navigator.mediaDevices.getUserMedia
+    ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices) : null;
+  showModal('<div class="m-emoji">📷</div><h2>' + titel + '</h2>' +
+    '<p>Houd de camera voor de QR-code op het andere scherm.</p>' +
+    '<video id="scanVid" playsinline autoplay muted style="width:100%;max-width:280px;border-radius:16px;background:#000"></video>' +
+    '<div id="scanHint" style="min-height:1.3em;font-weight:700"></div>' +
+    '<div class="m-btns"><button class="btn plain" id="scanTerug">Terug</button></div>', () => {
+      $('scanTerug').addEventListener('click', () => { stopScan(); closeModal(); terug(); });
+      if (!gum) {
+        $('scanHint').textContent = 'Deze telefoon laat de camera niet toe. Typ anders de woorden.';
+        return;
+      }
+      const vid = $('scanVid');
+      const cv = document.createElement('canvas');
+      gum({ video: { facingMode: 'environment' } }).then(stream => {
+        scanStream = stream;
+        vid.srcObject = stream;
+        vid.play && vid.play();
+        const tick = () => {
+          if (!scanStream) return;
+          if (vid.readyState >= 2 && vid.videoWidth) {
+            cv.width = vid.videoWidth;
+            cv.height = vid.videoHeight;
+            const ctx = cv.getContext('2d');
+            ctx.drawImage(vid, 0, 0, cv.width, cv.height);
+            let res = null;
+            try {
+              const img = ctx.getImageData(0, 0, cv.width, cv.height);
+              res = jsQR(img.data, img.width, img.height);
+            } catch (e) {}
+            if (res && res.data) {
+              const txt = res.data, i = txt.indexOf(prefix);
+              if (i >= 0) {
+                stopScan();
+                closeModal();
+                (kind === 'play' ? handlePlayString : handleLinkString)(txt.slice(i + prefix.length));
+                return;
+              }
+              if (txt.indexOf(ander) >= 0) $('scanHint').textContent = 'Dat is de andere soort code. 🙈';
+            }
+          }
+          scanRAF = requestAnimationFrame(tick);
+        };
+        scanRAF = requestAnimationFrame(tick);
+      }).catch(() => {
+        $('scanHint').textContent = 'De camera doet niet mee. 😕 Typ anders de woorden.';
+      });
+    });
 }
 
 /* op afstand: wederzijdse woordcodes, elk kind twee woorden */
@@ -1361,6 +1448,7 @@ function showModal(html, setup) {
   if (setup) setup();
 }
 function closeModal() {
+  stopScan(); /* een openstaande camera vrijgeven zodra de modal wijzigt */
   if (modalQueue.length) {
     const next = modalQueue.shift();
     $('modalBox').innerHTML = next[0];

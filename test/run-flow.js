@@ -4,5 +4,6 @@ load('test/dom-shim.js');
 load('src/engine.js');
 load('src/words.js');
 load('src/qr.js');
+load('src/jsqr.js');
 load('.tmp-ui.js');
 load('test/flow-test.js');

@@ -21,10 +21,10 @@ n=$(grep -n '</style>' src/head.html | head -1 | cut -d: -f1)
   head -n "$n" src/head.html
   printf '</head>\n<body>\n'
   tail -n +"$((n + 1))" src/head.html
-  cat src/engine.js src/words.js src/qr.js src/tail.html
+  cat src/engine.js src/words.js src/qr.js src/jsqr.js src/tail.html
   printf '</body>\n</html>\n'
 } > index.html
-cat src/head.html src/engine.js src/words.js src/qr.js src/tail.html > artifact.html
+cat src/head.html src/engine.js src/words.js src/qr.js src/jsqr.js src/tail.html > artifact.html
 HASH=$(shasum index.html | cut -c1-12)
 sed "s/__VERSION__/$HASH/" src/sw.js > sw.js
 echo "gebouwd: index.html ($(wc -c < index.html | tr -d ' ') bytes), artifact.html en sw.js (versie $HASH)"
