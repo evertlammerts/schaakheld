@@ -71,6 +71,9 @@ for w in words:
     k = sleutel(w)
     assert k not in gezien, 'klinkt gelijk: %r en %r' % (gezien[k], w)
     gezien[k] = w
+import json
+js = open('src/words.js').read()
+assert json.loads(js[js.index('['):js.rindex(']')+1]) == words, 'words.js loopt niet gelijk met words-nl.txt'
 " || { echo "FAIL words-nl.txt"; exit 1; }
 echo "woordlijst ok"
 

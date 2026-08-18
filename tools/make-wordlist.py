@@ -28,6 +28,7 @@ Pijplijn:
 
 import hashlib
 import io
+import json
 import pathlib
 import re
 import sys
@@ -181,7 +182,14 @@ def main() -> None:
         sys.exit(f"maar {len(uniek)} kandidaten, {N} nodig: filters te streng")
     final = sorted(uniek[:N])
     OUT.write_text("\n".join(final) + "\n")
-    print(f"geschreven: {OUT} ({len(final)} woorden, "
+    js = ROOT / "src" / "words.js"
+    js.write_text(
+        "/* Gegenereerd door tools/make-wordlist.py, niet met de hand bewerken.\n"
+        "   1024 woorden (10 bits per woord) voor koppel- en speelcodes.\n"
+        "   Bron: eigen selectie uit de OpenTaal-woordenlijst (Revised BSD /\n"
+        "   CC BY 3.0, zie het colofon). */\n"
+        "const WOORDEN = " + json.dumps(final, separators=(",", ":")) + ";\n")
+    print(f"geschreven: {OUT} en {js} ({len(final)} woorden, "
           f"{min(len(w) for w in final)}-{max(len(w) for w in final)} letters)")
 
 

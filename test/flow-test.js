@@ -503,9 +503,10 @@ var mSamen = viewFromDoc(mergeDoc(mLeeg, mOscar));
 ok('migratie: echte keuze wint van latere default', mSamen.name === 'Oscar' &&
   mSamen.theme === 'oceaan' && mSamen.xp === 15);
 
-/* ---------- reset flow (last: it wipes the profile) ---------- */
+/* ---------- reset flow (wipes the profile) ---------- */
 goHome();
-var epochVoor = DOC.epoch;
+ACC = { id: 'testaccountid123', secret: 'testsecret-1234567890' };
+saveAcc();
 saveP();
 var preResetDoc = localStorage.getItem('schaakheld1');
 fire(__els.resetBtn, 'click');
@@ -519,10 +520,106 @@ ok('reset: profile wiped and name asked again', P.xp === 0 && P.stars === 0 &&
 ok('reset: badges, tellers en dag ook gewist', Object.keys(P.badges).length === 0 &&
   P.c.gamesPlayed === 0 && P.theme === 'munt' &&
   P.day && P.day.date === todayStr() && P.day.stars === 0 && !P.day.allDone);
-ok('reset: epoch verhoogd', DOC.epoch === epochVoor + 1);
-/* de oude staat komt via sync terug binnen: mag niets herrijzen */
+/* wissen ontkoppelt: andere apparaten en de server houden het profiel,
+   dus een vergissing is herstelbaar en een nieuw kind op dit apparaat
+   speelt niet stiekem in het oude account verder */
+ok('reset: ontkoppeld van het account', ACC === null &&
+  localStorage.getItem('schaakheld-acc') === null);
 applyRemoteDoc(JSON.parse(preResetDoc));
-ok('reset: oude staat herrijst niet via sync', P.xp === 0 && P.stars === 0 &&
-  Object.keys(P.badges).length === 0 && P.best === 0);
+ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
+  P.xp > 0 && DOC.epoch === 0);
 
-print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');
+/* ---------- woorden, QR en koppelen: end-to-end op de fake server ---------- */
+(async function () {
+  closeModal(); /* het naamvenster uit de reset-flow */
+  ok('woorden: 1024 uniek geladen', WOORDEN.length === 1024 && new Set(WOORDEN).size === 1024);
+  var qm = QR.qrMatrix('test');
+  ok('qr: matrix met zoek- en timingpatronen', qm.length === 21 && qm[0][0] === 1 &&
+    qm[20][0] === 1 && qm[0][20] === 1 && qm[9][6] === 0 && qm[6][9] === 0 && qm[6][8] === 1);
+
+  /* apparaat A: voortgang plus delen */
+  ok('link: nog geen account', ACC === null);
+  setPref('name', 'Oscar');
+  bump('xp', 120);
+  addBadge('vlam');
+  var xpA = P.xp;
+  await linkShareFlow();
+  ok('link A: account aangemaakt', !!ACC && geldigAcc(ACC));
+  var mHtml = __els.modalBox.innerHTML;
+  ok('link A: QR en woordcode getoond', mHtml.indexOf('<svg') >= 0 &&
+    /[a-z]+-[a-z]+-[a-z]+-[a-z]+/.test(mHtml));
+  var code = mHtml.match(/([a-z]+-[a-z]+-[a-z]+-[a-z]+)/)[1];
+  var urlA = linkURL();
+  var accA = ACC;
+  fire(__els.linkDone, 'click');
+  for (var i = 0; i < 20; i++) await null; /* de ongewachte syncNow afmaken */
+  ok('link A: profiel versleuteld op de server', !!__server.profiles[ACC.id] &&
+    String.fromCharCode.apply(null, __server.profiles[ACC.id].blob).indexOf('Oscar') < 0);
+
+  /* apparaat B: schoon, wisselt de vier woorden in */
+  localStorage.removeItem('schaakheld1');
+  clearAcc();
+  loadProfile();
+  ok('link B: begint leeg', P.xp === 0 && P.name === '');
+  var accB = await redeemWords(code);
+  ok('link B: woorden leveren credentials', !!accB && geldigAcc(accB) && accB.id === accA.id);
+  ok('link B: code is eenmalig', (await redeemWords(code)) === null);
+  ok('link B: verkeerde woorden falen stil', (await redeemWords('aap-aap-aap-aap')) === null);
+  var remote = await fetchRemoteProfile(accB);
+  ok('link B: profiel opgehaald en ontsleuteld', !!remote && remote.v === 2);
+  finishLink(accB, remote);
+  for (i = 0; i < 20; i++) await null;
+  ok('link B: gekoppeld en gemerged', P.name === 'Oscar' && P.xp === xpA &&
+    !!P.badges.vlam && !!ACC);
+  ok('sync: fout secret krijgt niets', await (async function () {
+    var r = await fetch(SYNC_URL + '/v1/profile/' + ACC.id,
+      { headers: { Authorization: 'Bearer fout-secret-1234567890' } });
+    return r.status === 404;
+  })());
+
+  /* QR-route op nog een vers apparaat: fragment binnen, bevestigen */
+  localStorage.removeItem('schaakheld1');
+  clearAcc();
+  loadProfile();
+  location.hash = urlA.slice(urlA.indexOf('#'));
+  ok('link QR: fragment herkend en meteen gewist', checkLinkFragment() === true &&
+    location.hash === '');
+  for (i = 0; i < 20; i++) await null;
+  ok('link QR: bevestiging noemt de naam', __els.modalBox.innerHTML.indexOf('Oscar') >= 0);
+  fire(__els.linkYes, 'click');
+  for (i = 0; i < 20; i++) await null;
+  ok('link QR: gekoppeld na bevestiging', P.name === 'Oscar' && P.xp === xpA && !!ACC);
+
+  /* de woordkiezer: suggesties uit de lijst, vier woorden, nette fout */
+  localStorage.removeItem('schaakheld1');
+  clearAcc();
+  loadProfile();
+  linkEntryFlow();
+  $('wordInp').value = WOORDEN[0].slice(0, 3);
+  fire(__els.wordInp, 'input');
+  ok('kiezer: suggesties uit de lijst', __els.wordSugg.innerHTML.indexOf(WOORDEN[0]) >= 0);
+  fire(__els.wordSugg, 'click', { target: { dataset: { w: WOORDEN[0] } } });
+  fire(__els.wordSugg, 'click', { target: { dataset: { w: WOORDEN[1] } } });
+  fire(__els.wordSugg, 'click', { target: { dataset: { w: WOORDEN[2] } } });
+  ok('kiezer: pas bij vier woorden mag je door', __els.linkGo.disabled === true);
+  fire(__els.wordSugg, 'click', { target: { dataset: { w: WOORDEN[3] } } });
+  ok('kiezer: vier woorden gekozen', __els.linkGo.disabled === false &&
+    __els.wordChips.textContent.indexOf(WOORDEN[3]) >= 0);
+  fire(__els.linkGo, 'click');
+  for (i = 0; i < 20; i++) await null;
+  /* onbekende code: geen koppeling, kiezer leeg voor een nieuwe poging */
+  ok('kiezer: onbekende code koppelt niet en maakt de kiezer leeg', ACC === null &&
+    __els.wordChips.textContent === '' && !__els.overlay.classList.contains('hidden'));
+  closeModal();
+
+  /* sync na het spelen: de debounce duwt de nieuwe stand naar de server */
+  finishLink(accB, null);
+  for (i = 0; i < 20; i++) await null;
+  bump('stars', 5);
+  drainTimers();
+  for (i = 0; i < 20; i++) await null;
+  var opServer = await openJSON(ACC.secret, 'profiel', __server.profiles[ACC.id].blob);
+  ok('sync: laatste stand versleuteld op de server', cntSum(opServer.cnt.stars || {}) >= 5);
+
+  print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');
+})();

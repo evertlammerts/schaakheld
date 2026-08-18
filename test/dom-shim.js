@@ -61,7 +61,104 @@ var localStorage = {
   setItem(k, v) { this._m[k] = String(v); },
   removeItem(k) { delete this._m[k]; }
 };
-var location = { protocol: 'file:' };
+
+/* TextEncoder/TextDecoder: jsc heeft ze niet; utf-8 via de escape-truc */
+function TextEncoder() {}
+TextEncoder.prototype.encode = function (s) {
+  const e = unescape(encodeURIComponent(s)), out = new Uint8Array(e.length);
+  for (let i = 0; i < e.length; i++) out[i] = e.charCodeAt(i);
+  return out;
+};
+function TextDecoder() {}
+TextDecoder.prototype.decode = function (bytes) {
+  bytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return decodeURIComponent(escape(s));
+};
+
+/* Nep-WebCrypto: deterministisch, rond-tript, en weigert een verkeerde
+   sleutel; goed genoeg om alle koppel- en syncpaden headless te draaien.
+   De echte AES-GCM/HKDF draait alleen in de browser. */
+var __seed = 0x1234567;
+function __ksBytes(s) { const b = []; for (let i = 0; i < s.length; i++) b.push(s.charCodeAt(i) & 255); return b; }
+function __keyTag(k) { let t = 0; for (const b of __ksBytes(k)) t = (t * 31 + b) >>> 0; return t; }
+var crypto = {
+  getRandomValues(arr) {
+    for (let i = 0; i < arr.length; i++) {
+      __seed ^= __seed << 13; __seed ^= __seed >>> 17; __seed ^= __seed << 5;
+      arr[i] = __seed & 255;
+    }
+    return arr;
+  },
+  subtle: {
+    digest(alg, bytes) {
+      bytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      let h = 2166136261;
+      const out = new Uint8Array(32);
+      for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 16777619) >>> 0;
+      for (let i = 0; i < 32; i++) { h = (Math.imul(h, 1103515245) + 12345) >>> 0; out[i] = h & 255; }
+      return Promise.resolve(out.buffer);
+    },
+    importKey(fmt, keyBytes) { return Promise.resolve({ k: Array.from(keyBytes).join(',') }); },
+    deriveKey(params, key) { return Promise.resolve({ k: key.k + '|' + Array.from(params.info).join(',') }); },
+    encrypt(params, key, data) {
+      data = data instanceof Uint8Array ? data : new Uint8Array(data);
+      const ks = __ksBytes(key.k), tag = __keyTag(key.k), out = new Uint8Array(data.length + 8);
+      for (let i = 0; i < 8; i++) out[i] = (tag >> ((i % 4) * 8)) & 255;
+      for (let i = 0; i < data.length; i++) out[i + 8] = data[i] ^ ks[i % ks.length] ^ 170;
+      return Promise.resolve(out.buffer);
+    },
+    decrypt(params, key, data) {
+      data = data instanceof Uint8Array ? data : new Uint8Array(data);
+      const ks = __ksBytes(key.k), tag = __keyTag(key.k);
+      for (let i = 0; i < 8; i++) {
+        if (data[i] !== ((tag >> ((i % 4) * 8)) & 255)) return Promise.reject(new Error('verkeerde sleutel'));
+      }
+      const out = new Uint8Array(data.length - 8);
+      for (let i = 0; i < out.length; i++) out[i] = data[i + 8] ^ ks[i % ks.length] ^ 170;
+      return Promise.resolve(out.buffer);
+    }
+  }
+};
+
+/* Nep-fetch met dezelfde semantiek als de Go-server (koppelcodes eenmalig,
+   profielblobs met bearer secret), zodat de flows end-to-end testbaar zijn. */
+var __server = { links: {}, profiles: {} };
+var fetch = function (url, opts) {
+  opts = opts || {};
+  return new Promise(function (resolve) {
+    const m = opts.method || 'GET';
+    const path = url.replace(/^[a-z]+:\/\/[^\/]+/, '');
+    const hdrs = opts.headers || {};
+    const auth = hdrs.Authorization || hdrs.authorization || '';
+    const secret = auth.indexOf('Bearer ') === 0 ? auth.slice(7) : '';
+    const body = typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body;
+    const res = (status, data) => resolve({
+      status,
+      json: () => Promise.resolve(data),
+      arrayBuffer: () => Promise.resolve(data instanceof Uint8Array ? data.buffer.slice(0) : new ArrayBuffer(0))
+    });
+    if (m === 'POST' && path === '/v1/link') { __server.links[body.code] = body.payload; res(204); }
+    else if (m === 'POST' && path === '/v1/link/redeem') {
+      const p = __server.links[body.code];
+      delete __server.links[body.code];
+      p === undefined ? res(404) : res(200, { payload: p });
+    } else if (path.indexOf('/v1/profile/') === 0) {
+      const id = path.slice('/v1/profile/'.length);
+      const prof = __server.profiles[id];
+      if (m === 'PUT') {
+        if (prof && prof.secret !== secret) return res(404);
+        __server.profiles[id] = { secret, blob: new Uint8Array(body) };
+        res(204);
+      } else {
+        (!prof || prof.secret !== secret) ? res(404) : res(200, prof.blob);
+      }
+    } else res(404);
+  });
+};
+var location = { protocol: 'file:', origin: 'https://test.local', pathname: '/schaakheld/', search: '', hash: '' };
+var history = { replaceState() { location.hash = ''; } };
 var innerWidth = 900, innerHeight = 700;
 var addEventListener = function () {};
 var matchMedia = function () { return { matches: true }; };
@@ -84,4 +181,6 @@ function drainTimers(max) {
   }
   return n;
 }
-function fire(el, type) { (el._ev[type] || []).forEach(f => f({ key: '', preventDefault() {} })); }
+function fire(el, type, ev) {
+  (el._ev[type] || []).forEach(f => f(Object.assign({ key: '', preventDefault() {} }, ev || {})));
+}

@@ -19,6 +19,12 @@ README.md voor de spelvormen en de opbouw.
     committen, anders serveert Pages een oude cacheversie.
 - Bewerk nooit `index.html`, `artifact.html` of `sw.js` direct. Altijd
   `src/` aanpassen en opnieuw bouwen.
+- `src/words.js` en `src/words-nl.txt` zijn gegenereerd door
+  `tools/make-wordlist.py`; niet met de hand bewerken. `src/qr.js` is de
+  eigen QR-encoder (geverifieerd via round-trip-decoderen met OpenCV).
+- De server (koppelcodes en profiel-sync) staat in `server/`, Go, alleen
+  stdlib. Tests draaien via `./test.sh` als er een go-toolchain is, anders
+  op de devbox: `nix shell nixpkgs#go -c go test ./server/...`.
 - App-iconen komen uit `tools/make-icons.py` (pure stdlib, reproduceerbaar);
   gegenereerde PNG's staan in de repo-root en worden meegecommit.
 
