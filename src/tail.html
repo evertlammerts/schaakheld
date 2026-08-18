@@ -51,16 +51,64 @@ const DEV = (() => {
 })();
 
 function emptyDoc() {
-  return { v: 2, cnt: {}, set: { badges: {} }, lww: {}, max: { best: 0 },
+  return { v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: {}, max: { best: 0 },
     loc: { streak: 0, lastLevel: null, day: null } };
 }
+
+/* normDoc maakt van willekeurige input een gegarandeerd geldig doc: elke
+   waarde die niet klopt wordt gerepareerd, geklemd of weggegooid. Dat is
+   niet alleen netheid: een doc van buiten (sync, QR) is maar bytes, en
+   zonder deze schoonmaak kan een kapot of kwaadaardig doc de tellers
+   voorgoed vergiftigen (een G-Counter kan nooit meer zakken) of met een
+   absurde timestamp elke toekomstige merge blijven winnen. Ook het eigen
+   opgeslagen doc gaat hierdoorheen, zodat corruptie zichzelf geneest. */
+const MAX_BIJDRAGE = 1e7, MAX_BADGES = 128;
 function normDoc(raw) {
-  const d = Object.assign(emptyDoc(), raw);
-  d.cnt = d.cnt || {};
-  d.set = Object.assign({ badges: {} }, d.set);
-  d.lww = d.lww || {};
-  d.max = Object.assign({ best: 0 }, d.max);
-  d.loc = Object.assign({ streak: 0, lastLevel: null, day: null }, d.loc);
+  const d = emptyDoc();
+  if (!raw || typeof raw !== 'object') return d;
+  const ep = +raw.epoch;
+  if (isFinite(ep) && ep > 0) d.epoch = Math.floor(Math.min(ep, 1e6));
+  if (raw.cnt && typeof raw.cnt === 'object') {
+    for (const path in raw.cnt) {
+      const src = raw.cnt[path];
+      if (path.length > 64 || !src || typeof src !== 'object' || Array.isArray(src)) continue;
+      const m = {};
+      for (const dev in src) {
+        const n = +src[dev];
+        if (typeof src[dev] === 'number' && isFinite(n) && n > 0 && dev.length <= 64) {
+          m[dev] = Math.min(n, MAX_BIJDRAGE);
+        }
+      }
+      if (Object.keys(m).length) d.cnt[path] = m;
+    }
+  }
+  const badges = raw.set && raw.set.badges;
+  if (badges && typeof badges === 'object') {
+    let i = 0;
+    for (const k in badges) {
+      if (badges[k] === true && k.length <= 40 && i++ < MAX_BADGES) d.set.badges[k] = true;
+    }
+  }
+  if (raw.lww && typeof raw.lww === 'object') {
+    const defs = defaultP(), now = Date.now();
+    for (const f of PREFS) {
+      const e = raw.lww[f];
+      if (!e || typeof e !== 'object' || typeof e.v !== typeof defs[f]) continue;
+      const t = +e.t;
+      if (!isFinite(t) || t < 0) continue;
+      const v = typeof e.v === 'string' ? e.v.slice(0, 40) : e.v;
+      /* een timestamp uit de toekomst zou anders elke merge blijven winnen */
+      d.lww[f] = { v, t: Math.min(t, now + 86400000) };
+    }
+  }
+  const best = raw.max && +raw.max.best;
+  if (typeof best === 'number' && isFinite(best) && best > 0) d.max.best = Math.min(best, 1e6);
+  if (raw.loc && typeof raw.loc === 'object') {
+    const st = +raw.loc.streak;
+    d.loc.streak = isFinite(st) && st > 0 ? Math.min(st, 1e6) : 0;
+    d.loc.lastLevel = raw.loc.lastLevel == null ? null : +raw.loc.lastLevel || 0;
+    d.loc.day = raw.loc.day && typeof raw.loc.day === 'object' ? raw.loc.day : null;
+  }
   return d;
 }
 
@@ -95,8 +143,11 @@ function migrateLegacy(o, dev) {
   }
   for (const k in pat) if (+pat[k] > 0) d.cnt['c.pat.' + k] = { [dev]: +pat[k] };
   for (const k in (o.badges || {})) if (o.badges[k]) d.set.badges[k] = true;
-  const t = Date.now();
-  for (const f of PREFS) d.lww[f] = { v: o[f], t };
+  /* alleen echt gekozen waarden krijgen gezag: een onaangeraakte default
+     krijgt t=0 en verliest dus altijd van een bewuste keuze op het andere
+     apparaat, hoe laat dat apparaat ook pas migreert */
+  const t = Date.now(), defs = defaultP();
+  for (const f of PREFS) d.lww[f] = { v: o[f], t: o[f] === defs[f] ? 0 : t };
   d.max.best = +o.best || 0;
   d.loc = { streak: +o.streak || 0, lastLevel: o.lastLevel == null ? null : o.lastLevel,
     day: o.day || null };
@@ -123,10 +174,14 @@ let DOC, P;
 function loadProfile() {
   let raw = null;
   try { raw = JSON.parse(localStorage.getItem('schaakheld1')); } catch (e) {}
+  const legacy = !!raw && raw.v !== 2;
   if (raw && raw.v === 2) DOC = normDoc(raw);
   else if (raw) DOC = migrateLegacy(raw, DEV);
   else DOC = emptyDoc();
   P = viewFromDoc(DOC);
+  /* migratie meteen vastleggen: anders migreert elke start opnieuw, met
+     een steeds nieuwere timestamp op de voorkeuren */
+  if (legacy) saveP();
 }
 loadProfile();
 
@@ -160,7 +215,10 @@ function addBadge(id) {
 
 /* Merge is idempotent, commutatief en associatief: heen en weer syncen of
    dezelfde overdracht twee keer toepassen kan nooit iets kwijtmaken. De
-   lokale velden komen altijd uit het eigen doc. */
+   lokale velden komen altijd uit het eigen doc. Uitzondering op het
+   samenvoegen: een hogere epoch betekent een bewuste wisactie ("Alles
+   wissen"); dat doc wint dan integraal, anders zouden gewiste tellers en
+   trofeeen via de per-apparaat-max meteen weer herrijzen. */
 function foldCnt(src, out) {
   for (const path in src) {
     for (const dev in src[path]) {
@@ -172,7 +230,14 @@ function foldCnt(src, out) {
   }
 }
 function mergeDoc(a, b) {
+  if (a.epoch !== b.epoch) {
+    const win = a.epoch > b.epoch ? a : b;
+    const out = normDoc(JSON.parse(JSON.stringify(win)));
+    out.loc = JSON.parse(JSON.stringify(a.loc));
+    return out;
+  }
   const out = emptyDoc();
+  out.epoch = a.epoch;
   foldCnt(a.cnt, out.cnt);
   foldCnt(b.cnt, out.cnt);
   Object.assign(out.set.badges, a.set.badges, b.set.badges);
@@ -1967,7 +2032,11 @@ $('resetBtn').addEventListener('click', () => {
       $('rstNo').addEventListener('click', closeModal);
       $('rstGo').addEventListener('click', () => {
         try { localStorage.removeItem('schaakheld1'); } catch (e) {}
+        /* de epoch omhoog maakt de wis merge-bestendig: elk doc dat de
+           oude staat nog heeft verliest voortaan integraal */
+        const ep = DOC.epoch + 1;
         DOC = emptyDoc();
+        DOC.epoch = ep;
         P = viewFromDoc(DOC);
         saveP();
         applyTheme();

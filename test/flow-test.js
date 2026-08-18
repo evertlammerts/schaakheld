@@ -404,8 +404,9 @@ loadProfile();
 ok('migratie: oud profiel geladen', P.xp === 120 && P.stars === 7 && P.name === 'Oscar' &&
   P.c.gamesPlayed === 3 && P.c.pat.vork === 2 && P.badges.winst === true);
 ok('migratie: bijdragen op dit apparaat, doc is v2', DOC.v === 2 && DOC.cnt.xp[DEV] === 120);
-saveP();
-ok('migratie: opgeslagen als v2', JSON.parse(localStorage.getItem('schaakheld1')).v === 2);
+/* loadProfile legt de migratie zelf vast; anders zou elke start opnieuw
+   migreren met een steeds nieuwere timestamp op de voorkeuren */
+ok('migratie: meteen als v2 opgeslagen', JSON.parse(localStorage.getItem('schaakheld1')).v === 2);
 localStorage.setItem('schaakheld1', docSave);
 loadProfile(); /* terug naar het testprofiel van hierboven */
 
@@ -457,8 +458,56 @@ ok('sync: dubbel toepassen verandert niets', P.xp === xpNow + 100);
 ok('sync: kapot doc geweigerd', applyRemoteDoc({ hoi: 1 }) === false &&
   applyRemoteDoc(null) === false && P.xp === xpNow + 100);
 
+/* ---------- sanering en epoch (reviewbevindingen) ---------- */
+saveP();
+var schoonSave = localStorage.getItem('schaakheld1');
+var gif = { v: 2, cnt: { xp: '100', stars: { evil: 1e12 }, 'c.pat.vork': [7], hack: 5 },
+  lww: { name: { v: 'GRIEFED', t: 1e18 }, sound: { v: 'nee', t: 5 } },
+  set: { badges: { nep: 1, echt: true } }, max: { best: 1e12 }, epoch: 'x' };
+var schoon = normDoc(gif);
+ok('sanering: string-tellermap geeft geen fantoomapparaten', !schoon.cnt.xp);
+ok('sanering: array- en niet-object-paden genegeerd', !schoon.cnt['c.pat.vork'] && !schoon.cnt.hack);
+ok('sanering: absurde bijdrage geklemd', schoon.cnt.stars.evil === 1e7);
+ok('sanering: toekomst-timestamp geklemd', schoon.lww.name.t <= Date.now() + 86400000);
+ok('sanering: voorkeur met verkeerd type genegeerd', !schoon.lww.sound);
+ok('sanering: alleen echte trofeeen', !schoon.set.badges.nep && schoon.set.badges.echt === true);
+ok('sanering: best geklemd, kapotte epoch hersteld', schoon.max.best === 1e6 && schoon.epoch === 0);
+/* een kapot eigen doc geneest bij het laden en bump blijft werken */
+localStorage.setItem('schaakheld1', JSON.stringify({ v: 2, cnt: { xp: 7 } }));
+loadProfile();
+var bumpOk = true;
+try { bump('xp', 3); } catch (e) { bumpOk = false; }
+ok('sanering: kapot doc geneest, bump werkt weer', bumpOk && P.xp === 3);
+localStorage.setItem('schaakheld1', schoonSave);
+loadProfile();
+
+/* epoch: "Alles wissen" moet een merge met oude staat overleven */
+var oudDoc = migrateLegacy({ xp: 300, best: 9, badges: { vlam: true } }, 'ipadB');
+var wisDoc = emptyDoc();
+wisDoc.epoch = 1;
+var naWis1 = viewFromDoc(mergeDoc(wisDoc, oudDoc));
+ok('epoch: wis wint van oude tellers en trofeeen', naWis1.xp === 0 && !naWis1.badges.vlam &&
+  naWis1.best === 0);
+ok('epoch: ook andersom (commutatief)', viewFromDoc(mergeDoc(oudDoc, wisDoc)).xp === 0);
+var naWis2 = mergeDoc(wisDoc, oudDoc);
+naWis2.cnt.xp = { ipadA: 25 };
+ok('epoch: nieuwe voortgang na wis blijft staan', viewFromDoc(mergeDoc(naWis2, oudDoc)).xp === 25);
+
+/* migratie-gezag: een latere migratie met defaults verliest van een
+   eerdere echte keuze */
+var mOscar = migrateLegacy({ name: 'Oscar', theme: 'oceaan', xp: 10 }, 'a');
+var mLeeg = migrateLegacy({ xp: 5 }, 'b');
+ok('migratie: defaults krijgen geen gezag (t=0)', mLeeg.lww.name.t === 0 &&
+  mLeeg.lww.theme.t === 0 && mOscar.lww.name.t > 0);
+var mSamen = viewFromDoc(mergeDoc(mLeeg, mOscar));
+ok('migratie: echte keuze wint van latere default', mSamen.name === 'Oscar' &&
+  mSamen.theme === 'oceaan' && mSamen.xp === 15);
+
 /* ---------- reset flow (last: it wipes the profile) ---------- */
 goHome();
+var epochVoor = DOC.epoch;
+saveP();
+var preResetDoc = localStorage.getItem('schaakheld1');
 fire(__els.resetBtn, 'click');
 ok('reset: confirm modal shown', __els.modalBox.innerHTML.indexOf('Alles wissen') >= 0);
 fire(__els.rstNo, 'click');
@@ -470,5 +519,10 @@ ok('reset: profile wiped and name asked again', P.xp === 0 && P.stars === 0 &&
 ok('reset: badges, tellers en dag ook gewist', Object.keys(P.badges).length === 0 &&
   P.c.gamesPlayed === 0 && P.theme === 'munt' &&
   P.day && P.day.date === todayStr() && P.day.stars === 0 && !P.day.allDone);
+ok('reset: epoch verhoogd', DOC.epoch === epochVoor + 1);
+/* de oude staat komt via sync terug binnen: mag niets herrijzen */
+applyRemoteDoc(JSON.parse(preResetDoc));
+ok('reset: oude staat herrijst niet via sync', P.xp === 0 && P.stars === 0 &&
+  Object.keys(P.badges).length === 0 && P.best === 0);
 
 print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');
