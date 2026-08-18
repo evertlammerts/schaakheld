@@ -44,6 +44,7 @@ type config struct {
 	redeemSlots int
 	maxLinks    int              // max openstaande koppelcodes tegelijk
 	maxAccounts int              // max profielen op schijf
+	queueWait   time.Duration    // hoe lang een verzoek op een slot wacht
 	now         func() time.Time // injecteerbaar voor de TTL-tests
 }
 
@@ -60,7 +61,12 @@ type server struct {
 	links    map[string]linkEntry
 	accounts int // aantal profielbestanden, begrensd door maxAccounts
 
-	redeemC chan struct{} // semafoor: cfg.redeemSlots inwisselaars tegelijk
+	// drie losse semaforen (elk cfg.redeemSlots breed) voor de drie
+	// onge-authenticeerde schrijfpaden, zodat een vloed op het ene pad
+	// het andere niet meesleept
+	redeemC chan struct{}
+	linkC   chan struct{}
+	putC    chan struct{}
 }
 
 func newServer(cfg config) (*server, error) {
@@ -76,6 +82,9 @@ func newServer(cfg config) (*server, error) {
 	if cfg.maxAccounts <= 0 {
 		cfg.maxAccounts = 64
 	}
+	if cfg.queueWait <= 0 {
+		cfg.queueWait = 2 * time.Second
+	}
 	if err := os.MkdirAll(cfg.dataDir, 0o700); err != nil {
 		return nil, err
 	}
@@ -83,6 +92,8 @@ func newServer(cfg config) (*server, error) {
 		cfg:     cfg,
 		links:   map[string]linkEntry{},
 		redeemC: make(chan struct{}, cfg.redeemSlots),
+		linkC:   make(chan struct{}, cfg.redeemSlots),
+		putC:    make(chan struct{}, cfg.redeemSlots),
 	}
 	entries, err := os.ReadDir(cfg.dataDir)
 	if err != nil {
@@ -91,6 +102,10 @@ func newServer(cfg config) (*server, error) {
 	for _, e := range entries {
 		if strings.HasSuffix(e.Name(), ".json") {
 			s.accounts++
+		}
+		// door een crash achtergebleven tempbestanden opruimen
+		if strings.HasPrefix(e.Name(), ".tmp-") {
+			os.Remove(filepath.Join(cfg.dataDir, e.Name()))
 		}
 	}
 	mux := http.NewServeMux()
@@ -134,9 +149,25 @@ func (s *server) cors(w http.ResponseWriter, r *http.Request) {
 
 /* ---------- koppelcodes (endpoint 1 en 2) ---------- */
 
+// acquire pakt een plekje in een semafoor of wacht daar kort op; wie na
+// queueWait nog geen plek heeft krijgt 429. Zo overleeft normaal gebruik
+// een korte piek, terwijl een vloed geen eindeloze wachtrij opbouwt.
+func (s *server) acquire(w http.ResponseWriter, c chan struct{}) bool {
+	select {
+	case c <- struct{}{}:
+		return true
+	case <-time.After(s.cfg.queueWait):
+		http.Error(w, "te druk", http.StatusTooManyRequests)
+		return false
+	}
+}
+
 // handleLink registreert {code -> versleutelde credentials} met een TTL.
 // Opnieuw registreren onder dezelfde code overschrijft: de code is
 // hoog-entropisch en machine-gegenereerd, wie hem kent mag hem zetten.
+// Registreren krijgt dezelfde rem als inwisselen (het is even
+// onge-authenticeerd), en een volle tabel geeft ALLES 429, ook een
+// bestaande code: anders was vol-zijn een orakel voor welke codes bestaan.
 func (s *server) handleLink(w http.ResponseWriter, r *http.Request) {
 	var in struct{ Code, Payload string }
 	if !readJSON(w, r, maxPayload+1024, &in) {
@@ -147,17 +178,24 @@ func (s *server) handleLink(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ongeldig verzoek", http.StatusBadRequest)
 		return
 	}
+	if !s.acquire(w, s.linkC) {
+		return
+	}
+	defer func() { <-s.linkC }()
+	time.Sleep(s.cfg.redeemDelay)
 	s.mu.Lock()
 	s.sweepLocked()
 	// begrensd: wie het endpoint bespuit met verzonnen codes vult anders
 	// onbeperkt geheugen binnen een TTL-venster
-	if _, bestaat := s.links[in.Code]; !bestaat && len(s.links) >= s.cfg.maxLinks {
-		s.mu.Unlock()
+	vol := len(s.links) >= s.cfg.maxLinks
+	if !vol {
+		s.links[in.Code] = linkEntry{payload: in.Payload, expires: s.cfg.now().Add(linkTTL)}
+	}
+	s.mu.Unlock()
+	if vol {
 		http.Error(w, "te druk", http.StatusTooManyRequests)
 		return
 	}
-	s.links[in.Code] = linkEntry{payload: in.Payload, expires: s.cfg.now().Add(linkTTL)}
-	s.mu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -173,14 +211,10 @@ func (s *server) handleRedeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Code = strings.ToLower(strings.TrimSpace(in.Code))
-	select {
-	case s.redeemC <- struct{}{}:
-		defer func() { <-s.redeemC }()
-	default:
-		time.Sleep(s.cfg.redeemDelay)
-		http.Error(w, "te druk", http.StatusTooManyRequests)
+	if !s.acquire(w, s.redeemC) {
 		return
 	}
+	defer func() { <-s.redeemC }()
 	time.Sleep(s.cfg.redeemDelay)
 	payload := ""
 	s.mu.Lock()
@@ -323,6 +357,14 @@ func (s *server) handleProfilePut(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "leeg", http.StatusBadRequest)
 		return
 	}
+	// dezelfde rem als op de koppelcodes: aanmaken is onge-authenticeerd,
+	// en doordat ELKE put erdoorheen gaat valt uit het tijdsverschil ook
+	// niet af te lezen of een id bestond
+	if !s.acquire(w, s.putC) {
+		return
+	}
+	defer func() { <-s.putC }()
+	time.Sleep(s.cfg.redeemDelay)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	pf, exists, err := s.loadStored(id)
@@ -335,9 +377,11 @@ func (s *server) handleProfilePut(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
-	// begrensd: anders schrijft een spuiter met verzonnen ids de schijf vol
+	// begrensd: anders schrijft een spuiter met verzonnen ids de schijf
+	// vol. Zelfde antwoord als elk ander falen, dus geen vol-orakel; dat
+	// het echt vol raakt ziet de monitoring op de homelab, niet de klant.
 	if !exists && s.accounts >= s.cfg.maxAccounts {
-		http.Error(w, "vol", http.StatusTooManyRequests)
+		notFound(w)
 		return
 	}
 	out := profileFile{
@@ -370,13 +414,28 @@ func writeFileAtomic(path string, v any) error {
 		tmp.Close()
 		return err
 	}
+	// fsync van bestand en map: zonder dit kan een stroomstoring vlak na
+	// de rename een leeg of ontbrekend profiel achterlaten, en de
+	// eerstvolgende restic-run is pas dagen later
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
 	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 /* ---------- kleine helpers ---------- */

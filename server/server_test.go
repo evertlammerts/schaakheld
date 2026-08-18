@@ -180,6 +180,7 @@ func TestRedeemGelijktijdigheidslimiet(t *testing.T) {
 	s, _ := newTestServer(t, func(c *config) {
 		c.redeemDelay = 100 * time.Millisecond
 		c.redeemSlots = 1
+		c.queueWait = 10 * time.Millisecond
 	})
 	var wg sync.WaitGroup
 	codes := make(chan int, 3)
@@ -219,11 +220,35 @@ func TestLinkBegrensd(t *testing.T) {
 	if w.Code != 429 {
 		t.Errorf("boven de limiet: status %d, wil 429", w.Code)
 	}
-	// een bestaande code herregistreren mag wel: dat groeit niet
+	// vol is vol, ook voor een bestaande code: een ander antwoord voor
+	// bestaand-vs-nieuw zou een orakel zijn voor welke codes bestaan
 	w = do(t, s, "POST", "/v1/link", "", jsonBody(t, map[string]string{
 		"code": "code-een", "payload": "vers"}))
-	if w.Code != 204 {
-		t.Errorf("herregistreren binnen limiet: status %d, wil 204", w.Code)
+	if w.Code != 429 {
+		t.Errorf("herregistreren bij volle tabel: status %d, wil 429", w.Code)
+	}
+	// en wat er stond is niet overschreven door de geweigerde poging
+	w = do(t, s, "POST", "/v1/link/redeem", "", jsonBody(t, map[string]string{
+		"code": "code-een"}))
+	var out struct{ Payload string }
+	json.Unmarshal(w.Body.Bytes(), &out)
+	if out.Payload != "x" {
+		t.Errorf("payload veranderd door geweigerde registratie: %q", out.Payload)
+	}
+}
+
+func TestLinkEnPutVasteVertraging(t *testing.T) {
+	s, _ := newTestServer(t, func(c *config) { c.redeemDelay = 30 * time.Millisecond })
+	start := time.Now()
+	do(t, s, "POST", "/v1/link", "", jsonBody(t, map[string]string{
+		"code": "aap-noot-mies-wim", "payload": "x"}))
+	if d := time.Since(start); d < 30*time.Millisecond {
+		t.Errorf("registreren na %v, vertraging hoort minstens 30ms te zijn", d)
+	}
+	start = time.Now()
+	do(t, s, "PUT", "/v1/profile/a1b2c3d4e5f6a7b8", testSecret, []byte("blob"))
+	if d := time.Since(start); d < 30*time.Millisecond {
+		t.Errorf("put na %v, vertraging hoort minstens 30ms te zijn", d)
 	}
 }
 
@@ -310,9 +335,10 @@ func TestProfielAccountsBegrensd(t *testing.T) {
 			t.Fatalf("aanmaken %s: status %d", id, w.Code)
 		}
 	}
+	// vol geeft hetzelfde 404 als elk ander falen: geen vol-orakel
 	w := do(t, s, "PUT", "/v1/profile/d1b2c3d4e5f6a7b8", testSecret, []byte("blob"))
-	if w.Code != 429 {
-		t.Errorf("derde account boven limiet: status %d, wil 429", w.Code)
+	if w.Code != 404 {
+		t.Errorf("derde account boven limiet: status %d, wil 404", w.Code)
 	}
 	// bestaande accounts blijven gewoon schrijfbaar
 	w = do(t, s, "PUT", "/v1/profile/a1b2c3d4e5f6a7b8", testSecret, []byte("update"))
@@ -322,8 +348,8 @@ func TestProfielAccountsBegrensd(t *testing.T) {
 	// en de teller telt bestaande bestanden mee na een herstart
 	s2, _ := newTestServer(t, func(c *config) { c.dataDir = dir; c.maxAccounts = 2 })
 	w = do(t, s2, "PUT", "/v1/profile/d1b2c3d4e5f6a7b8", testSecret, []byte("blob"))
-	if w.Code != 429 {
-		t.Errorf("na herstart boven limiet: status %d, wil 429", w.Code)
+	if w.Code != 404 {
+		t.Errorf("na herstart boven limiet: status %d, wil 404", w.Code)
 	}
 }
 
