@@ -31,6 +31,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// ReadTimeout/WriteTimeout gelden voor gewone requests. Ze raken de
+	// websocket-relay NIET: websocket.Accept hijackt de verbinding en zet
+	// de deadlines terug op nul, dus een lang potje wordt hier niet na 30s
+	// afgekapt. Niet "opschonen" naar een kortere timeout in de veronder-
+	// stelling dat de relay meelift; dat breekt juist het samenspelen.
 	s := &http.Server{
 		Addr:              *addr,
 		Handler:           srv,

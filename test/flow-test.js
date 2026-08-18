@@ -621,5 +621,237 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var opServer = await openJSON(ACC.secret, 'profiel', __server.profiles[ACC.id].blob);
   ok('sync: laatste stand versleuteld op de server', cntSum(opServer.cnt.stars || {}) >= 5);
 
+  /* ---------- samen spelen: QR-route, potje, revanche, weg ---------- */
+  var tikje = async function () { drainTimers(); for (var j = 0; j < 30; j++) await null; drainTimers(); };
+  await mpHostQR();
+  await tikje();
+  ok('mp: kamer gemaakt en QR-wachtscherm', !!MP && MP.host === true &&
+    __els.modalBox.innerHTML.indexOf('<svg') >= 0 &&
+    __els.modalBox.innerHTML.indexOf('Wachten') >= 0);
+
+  var gastTok = __server.wsrooms[MP.room].order[1];
+  var maat = new WebSocket('ws://nep');
+  maat.inbox = [];
+  maat.onmessage = function (e) { maat.inbox.push(JSON.parse(e.data)); };
+  await tikje();
+  maat.send(JSON.stringify({ room: MP.room, seat: gastTok }));
+  await tikje();
+  maat.send(JSON.stringify({ t: 'hallo', naam: 'Fien' }));
+  await tikje();
+  ok('mp: verbonden-scherm met emoji-trio', __els.modalBox.innerHTML.indexOf('Fien') >= 0 &&
+    __els.modalBox.innerHTML.indexOf(mpEmojiTrio(MP.room)) >= 0);
+  ok('mp: maatje kreeg ons hallo', maat.inbox.some(function (m) { return m.t === 'hallo'; }));
+
+  fire(__els.mpGo, 'click');
+  await tikje();
+  var startMsg = maat.inbox.filter(function (m) { return m.t === 'start'; })[0];
+  ok('mp: potje gestart met complementaire kleuren', !!session && session.online === true &&
+    MP.gameNo === 1 && !!startMsg && ((MP.myColor === 'w') === (startMsg.jij === 'b')));
+  ok('mp: beurt volgt de kleur', (BD.mode === 'move') === (MP.myColor === 'w'));
+
+  var maatZet = function (n) {
+    var zm = legalMoves(session.S)[0];
+    maat.send(JSON.stringify({ t: 'zet', from: zm.from, to: zm.to,
+      promo: zm.promo || null, n: n, gameNo: MP.gameNo }));
+  };
+  if (MP.myColor === 'w') {
+    commitKid(legalMoves(session.S).find(function (x) {
+      return alg(x.from) === 'e2' && alg(x.to) === 'e4';
+    }));
+    await tikje();
+    ok('mp: eigen zet verstuurd, beurt voorbij', BD.mode === 'off' &&
+      maat.inbox.some(function (m) { return m.t === 'zet' && m.n === 1; }));
+    maatZet(2);
+    await tikje();
+    ok('mp: zet van maatje toegepast', session.S.hist.length === 2 && BD.mode === 'move');
+  } else {
+    maatZet(1);
+    await tikje();
+    ok('mp: zet van maatje toegepast', session.S.hist.length === 1 && BD.mode === 'move');
+    commitKid(legalMoves(session.S)[0]);
+    await tikje();
+    ok('mp: eigen zet verstuurd, beurt voorbij', BD.mode === 'off' &&
+      maat.inbox.some(function (m) { return m.t === 'zet' && m.n === 2; }));
+  }
+
+  /* hersync: het maatje levert de zettenlijst, de client speelt na. Dit
+     is de regressie voor de bug waar parseFEN de zetteller op 0 zette. */
+  maat.inbox.length = 0;
+  maat.send(JSON.stringify({ t: 'sync?' }));
+  await tikje();
+  var syncMsg = maat.inbox.filter(function (m) { return m.t === 'sync'; })[0];
+  ok('mp: sync levert de zettenlijst', !!syncMsg && Array.isArray(syncMsg.moves) &&
+    syncMsg.moves.length === session.S.hist.length && syncMsg.jij !== MP.myColor);
+  /* de client vraagt na een gat zelf om sync; simuleer dat en lever een
+     lijst met een extra zet van het maatje erin */
+  var plyVoor = session.S.hist.length;
+  var lijst = session.S.hist.map(function (u) { return { from: u.m.from, to: u.m.to, promo: u.m.promo || null }; });
+  if (session.S.turn !== MP.myColor) {
+    var extra = legalMoves(session.S)[0];
+    lijst.push({ from: extra.from, to: extra.to, promo: extra.promo || null });
+  }
+  MP.syncWanted = true;
+  maat.send(JSON.stringify({ t: 'sync', moves: lijst, jij: MP.myColor === 'w' ? 'b' : 'w', gameNo: 1, over: false }));
+  await tikje();
+  ok('mp: hersync herstelt zetteller (geen reset naar 0)',
+    session.S.hist.length === lijst.length && session.S.hist.length >= plyVoor &&
+    BD.mode === (session.S.turn === MP.myColor ? 'move' : 'off'));
+  /* na de hersync loopt het tellen door: de volgende in-orde zet past nog */
+  if (session.S.turn === MP.myColor) {
+    var n0 = session.S.hist.length;
+    commitKid(legalMoves(session.S)[0]);
+    await tikje();
+    ok('mp: eigen zet na hersync verstuurd met juist volgnummer',
+      maat.inbox.some(function (m) { return m.t === 'zet' && m.n === n0 + 1; }));
+  }
+
+  /* vals spel: het maatje probeert onze eigen kleur te zetten -> geweigerd */
+  session.S = MP.myColor === 'w' ? parseFEN('8/8/8/8/8/8/4P3/4K1k1 w - - 0 1')
+    : parseFEN('4k1K1/4p3/8/8/8/8/8/8 b - - 0 1');
+  BD.mode = 'move';
+  var histVals = session.S.hist.length;
+  maat.send(JSON.stringify({ t: 'zet', from: sqFromAlg('e2'), to: sqFromAlg('e4'),
+    promo: null, n: histVals + 1, gameNo: MP.gameNo }));
+  await tikje();
+  ok('mp: maatje mag onze kleur niet zetten', session.S.hist.length === histVals);
+
+  /* mat vanuit de eigen kleur: winst NIET in de gedeelde teller (anti-farm),
+     wel in winsOnline; revanche aangeboden */
+  session.S = MP.myColor === 'w'
+    ? parseFEN('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1')
+    : parseFEN('r5k1/5ppp/8/8/8/8/5PPP/6K1 b - - 0 1');
+  BD.mode = 'move';
+  var winsVoor = P.wins, onlineVoor = P.c.winsOnline || 0;
+  commitKid(legalMoves(session.S).find(function (x) {
+    return alg(x.to) === (MP.myColor === 'w' ? 'a8' : 'a1');
+  }));
+  await tikje();
+  ok('mp: winst alleen in winsOnline, niet in P.wins', session.over === true &&
+    P.wins === winsVoor && (P.c.winsOnline || 0) === onlineVoor + 1 &&
+    __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0 &&
+    __els.modalBox.innerHTML.indexOf('Revanche') >= 0);
+
+  var kleurVoor = MP.myColor;
+  fire(__els.mpRev, 'click');
+  await tikje();
+  maat.send(JSON.stringify({ t: 'revanche' }));
+  await tikje();
+  ok('mp: revanche wisselt kleur en start opnieuw', MP.gameNo === 2 &&
+    MP.myColor !== kleurVoor && session.S.hist.length === 0 && session.over === false &&
+    maat.inbox.some(function (m) { return m.t === 'start' && m.n === 2; }));
+
+  /* vals spel: de gast (het maatje) probeert met een 'start' het potje te
+     resetten; de host deelt de kleuren uit, dus dit hoort genegeerd te
+     worden */
+  var kleurNu = MP.myColor, gnNu = MP.gameNo;
+  commitKid(legalMoves(session.S).find(function (x) { return alg(x.from) === 'e2' && alg(x.to) === 'e4'; }));
+  await tikje();
+  maat.send(JSON.stringify({ t: 'start', jij: MP.myColor === 'w' ? 'w' : 'b', n: 99 }));
+  await tikje();
+  ok('mp: host negeert een start van de gast', MP.myColor === kleurNu &&
+    MP.gameNo === gnNu && session.S.hist.length === 1);
+
+  /* het maatje stopt ermee */
+  maat.send(JSON.stringify({ t: 'weg' }));
+  await tikje();
+  ok('mp: afscheid als het maatje stopt', MP === null &&
+    __els.modalBox.innerHTML.indexOf('gestopt') >= 0);
+  fire(__els.mpWegOk, 'click');
+  await tikje();
+
+  /* ---------- samen spelen: gast via de speel-QR ---------- */
+  var r2 = await (await fetch(SYNC_URL + '/v1/room', { method: 'POST' })).json();
+  var hostSock = new WebSocket('ws://nep');
+  hostSock.inbox = [];
+  hostSock.onmessage = function (e) { hostSock.inbox.push(JSON.parse(e.data)); };
+  await tikje();
+  hostSock.send(JSON.stringify({ room: r2.room, seat: r2.seat }));
+  await tikje();
+  location.hash = '#SHPLAY1:' + r2.room + '.' + r2.guest;
+  ok('mp gast: speelfragment herkend en gewist', checkPlayFragment() === true &&
+    location.hash === '');
+  fire(__els.mpJa, 'click');
+  await tikje();
+  hostSock.send(JSON.stringify({ t: 'hallo', naam: 'Mo' }));
+  await tikje();
+  ok('mp gast: wachten tot de host start', __els.modalBox.innerHTML.indexOf('Mo') >= 0 &&
+    __els.modalBox.innerHTML.indexOf('start drukt') >= 0);
+  hostSock.send(JSON.stringify({ t: 'start', jij: 'b', n: 1 }));
+  await tikje();
+  ok('mp gast: potje als zwart, wit is aan zet', !!session && session.online === true &&
+    MP.myColor === 'b' && BD.mode === 'off');
+  var wz = legalMoves(session.S)[0];
+  hostSock.send(JSON.stringify({ t: 'zet', from: wz.from, to: wz.to, promo: null, n: 1, gameNo: 1 }));
+  await tikje();
+  ok('mp gast: zet van de host toegepast', session.S.hist.length === 1 && BD.mode === 'move');
+  ok('mp gast: hallo en hersync-vraag verstuurd', hostSock.inbox.some(function (m) {
+    return m.t === 'hallo';
+  }));
+  /* de zwartspeler moet zijn eigen stukken via het bord kunnen aanraken en
+     zetten (regressie: onCell was op wit vastgezet) */
+  hostSock.inbox.length = 0;
+  var zwZet = legalMoves(session.S).find(function (x) { return colorOf(session.S.board[x.from]) === 'b'; });
+  onCell(zwZet.from);
+  ok('mp gast: zwart stuk selecteerbaar via het bord', BD.sel === zwZet.from && BD.dots.has(zwZet.to));
+  onCell(zwZet.to);
+  await tikje();
+  ok('mp gast: zwarte zet via het bord gespeeld en verstuurd',
+    session.S.hist.length === 2 && hostSock.inbox.some(function (m) { return m.t === 'zet' && m.n === 2; }));
+  mpVerlaat();
+  await tikje();
+  ok('mp gast: netjes weggegaan', MP === null &&
+    hostSock.inbox.some(function (m) { return m.t === 'weg'; }));
+
+  /* herverbinden geeft na een budget op en zegt het eerlijk: de kamer
+     bestaat niet (meer), dus de socket opent wel maar wordt meteen gesloten
+     zonder welkom. Zonder de onopen->welkom-fix zou dit eeuwig stil door
+     reconnecten. */
+  session = { kind: 'game', online: true, over: false, myColor: 'w', S: newGame() };
+  showScreen('play');
+  mpStart('kamerdiENIETbestaat', 'stoeltokendatNIETbestaat', true);
+  for (i = 0; i < 80 && MP; i++) { drainTimers(); await null; await null; }
+  ok('mp: geeft na te veel mislukte herverbindingen op en meldt het',
+    MP === null && __els.modalBox.innerHTML.indexOf('verbinding is weg') >= 0);
+  fire(__els.mpVwOk, 'click');
+  await tikje();
+
+  /* ---------- wederzijdse woordcodes tegen de nep-server ---------- */
+  var hA = await lookupCode('SHPLAY1-zoek:', 'boom-vis');
+  var hB = await lookupCode('SHPLAY1-zoek:', 'roos-kat');
+  var pb = function (mine, theirs) {
+    return fetch(SYNC_URL + '/v1/pair', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mine: mine, theirs: theirs }) });
+  };
+  ok('pair: eerste kant wacht', (await pb(hA, hB)).status === 204);
+  var p2 = await pb(hB, hA);
+  var d2 = await p2.json();
+  var p3 = await pb(hA, hB);
+  var d3 = await p3.json();
+  ok('pair: wederzijds aanwijzen koppelt, eerste kant is host', p2.status === 200 &&
+    p3.status === 200 && d3.room === d2.room && d3.seat !== d2.seat &&
+    d3.host === true && d2.host === false);
+
+  /* anti-farm (memo): een online winst geeft NOOIT XP en telt niet mee voor
+     de dagmissies of de gedeelde 'wins'-teller; alleen winsOnline. De rest
+     van de suite zet alle missies vooraf op klaar, dus dit meten we op een
+     verse dag waar de missies nog open staan. */
+  P.day = { date: 'gisteren' };
+  ensureDay();
+  var xpVoor = P.xp, dagWinsVoor = P.day.wins || 0, pWinsVoor = P.wins, onlineVoor2 = P.c.winsOnline || 0;
+  MP = { room: 'r', seat: 's', host: true, myColor: 'w', gameNo: 1, revMine: false,
+    revTheirs: false, peerName: 'X', open: false, weg: false };
+  session = { kind: 'game', online: true, myColor: 'w', over: false,
+    S: parseFEN('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1') };
+  BD.mode = 'move';
+  commitKid(legalMoves(session.S).find(function (x) { return alg(x.to) === 'a8'; }));
+  drainTimers();
+  for (i = 0; i < 20; i++) await null;
+  ok('mp: online winst geeft geen XP en raakt de HUD-wins/missies niet',
+    P.xp === xpVoor && (P.day.wins || 0) === dagWinsVoor && P.wins === pWinsVoor &&
+    (P.c.winsOnline || 0) === onlineVoor2 + 1);
+  closeModal();
+  mpStop();
+
   print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');
 })();

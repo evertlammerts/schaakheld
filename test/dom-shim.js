@@ -123,8 +123,18 @@ var crypto = {
 };
 
 /* Nep-fetch met dezelfde semantiek als de Go-server (koppelcodes eenmalig,
-   profielblobs met bearer secret), zodat de flows end-to-end testbaar zijn. */
-var __server = { links: {}, profiles: {} };
+   profielblobs met bearer secret, kamers en wederzijdse paren), zodat de
+   flows end-to-end testbaar zijn. */
+var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, teller: 0 };
+function __nieuwToken() { return 'tok' + (++__server.teller) + 'x'.repeat(16); }
+function __nieuweKamer() {
+  const id = 'kamer' + (++__server.teller) + 'k'.repeat(12);
+  const host = __nieuwToken(), gast = __nieuwToken();
+  __server.wsrooms[id] = { seats: {}, order: [host, gast] };
+  __server.wsrooms[id].seats[host] = null;
+  __server.wsrooms[id].seats[gast] = null;
+  return { id, host, gast };
+}
 var fetch = function (url, opts) {
   opts = opts || {};
   return new Promise(function (resolve) {
@@ -140,6 +150,33 @@ var fetch = function (url, opts) {
       arrayBuffer: () => Promise.resolve(data instanceof Uint8Array ? data.buffer.slice(0) : new ArrayBuffer(0))
     });
     if (m === 'POST' && path === '/v1/link') { __server.links[body.code] = body.payload; res(204); }
+    else if (m === 'POST' && path === '/v1/room') {
+      const k = __nieuweKamer();
+      res(200, { room: k.id, seat: k.host, guest: k.gast });
+    }
+    else if (m === 'POST' && path === '/v1/pair') {
+      /* zelfde validatie als room.go: zelfde-code of rare tekens is 400 */
+      if (body.mine === body.theirs || !/^[A-Za-z0-9_-]{8,64}$/.test(body.mine) ||
+        !/^[A-Za-z0-9_-]{8,64}$/.test(body.theirs)) { res(400); return; }
+      const lo = body.mine < body.theirs ? body.mine : body.theirs;
+      const hi = body.mine < body.theirs ? body.theirs : body.mine;
+      const key = lo + '|' + hi;
+      const p = __server.pending[key];
+      if (!p) { __server.pending[key] = { dirA: body.mine }; res(204); }
+      else if (p.room) {
+        /* idempotent: elke kant haalt zijn eigen stoel op, net als room.go */
+        if (body.mine === p.dirA) res(200, { room: p.room, seat: p.seatA, host: true });
+        else res(200, { room: p.room, seat: p.seatB, host: false });
+      }
+      else if (p.dirA === body.mine) res(204);
+      else {
+        const k = __nieuweKamer();
+        p.room = k.id;
+        p.seatA = k.host;
+        p.seatB = k.gast;
+        res(200, { room: k.id, seat: p.seatB, host: false });
+      }
+    }
     else if (m === 'POST' && path === '/v1/link/redeem') {
       const p = __server.links[body.code];
       delete __server.links[body.code];
@@ -165,6 +202,71 @@ var matchMedia = function () { return { matches: true }; };
 var performance = { now: () => Date.now() };
 var requestAnimationFrame = function () { return 0; };
 var cancelAnimationFrame = function () {};
+
+/* Nep-WebSocket met dezelfde relay-semantiek als de Go-server: eerste
+   bericht is de join {room, seat}, daarna gaan berichten naar het andere
+   stoeltje; welkom- en peer-signalen zoals in room.go. Aflevering loopt
+   via de timerwachtrij, dus drainTimers() drijft alles aan. */
+function WebSocket(url) {
+  const self = this;
+  this.readyState = 0;
+  this._room = null;
+  this._seat = null;
+  this.onopen = null; this.onmessage = null; this.onclose = null;
+  setTimeout(() => {
+    if (self.readyState !== 0) return;
+    self.readyState = 1;
+    if (self.onopen) self.onopen({});
+  }, 0);
+  const lever = (sock, data) => setTimeout(() => {
+    if (sock.readyState === 1 && sock.onmessage) sock.onmessage({ data });
+  }, 0);
+  const peer = () => {
+    const rm = __server.wsrooms[self._room];
+    if (!rm) return null;
+    for (const tok in rm.seats) {
+      const so = rm.seats[tok];
+      if (tok !== self._seat && so && so.readyState === 1) return so;
+    }
+    return null;
+  };
+  this.send = function (data) {
+    if (self.readyState !== 1) return;
+    if (!self._room) {
+      let join = null;
+      try { join = JSON.parse(data); } catch (e) {}
+      const rm = join && __server.wsrooms[join.room];
+      if (!rm || !(join.seat in rm.seats)) { self.close(); return; }
+      const oud = rm.seats[join.seat];
+      self._room = join.room;
+      self._seat = join.seat;
+      rm.seats[join.seat] = self;
+      if (oud && oud !== self) oud.close();
+      lever(self, '{"t":"welkom"}');
+      const p = peer();
+      if (p) lever(p, '{"t":"peer","aan":true}');
+      return;
+    }
+    const p = peer();
+    if (p) lever(p, data);
+  };
+  this.close = function () {
+    if (self.readyState === 3) return;
+    self.readyState = 3;
+    if (self._room) {
+      const rm = __server.wsrooms[self._room];
+      if (rm && rm.seats[self._seat] === self) {
+        rm.seats[self._seat] = null;
+        const zoek = __server.wsrooms[self._room];
+        for (const tok in zoek.seats) {
+          const so = zoek.seats[tok];
+          if (so && so.readyState === 1) lever(so, '{"t":"peer","aan":false}');
+        }
+      }
+    }
+    if (self.onclose) setTimeout(() => { if (self.onclose) self.onclose({}); }, 0);
+  };
+}
 
 /* manual timer queue */
 var __timers = [], __tid = 1;

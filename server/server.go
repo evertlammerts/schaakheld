@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -57,16 +58,22 @@ type server struct {
 	cfg config
 	mux *http.ServeMux
 
-	mu       sync.Mutex // beschermt links, accounts en de profielbestanden
+	mu       sync.Mutex // beschermt links, accounts, rooms, pending en de profielbestanden
 	links    map[string]linkEntry
 	accounts int // aantal profielbestanden, begrensd door maxAccounts
+	rooms    map[string]*room
+	pending  map[string]*pendingPair
 
-	// drie losse semaforen (elk cfg.redeemSlots breed) voor de drie
+	// losse semaforen (elk cfg.redeemSlots breed) voor de
 	// onge-authenticeerde schrijfpaden, zodat een vloed op het ene pad
 	// het andere niet meesleept
 	redeemC chan struct{}
 	linkC   chan struct{}
 	putC    chan struct{}
+	roomC   chan struct{}
+	pairC   chan struct{}
+
+	wsActive atomic.Int32 // gelijktijdige websocket-verbindingen, begrensd door maxWsConns
 }
 
 func newServer(cfg config) (*server, error) {
@@ -91,9 +98,13 @@ func newServer(cfg config) (*server, error) {
 	s := &server{
 		cfg:     cfg,
 		links:   map[string]linkEntry{},
+		rooms:   map[string]*room{},
+		pending: map[string]*pendingPair{},
 		redeemC: make(chan struct{}, cfg.redeemSlots),
 		linkC:   make(chan struct{}, cfg.redeemSlots),
 		putC:    make(chan struct{}, cfg.redeemSlots),
+		roomC:   make(chan struct{}, cfg.redeemSlots),
+		pairC:   make(chan struct{}, cfg.redeemSlots),
 	}
 	entries, err := os.ReadDir(cfg.dataDir)
 	if err != nil {
@@ -113,6 +124,9 @@ func newServer(cfg config) (*server, error) {
 	mux.HandleFunc("POST /v1/link/redeem", s.handleRedeem)
 	mux.HandleFunc("GET /v1/profile/{id}", s.handleProfileGet)
 	mux.HandleFunc("PUT /v1/profile/{id}", s.handleProfilePut)
+	mux.HandleFunc("POST /v1/room", s.handleRoomCreate)
+	mux.HandleFunc("POST /v1/pair", s.handlePair)
+	mux.HandleFunc("GET /v1/room/ws", s.handleRoomWS)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "ok\n")
 	})
