@@ -3,3 +3,5 @@ artifact.html
 .DS_Store
 .tmp-sw-shim.js
 .tmp-sw.js
+tools/.wordlist-cache/
+server/data/
