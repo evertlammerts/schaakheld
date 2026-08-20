@@ -48,7 +48,7 @@ cache.
 ## Bouwen en testen
 
 ```
-./build.sh   # bouwt index.html en artifact.html uit src/
+./build.sh   # bouwt index.html en sw.js uit src/
 ./test.sh    # draait de engine-tests en de UI-flowtests headless
 ```
 

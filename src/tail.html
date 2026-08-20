@@ -3068,7 +3068,7 @@ if (!checkPlayFragment() && !checkLinkFragment()) {
 if (ACC) syncNow();
 
 /* PWA: op GitHub Pages cachet de service worker de app voor offline gebruik.
-   In omgevingen zonder sw.js (zoals het Claude-artifact) faalt dit stil. */
+   In omgevingen zonder sw.js faalt dit stil. */
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
 }

@@ -1,9 +1,7 @@
 #!/bin/sh
-# Bouwt drie bestanden uit src/:
+# Bouwt twee bestanden uit src/:
 #  - index.html: standalone pagina met doctype, viewport en PWA-tags, voor
 #    GitHub Pages. Werkt samen met sw.js en manifest.webmanifest offline.
-#  - artifact.html: kale concat zonder doctype, voor publicatie als
-#    Claude-artifact (de artifact-runtime voegt zelf het skelet toe).
 #  - sw.js: service worker uit src/sw.js, met een hash van index.html als
 #    cacheversie. Zo krijgt elke release vanzelf een verse cache.
 set -e
@@ -24,7 +22,6 @@ n=$(grep -n '</style>' src/head.html | head -1 | cut -d: -f1)
   cat src/engine.js src/words.js src/qr.js src/jsqr.js src/tail.html
   printf '</body>\n</html>\n'
 } > index.html
-cat src/head.html src/engine.js src/words.js src/qr.js src/jsqr.js src/tail.html > artifact.html
 HASH=$(shasum index.html | cut -c1-12)
 sed "s/__VERSION__/$HASH/" src/sw.js > sw.js
-echo "gebouwd: index.html ($(wc -c < index.html | tr -d ' ') bytes), artifact.html en sw.js (versie $HASH)"
+echo "gebouwd: index.html ($(wc -c < index.html | tr -d ' ') bytes) en sw.js (versie $HASH)"

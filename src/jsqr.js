@@ -1,5 +1,5 @@
 /* jsQR 1.4.0 — QR-decoder, MIT-licentie, (c) Cozmo. https://github.com/cozmo/jsQR
-   Gevendord (geminificeerd met esbuild) omdat het artifact/PWA geen externe
+   Gevendord (geminificeerd met esbuild) omdat de PWA geen externe
    libraries mag laden. Wij gebruiken het alleen om onze eigen koppel- en
    speel-QRs in de app te scannen (iOS Safari heeft geen BarcodeDetector).
    Niet met de hand bewerken; vervang het hele bestand bij een update. */

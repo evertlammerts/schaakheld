@@ -1,7 +1,7 @@
 /* ---------- QR-encoder ----------
    Byte-mode, foutcorrectie M, versie 1-6 (max 106 bytes payload): genoeg
-   voor de koppel-URL. Zelf geschreven omdat het artifact achter een
-   strikte CSP draait: geen externe libraries. qrMatrix(text) geeft een
+   voor de koppel-URL. Zelf geschreven omdat de app offline moet werken:
+   geen externe libraries. qrMatrix(text) geeft een
    vierkante 0/1-matrix, qrSvg(text) een kant-en-klare SVG-string.
    Indeling volgens ISO 18004; geverifieerd door round-trip-decoderen. */
 
