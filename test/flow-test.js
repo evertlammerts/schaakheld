@@ -359,17 +359,55 @@ P.xp = 200;
 pickTheme('oceaan');
 ok('theme: ontgrendeld vanaf Paard', P.theme === 'oceaan');
 P.xp = xpSave;
-/* modal queue keeps order */
+/* modal queue keeps order; de cancelable-vlag reist mee de wachtrij door */
 modalQueue = []; modalOpen = false;
 __els.overlay.classList.add('hidden');
 showModal('<p>EEN</p>');
-showModal('<p>TWEE</p>');
+showModal('<p>TWEE</p>', null, true);
 ok('modal queue: eerste zichtbaar, tweede wacht', __els.modalBox.innerHTML.indexOf('EEN') >= 0 &&
-  modalQueue.length === 1);
+  __els.modalBox.innerHTML.indexOf('m-close') < 0 && modalQueue.length === 1);
 closeModal();
 ok('modal queue: tweede komt daarna', __els.modalBox.innerHTML.indexOf('TWEE') >= 0);
-closeModal();
+ok('modal queue: cancelable komt mee uit de wachtrij', modalCancelable === true &&
+  __els.modalBox.innerHTML.indexOf('m-close') >= 0);
+fire(__els.overlay, 'click', { target: __els.overlay });
 ok('modal queue: leeg en dicht', modalOpen === false && __els.overlay.classList.contains('hidden'));
+
+/* kies-je-turbo is te annuleren: via ✕, via een tik op de achtergrond,
+   maar niet via een tik in de kaart zelf */
+var sessVoor = session;
+startGameFlow();
+ok('kies-turbo: open met sluitknop', !__els.overlay.classList.contains('hidden') &&
+  __els.modalBox.innerHTML.indexOf('Tegen wie speel je?') >= 0 &&
+  __els.modalBox.innerHTML.indexOf('m-close') >= 0);
+fire(__els.mClose, 'click');
+ok('kies-turbo: ✕ sluit zonder potje', modalOpen === false &&
+  __els.overlay.classList.contains('hidden') && session === sessVoor);
+startGameFlow();
+fire(__els.overlay, 'click', { target: __els.modalBox });
+ok('kies-turbo: tik in de kaart sluit niet', modalOpen === true &&
+  !__els.overlay.classList.contains('hidden'));
+fire(__els.overlay, 'click', { target: __els.overlay });
+ok('kies-turbo: achtergrond-tik sluit wel', modalOpen === false &&
+  __els.overlay.classList.contains('hidden') && session === sessVoor);
+startGameFlow();
+fire(document, 'keydown', { key: 'a' });
+ok('kies-turbo: een andere toets sluit niet', modalOpen === true &&
+  !__els.overlay.classList.contains('hidden'));
+fire(document, 'keydown', { key: 'Escape' });
+ok('kies-turbo: Escape sluit wel', modalOpen === false &&
+  __els.overlay.classList.contains('hidden') && session === sessVoor);
+/* zonder cancelable-vlag: geen ✕, en achtergrond en Escape doen niks */
+showModal('<p>VAST</p>');
+fire(__els.overlay, 'click', { target: __els.overlay });
+ok('modal zonder cancel: blijft staan', modalOpen === true &&
+  __els.modalBox.innerHTML.indexOf('m-close') < 0);
+fire(document, 'keydown', { key: 'Escape' });
+ok('modal zonder cancel: Escape doet niks', modalOpen === true &&
+  __els.modalBox.innerHTML.indexOf('VAST') >= 0);
+closeModal();
+ok('modal zonder cancel: eigen knop sluit', modalOpen === false &&
+  __els.overlay.classList.contains('hidden'));
 
 /* ---------- profiel-CRDT: doc, migratie, merge en sync ---------- */
 /* doc en weergave lopen gelijk (predictHits niet: die is hierboven met opzet

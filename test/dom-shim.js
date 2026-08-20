@@ -50,7 +50,10 @@ var document = {
   querySelector() { return makeEl('_q' + (elc++)); },
   body: makeEl('body'),
   documentElement: makeEl('documentElement'),
-  addEventListener() {}
+  /* document-brede handlers echt bewaren, zodat fire(document, 'keydown', ...)
+     in de flowtests de app-code raakt (Escape sluit een modal) */
+  _ev: {},
+  addEventListener(t, fn) { (this._ev[t] || (this._ev[t] = [])).push(fn); }
 };
 var window = globalThis;
 var navigator = {};

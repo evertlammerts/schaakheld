@@ -1438,27 +1438,43 @@ function spin(show, txt) {
   $('spin').classList.toggle('hidden', !show);
 }
 /* Modal with a queue: a second modal (say the victory screen right after a
-   level-up) waits until the first one is dismissed instead of replacing it. */
-let modalQueue = [], modalOpen = false;
-function showModal(html, setup) {
-  if (modalOpen) { modalQueue.push([html, setup]); return; }
-  modalOpen = true;
-  $('modalBox').innerHTML = html;
-  $('overlay').classList.remove('hidden');
+   level-up) waits until the first one is dismissed instead of replacing it.
+   Met cancelable=true krijgt de modal een ✕ en sluit hij ook via een tik
+   naast de kaart of Escape. Zonder die vlag sluit alleen een eigen knop,
+   zodat keuzes met gevolgen (wissen, level-up, verbinden) bewust blijven. */
+let modalQueue = [], modalOpen = false, modalCancelable = false;
+function renderModal(html, setup, cancelable) {
+  modalCancelable = !!cancelable;
+  $('modalBox').innerHTML = (cancelable ?
+    '<button class="m-close" id="mClose" aria-label="Sluiten">✕</button>' : '') + html;
+  if (cancelable) $('mClose').addEventListener('click', closeModal);
   if (setup) setup();
+}
+function showModal(html, setup, cancelable) {
+  if (modalOpen) { modalQueue.push([html, setup, cancelable]); return; }
+  modalOpen = true;
+  $('overlay').classList.remove('hidden');
+  renderModal(html, setup, cancelable);
 }
 function closeModal() {
   stopScan(); /* een openstaande camera vrijgeven zodra de modal wijzigt */
   if (modalQueue.length) {
     const next = modalQueue.shift();
-    $('modalBox').innerHTML = next[0];
-    if (next[1]) next[1]();
+    renderModal(next[0], next[1], next[2]);
     return;
   }
   modalOpen = false;
+  modalCancelable = false;
   $('overlay').classList.add('hidden');
   modalQueue = [];
 }
+$('overlay').addEventListener('click', e => {
+  /* alleen een tik op de achtergrond zelf, niet in de kaart */
+  if (modalCancelable && e.target === $('overlay')) closeModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && modalOpen && modalCancelable) closeModal();
+});
 function showToast(txt, gold) {
   const t = $('toast');
   const n = t.cloneNode(false);
@@ -2159,7 +2175,7 @@ function startGameFlow() {
       document.querySelectorAll('.lvl-btn').forEach(b => {
         b.addEventListener('click', () => { closeModal(); startGame(+b.dataset.lvl); });
       });
-    });
+    }, true);
 }
 
 function startGame(level) {
