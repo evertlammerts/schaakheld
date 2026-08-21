@@ -330,10 +330,20 @@
   .ghost { position: fixed; z-index: 30; pointer-events: none; display: grid; place-items: center;
     font-size: calc(var(--bw) / 8 * .72); line-height: 1; transition: transform .22s ease; }
 
+  /* Laatste zet: goud op een licht vak, brons op een donker vak. De oude
+     kleuren lagen te dicht bij het muntbord: #79C4A9 op #58B7A6 scheelt
+     bijna niets, dus wie met wit speelde zag de zet van zwart niet. Deze
+     twee wijken in elk van de zeven thema's duidelijk af (het kleinste
+     verschil tussen een highlight en welk bordvak dan ook ging van dE 8.6
+     naar 20.8) en houden toch het licht/donker-patroon van het bord vast.
+     Alleen de achtergrond, geen box-shadow: die is van de rand-standen
+     (selectie, goed/fout, gemist, spy) en die horen te winnen. Na een zet
+     met een truc staan 'last' en 'spy' namelijk samen op een vak. Selectie
+     staat hieronder en is even specifiek, dus die kleurt er overheen. */
+  .cell.last.light { background: #FFBE20; }
+  .cell.last.dark { background: #6B3F00; }
   .cell.sel { box-shadow: inset 0 0 0 4px var(--sun); }
   .cell.sel.light, .cell.sel.dark { background: #FFE08A; }
-  .cell.last.light { background: #FFEDB0; }
-  .cell.last.dark { background: #79C4A9; }
   .cell.dot::after {
     content: ''; position: absolute; inset: 0; margin: auto; width: 26%; height: 26%;
     border-radius: 50%; background: rgba(23, 69, 111, .3);
@@ -405,6 +415,12 @@
   .pat-label { font-size: 12.5px; color: var(--ink-soft); white-space: nowrap; }
 
   .action-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: var(--bw); }
+  /* Stoppen in een online potje is onomkeerbaar. Vlak onder het bord werd
+     die knop per ongeluk aangetikt na een zet op de onderste rij, dus in
+     een potje samen zakt de rij naar de onderkant van de kolom, voorbij de
+     puntenwijzer. .board-side is een flex-kolom, dus order regelt dat
+     zonder de drill-knoppen (die horen wel bij het bord) te verplaatsen. */
+  .action-row.onderaan { order: 1; margin-top: 4px; }
   .btn {
     border: none; cursor: pointer; border-radius: 999px;
     padding: 13px 26px; font-size: 17px; font-weight: bold;
@@ -2667,7 +2683,8 @@ function mpBeginGame() {
   $('predictBar').classList.add('hidden');
   updateTrays();
   updateToggles();
-  setActions([{ label: '🏳️ Stoppen', cls: 'plain small', fn: mpVerlaat, id: 'mpStopBtn' }]);
+  setActions([{ label: '🏳️ Stoppen', cls: 'plain small', fn: mpStopVragen, id: 'mpStopBtn' }]);
+  $('actionRow').classList.add('onderaan');
   if (MP.myColor === 'w') {
     BD.mode = 'move';
     say('Jij speelt met wit tegen ' + mpNaam() + '. Jij mag beginnen! ⬜');
@@ -2783,6 +2800,21 @@ function mpVerlaat() {
   mpStop();
   if (session && session.online) session.over = true;
   goHome();
+}
+
+/* Stoppen is onomkeerbaar: de kamer en de codes zijn daarna weg. Dus eerst
+   even vragen. De modal is cancelable, zodat ✕, Escape en een tik ernaast
+   allemaal 'doorspelen' betekenen: een misklik kost nooit meer een potje. */
+function mpStopVragen() {
+  if (!MP || !session || !session.online || session.over) { mpVerlaat(); return; }
+  showModal('<div class="m-emoji">🏳️</div><h2>Stoppen met dit potje?</h2>' +
+    '<p>Dan is het potje met ' + escHtml(mpNaam()) + ' afgelopen.<br>' +
+    'Voor een nieuw potje heb je ook nieuwe codes nodig.</p>' +
+    '<div class="m-btns"><button class="btn sun" id="mpDoorspelen">↩️ Nee, doorspelen</button>' +
+    '<button class="btn plain" id="mpStopJa">🏳️ Ja, stoppen</button></div>', () => {
+      $('mpDoorspelen').addEventListener('click', closeModal);
+      $('mpStopJa').addEventListener('click', () => { closeModal(); mpVerlaat(); });
+    }, true);
 }
 
 /* ---------- de drie manieren om bij elkaar te komen ---------- */
@@ -3285,6 +3317,7 @@ const actionBtns = {};
 function setActions(list) {
   const row = $('actionRow');
   row.innerHTML = '';
+  row.classList.remove('onderaan'); /* standaard vlak onder het bord; mp zet hem laag */
   for (const k in actionBtns) delete actionBtns[k];
   for (const a of list) {
     const b = document.createElement('button');
@@ -4529,7 +4562,11 @@ function updateToggles() {
 function endGameOnline(st, drawTxt) {
   const ik = session.myColor || 'w';
   let emoji, h, p;
-  if (!st.result) {
+  /* gameStatus meldt remise als result 'd', nooit als een leeg result. Op
+     !st.result testen betekende dat de remise-tak nooit aansloeg: bij pat,
+     de 50-zettenregel of te weinig materiaal kregen BEIDE kinderen te
+     horen dat de ander gewonnen had. */
+  if (st.result === 'd') {
     emoji = '🤝';
     h = 'Gelijkspel!';
     p = (drawTxt[st.reason] || 'Remise!') + '<br>Goed gespeeld, allebei!';
@@ -4867,7 +4904,11 @@ document.querySelectorAll('.mode-card').forEach(b => {
     else startDrill(mode);
   });
 });
-$('backBtn').addEventListener('click', goHome);
+$('backBtn').addEventListener('click', () => {
+  /* midden in een potje samen is ← Home net zo onomkeerbaar als Stoppen */
+  if (MP && session && session.online && !session.over) { mpStopVragen(); return; }
+  goHome();
+});
 $('setBtn').addEventListener('click', openSettings);
 $('tabSpelen').addEventListener('click', () => showHomeTab('spelen'));
 $('tabIk').addEventListener('click', () => showHomeTab('ik'));

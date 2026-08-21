@@ -804,7 +804,8 @@ function mpBeginGame() {
   $('predictBar').classList.add('hidden');
   updateTrays();
   updateToggles();
-  setActions([{ label: '🏳️ Stoppen', cls: 'plain small', fn: mpVerlaat, id: 'mpStopBtn' }]);
+  setActions([{ label: '🏳️ Stoppen', cls: 'plain small', fn: mpStopVragen, id: 'mpStopBtn' }]);
+  $('actionRow').classList.add('onderaan');
   if (MP.myColor === 'w') {
     BD.mode = 'move';
     say('Jij speelt met wit tegen ' + mpNaam() + '. Jij mag beginnen! ⬜');
@@ -920,6 +921,21 @@ function mpVerlaat() {
   mpStop();
   if (session && session.online) session.over = true;
   goHome();
+}
+
+/* Stoppen is onomkeerbaar: de kamer en de codes zijn daarna weg. Dus eerst
+   even vragen. De modal is cancelable, zodat ✕, Escape en een tik ernaast
+   allemaal 'doorspelen' betekenen: een misklik kost nooit meer een potje. */
+function mpStopVragen() {
+  if (!MP || !session || !session.online || session.over) { mpVerlaat(); return; }
+  showModal('<div class="m-emoji">🏳️</div><h2>Stoppen met dit potje?</h2>' +
+    '<p>Dan is het potje met ' + escHtml(mpNaam()) + ' afgelopen.<br>' +
+    'Voor een nieuw potje heb je ook nieuwe codes nodig.</p>' +
+    '<div class="m-btns"><button class="btn sun" id="mpDoorspelen">↩️ Nee, doorspelen</button>' +
+    '<button class="btn plain" id="mpStopJa">🏳️ Ja, stoppen</button></div>', () => {
+      $('mpDoorspelen').addEventListener('click', closeModal);
+      $('mpStopJa').addEventListener('click', () => { closeModal(); mpVerlaat(); });
+    }, true);
 }
 
 /* ---------- de drie manieren om bij elkaar te komen ---------- */
@@ -1422,6 +1438,7 @@ const actionBtns = {};
 function setActions(list) {
   const row = $('actionRow');
   row.innerHTML = '';
+  row.classList.remove('onderaan'); /* standaard vlak onder het bord; mp zet hem laag */
   for (const k in actionBtns) delete actionBtns[k];
   for (const a of list) {
     const b = document.createElement('button');
@@ -2666,7 +2683,11 @@ function updateToggles() {
 function endGameOnline(st, drawTxt) {
   const ik = session.myColor || 'w';
   let emoji, h, p;
-  if (!st.result) {
+  /* gameStatus meldt remise als result 'd', nooit als een leeg result. Op
+     !st.result testen betekende dat de remise-tak nooit aansloeg: bij pat,
+     de 50-zettenregel of te weinig materiaal kregen BEIDE kinderen te
+     horen dat de ander gewonnen had. */
+  if (st.result === 'd') {
     emoji = '🤝';
     h = 'Gelijkspel!';
     p = (drawTxt[st.reason] || 'Remise!') + '<br>Goed gespeeld, allebei!';
@@ -3004,7 +3025,11 @@ document.querySelectorAll('.mode-card').forEach(b => {
     else startDrill(mode);
   });
 });
-$('backBtn').addEventListener('click', goHome);
+$('backBtn').addEventListener('click', () => {
+  /* midden in een potje samen is ← Home net zo onomkeerbaar als Stoppen */
+  if (MP && session && session.online && !session.over) { mpStopVragen(); return; }
+  goHome();
+});
 $('setBtn').addEventListener('click', openSettings);
 $('tabSpelen').addEventListener('click', () => showHomeTab('spelen'));
 $('tabIk').addEventListener('click', () => showHomeTab('ik'));

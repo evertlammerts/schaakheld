@@ -318,10 +318,20 @@
   .ghost { position: fixed; z-index: 30; pointer-events: none; display: grid; place-items: center;
     font-size: calc(var(--bw) / 8 * .72); line-height: 1; transition: transform .22s ease; }
 
+  /* Laatste zet: goud op een licht vak, brons op een donker vak. De oude
+     kleuren lagen te dicht bij het muntbord: #79C4A9 op #58B7A6 scheelt
+     bijna niets, dus wie met wit speelde zag de zet van zwart niet. Deze
+     twee wijken in elk van de zeven thema's duidelijk af (het kleinste
+     verschil tussen een highlight en welk bordvak dan ook ging van dE 8.6
+     naar 20.8) en houden toch het licht/donker-patroon van het bord vast.
+     Alleen de achtergrond, geen box-shadow: die is van de rand-standen
+     (selectie, goed/fout, gemist, spy) en die horen te winnen. Na een zet
+     met een truc staan 'last' en 'spy' namelijk samen op een vak. Selectie
+     staat hieronder en is even specifiek, dus die kleurt er overheen. */
+  .cell.last.light { background: #FFBE20; }
+  .cell.last.dark { background: #6B3F00; }
   .cell.sel { box-shadow: inset 0 0 0 4px var(--sun); }
   .cell.sel.light, .cell.sel.dark { background: #FFE08A; }
-  .cell.last.light { background: #FFEDB0; }
-  .cell.last.dark { background: #79C4A9; }
   .cell.dot::after {
     content: ''; position: absolute; inset: 0; margin: auto; width: 26%; height: 26%;
     border-radius: 50%; background: rgba(23, 69, 111, .3);
@@ -393,6 +403,12 @@
   .pat-label { font-size: 12.5px; color: var(--ink-soft); white-space: nowrap; }
 
   .action-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: var(--bw); }
+  /* Stoppen in een online potje is onomkeerbaar. Vlak onder het bord werd
+     die knop per ongeluk aangetikt na een zet op de onderste rij, dus in
+     een potje samen zakt de rij naar de onderkant van de kolom, voorbij de
+     puntenwijzer. .board-side is een flex-kolom, dus order regelt dat
+     zonder de drill-knoppen (die horen wel bij het bord) te verplaatsen. */
+  .action-row.onderaan { order: 1; margin-top: 4px; }
   .btn {
     border: none; cursor: pointer; border-radius: 999px;
     padding: 13px 26px; font-size: 17px; font-weight: bold;

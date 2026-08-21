@@ -945,5 +945,78 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   closeModal();
   mpStop();
 
+  /* remise online: BEIDE spelers horen 'Gelijkspel' te zien. Regressie voor
+     de bug waar gameStatus altijd result 'd' teruggaf, zodat de remise-tak
+     nooit aansloeg en allebei de kinderen te horen kregen dat ze verloren
+     hadden van de ander. We spelen dezelfde patstelling een keer als wit en
+     een keer als zwart. */
+  var remiseTest = async function (kleur) {
+    MP = { room: 'r', seat: 's', host: true, myColor: kleur, gameNo: 1, revMine: false,
+      revTheirs: false, peerName: 'Fien', open: false, weg: false };
+    session = { kind: 'game', online: true, myColor: kleur, over: false,
+      S: parseFEN(kleur === 'w' ? '7k/8/6K1/8/8/8/8/5Q2 w - - 0 1'
+        : '5q2/8/8/8/8/6k1/8/7K b - - 0 1') };
+    BD.mode = 'move';
+    commitKid(legalMoves(session.S).find(function (x) {
+      return alg(x.from) === (kleur === 'w' ? 'f1' : 'f8') &&
+        alg(x.to) === (kleur === 'w' ? 'f7' : 'f2');
+    }));
+    drainTimers();
+    for (var k = 0; k < 20; k++) await null;
+    var html = __els.modalBox.innerHTML;
+    closeModal();
+    mpStop();
+    return html;
+  };
+  var remiseW = await remiseTest('w');
+  ok('mp: remise als wit heet gelijkspel, niet verloren',
+    remiseW.indexOf('Gelijkspel') >= 0 && remiseW.indexOf('wint dit potje') < 0 &&
+    remiseW.indexOf('Schaakmat') < 0 && remiseW.indexOf('Pat!') >= 0);
+  var remiseB = await remiseTest('b');
+  ok('mp: remise als zwart heet gelijkspel, niet verloren',
+    remiseB.indexOf('Gelijkspel') >= 0 && remiseB.indexOf('wint dit potje') < 0 &&
+    remiseB.indexOf('Schaakmat') < 0 && remiseB.indexOf('Pat!') >= 0);
+
+  /* stoppen vraagt eerst: de knop zit vlak genoeg bij het bord om per
+     ongeluk aangetikt te worden, dus een enkele tik mag nooit een potje
+     kosten. En hij hoort onderaan de kolom te staan, niet tegen het bord. */
+  MP = { room: 'r', seat: 's', host: true, myColor: 'w', gameNo: 1, revMine: false,
+    revTheirs: false, peerName: 'Fien', open: false, weg: false };
+  mpBeginGame();
+  ok('mp: stopknop staat onderaan, niet tegen het bord',
+    __els.actionRow.classList.contains('onderaan'));
+  fire(actionBtns.mpStopBtn, 'click');
+  ok('mp: stoppen vraagt eerst om bevestiging',
+    __els.modalBox.innerHTML.indexOf('Stoppen met dit potje?') >= 0 &&
+    !!MP && !!session && session.over !== true);
+  fire(__els.mpDoorspelen, 'click');
+  ok('mp: doorspelen laat het potje staan',
+    !!MP && !!session && session.online === true && session.over !== true &&
+    __els.overlay.classList.contains('hidden'));
+  fire(actionBtns.mpStopBtn, 'click');
+  fire(__els.mpStopJa, 'click');
+  await tikje();
+  ok('mp: pas na ja is het potje echt afgelopen', MP === null && session === null);
+
+  /* ← Home midden in een potje is even onomkeerbaar en vraagt dus ook */
+  MP = { room: 'r', seat: 's', host: true, myColor: 'w', gameNo: 1, revMine: false,
+    revTheirs: false, peerName: 'Fien', open: false, weg: false };
+  mpBeginGame();
+  fire(__els.backBtn, 'click');
+  ok('mp: ← Home vraagt ook eerst',
+    __els.modalBox.innerHTML.indexOf('Stoppen met dit potje?') >= 0 && !!MP);
+  fire(__els.mpStopJa, 'click');
+  await tikje();
+  ok('mp: ← Home stopt na ja wel', MP === null && session === null);
+  /* buiten een online potje blijft ← Home gewoon meteen naar huis gaan, en
+     de knoppenrij staat weer gewoon onder het bord (geen resten van mp) */
+  startGame(0);
+  drainTimers();
+  ok('offline: knoppenrij staat weer onder het bord',
+    !__els.actionRow.classList.contains('onderaan'));
+  fire(__els.backBtn, 'click');
+  ok('offline: ← Home gaat meteen naar huis zonder vraag',
+    session === null && __els.overlay.classList.contains('hidden'));
+
   print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');
 })();
