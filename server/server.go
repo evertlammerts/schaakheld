@@ -63,6 +63,7 @@ type server struct {
 	accounts int // aantal profielbestanden, begrensd door maxAccounts
 	rooms    map[string]*room
 	pending  map[string]*pendingPair
+	buses    map[string]busEntry
 
 	// losse semaforen (elk cfg.redeemSlots breed) voor de
 	// onge-authenticeerde schrijfpaden, zodat een vloed op het ene pad
@@ -72,6 +73,7 @@ type server struct {
 	putC    chan struct{}
 	roomC   chan struct{}
 	pairC   chan struct{}
+	busC    chan struct{}
 
 	wsActive atomic.Int32 // gelijktijdige websocket-verbindingen, begrensd door maxWsConns
 }
@@ -100,11 +102,13 @@ func newServer(cfg config) (*server, error) {
 		links:   map[string]linkEntry{},
 		rooms:   map[string]*room{},
 		pending: map[string]*pendingPair{},
+		buses:   map[string]busEntry{},
 		redeemC: make(chan struct{}, cfg.redeemSlots),
 		linkC:   make(chan struct{}, cfg.redeemSlots),
 		putC:    make(chan struct{}, cfg.redeemSlots),
 		roomC:   make(chan struct{}, cfg.redeemSlots),
 		pairC:   make(chan struct{}, cfg.redeemSlots),
+		busC:    make(chan struct{}, cfg.redeemSlots),
 	}
 	entries, err := os.ReadDir(cfg.dataDir)
 	if err != nil {
@@ -127,6 +131,8 @@ func newServer(cfg config) (*server, error) {
 	mux.HandleFunc("POST /v1/room", s.handleRoomCreate)
 	mux.HandleFunc("POST /v1/pair", s.handlePair)
 	mux.HandleFunc("GET /v1/room/ws", s.handleRoomWS)
+	mux.HandleFunc("POST /v1/bus", s.handleBusPost)
+	mux.HandleFunc("POST /v1/bus/check", s.handleBusCheck)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "ok\n")
 	})

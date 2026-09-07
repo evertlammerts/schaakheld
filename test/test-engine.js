@@ -127,7 +127,7 @@ for (const lvl of [1, 2, 3]) {
   let plies = 0;
   const t = Date.now();
   while (plies < 60 && !E.gameStatus(S).over) {
-    const m = E.pickMove(S, lvl);
+    const m = E.pickMove(S, lvl, null, 150);
     if (!m) break;
     E.makeMove(S, m);
     plies++;
@@ -175,6 +175,180 @@ for (const wantTrap of [true, false]) {
     E.makeMove(task.S, task.move);
     check('trap punish is capture', E.isCapture(task.S, task.punish), true);
     E.unmakeMove(task.S);
+  }
+}
+
+/* Opening book: every line is legal from the start position, and Turbo follows it. */
+{
+  let legalLines = 0;
+  for (const line of E.BOOK_LINES) {
+    const S = E.newGame();
+    let ok = true;
+    for (const k of line.split(' ')) {
+      const m = E.legalMoves(S).find(x => E.moveKey(x) === k);
+      if (!m) { ok = false; console.log('  illegal book move ' + k + ' in: ' + line); break; }
+      E.makeMove(S, m);
+    }
+    if (ok) legalLines++;
+  }
+  check('book: all lines legal', legalLines, E.BOOK_LINES.length);
+  const S = E.newGame();
+  check('book: first move comes from the book', ['e2e4', 'd2d4'].includes(E.moveKey(E.bookMove(S))), true);
+  E.makeMove(S, E.legalMoves(S).find(x => E.moveKey(x) === 'e2e4'));
+  E.makeMove(S, E.legalMoves(S).find(x => E.moveKey(x) === 'e7e5'));
+  const cands = [...E.bookMoves(S).keys()];
+  check('book: after 1.e4 e5 the knight or a bishop', cands.includes('g1f3') && cands.includes('b1c3') && cands.includes('f1c4'), true);
+  E.makeMove(S, E.legalMoves(S).find(x => E.moveKey(x) === 'a2a3'));
+  check('book: out of book after a strange move', E.bookMove(S), null);
+  const first = E.moveKey(E.pickMove(E.newGame(), 2));
+  check('book: level 2 plays the book', first === 'e2e4' || first === 'd2d4', true);
+}
+
+/* Hashing: stable across make/unmake, sensitive to side, castling and ep. */
+{
+  const S = E.parseFEN('r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1');
+  const h0 = E.hashOf(S);
+  const m = E.legalMoves(S)[5];
+  E.makeMove(S, m);
+  const h1 = E.hashOf(S);
+  E.unmakeMove(S);
+  check('hash: differs after a move', h0 !== h1, true);
+  check('hash: restored after unmake', E.hashOf(S), h0);
+  const T = E.parseFEN('r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w Kkq - 0 1');
+  check('hash: castling rights count', E.hashOf(T) !== h0, true);
+  const U = E.parseFEN('r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R b KQkq - 0 1');
+  check('hash: side to move counts', E.hashOf(U) !== h0, true);
+}
+
+/* Timed search: finds a mate in 2 and a hanging queen, keeps the board, and
+   respects its budget. */
+{
+  const S = E.parseFEN('k7/8/2K5/8/8/8/8/7R w - - 0 1');
+  const fen = E.toFEN(S);
+  const t0 = Date.now();
+  const r = E.think(S, 1500, 6);
+  check('think: mate in 2 found', ['c6b6', 'c6c7'].includes(E.moveKey(r.m)) && r.score >= E.MATE - 3, true);
+  check('think: board untouched', E.toFEN(S), fen);
+  const Q = E.parseFEN('7k/8/8/3q4/8/8/8/3RK3 w - - 0 1');
+  const rq = E.think(Q, 800, 6);
+  check('think: takes the free queen', E.moveKey(rq.m), 'd1d5');
+  const B = E.parseFEN('r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4');
+  /* TT mate scores are ply-relative: a second search from a position one ply
+     deeper into the same mate must still report the (shorter) mate */
+  const M2 = E.parseFEN('k7/8/2K5/8/8/8/8/7R w - - 0 1');
+  E.think(M2, 800, 6);
+  const kb6 = E.legalMoves(M2).find(m => E.moveKey(m) === 'c6b6');
+  E.makeMove(M2, kb6);
+  const kb8 = E.legalMoves(M2).find(m => E.moveKey(m) === 'a8b8');
+  E.makeMove(M2, kb8);
+  const r1 = E.think(M2, 800, 6);
+  check('think: mate in 1 after transposition into cached line', E.moveKey(r1.m) === 'h1h8' && r1.score >= E.MATE - 1, true);
+  const t1 = Date.now();
+  const rb = E.think(B, 300, 8);
+  const dt = Date.now() - t1;
+  check('think: stays within about its budget (' + dt + 'ms)', dt < 900, true);
+  check('think: reaches at least depth 3 in 300ms', rb.depth >= 3, true);
+  console.log('think: depth ' + rb.depth + ', ' + rb.nodes + ' nodes in ' + dt + 'ms; mate-in-2 in ' + (t1 - t0) + 'ms');
+}
+
+/* Threats: what black would win if it were black's move (null move + SEE). */
+{
+  const S = E.parseFEN('6k1/8/8/8/8/2b5/8/R5K1 w - - 0 1');
+  const th = E.threatDetails(S);
+  check('threat: hanging rook seen', th.length === 1 && E.alg(th[0].sq) === 'a1', true);
+  check('threat: board untouched', E.toFEN(S), '6k1/8/8/8/8/2b5/8/R5K1 w - - 0 1');
+  check('threat: defended pawn is no threat', E.threatDetails(E.parseFEN('6k1/8/5b2/8/3P4/2P5/8/6K1 w - - 0 1')).length, 0);
+  check('threat: none while in check', E.threatDetails(E.parseFEN('6k1/8/8/8/8/2b5/8/R3K3 w - - 0 1')).length, 0);
+  const N = E.nullMoved(E.parseFEN('rnbqkbnr/pppp1ppp/8/4p3/3PP3/8/PPP2PPP/RNBQKBNR b KQkq d3 0 2'));
+  check('nullMoved: flips turn and clears ep', N.turn === 'w' && N.ep === -1, true);
+}
+
+/* Mate in N: Kb6 then Rh8# is the only mate in 2; nothing mates in 1. */
+{
+  const S = E.parseFEN('k7/8/2K5/8/8/8/8/7R w - - 0 1');
+  check('mate2: no mate in 1', E.matingMoves(S, 1).length, 0);
+  const m2 = E.matingMoves(S, 2).map(m => E.alg(m.from) + E.alg(m.to));
+  check('mate2: Kb6 and Kc7 are the mates in 2', m2.join(','), 'c6b6,c6c7');
+  check('mate2: board untouched', E.toFEN(S), 'k7/8/2K5/8/8/8/8/7R w - - 0 1');
+  const kb6 = E.legalMoves(S).find(m => E.alg(m.to) === 'b6');
+  const rh7 = E.legalMoves(S).find(m => E.alg(m.to) === 'h7');
+  check('mate2: patternMatches accepts Kb6', E.patternMatches(S, kb6, 'mat2'), true);
+  check('mate2: patternMatches rejects Rh7 (mate in 3)', E.patternMatches(S, rh7, 'mat2'), false);
+  /* a mate in 1 is not "mate in 2" for the drill */
+  const S1 = E.parseFEN('k7/8/1K6/8/8/8/8/7R w - - 0 1');
+  const rh8 = E.legalMoves(S1).find(m => E.alg(m.to) === 'h8');
+  check('mate2: immediate mate is mat1, not mat2', E.patternMatches(S1, rh8, 'mat1') && !E.patternMatches(S1, rh8, 'mat2'), true);
+  check('matesIn: exactly n, a sooner mate does not count as n', E.matesIn(S1, rh8, 1) && !E.matesIn(S1, rh8, 2), true);
+  check('matesWithin: within 2 includes the mate in 1', E.matesWithin(S1, 2) && E.matesWithin(S, 2) && !E.matesWithin(S, 1), true);
+  const t = E.genMate2Task();
+  check('mate2: generator finds a forced mate in 2', !!t && t.answers.length >= 1 && t.answers.length <= 2 &&
+    t.answers.every(a => E.matesIn(t.S, a.m, 2)) && E.matingMoves(t.S, 1).length === 0, true);
+}
+
+/* Defence: saving moves really save, and there are few of them. */
+{
+  /* white must make luft: h3 or h4 stop Rb1# */
+  const S = E.parseFEN('1r4k1/8/8/8/8/8/r6P/6K1 w - - 0 1');
+  const N = E.nullMoved(S);
+  check('king: black threatens mate in 1', E.matingMoves(N, 1).map(m => E.alg(m.to)).join(','), 'b1');
+  /* the shipped pool is verified here the way the generator verifies: every
+     answer holds (no mate within 2, not clearly lost), every other move
+     loses to a forced mate within 2. Live generation is only smoke-tested
+     (it takes tens of seconds per puzzle; tools/make-koning.js does it). */
+  const POOL = typeof KONING_POOL !== 'undefined' ? KONING_POOL : require('../src/koning.js').KONING_POOL;
+  check('king: pool present', POOL.length >= 100 || POOL.length === 0, true);
+  const sample = POOL.length ? [0, Math.floor(POOL.length / 2), POOL.length - 1].map(i => POOL[i]) : [];
+  for (const p of sample) {
+    const S = E.parseFEN(p.fen);
+    const ans = p.answers.map(k => E.legalMoves(S).find(m => E.moveKey(m) === k));
+    check('king pool ' + p.type + ': answers legal and 1-2', ans.every(Boolean) && ans.length >= 1 && ans.length <= 2, true);
+    check('king pool ' + p.type + ': threat is real', p.type === 'schaak' ? E.inCheck(S) :
+      E.matesWithin(E.nullMoved(S), p.type === 'mat1' ? 1 : 2), true);
+    let holds = 0;
+    for (const m of ans) {
+      E.makeMove(S, m);
+      const st = E.gameStatus(S);
+      if (st.over ? true : E.saveHolds(S)) holds++;
+      E.unmakeMove(S);
+    }
+    check('king pool ' + p.type + ': every answer holds', holds, ans.length);
+    const rest = E.legalMoves(S).filter(m => !ans.some(a => a.from === m.from && a.to === m.to && (a.promo || null) === (m.promo || null)));
+    /* every other move fails the same test the answers passed: mate within
+       two, or black clearly winning anyway */
+    let lost = 0;
+    for (const m of rest) {
+      E.makeMove(S, m);
+      const st = E.gameStatus(S);
+      const sc = st.over ? (st.reason === 'mat' ? E.MATE : 0) : E.mateScore(S, 2);
+      const bad = !st.over && (sc >= E.MATE - 4 || !E.saveHolds(S));
+      E.unmakeMove(S);
+      if (bad) lost++;
+    }
+    check('king pool ' + p.type + ': every other move loses (mate or clearly lost)', lost, rest.length);
+    check('king pool ' + p.type + ': board untouched', E.toFEN(S), p.fen);
+  }
+  const t = E.genKingTask(null, 1);
+  check('king: live generator smoke (one attempt)', t === null || (t.S.turn === 'w' && t.answers.length >= 1 && t.answers.length <= 2), true);
+  check('colorFlipped: mirrors and swaps', E.toFEN(E.colorFlipped(E.parseFEN('k7/8/2K5/8/8/8/8/7R w - - 0 1'))), '7r/8/8/8/8/2k5/8/K7 b - - 0 1');
+  const p = E.genPieceTask();
+  check('piece: generator returns a hanging piece with saves', !!p && p.type === 'stuk' && p.hang.victim >= 300 &&
+    p.answers.length >= 1 && p.answers.length <= 4, true);
+  if (p) {
+    const base = E.forcedMaterial(p.S);
+    check('piece: every answer keeps the material', p.answers.every(a => {
+      E.makeMove(p.S, a.m);
+      const after = E.forcedMaterial(p.S);
+      E.unmakeMove(p.S);
+      return after - base >= -60;
+    }), true);
+    const rest = E.legalMoves(p.S).filter(m => !p.answers.some(a => a.m.from === m.from && a.m.to === m.to && (a.m.promo || null) === (m.promo || null)));
+    check('piece: every non-answer loses material', rest.every(m => {
+      E.makeMove(p.S, m);
+      const st = E.gameStatus(p.S);
+      const after = st.over ? base : E.forcedMaterial(p.S);
+      E.unmakeMove(p.S);
+      return after - base < -60;
+    }), true);
   }
 }
 

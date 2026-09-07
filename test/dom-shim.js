@@ -103,8 +103,32 @@ var crypto = {
       for (let i = 0; i < 32; i++) { h = (Math.imul(h, 1103515245) + 12345) >>> 0; out[i] = h & 255; }
       return Promise.resolve(out.buffer);
     },
-    importKey(fmt, keyBytes) { return Promise.resolve({ k: Array.from(keyBytes).join(',') }); },
+    importKey(fmt, keyBytes, alg) {
+      if (alg && alg.name === 'ECDH') return Promise.resolve({ ecdhPub: Array.from(keyBytes) });
+      return Promise.resolve({ k: Array.from(keyBytes).join(',') });
+    },
     deriveKey(params, key) { return Promise.resolve({ k: key.k + '|' + Array.from(params.info).join(',') }); },
+    /* HKDF-bits: deterministisch uit sleutel plus info; ECDH-bits: symmetrisch
+       (beide kanten leiden hetzelfde af), pub = priv in deze nep */
+    deriveBits(params, key, bits) {
+      const n = bits / 8, out = new Uint8Array(n);
+      let seed;
+      if (params.name === 'ECDH') {
+        const a = key.ecdhPriv.join(','), b = params.public.ecdhPub.join(',');
+        seed = a < b ? a + '/' + b : b + '/' + a;
+      } else seed = key.k + '|' + Array.from(params.info).join(',');
+      let h = 2166136261;
+      for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619) >>> 0;
+      for (let i = 0; i < n; i++) { h = (Math.imul(h, 1103515245) + 12345) >>> 0; out[i] = h & 255; }
+      return Promise.resolve(out.buffer);
+    },
+    generateKey(alg) {
+      const raw = new Uint8Array(32);
+      crypto.getRandomValues(raw);
+      const arr = Array.from(raw);
+      return Promise.resolve({ publicKey: { ecdhPub: arr }, privateKey: { ecdhPriv: arr } });
+    },
+    exportKey(fmt, key) { return Promise.resolve(new Uint8Array(key.ecdhPub).buffer); },
     encrypt(params, key, data) {
       data = data instanceof Uint8Array ? data : new Uint8Array(data);
       const ks = __ksBytes(key.k), tag = __keyTag(key.k), out = new Uint8Array(data.length + 8);
@@ -128,7 +152,7 @@ var crypto = {
 /* Nep-fetch met dezelfde semantiek als de Go-server (koppelcodes eenmalig,
    profielblobs met bearer secret, kamers en wederzijdse paren), zodat de
    flows end-to-end testbaar zijn. */
-var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, teller: 0 };
+var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, teller: 0 };
 function __nieuwToken() { return 'tok' + (++__server.teller) + 'x'.repeat(16); }
 function __nieuweKamer() {
   const id = 'kamer' + (++__server.teller) + 'k'.repeat(12);
@@ -153,6 +177,22 @@ var fetch = function (url, opts) {
       arrayBuffer: () => Promise.resolve(data instanceof Uint8Array ? data.buffer.slice(0) : new ArrayBuffer(0))
     });
     if (m === 'POST' && path === '/v1/link') { __server.links[body.code] = body.payload; res(204); }
+    else if (m === 'POST' && path === '/v1/bus') {
+      /* zelfde regels als bus.go: bus = sha256(bewijs), leeg blob wist */
+      crypto.subtle.digest('SHA-256', new TextEncoder().encode(body.bewijs)).then(function (d) {
+        var hex = '';
+        var bytes = new Uint8Array(d);
+        for (var i = 0; i < 32; i++) hex += (bytes[i] >> 4).toString(16) + (bytes[i] & 15).toString(16);
+        if (!/^[a-f0-9]{64}$/.test(body.bus) || hex !== body.bus || !/^[A-Za-z0-9_-]{8,64}$/.test(body.bewijs)) { res(400); return; }
+        if (body.blob === '') delete __server.buses[body.bus]; else __server.buses[body.bus] = body.blob;
+        res(204);
+      });
+    }
+    else if (m === 'POST' && path === '/v1/bus/check') {
+      var blobs = {};
+      (body.bussen || []).forEach(function (id) { if (id in __server.buses) blobs[id] = __server.buses[id]; });
+      res(200, { blobs: blobs });
+    }
     else if (m === 'POST' && path === '/v1/room') {
       const k = __nieuweKamer();
       res(200, { room: k.id, seat: k.host, guest: k.gast });

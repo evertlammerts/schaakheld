@@ -311,7 +311,10 @@ function orderMoves(S, moves) {
   return moves.map(m => ({ m, k: mvvLva(S, m) })).sort((a, b) => b.k - a.k).map(x => x.m);
 }
 
-function quiesce(S, alpha, beta, depth, evalFn) {
+/* tick: optional deadline probe from the timed search, so a capture storm at a
+   leaf cannot run past the budget unnoticed */
+function quiesce(S, alpha, beta, depth, evalFn, tick) {
+  if (tick && tick()) return alpha;
   const stand = evalFn(S);
   if (stand >= beta) return beta;
   if (stand > alpha) alpha = stand;
@@ -319,7 +322,7 @@ function quiesce(S, alpha, beta, depth, evalFn) {
   const caps = orderMoves(S, legalMoves(S).filter(m => isCapture(S, m)));
   for (const m of caps) {
     makeMove(S, m);
-    const sc = -quiesce(S, -beta, -alpha, depth - 1, evalFn);
+    const sc = -quiesce(S, -beta, -alpha, depth - 1, evalFn, tick);
     unmakeMove(S);
     if (sc >= beta) return beta;
     if (sc > alpha) alpha = sc;
@@ -365,9 +368,192 @@ function forcedMaterial(S) {
   return S.turn === 'w' ? v : -v;
 }
 
+/* --- opening book: a handful of sound, kid-friendly lines in coordinate notation.
+   Turbo (level 2 and 3) plays from it while the game follows a line; the
+   Openingsschool teaches three of them with the reasons per move. --- */
+const BOOK_LINES = [
+  /* Italiaans, rustig */
+  'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3 g8f6 d2d3 d7d6 e1g1 e8g8 b1d2 a7a6',
+  'e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 d2d3 f8c5 c2c3 d7d6 e1g1 e8g8 b1d2 a7a6',
+  /* Vierpaardenspel */
+  'e2e4 e7e5 g1f3 b8c6 b1c3 g8f6 f1b5 f8b4 e1g1 e8g8 d2d3 d7d6 c1g5 c8g4',
+  /* Spaans */
+  'e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7 f1e1 b7b5 a4b3 d7d6 c2c3 e8g8 h2h3',
+  /* Schots */
+  'e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4 f8c5 c1e3 d8f6 c2c3 g8e7 f1c4 e8g8',
+  /* Weens en Loperspel */
+  'e2e4 e7e5 b1c3 g8f6 f1c4 b8c6 d2d3 f8c5 f2f4 d7d6 g1f3',
+  'e2e4 e7e5 f1c4 g8f6 d2d3 c7c6 g1f3 d7d5 c4b3 f8d6 b1c3',
+  /* Philidor-achtig voor zwart */
+  'e2e4 e7e5 g1f3 d7d6 d2d4 e5d4 f3d4 g8f6 b1c3 f8e7 f1e2 e8g8 e1g1',
+  /* Scandinavisch, Caro-Kann, Frans */
+  'e2e4 d7d5 e4d5 d8d5 b1c3 d5a5 d2d4 g8f6 g1f3 c8f5 f1c4 e7e6 c1d2 c7c6',
+  'e2e4 c7c6 d2d4 d7d5 b1c3 d5e4 c3e4 c8f5 e4g3 f5g6 h2h3 g8f6 g1f3 b8d7',
+  'e2e4 e7e6 d2d4 d7d5 e4e5 c7c5 c2c3 b8c6 g1f3 d8b6 a2a3',
+  /* Londen */
+  'd2d4 d7d5 g1f3 g8f6 c1f4 e7e6 e2e3 c7c5 c2c3 b8c6 b1d2 f8d6 f4g3 e8g8 f1d3 b7b6 e1g1',
+  'd2d4 d7d5 c1f4 g8f6 e2e3 e7e6 g1f3 c7c5 c2c3 b8c6 f1d3 f8d6 b1d2 e8g8 e1g1',
+  'd2d4 g8f6 c1f4 g7g6 e2e3 f8g7 g1f3 e8g8 f1e2 d7d6 h2h3 b8d7 e1g1',
+  /* Damegambiet en Slavisch */
+  'd2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c1g5 f8e7 e2e3 e8g8 g1f3 h7h6 g5h4 b7b6',
+  'd2d4 d7d5 g1f3 g8f6 c2c4 e7e6 b1c3 f8e7 c1g5 e8g8 e2e3 h7h6 g5h4 b7b6',
+  'd2d4 d7d5 c2c4 c7c6 g1f3 g8f6 b1c3 d5c4 a2a4 c8f5 e2e3 e7e6 f1c4 f8b4 e1g1 e8g8'
+];
+const BOOK = BOOK_LINES.map(l => l.split(' '));
+function moveKey(m) { return alg(m.from) + alg(m.to) + (m.promo || ''); }
+/* the book moves that continue the game so far, with how many lines play each */
+function bookMoves(S) {
+  const played = S.hist.map(u => moveKey(u.m));
+  const out = new Map();
+  for (const line of BOOK) {
+    if (line.length <= played.length) continue;
+    let ok = true;
+    for (let i = 0; i < played.length; i++) if (line[i] !== played[i]) { ok = false; break; }
+    if (!ok) continue;
+    const k = line[played.length];
+    out.set(k, (out.get(k) || 0) + 1);
+  }
+  return out;
+}
+function bookMove(S, rng) {
+  rng = rng || Math.random;
+  const cands = bookMoves(S);
+  if (!cands.size) return null;
+  const legal = legalMoves(S);
+  const pool = [];
+  for (const [k, n] of cands) {
+    const m = legal.find(x => moveKey(x) === k);
+    if (m) for (let i = 0; i < n; i++) pool.push(m);
+  }
+  return pool.length ? pool[Math.floor(rng() * pool.length)] : null;
+}
+
+/* --- Zobrist hashing and a small transposition table for the timed search --- */
+const ZOB = (() => {
+  let s = 0x9E3779B9 >>> 0;
+  const next = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s; };
+  const pcs = {};
+  for (const p of 'PNBRQKpnbrqk') { pcs[p] = []; for (let sq = 0; sq < 128; sq++) pcs[p].push([next(), next()]); }
+  const castle = { K: [next(), next()], Q: [next(), next()], k: [next(), next()], q: [next(), next()] };
+  const ep = []; for (let f = 0; f < 8; f++) ep.push([next(), next()]);
+  return { pcs, castle, ep, side: [next(), next()] };
+})();
+function hashOf(S) {
+  let a = 0, b = 0;
+  for (let sq = 0; sq < 128; sq++) {
+    if (sq & 0x88) continue;
+    const p = S.board[sq];
+    if (p) { const z = ZOB.pcs[p][sq]; a ^= z[0]; b ^= z[1]; }
+  }
+  if (S.turn === 'b') { a ^= ZOB.side[0]; b ^= ZOB.side[1]; }
+  for (const c of 'KQkq') if (S.castle[c]) { a ^= ZOB.castle[c][0]; b ^= ZOB.castle[c][1]; }
+  if (S.ep >= 0) { const z = ZOB.ep[S.ep & 15]; a ^= z[0]; b ^= z[1]; }
+  return (a >>> 0) * 2097152 + ((b >>> 0) >>> 11);
+}
+const TT = new Map();
+const TT_MAX = 150000;
+
+/* Iterative deepening alpha-beta with a time budget: transposition table,
+   killer and history ordering, check extension, quiescence at the leaves.
+   Returns the best move of the deepest fully searched iteration. */
+function think(S, budgetMs, maxDepth) {
+  const t0 = Date.now(), deadline = t0 + (budgetMs || 1000);
+  maxDepth = maxDepth || 8;
+  let nodes = 0, aborted = false;
+  const killers = [], hist = new Map();
+  if (TT.size > TT_MAX) TT.clear();
+  const tick = () => {
+    if ((++nodes & 255) === 0 && Date.now() > deadline) aborted = true;
+    return aborted;
+  };
+  /* mate scores are stored relative to the node, not the root, so a
+     transposition reached at another ply reads back the right distance */
+  const toTT = (s, ply) => s > MATE - 1000 ? s + ply : (s < -MATE + 1000 ? s - ply : s);
+  const fromTT = (s, ply) => s > MATE - 1000 ? s - ply : (s < -MATE + 1000 ? s + ply : s);
+  const order = (moves, ttMove, ply) => {
+    const k = killers[ply] || [];
+    return moves.map(m => {
+      let key = mvvLva(S, m);
+      if (ttMove && m.from === ttMove.from && m.to === ttMove.to && (m.promo || null) === (ttMove.promo || null)) key = 1e6;
+      else if (!key) {
+        if (k.some(x => x.from === m.from && x.to === m.to)) key = 900;
+        else key = (hist.get(m.from * 128 + m.to) || 0) / 100;
+      }
+      return { m, key };
+    }).sort((x, y) => y.key - x.key).map(x => x.m);
+  };
+  function ab(depth, alpha, beta, ply) {
+    if (tick()) return 0;
+    const chk = inCheck(S);
+    if (chk) depth++;
+    if (depth <= 0) return quiesce(S, alpha, beta, 6, evalSTM, tick);
+    if (S.half >= 100) return 0;
+    const key = hashOf(S);
+    const e = TT.get(key);
+    let ttMove = null;
+    if (e) {
+      ttMove = e.m;
+      if (e.d >= depth) {
+        const s = fromTT(e.s, ply);
+        if (e.f === 0) return s;
+        if (e.f === 1 && s >= beta) return s;
+        if (e.f === 2 && s <= alpha) return s;
+      }
+    }
+    const moves = legalMoves(S);
+    if (!moves.length) return chk ? -MATE + ply : 0;
+    const alpha0 = alpha;
+    let best = -Infinity, bestM = null;
+    for (const m of order(moves, ttMove, ply)) {
+      makeMove(S, m);
+      const sc = -ab(depth - 1, -beta, -alpha, ply + 1);
+      unmakeMove(S);
+      if (aborted) return 0;
+      if (sc > best) { best = sc; bestM = m; }
+      if (sc > alpha) {
+        alpha = sc;
+        if (alpha >= beta) {
+          if (!isCapture(S, m)) {
+            const k = killers[ply] || (killers[ply] = []);
+            if (!k.some(x => x.from === m.from && x.to === m.to)) { k.unshift(m); if (k.length > 2) k.pop(); }
+            hist.set(m.from * 128 + m.to, (hist.get(m.from * 128 + m.to) || 0) + depth * depth);
+          }
+          break;
+        }
+      }
+    }
+    TT.set(key, { d: depth, s: toTT(best, ply), f: best <= alpha0 ? 2 : (best >= beta ? 1 : 0), m: bestM });
+    return best;
+  }
+  const rootMoves = legalMoves(S);
+  if (!rootMoves.length) return { m: null, score: 0, depth: 0, nodes: 0 };
+  let bestMove = null, bestScore = 0, done = 0;
+  for (let d = 1; d <= maxDepth; d++) {
+    if (Math.abs(bestScore) >= MATE - 100) break;
+    let alpha = -Infinity, rootBest = null, rootScore = -Infinity;
+    for (const m of order(rootMoves, bestMove, 0)) {
+      makeMove(S, m);
+      const sc = -ab(d - 1, -Infinity, -alpha, 1);
+      unmakeMove(S);
+      if (aborted) break;
+      if (sc > rootScore) { rootScore = sc; rootBest = m; }
+      if (sc > alpha) alpha = sc;
+    }
+    if (aborted) break;
+    bestMove = rootBest; bestScore = rootScore; done = d;
+    if (Math.abs(rootScore) >= MATE - 100) break;
+    if (Date.now() - t0 > budgetMs / 2) break;
+  }
+  if (!bestMove) bestMove = rootScores(S, 1)[0].m;
+  return { m: bestMove, score: bestScore, depth: done, nodes };
+}
+
 /* --- AI opponent --- */
 
-function pickMove(S, level, rng) {
+/* Level 1 (Baby): mostly random. Level 2 (Turbo): book, then depth 2 with a
+   margin, so it stays beatable. Level 3 (Super Turbo): book, then the timed
+   search. budgetMs only matters for level 3 (tests pass a small one). */
+function pickMove(S, level, rng, budgetMs) {
   rng = rng || Math.random;
   const legal = legalMoves(S);
   if (legal.length === 0) return null;
@@ -377,8 +563,13 @@ function pickMove(S, level, rng) {
     if (scored[0].score - scored[scored.length - 1].score > 600 && rng() < 0.5) return scored[0].m;
     return legal[Math.floor(rng() * legal.length)];
   }
-  const depth = level === 1 ? 1 : (level === 2 ? 2 : 3);
-  const margin = level === 1 ? 250 : (level === 2 ? 80 : 25);
+  if (level >= 2) {
+    const bm = bookMove(S, rng);
+    if (bm) return bm;
+  }
+  if (level === 3) return think(S, budgetMs || 1200, 8).m;
+  const depth = level === 1 ? 1 : 2;
+  const margin = level === 1 ? 250 : 80;
   const scored = rootScores(S, depth);
   const top = scored.filter(x => x.score >= scored[0].score - margin);
   return top[Math.floor(rng() * top.length)].m;
@@ -528,11 +719,10 @@ function seeSquare(S, t) {
   return Math.max(0, net);
 }
 
-/* Black pieces white can win material on, judged per square with the exchange value.
-   Returns details: {sq, victim (cp), gain (cp won in the exchange), move}. */
-function freePiecesEx(S) {
+/* Enemy pieces the side to move can win material on, judged per square with the
+   exchange value. Returns details: {sq, victim (cp), gain (cp won), move}. */
+function winnableCaptures(S) {
   const out = [];
-  if (S.turn !== 'w') return out;
   const caps = legalMoves(S).filter(m => S.board[m.to] && m.flags !== 'e');
   const byTarget = new Map();
   for (const m of caps) {
@@ -547,15 +737,31 @@ function freePiecesEx(S) {
   }
   return out;
 }
+function freePiecesEx(S) { return S.turn === 'w' ? winnableCaptures(S) : []; }
 function freePieces(S) { return freePiecesEx(S).map(x => x.sq); }
+
+/* The same position with the other side to move (null move); ep rights vanish. */
+function nullMoved(S) {
+  const N = parseFEN(toFEN(S));
+  N.turn = other(N.turn);
+  N.ep = -1;
+  return N;
+}
+/* White pieces black would win if it were black's move: what Turbo threatens. */
+function threatDetails(S) {
+  if (S.turn !== 'w' || inCheck(S)) return [];
+  const N = nullMoved(S);
+  if (inCheck(N)) return []; /* white king en prise is not a "threat", it is check */
+  return winnableCaptures(N);
+}
 
 function genScanTask(type, rng) {
   rng = rng || Math.random;
-  const wants = { attacked: [2, 5], capture: [1, 4], mobility: [3, 10], free: [1, 2] };
+  const wants = { attacked: [2, 5], capture: [1, 4], mobility: [3, 10], free: [1, 2], threat: [1, 2] };
   let relax = 0;
   for (let tries = 0; tries < 120; tries++) {
     if (tries > 0 && tries % 40 === 0) relax++;
-    const noisy = type === 'free' || type === 'capture';
+    const noisy = type === 'free' || type === 'capture' || type === 'threat';
     const S = randomPosition({ noise: noisy ? 320 : 120, maxImbalance: noisy ? 900 : 450,
       minPlies: 8, maxPlies: 24 }, rng);
     if (inCheck(S)) continue;
@@ -563,6 +769,7 @@ function genScanTask(type, rng) {
     if (type === 'attacked') targets = attackedPieces(S, 'w');
     else if (type === 'capture') targets = captureTargets(S);
     else if (type === 'free') { details = freePiecesEx(S); targets = details.map(x => x.sq); }
+    else if (type === 'threat') { details = threatDetails(S); targets = details.map(x => x.sq); }
     else if (type === 'mobility') {
       const cands = piecesOf(S, 'w').filter(sq => 'NBRQ'.includes(S.board[sq]));
       if (cands.length === 0) continue;
@@ -744,10 +951,40 @@ function patternsAfterMove(S, m) {
   return res;
 }
 
+/* Mate-in-N scores from the side to move's view: a mate delivered at ply p scores
+   MATE - p. search() only sees "no legal moves" at depth >= 1, so mate at ply
+   2n-1 needs depth 2n. */
+function mateScore(S, n) { return search(S, 2 * n, -Infinity, Infinity, 0); }
+/* Does m force mate in exactly n moves: within n, and not already within n-1? */
+function matesIn(S, m, n) {
+  if (n > 1 && matesIn(S, m, n - 1)) return false;
+  makeMove(S, m);
+  const st = gameStatus(S);
+  let sc;
+  if (st.over) sc = st.reason === 'mat' ? MATE - 1 : 0;
+  else sc = -search(S, 2 * n - 1, -Infinity, Infinity, 1);
+  unmakeMove(S);
+  return sc >= MATE - (2 * n - 1);
+}
+/* Can the side to move force mate within n moves (any n' <= n)? */
+function matesWithin(S, n) {
+  return legalMoves(S).some(m => {
+    makeMove(S, m);
+    const st = gameStatus(S);
+    const sc = st.over ? (st.reason === 'mat' ? MATE - 1 : 0) : -search(S, 2 * n - 1, -Infinity, Infinity, 1);
+    unmakeMove(S);
+    return sc >= MATE - (2 * n - 1);
+  });
+}
+function matingMoves(S, n) {
+  return legalMoves(S).filter(m => matesIn(S, m, n));
+}
+
 /* Does move m match the asked pattern type, convincingly enough for a drill? */
 function patternMatches(S, m, type, info) {
   info = info || patternsAfterMove(S, m);
   if (type === 'mat1') return info.mate;
+  if (type === 'mat2') return !info.mate && matesIn(S, m, 2);
   if (type === 'vork') return info.safe && info.fork.length >= 2;
   if (type === 'penning') {
     if (!info.safe || !info.pin) return false;
@@ -774,6 +1011,7 @@ function patternMatches(S, m, type, info) {
 function genPatternTask(type, rng) {
   rng = rng || Math.random;
   if (type === 'mat1') return genMate1Task(rng);
+  if (type === 'mat2') return genMate2Task(rng);
   for (let tries = 0; tries < 150; tries++) {
     const S = randomPosition({ noise: 260, minPlies: 10, maxPlies: 26, maxImbalance: 700 }, rng);
     if (inCheck(S)) continue;
@@ -821,6 +1059,161 @@ function genMate1Task(rng) {
   return null;
 }
 
+/* Mate-in-2: noisy selfplay until white mates, step back three plies, and keep
+   the position only if the mate is forced from there and not already in one. */
+function genMate2Task(rng) {
+  rng = rng || Math.random;
+  for (let att = 0; att < 40; att++) {
+    const S = newGame();
+    let found = false;
+    for (let i = 0; i < 140; i++) {
+      const list = rootScores(S, S.turn === 'w' ? 2 : 1);
+      if (!list.length) break;
+      const margin = S.turn === 'w' ? 100 : 250;
+      const top = list.filter(x => x.score >= list[0].score - margin).slice(0, S.turn === 'w' ? 3 : 5);
+      makeMove(S, top[Math.floor(rng() * top.length)].m);
+      const st = gameStatus(S);
+      if (st.over) {
+        if (st.reason === 'mat' && st.result === 'w' && S.hist.length >= 3) {
+          unmakeMove(S); unmakeMove(S); unmakeMove(S);
+          found = true;
+        }
+        break;
+      }
+    }
+    if (!found || inCheck(S)) continue;
+    if (matingMoves(S, 1).length) continue;
+    const answers = matingMoves(S, 2).map(m => ({ m, info: null }));
+    if (!answers.length || answers.length > 2) continue;
+    S.hist = [];
+    return { S, type: 'mat2', answers };
+  }
+  return null;
+}
+
+/* --- defence drills: save the king, save the piece --- */
+
+/* Positions where black (Turbo) threatens mate in `n` and white has one or two
+   saving moves. Built from selfplay in which BLACK is the stronger side, stepping
+   back to white's move just before the mating threat lands. A "save" must survive
+   a real check: after it, black has no forced mate within two moves. The cheap
+   depth-2 pass only prunes; the expensive pass decides. */
+const SAVE_DEPTH = 4;
+/* Is white really saved after its move (black to move)? Two conditions, via
+   the TT-backed searcher (check extensions, no deadline): black has no forced
+   mate within SAVE_DEPTH/2 moves, and black is not clearly winning anyway: a
+   "save" that only postpones a lost game teaches nothing, and forced mates
+   just beyond the horizon come with a crushing score. Proving "no mate" at
+   depth 6 costs seconds on a full board, so this is the honest bound. */
+const SAVE_MAX_EVAL = 300;
+function saveHolds(S) {
+  const r = think(S, 1e12, SAVE_DEPTH);
+  return r.score < Math.min(MATE - SAVE_DEPTH - 1, SAVE_MAX_EVAL);
+}
+/* The same position with the colours swapped and the board mirrored: the
+   side that was mated becomes white, so the kid always defends. Castling
+   and en passant rights are dropped (irrelevant near a mating attack). */
+function colorFlipped(S) {
+  const F = parseFEN('8/8/8/8/8/8/8/8 w - - 0 1');
+  for (let sq = 0; sq < 128; sq++) {
+    if (sq & 0x88) continue;
+    const p = S.board[sq];
+    if (!p) continue;
+    const to = (7 - (sq >> 4)) * 16 + (sq & 15);
+    const q = isWhitePiece(p) ? p.toLowerCase() : p.toUpperCase();
+    F.board[to] = q;
+    if (q === 'K') F.kings.w = to;
+    if (q === 'k') F.kings.b = to;
+  }
+  F.turn = other(S.turn);
+  F.half = S.half;
+  return F;
+}
+
+/* Positions where black (Turbo) threatens mate in one or two, or gives check,
+   and white has one or two saving moves. Built from balanced noisy selfplay
+   until either side mates: stepping back two or four plies lands on the move
+   where the loser could still have saved himself (a white win is colour-
+   flipped). Saves are verified with saveHolds; the cheap depth-2 pass only
+   prunes candidates. */
+function genKingTask(rng, attempts) {
+  rng = rng || Math.random;
+  for (let att = 0; att < (attempts || 40); att++) {
+    let S = newGame();
+    let found = false;
+    for (let i = 0; i < 200; i++) {
+      const list = rootScores(S, 2);
+      if (!list.length) break;
+      const top = list.filter(x => x.score >= list[0].score - 120).slice(0, 5);
+      makeMove(S, top[Math.floor(rng() * top.length)].m);
+      const st = gameStatus(S);
+      if (st.over) {
+        if (st.reason === 'mat' && S.hist.length >= 4) {
+          const back = rng() < 0.5 ? 2 : 4;
+          for (let k = 0; k < back; k++) unmakeMove(S);
+          if (st.result === 'w') S = colorFlipped(S);
+          found = true;
+        }
+        break;
+      }
+    }
+    if (!found || S.turn !== 'w') continue;
+    const threat = inCheck(S) ? 0 : (matingMoves(nullMoved(S), 1).length ? 1 : (matingMoves(nullMoved(S), 2).length ? 2 : 0));
+    if (!inCheck(S) && !threat) continue;
+    const cands = [];
+    for (const m of legalMoves(S)) {
+      makeMove(S, m);
+      const st = gameStatus(S);
+      const sc = st.over ? (st.reason === 'mat' ? -MATE : 0) : search(S, 2, -Infinity, Infinity, 1);
+      unmakeMove(S);
+      /* sc is black's view: black mates next move when sc >= MATE - 2 */
+      if (sc < MATE - 3) cands.push(m);
+      if (cands.length > 4) break;
+    }
+    if (!cands.length || cands.length > 4) continue;
+    const saves = [];
+    for (const m of cands) {
+      makeMove(S, m);
+      const st = gameStatus(S);
+      /* the game ending after white's move means black is mated or it is a
+         draw: either way white is out of danger */
+      const holds = st.over ? true : saveHolds(S);
+      unmakeMove(S);
+      if (holds) saves.push(m);
+      if (saves.length > 2) break;
+    }
+    if (!saves.length || saves.length > 2) continue;
+    S.hist = [];
+    return { S, type: inCheck(S) ? 'schaak' : 'mat' + threat, answers: saves.map(m => ({ m, info: null })) };
+  }
+  return null;
+}
+
+/* A white piece hangs (SEE loss) and white can save it: move it, defend it, or
+   counter-attack. Every move after which black no longer wins material by force
+   counts, as long as it does not hang something else. */
+function genPieceTask(rng) {
+  rng = rng || Math.random;
+  for (let tries = 0; tries < 120; tries++) {
+    const S = randomPosition({ noise: 260, minPlies: 8, maxPlies: 24, maxImbalance: 600 }, rng);
+    if (inCheck(S)) continue;
+    const th = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250);
+    if (th.length !== 1) continue;
+    const base = forcedMaterial(S);
+    const saves = [], moves = legalMoves(S);
+    for (const m of moves) {
+      makeMove(S, m);
+      const st = gameStatus(S);
+      const after = st.over ? base : forcedMaterial(S);
+      unmakeMove(S);
+      if (after - base >= -60) saves.push({ m, info: null });
+    }
+    if (!saves.length || saves.length > 4) continue;
+    return { S, type: 'stuk', hang: th[0], answers: saves };
+  }
+  return null;
+}
+
 /* --- Dutch names --- */
 
 const NAME_NL = { p: 'pion', n: 'paard', b: 'loper', r: 'toren', q: 'dame', k: 'koning' };
@@ -839,11 +1232,13 @@ function moveNameNL(S, m) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { START_FEN, VAL, GLYPH, NAME_NL, parseFEN, toFEN, newGame, alg, sqFromAlg,
+  module.exports = { START_FEN, VAL, MATE, GLYPH, NAME_NL, parseFEN, toFEN, newGame, alg, sqFromAlg,
     colorOf, isWhitePiece, other, attacked, pseudoMoves, legalMoves, makeMove, unmakeMove,
-    inCheck, isCapture, perft, material, evalWhite, rootScores, forcedMaterial, pickMove,
+    inCheck, isCapture, perft, material, evalWhite, search, rootScores, forcedMaterial, pickMove,
     blunderCheck, gameStatus, randomPosition, piecesOf, attackedPieces, captureTargets,
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
-    patternsAfterMove, patternMatches, genPatternTask, genMate1Task };
+    patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
+    winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, saveHolds, colorFlipped,
+    genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think };
 }

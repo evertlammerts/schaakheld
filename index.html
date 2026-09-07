@@ -131,7 +131,7 @@
     border-top: 2px solid rgba(23, 69, 111, .07);
   }
   .tab {
-    flex: 1 1 0; max-width: 240px; padding: 13px 12px; border: none; cursor: pointer;
+    flex: 1 1 0; max-width: 200px; padding: 13px 8px; border: none; cursor: pointer;
     border-radius: 18px; font: inherit; font-weight: 800; font-size: 17px;
     background: transparent; color: var(--ink-soft); transition: transform .1s ease, background .15s ease;
   }
@@ -190,19 +190,6 @@
   .card-title { font-size: 15px; font-weight: bold; color: var(--ink-soft); margin-bottom: 10px; letter-spacing: .3px; }
   .card-sub { font-weight: normal; font-size: 12px; }
 
-  .mission {
-    display: flex; align-items: center; gap: 10px; padding: 9px 12px;
-    border-radius: 14px; background: var(--cream); margin: 6px 0; font-size: 14.5px;
-  }
-  .mission .m-name { flex: 1; line-height: 1.3; }
-  .mission .m-prog { font-variant-numeric: tabular-nums; color: var(--ink-soft); font-size: 13px; white-space: nowrap; font-weight: bold; }
-  .mission.done { background: var(--leaf-soft); }
-  .mission.done .m-prog { color: var(--leaf-deep); }
-  .mission .m-sub { display: block; font-size: 11.5px; font-weight: normal; color: var(--ink-soft); margin-top: 2px; line-height: 1.3; }
-  .mission .m-bar { display: block; height: 6px; background: rgba(23,69,111,.1); border-radius: 99px; overflow: hidden; margin-top: 5px; }
-  .mission .m-bar i { display: block; height: 100%; background: var(--sun); border-radius: 99px; }
-  .mission.done .m-bar i { background: var(--leaf); }
-
   .level-path { display: flex; align-items: flex-start; }
   .lp-node {
     display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1;
@@ -254,6 +241,82 @@
     padding: 6px 10px;
   }
   .reset-btn:hover { color: var(--coral); }
+
+  /* compacte rij-kaarten voor de vijf oefenspellen: emoji links, tekst rechts */
+  .mode-card.row { flex-direction: row; align-items: center; gap: 14px; padding: 14px 16px; }
+  .mode-card.row .mc-emoji { font-size: 34px; width: 44px; text-align: center; }
+  .mode-card.row .mc-txt { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+  .mode-card.row .mc-title { font-size: 17px; }
+  .mode-card.row .mc-sub { font-size: 13px; }
+  .mc-king { background: var(--coral-soft); }
+  .mc-open { background: #E7F6EE; }
+  .note { font-size: 12.5px; color: var(--ink-soft); line-height: 1.4; margin-top: 8px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  #view-vrienden .m-btns { display: flex; flex-direction: column; gap: 10px; }
+
+  /* weekdoel: zeven bolletjes, een doel, vriendelijke voortgang */
+  .weekstrip {
+    width: 100%; border: none; cursor: pointer; text-align: left; font: inherit; color: var(--ink);
+    display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 18px;
+    padding: 10px 14px; box-shadow: var(--shadow); margin: -6px 0 4px; font-size: 14px;
+  }
+  .weekstrip .dots { display: flex; gap: 4px; }
+  .weekstrip .dots i { width: 12px; height: 12px; border-radius: 50%; background: #E4EEF6; display: block; }
+  .weekstrip .dots i.on { background: var(--leaf); }
+  .weekstrip .dots i.today { box-shadow: 0 0 0 2px var(--sun); }
+  .weekstrip .ws-txt { flex: 1; line-height: 1.3; }
+  .weekstrip .ws-sub { display: block; font-size: 12px; color: var(--ink-soft); }
+  .weekstrip .ws-arrow { font-size: 22px; color: var(--ink-soft); }
+  .week { display: flex; justify-content: space-between; gap: 6px; margin: 4px 0 12px; }
+  .day { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ink-soft); flex: 1; }
+  .day i { width: 34px; height: 34px; border-radius: 50%; background: #E4EEF6; display: grid; place-items: center; font-style: normal; font-size: 16px; }
+  .day.on i { background: var(--leaf-soft); color: var(--leaf-deep); }
+  .day.today i { box-shadow: 0 0 0 3px var(--sun); }
+  .goal {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border-radius: 14px; background: var(--cream); font-size: 14.5px; margin: 6px 0;
+  }
+  .goal .g-name { flex: 1; line-height: 1.3; }
+  .goal .g-sub { display: block; font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+  .goal .g-bar { display: block; height: 6px; background: rgba(23,69,111,.1); border-radius: 99px; overflow: hidden; margin-top: 6px; }
+  .goal .g-bar i { display: block; height: 100%; background: var(--sun); border-radius: 99px; }
+  .goal .g-prog { font-size: 13px; white-space: nowrap; font-weight: bold; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .goal.done { background: var(--leaf-soft); }
+  .goal.done .g-bar i { background: var(--leaf); }
+  .goal.done .g-prog { color: var(--leaf-deep); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 0 0 12px; }
+  .chips:empty { display: none; }
+  .chip {
+    border: none; cursor: pointer; border-radius: 999px; padding: 9px 14px;
+    font-size: 14px; font-weight: bold; background: #E4EEF6; color: var(--ink-soft);
+  }
+  .chip.on { background: var(--sun); color: var(--ink); box-shadow: 0 3px 0 var(--sun-deep); }
+  .chip.big { font-size: 17px; padding: 10px 18px; }
+
+  /* vorm per oefenspel */
+  .vorm-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 14px; background: var(--cream); margin: 6px 0; font-size: 14.5px; }
+  .vorm-row .vorm-e { font-size: 24px; }
+  .vorm-row .vorm-n { flex: 1; font-weight: bold; line-height: 1.3; }
+  .vorm-row .vorm-sub { display: block; font-size: 11.5px; font-weight: normal; color: var(--ink-soft); }
+  .vorm-row .vorm-s { font-size: 20px; font-weight: bold; font-variant-numeric: tabular-nums; }
+  .vorm-d { font-size: 12px; color: var(--leaf-deep); font-weight: bold; }
+
+  /* vrienden */
+  .friend { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: var(--cream); margin: 8px 0; }
+  .friend .f-emo { font-size: 20px; letter-spacing: 2px; background: var(--card); border-radius: 12px; padding: 6px 8px; white-space: nowrap; }
+  .friend .f-txt { flex: 1; line-height: 1.3; font-size: 15.5px; font-weight: bold; }
+  .friend .f-sub { display: block; font-size: 12px; font-weight: normal; color: var(--ink-soft); }
+  .friend.wait { background: var(--leaf-soft); }
+  .friend .f-rm { width: 34px; height: 34px; font-size: 14px; box-shadow: none; background: transparent; color: var(--ink-soft); }
+
+  /* openingsschool: drie meters */
+  .meters { width: 100%; display: flex; flex-direction: column; gap: 8px; background: var(--card); border-radius: 18px; padding: 12px 16px; box-shadow: var(--shadow); }
+  .meters.hidden { display: none; }
+  .meter { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .meter .m-l { width: 118px; font-weight: bold; }
+  .meter .m-t { flex: 1; height: 12px; background: #E4EEF6; border-radius: 99px; overflow: hidden; }
+  .meter .m-t i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #BDE8C9, var(--leaf)); transition: width .4s ease; }
+  .meter .m-v { width: 34px; text-align: right; font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
   /* ---------- play screen ---------- */
   .playbar { display: flex; align-items: center; gap: 12px; margin: 6px 0 12px; }
@@ -620,6 +683,7 @@
           <div class="bubble" id="homeBubble">Ik ben Turbo. Ik ben langzaam… en daarom win ik bijna altijd! 🐢 Eerst kijken, dan denken, dan pas doen!</div>
         </div>
       </div>
+      <button id="weekStrip" class="weekstrip" title="Jouw week"></button>
       <div class="grid-label">🏆 Een potje spelen</div>
       <div class="mode-grid games">
         <button class="mode-card mc-game" data-mode="game">
@@ -629,45 +693,71 @@
         </button>
         <button class="mode-card mc-online" data-mode="online">
           <span class="mc-emoji">🤝</span>
-          <span class="mc-title">Samen spelen</span>
-          <span class="mc-sub">Een potje tegen een maatje, hier naast je of ver weg!</span>
+          <span class="mc-title">Potje met een vriend</span>
+          <span class="mc-sub">Nodig een vriend uit, of maak een nieuwe vriend.</span>
         </button>
       </div>
       <div class="grid-label">🎯 Oefenen</div>
       <div class="mode-grid drills">
-        <button class="mode-card mc-scan" data-mode="scan">
+        <button class="mode-card mc-scan row" data-mode="scan">
           <span class="mc-emoji">🔍</span>
-          <span class="mc-title">Speurogen</span>
-          <span class="mc-sub">Zie jij álles op het bord? Vind de aangevallen stukken!</span>
+          <span class="mc-txt"><span class="mc-title">Speurogen</span>
+          <span class="mc-sub">Zie jij álles? Vind wat aangevallen wordt en wat er dreigt.</span></span>
         </button>
-        <button class="mode-card mc-safe" data-mode="safe">
-          <span class="mc-emoji">🕵️</span>
-          <span class="mc-title">Valstrik-detector</span>
-          <span class="mc-sub">Is die zet veilig… of trap je in een valstrik?</span>
-        </button>
-        <button class="mode-card mc-best" data-mode="best3">
+        <button class="mode-card mc-best row" data-mode="best3">
           <span class="mc-emoji">🥇</span>
-          <span class="mc-title">De Beste Zet</span>
-          <span class="mc-sub">Drie zetten. Denk vooruit en kies de beste!</span>
+          <span class="mc-txt"><span class="mc-title">De Beste Zet</span>
+          <span class="mc-sub">Kies uit drie zetten, of ontmasker de valstrik.</span></span>
         </button>
-        <button class="mode-card mc-trucs" data-mode="trucs">
+        <button class="mode-card mc-trucs row" data-mode="trucs">
           <span class="mc-emoji">🎒</span>
-          <span class="mc-title">Turbo's Trucendoos</span>
-          <span class="mc-sub">Vind de vork, penning, spies of matzet!</span>
+          <span class="mc-txt"><span class="mc-title">Turbo’s Trucendoos</span>
+          <span class="mc-sub">Vork, penning, spies, aftrekaanval, mat in 1 én in 2.</span></span>
+        </button>
+        <button class="mode-card mc-king row" data-mode="koning">
+          <span class="mc-emoji">🛡️</span>
+          <span class="mc-txt"><span class="mc-title">Koning ontsnapt</span>
+          <span class="mc-sub">Turbo dreigt mat of pakt je stuk. Vind de reddende zet!</span></span>
+        </button>
+        <button class="mode-card mc-open row" data-mode="opening">
+          <span class="mc-emoji">📖</span>
+          <span class="mc-txt"><span class="mc-title">Openingsschool</span>
+          <span class="mc-sub">Leer hoe een partij goed begint: centrum, stukken, koning.</span></span>
         </button>
       </div>
     </div>
 
-    <!-- Tab 2: Ik — voortgang, trofeeën, instellingen -->
+    <!-- Tab 2: Vrienden — uitnodigen, of samen spelen met iemand nieuw -->
+    <div id="view-vrienden" class="home-view hidden">
+      <div class="home-card" style="margin-top:10px">
+        <div class="card-title">🤝 Jouw vrienden</div>
+        <div id="friendList"></div>
+        <div class="note">Vrienden worden kan alleen samen: na een potje tikken jullie allebei op Ja. Niemand kan jou zomaar toevoegen.</div>
+      </div>
+      <div class="home-card">
+        <div class="card-title">🌟 Spelen met een nieuw maatje</div>
+        <div class="m-btns">
+          <button class="btn sun" id="vrScan">📷 Ik scan de code</button>
+          <button class="btn plain" id="vrToon">📱 Laat mijn code zien</button>
+          <button class="btn plain" id="vrWoord">🔤 Ik typ woorden (op afstand)</button>
+        </div>
+        <div class="note">Na het potje kunnen jullie vrienden worden. Dan staat je maatje hierboven en nodig je met één tik uit.</div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Ik — week, vorm, voortgang, trofeeën -->
     <div id="view-ik" class="home-view hidden">
       <div class="stats-row">
         <span class="stat-chip">⭐ Sterren: <b id="statStars">0</b></span>
         <span class="stat-chip">🏆 Potjes gewonnen: <b id="statWins">0</b></span>
-        <span class="stat-chip">🔥 Beste reeks: <b id="statStreak">0</b></span>
       </div>
       <div class="home-card">
-        <div class="card-title">🎯 Missies van vandaag</div>
-        <div id="missionList"></div>
+        <div class="card-title">📅 Deze week</div>
+        <div id="weekCard"></div>
+      </div>
+      <div class="home-card">
+        <div class="card-title">📈 Jouw vorm <span class="card-sub">(de laatste 14 dagen)</span></div>
+        <div id="vormList"></div>
       </div>
       <div class="home-card">
         <div class="card-title">🗺️ Jouw weg naar Grootmeester</div>
@@ -690,6 +780,7 @@
 
     <nav class="tabbar">
       <button id="tabSpelen" class="tab on" data-tab="spelen">▶ Spelen</button>
+      <button id="tabVrienden" class="tab" data-tab="vrienden">🤝 Vrienden</button>
       <button id="tabIk" class="tab" data-tab="ik">🏆 Ik</button>
     </nav>
   </section>
@@ -744,6 +835,7 @@
           <div id="bubble" class="bubble">…</div>
         </div>
         <div id="taskBox" class="task hidden"></div>
+        <div id="meters" class="meters hidden"></div>
         <div id="optionsBox" class="hidden"></div>
         <div id="gameInfo" class="hidden">
           <div class="tray">Jij pakte: <span class="mat-diff" id="matKid"></span><div class="tray-pcs" id="trayKid"></div></div>
@@ -1077,7 +1169,10 @@ function orderMoves(S, moves) {
   return moves.map(m => ({ m, k: mvvLva(S, m) })).sort((a, b) => b.k - a.k).map(x => x.m);
 }
 
-function quiesce(S, alpha, beta, depth, evalFn) {
+/* tick: optional deadline probe from the timed search, so a capture storm at a
+   leaf cannot run past the budget unnoticed */
+function quiesce(S, alpha, beta, depth, evalFn, tick) {
+  if (tick && tick()) return alpha;
   const stand = evalFn(S);
   if (stand >= beta) return beta;
   if (stand > alpha) alpha = stand;
@@ -1085,7 +1180,7 @@ function quiesce(S, alpha, beta, depth, evalFn) {
   const caps = orderMoves(S, legalMoves(S).filter(m => isCapture(S, m)));
   for (const m of caps) {
     makeMove(S, m);
-    const sc = -quiesce(S, -beta, -alpha, depth - 1, evalFn);
+    const sc = -quiesce(S, -beta, -alpha, depth - 1, evalFn, tick);
     unmakeMove(S);
     if (sc >= beta) return beta;
     if (sc > alpha) alpha = sc;
@@ -1131,9 +1226,192 @@ function forcedMaterial(S) {
   return S.turn === 'w' ? v : -v;
 }
 
+/* --- opening book: a handful of sound, kid-friendly lines in coordinate notation.
+   Turbo (level 2 and 3) plays from it while the game follows a line; the
+   Openingsschool teaches three of them with the reasons per move. --- */
+const BOOK_LINES = [
+  /* Italiaans, rustig */
+  'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3 g8f6 d2d3 d7d6 e1g1 e8g8 b1d2 a7a6',
+  'e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 d2d3 f8c5 c2c3 d7d6 e1g1 e8g8 b1d2 a7a6',
+  /* Vierpaardenspel */
+  'e2e4 e7e5 g1f3 b8c6 b1c3 g8f6 f1b5 f8b4 e1g1 e8g8 d2d3 d7d6 c1g5 c8g4',
+  /* Spaans */
+  'e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7 f1e1 b7b5 a4b3 d7d6 c2c3 e8g8 h2h3',
+  /* Schots */
+  'e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4 f8c5 c1e3 d8f6 c2c3 g8e7 f1c4 e8g8',
+  /* Weens en Loperspel */
+  'e2e4 e7e5 b1c3 g8f6 f1c4 b8c6 d2d3 f8c5 f2f4 d7d6 g1f3',
+  'e2e4 e7e5 f1c4 g8f6 d2d3 c7c6 g1f3 d7d5 c4b3 f8d6 b1c3',
+  /* Philidor-achtig voor zwart */
+  'e2e4 e7e5 g1f3 d7d6 d2d4 e5d4 f3d4 g8f6 b1c3 f8e7 f1e2 e8g8 e1g1',
+  /* Scandinavisch, Caro-Kann, Frans */
+  'e2e4 d7d5 e4d5 d8d5 b1c3 d5a5 d2d4 g8f6 g1f3 c8f5 f1c4 e7e6 c1d2 c7c6',
+  'e2e4 c7c6 d2d4 d7d5 b1c3 d5e4 c3e4 c8f5 e4g3 f5g6 h2h3 g8f6 g1f3 b8d7',
+  'e2e4 e7e6 d2d4 d7d5 e4e5 c7c5 c2c3 b8c6 g1f3 d8b6 a2a3',
+  /* Londen */
+  'd2d4 d7d5 g1f3 g8f6 c1f4 e7e6 e2e3 c7c5 c2c3 b8c6 b1d2 f8d6 f4g3 e8g8 f1d3 b7b6 e1g1',
+  'd2d4 d7d5 c1f4 g8f6 e2e3 e7e6 g1f3 c7c5 c2c3 b8c6 f1d3 f8d6 b1d2 e8g8 e1g1',
+  'd2d4 g8f6 c1f4 g7g6 e2e3 f8g7 g1f3 e8g8 f1e2 d7d6 h2h3 b8d7 e1g1',
+  /* Damegambiet en Slavisch */
+  'd2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c1g5 f8e7 e2e3 e8g8 g1f3 h7h6 g5h4 b7b6',
+  'd2d4 d7d5 g1f3 g8f6 c2c4 e7e6 b1c3 f8e7 c1g5 e8g8 e2e3 h7h6 g5h4 b7b6',
+  'd2d4 d7d5 c2c4 c7c6 g1f3 g8f6 b1c3 d5c4 a2a4 c8f5 e2e3 e7e6 f1c4 f8b4 e1g1 e8g8'
+];
+const BOOK = BOOK_LINES.map(l => l.split(' '));
+function moveKey(m) { return alg(m.from) + alg(m.to) + (m.promo || ''); }
+/* the book moves that continue the game so far, with how many lines play each */
+function bookMoves(S) {
+  const played = S.hist.map(u => moveKey(u.m));
+  const out = new Map();
+  for (const line of BOOK) {
+    if (line.length <= played.length) continue;
+    let ok = true;
+    for (let i = 0; i < played.length; i++) if (line[i] !== played[i]) { ok = false; break; }
+    if (!ok) continue;
+    const k = line[played.length];
+    out.set(k, (out.get(k) || 0) + 1);
+  }
+  return out;
+}
+function bookMove(S, rng) {
+  rng = rng || Math.random;
+  const cands = bookMoves(S);
+  if (!cands.size) return null;
+  const legal = legalMoves(S);
+  const pool = [];
+  for (const [k, n] of cands) {
+    const m = legal.find(x => moveKey(x) === k);
+    if (m) for (let i = 0; i < n; i++) pool.push(m);
+  }
+  return pool.length ? pool[Math.floor(rng() * pool.length)] : null;
+}
+
+/* --- Zobrist hashing and a small transposition table for the timed search --- */
+const ZOB = (() => {
+  let s = 0x9E3779B9 >>> 0;
+  const next = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s; };
+  const pcs = {};
+  for (const p of 'PNBRQKpnbrqk') { pcs[p] = []; for (let sq = 0; sq < 128; sq++) pcs[p].push([next(), next()]); }
+  const castle = { K: [next(), next()], Q: [next(), next()], k: [next(), next()], q: [next(), next()] };
+  const ep = []; for (let f = 0; f < 8; f++) ep.push([next(), next()]);
+  return { pcs, castle, ep, side: [next(), next()] };
+})();
+function hashOf(S) {
+  let a = 0, b = 0;
+  for (let sq = 0; sq < 128; sq++) {
+    if (sq & 0x88) continue;
+    const p = S.board[sq];
+    if (p) { const z = ZOB.pcs[p][sq]; a ^= z[0]; b ^= z[1]; }
+  }
+  if (S.turn === 'b') { a ^= ZOB.side[0]; b ^= ZOB.side[1]; }
+  for (const c of 'KQkq') if (S.castle[c]) { a ^= ZOB.castle[c][0]; b ^= ZOB.castle[c][1]; }
+  if (S.ep >= 0) { const z = ZOB.ep[S.ep & 15]; a ^= z[0]; b ^= z[1]; }
+  return (a >>> 0) * 2097152 + ((b >>> 0) >>> 11);
+}
+const TT = new Map();
+const TT_MAX = 150000;
+
+/* Iterative deepening alpha-beta with a time budget: transposition table,
+   killer and history ordering, check extension, quiescence at the leaves.
+   Returns the best move of the deepest fully searched iteration. */
+function think(S, budgetMs, maxDepth) {
+  const t0 = Date.now(), deadline = t0 + (budgetMs || 1000);
+  maxDepth = maxDepth || 8;
+  let nodes = 0, aborted = false;
+  const killers = [], hist = new Map();
+  if (TT.size > TT_MAX) TT.clear();
+  const tick = () => {
+    if ((++nodes & 255) === 0 && Date.now() > deadline) aborted = true;
+    return aborted;
+  };
+  /* mate scores are stored relative to the node, not the root, so a
+     transposition reached at another ply reads back the right distance */
+  const toTT = (s, ply) => s > MATE - 1000 ? s + ply : (s < -MATE + 1000 ? s - ply : s);
+  const fromTT = (s, ply) => s > MATE - 1000 ? s - ply : (s < -MATE + 1000 ? s + ply : s);
+  const order = (moves, ttMove, ply) => {
+    const k = killers[ply] || [];
+    return moves.map(m => {
+      let key = mvvLva(S, m);
+      if (ttMove && m.from === ttMove.from && m.to === ttMove.to && (m.promo || null) === (ttMove.promo || null)) key = 1e6;
+      else if (!key) {
+        if (k.some(x => x.from === m.from && x.to === m.to)) key = 900;
+        else key = (hist.get(m.from * 128 + m.to) || 0) / 100;
+      }
+      return { m, key };
+    }).sort((x, y) => y.key - x.key).map(x => x.m);
+  };
+  function ab(depth, alpha, beta, ply) {
+    if (tick()) return 0;
+    const chk = inCheck(S);
+    if (chk) depth++;
+    if (depth <= 0) return quiesce(S, alpha, beta, 6, evalSTM, tick);
+    if (S.half >= 100) return 0;
+    const key = hashOf(S);
+    const e = TT.get(key);
+    let ttMove = null;
+    if (e) {
+      ttMove = e.m;
+      if (e.d >= depth) {
+        const s = fromTT(e.s, ply);
+        if (e.f === 0) return s;
+        if (e.f === 1 && s >= beta) return s;
+        if (e.f === 2 && s <= alpha) return s;
+      }
+    }
+    const moves = legalMoves(S);
+    if (!moves.length) return chk ? -MATE + ply : 0;
+    const alpha0 = alpha;
+    let best = -Infinity, bestM = null;
+    for (const m of order(moves, ttMove, ply)) {
+      makeMove(S, m);
+      const sc = -ab(depth - 1, -beta, -alpha, ply + 1);
+      unmakeMove(S);
+      if (aborted) return 0;
+      if (sc > best) { best = sc; bestM = m; }
+      if (sc > alpha) {
+        alpha = sc;
+        if (alpha >= beta) {
+          if (!isCapture(S, m)) {
+            const k = killers[ply] || (killers[ply] = []);
+            if (!k.some(x => x.from === m.from && x.to === m.to)) { k.unshift(m); if (k.length > 2) k.pop(); }
+            hist.set(m.from * 128 + m.to, (hist.get(m.from * 128 + m.to) || 0) + depth * depth);
+          }
+          break;
+        }
+      }
+    }
+    TT.set(key, { d: depth, s: toTT(best, ply), f: best <= alpha0 ? 2 : (best >= beta ? 1 : 0), m: bestM });
+    return best;
+  }
+  const rootMoves = legalMoves(S);
+  if (!rootMoves.length) return { m: null, score: 0, depth: 0, nodes: 0 };
+  let bestMove = null, bestScore = 0, done = 0;
+  for (let d = 1; d <= maxDepth; d++) {
+    if (Math.abs(bestScore) >= MATE - 100) break;
+    let alpha = -Infinity, rootBest = null, rootScore = -Infinity;
+    for (const m of order(rootMoves, bestMove, 0)) {
+      makeMove(S, m);
+      const sc = -ab(d - 1, -Infinity, -alpha, 1);
+      unmakeMove(S);
+      if (aborted) break;
+      if (sc > rootScore) { rootScore = sc; rootBest = m; }
+      if (sc > alpha) alpha = sc;
+    }
+    if (aborted) break;
+    bestMove = rootBest; bestScore = rootScore; done = d;
+    if (Math.abs(rootScore) >= MATE - 100) break;
+    if (Date.now() - t0 > budgetMs / 2) break;
+  }
+  if (!bestMove) bestMove = rootScores(S, 1)[0].m;
+  return { m: bestMove, score: bestScore, depth: done, nodes };
+}
+
 /* --- AI opponent --- */
 
-function pickMove(S, level, rng) {
+/* Level 1 (Baby): mostly random. Level 2 (Turbo): book, then depth 2 with a
+   margin, so it stays beatable. Level 3 (Super Turbo): book, then the timed
+   search. budgetMs only matters for level 3 (tests pass a small one). */
+function pickMove(S, level, rng, budgetMs) {
   rng = rng || Math.random;
   const legal = legalMoves(S);
   if (legal.length === 0) return null;
@@ -1143,8 +1421,13 @@ function pickMove(S, level, rng) {
     if (scored[0].score - scored[scored.length - 1].score > 600 && rng() < 0.5) return scored[0].m;
     return legal[Math.floor(rng() * legal.length)];
   }
-  const depth = level === 1 ? 1 : (level === 2 ? 2 : 3);
-  const margin = level === 1 ? 250 : (level === 2 ? 80 : 25);
+  if (level >= 2) {
+    const bm = bookMove(S, rng);
+    if (bm) return bm;
+  }
+  if (level === 3) return think(S, budgetMs || 1200, 8).m;
+  const depth = level === 1 ? 1 : 2;
+  const margin = level === 1 ? 250 : 80;
   const scored = rootScores(S, depth);
   const top = scored.filter(x => x.score >= scored[0].score - margin);
   return top[Math.floor(rng() * top.length)].m;
@@ -1294,11 +1577,10 @@ function seeSquare(S, t) {
   return Math.max(0, net);
 }
 
-/* Black pieces white can win material on, judged per square with the exchange value.
-   Returns details: {sq, victim (cp), gain (cp won in the exchange), move}. */
-function freePiecesEx(S) {
+/* Enemy pieces the side to move can win material on, judged per square with the
+   exchange value. Returns details: {sq, victim (cp), gain (cp won), move}. */
+function winnableCaptures(S) {
   const out = [];
-  if (S.turn !== 'w') return out;
   const caps = legalMoves(S).filter(m => S.board[m.to] && m.flags !== 'e');
   const byTarget = new Map();
   for (const m of caps) {
@@ -1313,15 +1595,31 @@ function freePiecesEx(S) {
   }
   return out;
 }
+function freePiecesEx(S) { return S.turn === 'w' ? winnableCaptures(S) : []; }
 function freePieces(S) { return freePiecesEx(S).map(x => x.sq); }
+
+/* The same position with the other side to move (null move); ep rights vanish. */
+function nullMoved(S) {
+  const N = parseFEN(toFEN(S));
+  N.turn = other(N.turn);
+  N.ep = -1;
+  return N;
+}
+/* White pieces black would win if it were black's move: what Turbo threatens. */
+function threatDetails(S) {
+  if (S.turn !== 'w' || inCheck(S)) return [];
+  const N = nullMoved(S);
+  if (inCheck(N)) return []; /* white king en prise is not a "threat", it is check */
+  return winnableCaptures(N);
+}
 
 function genScanTask(type, rng) {
   rng = rng || Math.random;
-  const wants = { attacked: [2, 5], capture: [1, 4], mobility: [3, 10], free: [1, 2] };
+  const wants = { attacked: [2, 5], capture: [1, 4], mobility: [3, 10], free: [1, 2], threat: [1, 2] };
   let relax = 0;
   for (let tries = 0; tries < 120; tries++) {
     if (tries > 0 && tries % 40 === 0) relax++;
-    const noisy = type === 'free' || type === 'capture';
+    const noisy = type === 'free' || type === 'capture' || type === 'threat';
     const S = randomPosition({ noise: noisy ? 320 : 120, maxImbalance: noisy ? 900 : 450,
       minPlies: 8, maxPlies: 24 }, rng);
     if (inCheck(S)) continue;
@@ -1329,6 +1627,7 @@ function genScanTask(type, rng) {
     if (type === 'attacked') targets = attackedPieces(S, 'w');
     else if (type === 'capture') targets = captureTargets(S);
     else if (type === 'free') { details = freePiecesEx(S); targets = details.map(x => x.sq); }
+    else if (type === 'threat') { details = threatDetails(S); targets = details.map(x => x.sq); }
     else if (type === 'mobility') {
       const cands = piecesOf(S, 'w').filter(sq => 'NBRQ'.includes(S.board[sq]));
       if (cands.length === 0) continue;
@@ -1510,10 +1809,40 @@ function patternsAfterMove(S, m) {
   return res;
 }
 
+/* Mate-in-N scores from the side to move's view: a mate delivered at ply p scores
+   MATE - p. search() only sees "no legal moves" at depth >= 1, so mate at ply
+   2n-1 needs depth 2n. */
+function mateScore(S, n) { return search(S, 2 * n, -Infinity, Infinity, 0); }
+/* Does m force mate in exactly n moves: within n, and not already within n-1? */
+function matesIn(S, m, n) {
+  if (n > 1 && matesIn(S, m, n - 1)) return false;
+  makeMove(S, m);
+  const st = gameStatus(S);
+  let sc;
+  if (st.over) sc = st.reason === 'mat' ? MATE - 1 : 0;
+  else sc = -search(S, 2 * n - 1, -Infinity, Infinity, 1);
+  unmakeMove(S);
+  return sc >= MATE - (2 * n - 1);
+}
+/* Can the side to move force mate within n moves (any n' <= n)? */
+function matesWithin(S, n) {
+  return legalMoves(S).some(m => {
+    makeMove(S, m);
+    const st = gameStatus(S);
+    const sc = st.over ? (st.reason === 'mat' ? MATE - 1 : 0) : -search(S, 2 * n - 1, -Infinity, Infinity, 1);
+    unmakeMove(S);
+    return sc >= MATE - (2 * n - 1);
+  });
+}
+function matingMoves(S, n) {
+  return legalMoves(S).filter(m => matesIn(S, m, n));
+}
+
 /* Does move m match the asked pattern type, convincingly enough for a drill? */
 function patternMatches(S, m, type, info) {
   info = info || patternsAfterMove(S, m);
   if (type === 'mat1') return info.mate;
+  if (type === 'mat2') return !info.mate && matesIn(S, m, 2);
   if (type === 'vork') return info.safe && info.fork.length >= 2;
   if (type === 'penning') {
     if (!info.safe || !info.pin) return false;
@@ -1540,6 +1869,7 @@ function patternMatches(S, m, type, info) {
 function genPatternTask(type, rng) {
   rng = rng || Math.random;
   if (type === 'mat1') return genMate1Task(rng);
+  if (type === 'mat2') return genMate2Task(rng);
   for (let tries = 0; tries < 150; tries++) {
     const S = randomPosition({ noise: 260, minPlies: 10, maxPlies: 26, maxImbalance: 700 }, rng);
     if (inCheck(S)) continue;
@@ -1587,6 +1917,161 @@ function genMate1Task(rng) {
   return null;
 }
 
+/* Mate-in-2: noisy selfplay until white mates, step back three plies, and keep
+   the position only if the mate is forced from there and not already in one. */
+function genMate2Task(rng) {
+  rng = rng || Math.random;
+  for (let att = 0; att < 40; att++) {
+    const S = newGame();
+    let found = false;
+    for (let i = 0; i < 140; i++) {
+      const list = rootScores(S, S.turn === 'w' ? 2 : 1);
+      if (!list.length) break;
+      const margin = S.turn === 'w' ? 100 : 250;
+      const top = list.filter(x => x.score >= list[0].score - margin).slice(0, S.turn === 'w' ? 3 : 5);
+      makeMove(S, top[Math.floor(rng() * top.length)].m);
+      const st = gameStatus(S);
+      if (st.over) {
+        if (st.reason === 'mat' && st.result === 'w' && S.hist.length >= 3) {
+          unmakeMove(S); unmakeMove(S); unmakeMove(S);
+          found = true;
+        }
+        break;
+      }
+    }
+    if (!found || inCheck(S)) continue;
+    if (matingMoves(S, 1).length) continue;
+    const answers = matingMoves(S, 2).map(m => ({ m, info: null }));
+    if (!answers.length || answers.length > 2) continue;
+    S.hist = [];
+    return { S, type: 'mat2', answers };
+  }
+  return null;
+}
+
+/* --- defence drills: save the king, save the piece --- */
+
+/* Positions where black (Turbo) threatens mate in `n` and white has one or two
+   saving moves. Built from selfplay in which BLACK is the stronger side, stepping
+   back to white's move just before the mating threat lands. A "save" must survive
+   a real check: after it, black has no forced mate within two moves. The cheap
+   depth-2 pass only prunes; the expensive pass decides. */
+const SAVE_DEPTH = 4;
+/* Is white really saved after its move (black to move)? Two conditions, via
+   the TT-backed searcher (check extensions, no deadline): black has no forced
+   mate within SAVE_DEPTH/2 moves, and black is not clearly winning anyway: a
+   "save" that only postpones a lost game teaches nothing, and forced mates
+   just beyond the horizon come with a crushing score. Proving "no mate" at
+   depth 6 costs seconds on a full board, so this is the honest bound. */
+const SAVE_MAX_EVAL = 300;
+function saveHolds(S) {
+  const r = think(S, 1e12, SAVE_DEPTH);
+  return r.score < Math.min(MATE - SAVE_DEPTH - 1, SAVE_MAX_EVAL);
+}
+/* The same position with the colours swapped and the board mirrored: the
+   side that was mated becomes white, so the kid always defends. Castling
+   and en passant rights are dropped (irrelevant near a mating attack). */
+function colorFlipped(S) {
+  const F = parseFEN('8/8/8/8/8/8/8/8 w - - 0 1');
+  for (let sq = 0; sq < 128; sq++) {
+    if (sq & 0x88) continue;
+    const p = S.board[sq];
+    if (!p) continue;
+    const to = (7 - (sq >> 4)) * 16 + (sq & 15);
+    const q = isWhitePiece(p) ? p.toLowerCase() : p.toUpperCase();
+    F.board[to] = q;
+    if (q === 'K') F.kings.w = to;
+    if (q === 'k') F.kings.b = to;
+  }
+  F.turn = other(S.turn);
+  F.half = S.half;
+  return F;
+}
+
+/* Positions where black (Turbo) threatens mate in one or two, or gives check,
+   and white has one or two saving moves. Built from balanced noisy selfplay
+   until either side mates: stepping back two or four plies lands on the move
+   where the loser could still have saved himself (a white win is colour-
+   flipped). Saves are verified with saveHolds; the cheap depth-2 pass only
+   prunes candidates. */
+function genKingTask(rng, attempts) {
+  rng = rng || Math.random;
+  for (let att = 0; att < (attempts || 40); att++) {
+    let S = newGame();
+    let found = false;
+    for (let i = 0; i < 200; i++) {
+      const list = rootScores(S, 2);
+      if (!list.length) break;
+      const top = list.filter(x => x.score >= list[0].score - 120).slice(0, 5);
+      makeMove(S, top[Math.floor(rng() * top.length)].m);
+      const st = gameStatus(S);
+      if (st.over) {
+        if (st.reason === 'mat' && S.hist.length >= 4) {
+          const back = rng() < 0.5 ? 2 : 4;
+          for (let k = 0; k < back; k++) unmakeMove(S);
+          if (st.result === 'w') S = colorFlipped(S);
+          found = true;
+        }
+        break;
+      }
+    }
+    if (!found || S.turn !== 'w') continue;
+    const threat = inCheck(S) ? 0 : (matingMoves(nullMoved(S), 1).length ? 1 : (matingMoves(nullMoved(S), 2).length ? 2 : 0));
+    if (!inCheck(S) && !threat) continue;
+    const cands = [];
+    for (const m of legalMoves(S)) {
+      makeMove(S, m);
+      const st = gameStatus(S);
+      const sc = st.over ? (st.reason === 'mat' ? -MATE : 0) : search(S, 2, -Infinity, Infinity, 1);
+      unmakeMove(S);
+      /* sc is black's view: black mates next move when sc >= MATE - 2 */
+      if (sc < MATE - 3) cands.push(m);
+      if (cands.length > 4) break;
+    }
+    if (!cands.length || cands.length > 4) continue;
+    const saves = [];
+    for (const m of cands) {
+      makeMove(S, m);
+      const st = gameStatus(S);
+      /* the game ending after white's move means black is mated or it is a
+         draw: either way white is out of danger */
+      const holds = st.over ? true : saveHolds(S);
+      unmakeMove(S);
+      if (holds) saves.push(m);
+      if (saves.length > 2) break;
+    }
+    if (!saves.length || saves.length > 2) continue;
+    S.hist = [];
+    return { S, type: inCheck(S) ? 'schaak' : 'mat' + threat, answers: saves.map(m => ({ m, info: null })) };
+  }
+  return null;
+}
+
+/* A white piece hangs (SEE loss) and white can save it: move it, defend it, or
+   counter-attack. Every move after which black no longer wins material by force
+   counts, as long as it does not hang something else. */
+function genPieceTask(rng) {
+  rng = rng || Math.random;
+  for (let tries = 0; tries < 120; tries++) {
+    const S = randomPosition({ noise: 260, minPlies: 8, maxPlies: 24, maxImbalance: 600 }, rng);
+    if (inCheck(S)) continue;
+    const th = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250);
+    if (th.length !== 1) continue;
+    const base = forcedMaterial(S);
+    const saves = [], moves = legalMoves(S);
+    for (const m of moves) {
+      makeMove(S, m);
+      const st = gameStatus(S);
+      const after = st.over ? base : forcedMaterial(S);
+      unmakeMove(S);
+      if (after - base >= -60) saves.push({ m, info: null });
+    }
+    if (!saves.length || saves.length > 4) continue;
+    return { S, type: 'stuk', hang: th[0], answers: saves };
+  }
+  return null;
+}
+
 /* --- Dutch names --- */
 
 const NAME_NL = { p: 'pion', n: 'paard', b: 'loper', r: 'toren', q: 'dame', k: 'koning' };
@@ -1605,14 +2090,20 @@ function moveNameNL(S, m) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { START_FEN, VAL, GLYPH, NAME_NL, parseFEN, toFEN, newGame, alg, sqFromAlg,
+  module.exports = { START_FEN, VAL, MATE, GLYPH, NAME_NL, parseFEN, toFEN, newGame, alg, sqFromAlg,
     colorOf, isWhitePiece, other, attacked, pseudoMoves, legalMoves, makeMove, unmakeMove,
-    inCheck, isCapture, perft, material, evalWhite, rootScores, forcedMaterial, pickMove,
+    inCheck, isCapture, perft, material, evalWhite, search, rootScores, forcedMaterial, pickMove,
     blunderCheck, gameStatus, randomPosition, piecesOf, attackedPieces, captureTargets,
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
-    patternsAfterMove, patternMatches, genPatternTask, genMate1Task };
+    patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
+    winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, saveHolds, colorFlipped,
+    genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think };
 }
+'use strict';
+/* Gegenereerd door tools/make-koning.js; niet met de hand bewerken. 160 geverifieerde puzzels. */
+const KONING_POOL = [{"fen":"3k4/1p5p/p2pr3/P7/4p1r1/8/2P2P2/2R1R1K1 w - - 0 41","type":"schaak","answers":["g1f1"]},{"fen":"r2qk2r/pp1nnppp/8/3p1b2/1p1K4/5N1P/PBP1PPP1/R2Q1B1R w - - 1 1","type":"mat1","answers":["d4e3"]},{"fen":"r4rk1/2p3pp/2p1p3/p1P5/2N1p1q1/2R1Q3/6PP/5K1R w - - 0 1","type":"schaak","answers":["f1e1"]},{"fen":"7r/kp6/2b5/5N2/5B2/8/r1B3K1/2R5 w - - 2 58","type":"schaak","answers":["g2f2","g2g3"]},{"fen":"3rk3/1pp2pr1/3bp3/p2p4/8/2N1P3/PPPB1PK1/R6R w - - 2 1","type":"schaak","answers":["g2f3","g2f1"]},{"fen":"r3k2r/ppp1qpp1/2n2n2/7p/2N1p1b1/4P2P/PPPbBPP1/R2QK1NR w - - 0 1","type":"schaak","answers":["d1d2","c4d2"]},{"fen":"6k1/bPp2p2/7p/4B2P/6p1/8/2P1Q1P1/1q3K2 w - - 2 1","type":"schaak","answers":["e2e1"]},{"fen":"N1bk3r/p2p2pp/5q2/1B2b3/2pnP3/2N5/PPn2PPP/R1BQK2R w - - 0 1","type":"schaak","answers":["e1f1"]},{"fen":"6k1/2p2p2/8/2p1R3/4P3/p6P/r4r2/3R1K2 w - - 3 64","type":"schaak","answers":["f1g1"]},{"fen":"1k1rr3/ppp2ppp/5q2/2b1p3/2QnP3/N2P3P/PP2P1BP/R4K1R w - - 6 20","type":"schaak","answers":["f1e1","g2f3"]},{"fen":"2r3k1/3R2p1/3R3p/3pPP2/3p4/P7/r7/6K1 w - - 0 1","type":"mat1","answers":["d7d8"]},{"fen":"2q1kbr1/1pp2p1p/p4P1p/4p3/3Pp3/P3B3/1PP1P2P/2RQR1K1 w - - 0 24","type":"schaak","answers":["g1h1","e3g5"]},{"fen":"6k1/1pq2pp1/3p1P2/1p1p3p/1P1P4/P4Q2/1P2r2r/R1BR3K w - - 0 43","type":"schaak","answers":["h1g1"]},{"fen":"r3kb1r/p1p2ppp/5q2/1P1P1n2/2P1p3/2BnP3/1P3PPP/R2QK1NR w - - 5 1","type":"schaak","answers":["d1d3","e1d2"]},{"fen":"1k1r1bQ1/ppp2p2/7p/6p1/2BPp3/2PKP3/PP3qPP/R6R w - - 0 1","type":"schaak","answers":["d3e4"]},{"fen":"6k1/2R2p2/3p4/p2P1pp1/2P3p1/6P1/5P1P/1r5K w - - 4 52","type":"schaak","answers":["h1g2"]},{"fen":"r3kb1r/1ppqppp1/p1n4p/3P2P1/2n1B3/2N1B2b/PPP1NPKP/RQ1R4 w kq - 1 16","type":"schaak","answers":["g2g1","g2h1"]},{"fen":"3rkb1Q/ppp2p2/3n3p/8/8/P2N3N/bPK1rPPP/3R2R1 w - - 0 31","type":"schaak","answers":["d1d2","c2c1"]},{"fen":"rnb1k1nr/pppp1ppp/8/4b3/5P1q/2N5/PPP1P1PP/R1BQKBNR w KQkq - 1 5","type":"schaak","answers":["e1d2","g2g3"]},{"fen":"8/7R/p1p5/R7/1PP1r2p/P1r2k1P/7P/6K1 w - - 5 64","type":"mat1","answers":["a5f5","h7f7"]},{"fen":"r3k2r/pppb1ppp/5n1n/8/1b1Bq3/3Q3P/PPP1KPP1/R4BNR w - - 0 1","type":"schaak","answers":["d3e4"]},{"fen":"r3r1k1/1pp2ppp/p2p4/3B2q1/3QP3/4PP1b/PPP4P/4RK1R w - - 4 22","type":"schaak","answers":["f1e2"]},{"fen":"1rbr2k1/ppp3p1/4n2B/5p2/q1P5/3p1BQP/PP3PP1/R2KR3 w - - 2 1","type":"schaak","answers":["b2b3"]},{"fen":"3r1rk1/p5pp/2bb4/2ppPpq1/3p4/P4BP1/1PPKPB1P/2RQR3 w - - 1 25","type":"schaak","answers":["e2e3"]},{"fen":"r1b2rk1/pppp1ppp/2n5/4N3/3PnB2/2qQ4/P3PPPP/1R2KB1R w - - 0 1","type":"schaak","answers":["d3c3","f4d2"]},{"fen":"8/k5p1/8/P1p5/3p3p/1Q1B2nP/1P3qP1/4R2K w - - 4 62","type":"schaak","answers":["h1h2"]},{"fen":"r5k1/6pp/8/8/2RPPB2/5B2/R5PP/1q5K w - - 1 47","type":"schaak","answers":["c4c1","f4c1"]},{"fen":"1k2rb1r/ppp2R1p/8/1PP1p1p1/6q1/1Q2B3/PRP2P1P/6K1 w - - 4 30","type":"schaak","answers":["g1h1","g1f1"]},{"fen":"5k1r/1qp2pp1/2p2n1p/7r/Q1N1p1P1/2p1b2P/P3PP2/2KR1B1R w - - 0 1","type":"schaak","answers":["c1c2","f2e3"]},{"fen":"4Bbr1/p3kp1p/1p1p1p2/3P4/7N/2q1PP1b/P1P1Q2P/R3K2R w - - 0 1","type":"schaak","answers":["e1f2"]},{"fen":"5R2/5ppk/p3p2p/4P3/5PP1/4K1rP/1r6/7R w - - 2 1","type":"schaak","answers":["e3d4"]},{"fen":"r1b2rk1/ppq2ppp/n7/2pp4/4n3/1N2P3/PPPKBPPP/R2Q2NR w - - 0 1","type":"schaak","answers":["d2e1"]},{"fen":"6k1/3P2p1/4r3/4qp2/8/3Q4/P1P1rp2/K2R4 w - - 1 1","type":"schaak","answers":["c2c3"]},{"fen":"6k1/3r4/8/1P3P2/8/4p2p/1B5P/6KR w - - 3 1","type":"mat1","answers":["g1f1"]},{"fen":"3rk1r1/1pp2ppp/p1n2q2/2b1p3/2P1b3/1P4Q1/P2BNPPP/1K1R1B1R w - - 0 1","type":"schaak","answers":["b1b2"]},{"fen":"3rk2r/1p1b1pp1/pqnp3p/3N1P2/4P3/1P6/P1P1NbPP/2RQKB1R w Kk - 3 21","type":"schaak","answers":["e1d2"]},{"fen":"8/k6p/P2PB3/6p1/4p1P1/5p1P/2N2r1K/8 w - - 0 1","type":"schaak","answers":["h2h1","h2g1"]},{"fen":"5rk1/p4ppp/2qp1b2/Q1P5/5NP1/P3P2B/1rK1P2P/3R3R w - - 1 1","type":"schaak","answers":["c2c1","c2d3"]},{"fen":"k7/p1p5/2P5/1P2P3/3B3p/5p1P/5P1r/5K2 w - - 10 54","type":"mat1","answers":["f1g1","f1e1"]},{"fen":"2r2k1r/2p2ppp/2Qp4/8/3Bb3/5qP1/PPP2P1P/3R1RK1 w - - 0 1","type":"mat1","answers":["d4g7"]},{"fen":"8/p1Q2pkp/8/1PpP4/8/4qN1P/1bP3P1/1R4KR w - - 1 1","type":"schaak","answers":["g1f1","g1h2"]},{"fen":"r4rk1/ppp2ppp/2Bbbq2/8/3Pn3/4P3/PPPNN1PP/R1BQ1K1R w - - 1 1","type":"schaak","answers":["d2f3","e2f4"]},{"fen":"r4br1/ppn2p1p/4kp2/1BPqp3/2Q5/P4P2/1PP2P1P/R1B2RK1 w - - 3 1","type":"schaak","answers":["g1h1"]},{"fen":"1k1r3r/1p3ppp/p6n/1qp1p1B1/4P3/P4Q2/RPP2PPP/5K1R w - - 1 27","type":"schaak","answers":["f1g1","f1e1"]},{"fen":"2rn1k1r/Q1p2ppp/3p4/1B6/4P3/5qBb/P1P2P1P/R2R2K1 w - - 0 23","type":"mat1","answers":["b5f1"]},{"fen":"r5k1/1pp2p1p/p7/1b2p1P1/4r3/P6N/1PP4P/2R1K2R w - - 2 34","type":"schaak","answers":["e1f2"]},{"fen":"5r1k/p1p3pp/8/2b5/2R5/3b4/PP1N1PPP/5K1R w - - 1 1","type":"schaak","answers":["f1e1"]},{"fen":"Q1b3k1/1pp3p1/1q2p3/3p2r1/3r4/3B2K1/2P3P1/4RR2 w - - 4 45","type":"schaak","answers":["g3f3"]},{"fen":"1k6/5p2/p2r1p1p/2p1pN2/8/1p5P/1P2QPr1/K2qR3 w - - 0 1","type":"schaak","answers":["e1d1","e2d1"]},{"fen":"1r2r1k1/1b4p1/p3p3/2B2p2/2Q1q2p/7P/PPPp1P2/3R1RK1 w - - 0 36","type":"mat1","answers":["c4e4"]},{"fen":"3r1k1r/1pp2Pp1/p6p/2b5/2BP1P1q/P1BQp3/1PP1R3/1R2K3 w - - 4 1","type":"schaak","answers":["e1d1"]},{"fen":"r1b1kb1r/pppn1ppp/4p3/1N1p4/3N2nq/8/PPPPPPP1/R1BQKBR1 w Qkq - 0 7","type":"mat1","answers":["g2g3","b5c7"]},{"fen":"r3k1nr/ppp2ppp/2nbb3/3p4/7q/2NPPP2/PPP2PBP/R1BQ1RK1 w - - 1 1","type":"mat1","answers":["f3f4"]},{"fen":"r3k2r/1p4qp/pQp4p/N2pp3/8/PB5b/1PP2PPP/5RKR w q - 11 27","type":"mat1","answers":["g2g3","b3d5"]},{"fen":"8/kpbP2p1/8/7R/p3P2p/P6P/6BK/3r4 w - - 9 59","type":"schaak","answers":["e4e5"]},{"fen":"rnb1k2r/pppp1ppp/8/2q1P3/1b2n3/5N2/PPPBPPPP/RN1QKB1R w - - 3 1","type":"mat1","answers":["d1c1","e2e3"]},{"fen":"1B2k2r/1Q4p1/2r2p1p/p2pp3/1b1nn3/4P3/PP3PPP/1R2KB1R w k - 1 22","type":"schaak","answers":["b7b4"]},{"fen":"3r2k1/pp4p1/4N2p/8/2pnPBn1/P4Q2/1P2K1PP/1q4R1 w - - 4 1","type":"schaak","answers":["e6d4"]},{"fen":"r1b2k1r/1pp2pp1/p6p/q2p1N2/3P1Q1P/2P1P3/P1Pn1PP1/1K1RR3 w - - 0 26","type":"schaak","answers":["d1d2"]},{"fen":"5q2/1pp4k/p7/4Q1p1/3p2r1/8/PP1R1P1P/6K1 w - - 7 1","type":"schaak","answers":["g1f1"]},{"fen":"k2r1Q2/ppR3R1/8/8/4q3/P5Q1/1PK5/3r4 w - - 2 56","type":"schaak","answers":["c2b3"]},{"fen":"Nk5r/pp3ppp/n2p4/1N1P2B1/Q2R2b1/8/PPP5/R1K2q2 w - - 2 35","type":"schaak","answers":["c1d2"]},{"fen":"N5k1/pp1b1pp1/3b2r1/2nP1p1p/2BB1P2/P6P/1PP2P2/3R2KR w - - 7 1","type":"schaak","answers":["g1f1"]},{"fen":"2k5/5pp1/4p2p/1R1bP3/6N1/2P4P/2P2PP1/4r1K1 w - - 13 1","type":"schaak","answers":["g1h2"]},{"fen":"1R6/4k3/7P/P7/3b2R1/1P2pP2/6P1/3r2K1 w - - 1 72","type":"schaak","answers":["g1h2"]},{"fen":"r1bqkb1r/ppp2ppp/3p1n2/4p3/3nP3/3P1N2/PPPNKPPP/R1BQ1B1R w kq - 2 6","type":"schaak","answers":["e2e1","f3d4"]},{"fen":"2k1r3/1r4p1/3bb2p/B2p1p2/P7/2p1PP1P/2P1RPB1/RK6 w - - 0 1","type":"schaak","answers":["b1c1","a5b6"]},{"fen":"8/5r1k/3R3p/1Rp3p1/6P1/7P/N1P1r2K/8 w - - 6 62","type":"schaak","answers":["h2g3","h2g1"]},{"fen":"4k3/1R5p/1R6/8/2PB4/p2q4/P4P2/1K6 w - - 2 1","type":"schaak","answers":["b1c1"]},{"fen":"8/5p1k/1Q6/2P2n2/P7/3P1P1P/4BP1q/5K2 w - - 3 66","type":"mat1","answers":["f1e1","e2d1"]},{"fen":"1r4kr/6p1/p2p4/3P1Q2/2P1P2p/P3qP2/R3B1PP/1K5R w - - 13 55","type":"schaak","answers":["b1c2","a2b2"]},{"fen":"3rk1nr/ppp2ppp/5n2/4p3/1Pq1P3/P4NP1/2P1KP1P/RQ3B1R w - - 5 1","type":"schaak","answers":["e2e1"]},{"fen":"1k6/3r2p1/8/6P1/4P2p/1p6/1P4R1/1K6 w - - 3 1","type":"mat1","answers":["b1c1","g2g1"]},{"fen":"8/1k6/6B1/3P4/1P2p1Pp/1r2P3/R4rPR/1K6 w - - 7 74","type":"schaak","answers":["b1c1","a2b2"]},{"fen":"r2qk2r/p1pb1ppp/Q5n1/4p3/1bP1P3/8/PP2NPPP/R1B1KB1R w KQkq - 1 13","type":"schaak","answers":["c1d2","e2c3"]},{"fen":"7Q/2pkbppp/p3pq2/3p4/N2Pb3/8/PPn1PPPP/2R1KB1R w K - 0 17","type":"schaak","answers":["c1c2"]},{"fen":"3r4/p1p3k1/2Bp4/3P4/2P1Np2/P7/2P3P1/1r4KR w - - 5 1","type":"schaak","answers":["g1f2"]},{"fen":"2krr3/Bpp3pp/3b4/1q3n2/3Pp3/2P4P/P1PQ1PB1/1K1R3R w - - 1 1","type":"schaak","answers":["b1a1"]},{"fen":"8/1p3pk1/1q3b1p/2r1p1p1/2p1P3/4Q2P/2P2PP1/1K1RR3 w - - 6 1","type":"schaak","answers":["b1c1"]},{"fen":"1r4kr/1p4p1/p2np3/4p3/4P1q1/PQNP3P/1PP5/3RR2K w - - 2 29","type":"mat1","answers":["e1e3"]},{"fen":"3rk2r/8/p4p1p/1b6/1b3n2/4P1B1/PN3PPP/R2K3R w k - 2 31","type":"schaak","answers":["d1c1","d1c2"]},{"fen":"r1b3kr/ppp2ppp/3b4/2Np4/1P1Bp2q/n4P1P/2P1PKP1/2RQ1BR1 w - - 2 20","type":"schaak","answers":["g2g3"]},{"fen":"1k4r1/1p5R/8/4p2P/R1P5/8/2P2PK1/3r4 w - - 7 68","type":"schaak","answers":["g2h2","g2f3"]},{"fen":"8/pp6/P7/1P2B1pk/5nr1/8/3P1b2/1R5K w - - 3 1","type":"mat1","answers":["e5f4"]},{"fen":"rn2k1nr/ppp2ppp/8/5b2/qbP5/1P3P2/P1K3PP/RNBQ1BNR w kq - 1 11","type":"schaak","answers":["f1d3","c2b2"]},{"fen":"1k6/1pp2pp1/p7/2n5/P1B4R/P6P/2b2r2/RK6 w - - 0 1","type":"schaak","answers":["b1c1","b1b2"]},{"fen":"7Q/4kp1p/4p3/3b4/2p5/4P3/P5PP/2q1KB2 w - - 1 37","type":"schaak","answers":["e1e2","e1f2"]},{"fen":"r2k3r/ppp2p1p/2n2p2/4p3/1bP3b1/N3P3/PP2KPPP/R1B2B1R w - - 2 1","type":"schaak","answers":["e2d3","f2f3"]},{"fen":"8/pp2kp1p/6p1/1P2p1P1/2n4R/6NP/P1r2P2/3r2KR w - - 3 1","type":"schaak","answers":["g1g2","g3f1"]},{"fen":"1k4r1/ppp2p2/3b1p2/3p4/3qP3/1P1B1P2/P1P2P2/R2Q2K1 w - - 6 31","type":"schaak","answers":["g1f1"]},{"fen":"6kr/1p2B3/p3p2p/4p3/4P1n1/1RN5/P1r3Pb/4R1K1 w - - 2 1","type":"schaak","answers":["g1h1"]},{"fen":"4r3/p4kpp/3QRp2/3P4/1P6/q7/6PP/4r1KR w - - 0 37","type":"schaak","answers":["g1f2"]},{"fen":"3r2kr/p5q1/7p/3p4/4P3/PQ3P1b/2P5/R3R1K1 w - - 1 1","type":"schaak","answers":["g1f2"]},{"fen":"8/P6k/7p/7K/2BBb1PP/P7/8/8 w - - 3 60","type":"mat1","answers":["c4f7","c4g8"]},{"fen":"r3r1k1/1p3ppp/p2p4/2PPp1q1/2B1p3/2Q1P2b/P1P2PPP/3R1RK1 w - - 1 1","type":"mat1","answers":["g2g3"]},{"fen":"2kr1b1r/ppp1pppp/3qb3/1N1p4/4P1n1/3B1n2/PPPPQPPP/R1B1R1K1 w - - 0 10","type":"schaak","answers":["e2f3"]},{"fen":"r5kr/pp3ppp/2pb4/P7/2bPP3/4pQ1P/1P1P1PPq/R1BR1K2 w - - 1 1","type":"schaak","answers":["d2d3"]},{"fen":"3Rn1r1/kpp3p1/p7/P5q1/4p3/2B1P3/1Q3PK1/7R w - - 8 1","type":"schaak","answers":["g2f1"]},{"fen":"r3k1nr/p1p2ppp/2p5/3pNb2/1b1p1PPq/8/PPP1PK1P/R1BQ1B1R w - - 3 1","type":"schaak","answers":["f2g2","f2g1"]},{"fen":"r2q1rk1/p1p2p1p/5p2/1p1Ppb2/2Kn4/3P4/PPP2PPP/R2Q1BNR w - - 0 1","type":"schaak","answers":["c4b4","c4c3"]},{"fen":"5rk1/1P3ppp/8/3p4/4pP2/4n1q1/1P2Q3/2R1KB2 w - - 2 1","type":"schaak","answers":["e2f2"]},{"fen":"r1b1r1k1/pp3ppp/3p1n2/qNp5/5P2/4pQ2/PPP1B1PP/R3K2R w - - 2 1","type":"schaak","answers":["b5c3"]},{"fen":"r3kb1r/p1p2ppp/3pp3/3Pn3/2p1nNPq/8/PPP1B1PP/R1BQK2R w KQkq - 2 11","type":"schaak","answers":["g2g3"]},{"fen":"3R4/5kp1/8/6p1/2b2p2/5P2/6P1/1r2BK2 w - - 4 1","type":"schaak","answers":["f1f2"]},{"fen":"r4rk1/p1p1nppp/1p6/3P1q2/1B2p3/3nPP1P/PP4BP/2RQK2R w K - 2 17","type":"schaak","answers":["e1d2"]},{"fen":"r3kB1r/ppp2ppp/8/3p4/3Pnq2/8/nPP1PPPP/1R1QKB1R w Kkq - 0 14","type":"mat1","answers":["f2f3"]},{"fen":"1r3k2/pp3p1p/5N2/4Rb2/8/8/PP3PPP/3r1KR1 w - - 9 27","type":"schaak","answers":["f1e2"]},{"fen":"2k1r1r1/pp1b1ppp/8/q2p4/1b1N1Pn1/2N3Q1/PPP1PKPP/3R1BR1 w - - 1 19","type":"schaak","answers":["f2e1"]},{"fen":"r5k1/r1p2pp1/2Q1b2p/1B4q1/4P3/2p4P/P1P2PP1/2K2R1R w - - 4 1","type":"schaak","answers":["f2f4"]},{"fen":"6k1/3p1pr1/7p/1pPb4/3P4/2R2P1P/8/r4BKR w - - 1 35","type":"schaak","answers":["g1f2"]},{"fen":"2kr2r1/2pqpp2/2n2b1p/8/3P3P/P1BNPb2/1PQ1B3/4R1KR w - - 0 30","type":"schaak","answers":["g1f2"]},{"fen":"4Q3/2R5/2PP4/8/3Q4/5k2/2P2P1p/6K1 w - - 0 70","type":"schaak","answers":["g1h1","g1h2"]},{"fen":"r2r2k1/1pp2ppp/p3p3/3p4/2nP1P2/P1P2Q2/2q2PPP/K2R1B1R w - - 0 21","type":"mat1","answers":["f1c4"]},{"fen":"7r/1p2N2k/p6p/4P3/4P3/8/P4PPP/5rKR w - - 0 1","type":"schaak","answers":["g1f1"]},{"fen":"r2qk2r/pQp2ppp/8/2p2bB1/3np3/P1n5/2PNPPPP/R2K1B1R w kq - 4 14","type":"schaak","answers":["d1c1"]},{"fen":"r3r1k1/p1p2ppp/2p5/b2pB1q1/1N1P4/2P1Pb2/PP1Q1PPP/R3R1K1 w - - 6 18","type":"mat1","answers":["g2g3","e5g3"]},{"fen":"1r4k1/2p3p1/3P1q2/7p/4Qp2/8/P1P3PP/K3R3 w - - 1 35","type":"schaak","answers":["e4e5"]},{"fen":"rnb1k2r/pp3ppp/2pp1q2/3p4/3Q2K1/2P1N3/PP2P1PP/RN3B1R w - - 0 1","type":"schaak","answers":["e3f5","g4g3"]},{"fen":"r7/5p1k/1P1R1P2/4Pb2/P1p2B2/7p/1P6/K7 w - - 1 87","type":"mat1","answers":["b2b3","b2b4"]},{"fen":"r1b1r1k1/1p1p1ppp/p2p1n2/2q1p3/3nP3/P2P1NB1/1PPQKPPP/3R1B1R w - - 2 1","type":"schaak","answers":["e2e1","f3d4"]},{"fen":"7R/k1p5/2P5/4N2p/p1Pb3P/P2P4/3r4/K7 w - - 5 64","type":"schaak","answers":["a1b1"]},{"fen":"1k6/2p4p/p1p3p1/B4p2/3P1P1P/P2P4/1r3r2/3R1K1R w - - 1 1","type":"schaak","answers":["f1g1"]},{"fen":"r5k1/6p1/2p3r1/2Qp4/p1pPp3/P3Pb2/1PP2P1P/1R4RK w - - 6 45","type":"schaak","answers":["g1g2"]},{"fen":"7Q/1pp1k3/p4n2/8/3PP3/2P1q3/6PP/3RKB1R w - - 1 1","type":"schaak","answers":["f1e2"]},{"fen":"6k1/1pp3p1/p7/3p4/3P1n1p/P1B1r2P/1PP3K1/6R1 w - - 2 48","type":"schaak","answers":["g2f2","g2f1"]},{"fen":"5rk1/ppp5/2P1p3/6p1/1R1Pr3/8/P4K1P/7R w - - 2 36","type":"schaak","answers":["f2g2","f2g3"]},{"fen":"3q1k1r/Q1p2ppp/8/4Nn2/1b6/N3P3/brP2PPP/R3KB1R w - - 1 1","type":"schaak","answers":["e1e2"]},{"fen":"r3r1k1/p4p1p/5n2/qp1n2B1/2p5/Q6P/PPP1KPP1/R4B1R w - - 0 1","type":"schaak","answers":["e2f3","g5e3"]},{"fen":"8/8/8/P6R/3pk2p/4p2P/4K1P1/r7 w - - 8 1","type":"mat1","answers":["h5h4"]},{"fen":"6kr/1p1b4/1qp1p2p/4P1p1/3P4/3Q1B1P/1rK3P1/3RR3 w - - 3 1","type":"schaak","answers":["c2c1"]},{"fen":"5k2/5p1p/b1N5/p3pp2/8/P1p4P/r1P2PP1/2KR4 w - - 1 31","type":"mat1","answers":["c1b1","d1d8"]},{"fen":"r1k1r3/ppp2p1p/n4q2/1BNp4/3P4/2Q1P3/PPP4P/R4K1R w - - 3 21","type":"schaak","answers":["f1e1","f1e2"]},{"fen":"8/1p2rpkp/1Pp2br1/p2p2qp/P2Pp3/Q1N1P2P/2P2P2/4R1KR w - - 0 1","type":"schaak","answers":["g1f1"]},{"fen":"r1b1kbnr/pppp1ppp/2n5/4P3/5q2/8/PPPKP1PP/RNBQ1BNR w - - 0 1","type":"schaak","answers":["d2e1","e2e3"]},{"fen":"4r1kr/ppp2ppp/4p3/q1bpP3/7Q/2PRP1BP/K1P2PP1/6R1 w - - 3 29","type":"schaak","answers":["a2b2","a2b1"]},{"fen":"6k1/P7/8/6p1/2N1p3/6p1/4r1PK/8 w - - 0 100","type":"schaak","answers":["h2h3","h2g3"]},{"fen":"3r4/4k3/p3r2p/1p2Pp2/1P1p1Ppb/1Q1Nq3/P5P1/3R2KR w - - 12 1","type":"schaak","answers":["g1f1"]},{"fen":"8/1p5k/2pP3p/2P4P/1BP1bp2/R7/8/2r3K1 w - - 2 51","type":"schaak","answers":["g1f2"]},{"fen":"6kr/pRq2pp1/2P1p3/2P4p/6P1/2BB1n1P/5P2/4R1K1 w - - 3 44","type":"schaak","answers":["g1f1"]},{"fen":"2kr1b1r/pppb1ppp/2n5/3pp3/3Pn1Pq/2P1P2P/PPNBNP2/R2QKB1R w - - 3 1","type":"mat1","answers":["h1h2","e2g3"]},{"fen":"r3kb1r/ppp2ppp/3p2b1/3npq2/2N1n3/4BN2/PPPKPPPP/2RQ1BR1 w kq - 4 13","type":"schaak","answers":["d2e1"]},{"fen":"6k1/6p1/p7/3p1pr1/3P4/P1B2r1P/1P6/1R5K w - - 2 56","type":"mat1","answers":["h1h2"]},{"fen":"8/5p1k/5Pb1/1PB5/7p/1NQ3KP/2P1r3/5r2 w - - 0 53","type":"schaak","answers":["g3h4"]},{"fen":"8/R5pk/7p/6rP/p2r4/P2P4/1P6/3R2K1 w - - 14 1","type":"schaak","answers":["g1f1","g1f2"]},{"fen":"1r2r1k1/6p1/4p2p/2QP1p2/4p1nq/P1B1P3/1PP5/3RK1R1 w - - 0 1","type":"schaak","answers":["e1d2"]},{"fen":"1rb3k1/1p3p1p/4p2n/3pP1p1/6P1/p1P1qP2/P1P4P/R1KQ1B1R w - - 0 1","type":"schaak","answers":["d1d2"]},{"fen":"1r6/5p2/p6k/P2rp3/3p1pBP/P2P4/5Pb1/1K1RR3 w - - 2 48","type":"schaak","answers":["b1a1","b1a2"]},{"fen":"r4rk1/pp2qppp/3b4/1p1p1n2/3P4/PNB5/2P1KPPP/R2Q3R w - - 4 1","type":"schaak","answers":["e2f1"]},{"fen":"3r1rk1/p1p2ppp/1q6/3ppb2/1b2n2P/N3B3/PPP1PPP1/R1Q1KBR1 w - - 1 17","type":"schaak","answers":["c2c3"]},{"fen":"3rk1r1/5p1p/2q1pp2/p7/4bQ2/P3P2P/2P2PP1/2RK1BR1 w - - 6 29","type":"schaak","answers":["f1d3"]},{"fen":"1r3k1r/ppp2pp1/7p/1bpP4/3Kn1q1/4P1PP/PPQ5/R1B3NR w - - 0 1","type":"schaak","answers":["c2c5"]},{"fen":"5rk1/1p4p1/4p3/8/1Qp1P2p/P1P3P1/2P4P/1K1q2NR w - - 0 1","type":"schaak","answers":["b1a2"]},{"fen":"r1b1k2r/ppp2ppp/5n2/1q4n1/1b6/1N2B3/PPP1K1PP/R2Q1BNR w kq - 1 17","type":"schaak","answers":["d1d3"]},{"fen":"r3k2B/ppp2p1p/4p3/6q1/3P4/2Nb4/PP3PPP/2KR3R w q - 0 18","type":"schaak","answers":["d1d2"]},{"fen":"r3k3/p5pp/1p1n1r2/b3p3/b1p1P3/P3B2P/1P4P1/R1NK1BR1 w - - 4 1","type":"schaak","answers":["d1e2"]},{"fen":"4r3/5p2/2k5/2p3b1/1pK5/4r2P/PPP3P1/1R2R3 w - - 6 1","type":"mat1","answers":["e1e3"]},{"fen":"2k1rB2/1p5P/8/p1p2p2/2Pp4/1q1P1QP1/8/1K1R3R w - - 18 1","type":"schaak","answers":["b1c1","b1a1"]},{"fen":"N6r/pp1k1ppp/3bb3/1P1p4/4q3/4Q1B1/P1n2PPP/2R1KB1R w K - 0 21","type":"schaak","answers":["c1c2"]},{"fen":"1r2k1r1/2pq1p2/3p1b2/1p2pp1p/4P3/3QB3/PPP2PKP/R6R w - - 2 1","type":"schaak","answers":["g2f1"]},{"fen":"r4rk1/ppp2pp1/2np2qp/4p3/Q2PP3/P1PB3b/P2N1PPP/R4RK1 w - - 9 15","type":"mat1","answers":["g2g3"]}];
+if (typeof module !== 'undefined') module.exports = { KONING_POOL };
 /* Gegenereerd door tools/make-wordlist.py, niet met de hand bewerken.
    1024 woorden (10 bits per woord) voor koppel- en speelcodes.
    Bron: eigen selectie uit de OpenTaal-woordenlijst (Revised BSD /
@@ -1900,20 +2391,48 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
      {apparaatId: bijdrage}. Weergave is de som, merge is per apparaat max.
      Zo telt +50 op de ene iPad en +30 op de andere op tot +80.
    - Trofeeen: G-Set, merge is vereniging.
-   - Naam, thema, instellingen: last-write-wins met timestamp.
-   - Streak, lastLevel en dagmissies zijn per apparaat en mergen niet. */
+   - Naam, thema, instellingen, weekdoel: last-write-wins met timestamp.
+   - Weektellers (wk.<week>.<sleutel>): G-Counters net als de rest; alleen
+     de laatste weken tellen mee, oudere sleutels ruimt normDoc op.
+   - De vorm-log (log.<spel>.<id>): G-Set van opdrachtresultaten, alleen de
+     laatste 28 dagen; daar komt de vorm-score uit.
+   - Vrienden (friends.<id>): per vriend een LWW-register.
+   - Streak, lastLevel, dag en weekSeen zijn per apparaat en mergen niet. */
 function defaultP() {
-  return { name: '', xp: 0, sound: true, guard: true, predict: true,
+  return { name: '', xp: 0, sound: true, guard: true, predict: true, weekGoal: null,
     wins: 0, stars: 0, streak: 0, best: 0, lastLevel: null,
-    theme: 'munt', badges: {}, day: null,
+    theme: 'munt', badges: {}, day: null, weekSeen: null, wk: {}, log: {}, friends: {},
     c: { gamesPlayed: 0, winsL2: 0, winsL3: 0, winsOnline: 0, perfectScans: 0,
       safeCorrect: 0, best3Gold: 0, predictHits: 0, patienceBonus: 0,
-      cloudUsed: 0, pat: {} } };
+      cloudUsed: 0, pat: {}, pad: {} } };
 }
 const COUNTERS = ['xp', 'wins', 'stars', 'c.gamesPlayed', 'c.winsL2', 'c.winsL3',
   'c.winsOnline', 'c.perfectScans', 'c.safeCorrect', 'c.best3Gold',
   'c.predictHits', 'c.patienceBonus', 'c.cloudUsed'];
-const PREFS = ['name', 'sound', 'guard', 'predict', 'theme'];
+const PREFS = ['name', 'sound', 'guard', 'predict', 'theme', 'weekGoal'];
+const DRILL_KINDS = ['scan', 'best3', 'trucs', 'koning', 'opening'];
+const LOG_DAYS = 28, WEEKS_KEPT = 16, MAX_LOG = 400, MAX_FRIENDS = 64;
+/* de vijf oefenspellen; ref is de richttijd (ms) per opdracht voor de vorm-score */
+const DRILLS = {
+  scan: { e: '🔍', naam: 'Speurogen', ref: 25000 },
+  best3: { e: '🥇', naam: 'De Beste Zet', ref: 30000 },
+  trucs: { e: '🎒', naam: 'Turbo’s Trucendoos', ref: 30000 },
+  koning: { e: '🛡️', naam: 'Koning ontsnapt', ref: 30000 },
+  opening: { e: '📖', naam: 'Openingsschool', ref: 40000 }
+};
+/* weekdoel-sjablonen: sleutel in de weektellers, tekst voor het kind */
+const GOAL_KINDS = {
+  opdr: { e: '🎯', naam: 'Opdrachten', ns: [10, 20, 40], key: () => 'opdr',
+    txt: g => g.n + ' opdrachten' },
+  potjes: { e: '🏆', naam: 'Potjes tegen Turbo', ns: [2, 3, 5], lvl: true,
+    key: g => 'potjes' + g.lvl, txt: g => g.n + ' potjes tegen ' + TURBO_NAMES[g.lvl] + (g.lvl < 3 ? ' of sterker' : '') },
+  wins: { e: '🥇', naam: 'Winnen van Turbo', ns: [1, 2, 3], lvl: true,
+    key: g => 'wins' + g.lvl, txt: g => g.n + ' keer winnen van ' + TURBO_NAMES[g.lvl] + (g.lvl < 3 ? ' of sterker' : '') },
+  vriend: { e: '🤝', naam: 'Potjes met een vriend', ns: [1, 2, 3], key: () => 'online',
+    txt: g => g.n + (g.n === 1 ? ' potje' : ' potjes') + ' met een vriend' },
+  top: { e: '🌟', naam: 'Toprondes', ns: [1, 2, 3], game: true, key: g => 'top.' + g.game,
+    txt: g => g.n + (g.n === 1 ? ' topronde' : ' toprondes') + ' bij ' + DRILLS[g.game].naam }
+};
 
 function newDevId() {
   try { return crypto.randomUUID(); } catch (e) {
@@ -1931,8 +2450,55 @@ const DEV = (() => {
 })();
 
 function emptyDoc() {
-  return { v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: {}, max: { best: 0 },
-    loc: { streak: 0, lastLevel: null, day: null } };
+  return { v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: {}, max: { best: 0, goal: {} },
+    log: {}, friends: {},
+    loc: { streak: 0, lastLevel: null, day: null, weekSeen: null } };
+}
+
+/* ISO-week als 'YYYY-Www', maandag als eerste dag: de week is de eenheid
+   van het weekdoel en van de weektellers */
+function isoWeek(d) {
+  d = d ? new Date(d) : new Date();
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dow = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - dow);
+  const y = t.getUTCFullYear();
+  const wk = Math.ceil(((t - Date.UTC(y, 0, 1)) / 86400000 + 1) / 7);
+  return y + '-W' + String(wk).padStart(2, '0');
+}
+/* de week die `n` weken voor de huidige ligt */
+function weekBefore(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - 7 * n);
+  return isoWeek(d);
+}
+function recentWeeks(n) {
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(weekBefore(i));
+  return out;
+}
+
+/* het weekdoel: sjabloon plus aantal, met per sjabloon een niveau of spel */
+function normGoal(g) {
+  if (!g || typeof g !== 'object') return null;
+  const kind = String(g.kind || '');
+  if (!GOAL_KINDS[kind]) return null;
+  const n = Math.floor(+g.n);
+  if (!(n >= 1 && n <= 200)) return null;
+  const out = { kind, n };
+  if (GOAL_KINDS[kind].lvl) out.lvl = [1, 2, 3].includes(+g.lvl) ? +g.lvl : 2;
+  if (GOAL_KINDS[kind].game) out.game = DRILL_KINDS.includes(g.game) ? g.game : 'scan';
+  return out;
+}
+
+function normFriend(f) {
+  if (!f || typeof f !== 'object') return null;
+  if (typeof f.k !== 'string' || !/^[A-Za-z0-9_-]{32,64}$/.test(f.k)) return null;
+  const t = +f.t;
+  if (!isFinite(t) || t < 0) return null;
+  const naam = String(f.naam || '').replace(/[<>&\x00-\x1f]/g, '').trim().slice(0, 14);
+  return { k: f.k, naam: naam || 'maatje', t: Math.min(t, Date.now() + 86400000),
+    weg: f.weg === true, host: f.host === true, since: Math.max(0, Math.min(+f.since || 0, 4102444800000)) };
 }
 
 /* normDoc maakt van willekeurige input een gegarandeerd geldig doc: elke
@@ -1948,10 +2514,15 @@ function normDoc(raw) {
   if (!raw || typeof raw !== 'object') return d;
   const ep = +raw.epoch;
   if (isFinite(ep) && ep > 0) d.epoch = Math.floor(Math.min(ep, 1e6));
+  const keepWeeks = new Set(recentWeeks(WEEKS_KEPT));
   if (raw.cnt && typeof raw.cnt === 'object') {
     for (const path in raw.cnt) {
       const src = raw.cnt[path];
       if (path.length > 64 || !src || typeof src !== 'object' || Array.isArray(src)) continue;
+      if (path.startsWith('wk.')) {
+        const m = /^wk\.(\d{4}-W\d{2})\.[A-Za-z0-9.]{1,24}$/.exec(path);
+        if (!m || !keepWeeks.has(m[1])) continue;
+      }
       const m = {};
       for (const dev in src) {
         const n = +src[dev];
@@ -1973,21 +2544,62 @@ function normDoc(raw) {
     const defs = defaultP(), now = Date.now();
     for (const f of PREFS) {
       const e = raw.lww[f];
-      if (!e || typeof e !== 'object' || typeof e.v !== typeof defs[f]) continue;
+      if (!e || typeof e !== 'object') continue;
+      if (f === 'weekGoal') { if (e.v !== null && !normGoal(e.v)) continue; }
+      else if (typeof e.v !== typeof defs[f]) continue;
       const t = +e.t;
       if (!isFinite(t) || t < 0) continue;
-      const v = typeof e.v === 'string' ? e.v.slice(0, 40) : e.v;
+      const v = typeof e.v === 'string' ? e.v.slice(0, 40) : (f === 'weekGoal' ? normGoal(e.v) : e.v);
       /* een timestamp uit de toekomst zou anders elke merge blijven winnen */
       d.lww[f] = { v, t: Math.min(t, now + 86400000) };
     }
   }
   const best = raw.max && +raw.max.best;
   if (typeof best === 'number' && isFinite(best) && best > 0) d.max.best = Math.min(best, 1e6);
+  /* weekdoel-bonus: een max-register per week, zodat twee apparaten die
+     allebei het doel zien halen samen precies één bonus opleveren */
+  const goal = raw.max && raw.max.goal;
+  if (goal && typeof goal === 'object') {
+    for (const wk in goal) {
+      const v = +goal[wk];
+      if (/^\d{4}-W\d{2}$/.test(wk) && isFinite(v) && v > 0) d.max.goal[wk] = Math.min(Math.floor(v), 1000);
+    }
+  }
+  /* vorm-log: [ts, moeilijkheid 0..1, ms, sterren 0..3]; oud of onzin gaat weg,
+     en per spel blijven de nieuwste MAX_LOG over */
+  const now = Date.now(), oudste = now - LOG_DAYS * 86400000;
+  if (raw.log && typeof raw.log === 'object') {
+    for (const kind of DRILL_KINDS) {
+      const src = raw.log[kind];
+      if (!src || typeof src !== 'object' || Array.isArray(src)) continue;
+      const rows = [];
+      for (const id in src) {
+        const e = src[id];
+        if (!Array.isArray(e) || e.length < 4 || id.length > 24 || !/^[A-Za-z0-9_-]+$/.test(id)) continue;
+        const ts = +e[0], diff = +e[1], ms = +e[2], stars = +e[3];
+        if (!isFinite(ts) || ts < oudste || ts > now + 86400000) continue;
+        if (!isFinite(diff) || !isFinite(ms) || !isFinite(stars)) continue;
+        rows.push([id, [Math.floor(ts), Math.min(1, Math.max(0, diff)), Math.min(3600000, Math.max(0, Math.floor(ms))),
+          Math.min(3, Math.max(0, Math.round(stars)))]]);
+      }
+      rows.sort((a, b) => b[1][0] - a[1][0]);
+      if (rows.length) d.log[kind] = Object.fromEntries(rows.slice(0, MAX_LOG));
+    }
+  }
+  if (raw.friends && typeof raw.friends === 'object') {
+    let i = 0;
+    for (const id in raw.friends) {
+      if (!/^[A-Za-z0-9_-]{8,32}$/.test(id) || i >= MAX_FRIENDS) continue;
+      const f = normFriend(raw.friends[id]);
+      if (f) { d.friends[id] = f; i++; }
+    }
+  }
   if (raw.loc && typeof raw.loc === 'object') {
     const st = +raw.loc.streak;
     d.loc.streak = isFinite(st) && st > 0 ? Math.min(st, 1e6) : 0;
     d.loc.lastLevel = raw.loc.lastLevel == null ? null : +raw.loc.lastLevel || 0;
     d.loc.day = raw.loc.day && typeof raw.loc.day === 'object' ? raw.loc.day : null;
+    d.loc.weekSeen = typeof raw.loc.weekSeen === 'string' ? raw.loc.weekSeen.slice(0, 8) : null;
   }
   return d;
 }
@@ -2030,7 +2642,7 @@ function migrateLegacy(o, dev) {
   for (const f of PREFS) d.lww[f] = { v: o[f], t: o[f] === defs[f] ? 0 : t };
   d.max.best = +o.best || 0;
   d.loc = { streak: +o.streak || 0, lastLevel: o.lastLevel == null ? null : o.lastLevel,
-    day: o.day || null };
+    day: o.day || null, weekSeen: null };
   return d;
 }
 
@@ -2039,14 +2651,19 @@ function migrateLegacy(o, dev) {
 function viewFromDoc(d) {
   const p = defaultP();
   for (const path in d.cnt) {
-    if (COUNTERS.includes(path) || path.startsWith('c.pat.')) setPath(p, path, cntSum(d.cnt[path]));
+    if (COUNTERS.includes(path) || path.startsWith('c.pat.') || path.startsWith('c.pad.') || path.startsWith('wk.'))
+      setPath(p, path, cntSum(d.cnt[path]));
   }
   for (const k in d.set.badges) if (d.set.badges[k]) p.badges[k] = true;
   for (const f of PREFS) if (d.lww[f]) p[f] = d.lww[f].v;
+  p.log = d.log;
+  p.friends = d.friends;
   p.best = +d.max.best || 0;
+  for (const wk in d.max.goal) p.xp += d.max.goal[wk];
   p.streak = +d.loc.streak || 0;
   p.lastLevel = d.loc.lastLevel == null ? null : d.loc.lastLevel;
   p.day = d.loc.day || null;
+  p.weekSeen = d.loc.weekSeen || null;
   return p;
 }
 
@@ -2069,6 +2686,7 @@ function saveP() {
   DOC.loc.streak = P.streak;
   DOC.loc.lastLevel = P.lastLevel;
   DOC.loc.day = P.day;
+  DOC.loc.weekSeen = P.weekSeen;
   if (P.best > DOC.max.best) DOC.max.best = P.best;
   try { localStorage.setItem('schaakheld1', JSON.stringify(DOC)); } catch (e) {}
 }
@@ -2092,6 +2710,24 @@ function setPref(f, v) {
 function addBadge(id) {
   DOC.set.badges[id] = true;
   P.badges[id] = true;
+  saveP();
+  syncSoon();
+}
+/* een opdrachtresultaat in de vorm-log; het id is uniek per apparaat en
+   moment, zodat twee apparaten nooit elkaars regels overschrijven */
+function logResult(kind, diff, ms, stars) {
+  if (!DRILL_KINDS.includes(kind)) return;
+  const ts = Date.now();
+  const id = DEV.slice(0, 6) + ts.toString(36) + Math.floor(Math.random() * 1296).toString(36);
+  const m = DOC.log[kind] || (DOC.log[kind] = {});
+  m[id] = [ts, Math.min(1, Math.max(0, +diff || 0)), Math.max(0, Math.floor(ms) || 0), Math.round(stars) || 0];
+  P.log = DOC.log;
+  saveP();
+  syncSoon();
+}
+function setFriend(id, f) {
+  DOC.friends[id] = Object.assign({}, f, { t: Date.now() });
+  P.friends = DOC.friends;
   saveP();
   syncSoon();
 }
@@ -2132,8 +2768,21 @@ function mergeDoc(a, b) {
     out.lww[f] = { v: win.v, t: win.t };
   }
   out.max.best = Math.max(+a.max.best || 0, +b.max.best || 0);
-  out.loc = JSON.parse(JSON.stringify(a.loc));
-  return out;
+  for (const wk in Object.assign({}, a.max.goal, b.max.goal)) {
+    out.max.goal[wk] = Math.max(+(a.max.goal || {})[wk] || 0, +(b.max.goal || {})[wk] || 0);
+  }
+  for (const kind of DRILL_KINDS) {
+    if (a.log[kind] || b.log[kind]) out.log[kind] = Object.assign({}, a.log[kind], b.log[kind]);
+  }
+  for (const id in Object.assign({}, a.friends, b.friends)) {
+    const x = a.friends[id], y = b.friends[id];
+    /* bij gelijke timestamp beslist de inhoud, zodat beide kanten hetzelfde kiezen */
+    out.friends[id] = !x ? y : (!y ? x : (y.t > x.t || (y.t === x.t && JSON.stringify(y) > JSON.stringify(x)) ? y : x));
+  }
+  /* de grenzen (weken, logregels, vrienden) gelden ook voor het resultaat */
+  const res = normDoc(out);
+  res.loc = JSON.parse(JSON.stringify(a.loc));
+  return res;
 }
 
 /* Voegt het profiel van een ander apparaat bij het onze. lastLevel is
@@ -2615,6 +3264,21 @@ function mpMsg(m) {
       MP.revTheirs = true;
       mpMaybeRevanche();
       break;
+    case 'vriend?':
+      mpOnVriendVraag(m);
+      break;
+    case 'vriend':
+      mpOnVriend(m);
+      break;
+    case 'remise?':
+      mpOnRemiseVraag(m);
+      break;
+    case 'remise':
+      mpOnRemise(m);
+      break;
+    case 'opgave':
+      mpOnOpgave(m);
+      break;
     case 'weg':
       mpOnWeg();
       break;
@@ -2624,6 +3288,7 @@ function mpMsg(m) {
 /* de bevestiging uit het memo: allebei dezelfde drie plaatjes zien */
 function mpOnHallo() {
   if (session && session.online) return; /* herverbinden, geen nieuw feest */
+  if (INV) inviteClear(); /* de uitnodiging is aangekomen: briefje kan weg */
   closeModal(); /* het wachtscherm (QR of verbinden) mag weg */
   const trio = '<p style="font-size:2.2em;letter-spacing:.2em">' + mpEmojiTrio(MP.room) + '</p>';
   if (MP.host) {
@@ -2683,7 +3348,8 @@ function mpBeginGame() {
   $('predictBar').classList.add('hidden');
   updateTrays();
   updateToggles();
-  setActions([{ label: '🏳️ Stoppen', cls: 'plain small', fn: mpStopVragen, id: 'mpStopBtn' }]);
+  setActions([{ label: '🤝 Remise?', cls: 'plain small', fn: offerDraw, id: 'drawBtn' },
+    { label: '🏳️ Opgeven', cls: 'plain small', fn: resignAsk, id: 'mpStopBtn' }]);
   $('actionRow').classList.add('onderaan');
   if (MP.myColor === 'w') {
     BD.mode = 'move';
@@ -2752,7 +3418,7 @@ function mpOnSync(m) {
   /* de stand kan al uit zijn (mat tijdens het verbindingsgat): dan meteen
      het eindscherm, anders zou het kind naar een bevroren bord staren */
   const st = gameStatus(S);
-  if (st.over) { BD.mode = 'off'; session.over = true; endGame(st); return; }
+  if (st.over) { BD.mode = 'off'; endGame(st); return; }
   session.over = false;
   BD.mode = S.turn === MP.myColor ? 'move' : 'off';
   say(S.turn === MP.myColor ? 'Jij bent weer aan zet! 💭' : (mpNaam() + ' is aan zet… ⏳'));
@@ -2802,36 +3468,48 @@ function mpVerlaat() {
   goHome();
 }
 
-/* Stoppen is onomkeerbaar: de kamer en de codes zijn daarna weg. Dus eerst
-   even vragen. De modal is cancelable, zodat ✕, Escape en een tik ernaast
-   allemaal 'doorspelen' betekenen: een misklik kost nooit meer een potje. */
+/* midden in een online potje weglopen is opgeven; buiten een potje gewoon weg */
 function mpStopVragen() {
   if (!MP || !session || !session.online || session.over) { mpVerlaat(); return; }
-  showModal('<div class="m-emoji">🏳️</div><h2>Stoppen met dit potje?</h2>' +
-    '<p>Dan is het potje met ' + escHtml(mpNaam()) + ' afgelopen.<br>' +
-    'Voor een nieuw potje heb je ook nieuwe codes nodig.</p>' +
-    '<div class="m-btns"><button class="btn sun" id="mpDoorspelen">↩️ Nee, doorspelen</button>' +
-    '<button class="btn plain" id="mpStopJa">🏳️ Ja, stoppen</button></div>', () => {
-      $('mpDoorspelen').addEventListener('click', closeModal);
-      $('mpStopJa').addEventListener('click', () => { closeModal(); mpVerlaat(); });
-    }, true);
+  resignAsk();
 }
 
 /* ---------- de drie manieren om bij elkaar te komen ---------- */
 
-function mpFlow() {
-  showModal('<div class="m-emoji">🤝</div><h2>Samen spelen</h2>' +
-    '<p>Zijn jullie bij elkaar in de kamer?</p>' +
-    '<div class="m-btns"><button class="btn sun" id="mpToon">📱 Ik laat een code zien</button>' +
-    '<button class="btn sun" id="mpScan">📷 Ik scan de code</button>' +
-    '<button class="btn plain" id="mpVer">🎈 Nee, ver weg</button>' +
-    '<button class="btn plain" id="mpTerug">Terug</button></div>', () => {
-      $('mpToon').addEventListener('click', () => { closeModal(); mpHostQR(); });
-      $('mpScan').addEventListener('click', () => { closeModal(); openScanner('play'); });
-      $('mpVer').addEventListener('click', () => { closeModal(); mpWordFlow(); });
-      $('mpTerug').addEventListener('click', closeModal);
-    });
+/* de vriendenlijst op het tabblad Vrienden; de echte uitnodig-logica staat
+   verderop bij vrienden */
+function renderFriends() {
+  const el = $('friendList');
+  if (!el) return;
+  const ids = Object.keys(P.friends || {}).filter(id => !P.friends[id].weg)
+    .sort((a, b) => (P.friends[b].since || 0) - (P.friends[a].since || 0));
+  if (!ids.length) {
+    el.innerHTML = '<div class="note" style="margin:0 0 4px">Nog geen vrienden. Speel eerst een potje samen (hieronder), dan kunnen jullie vrienden worden.</div>';
+    return;
+  }
+  el.innerHTML = ids.map(id => {
+    const f = P.friends[id];
+    const wacht = INV && INV.fid === id;
+    return '<div class="friend' + (wacht ? ' wait' : '') + '" data-fid="' + id + '"><span class="f-emo">' + friendTrio(f.k) + '</span>' +
+      '<span class="f-txt">' + escHtml(f.naam) + '<span class="f-sub">' +
+      (wacht ? 'Wachten tot ' + escHtml(f.naam) + ' SchaakHeld opent…' : 'vrienden sinds ' + friendSince(f)) + '</span></span>' +
+      (wacht ? '<button class="btn plain small" data-cancel="' + id + '">Stop</button>' :
+        '<button class="btn sun small" data-invite="' + id + '">Uitnodigen</button>') +
+      '<button class="icon-btn f-rm" data-remove="' + id + '" title="Weghalen">✕</button></div>';
+  }).join('');
+  el.addEventListener('click', e => {
+    const d = e.target && e.target.dataset ? e.target.dataset : {};
+    if (d.invite && P.friends[d.invite]) inviteFriend(d.invite);
+    else if (d.cancel) inviteCancel();
+    else if (d.remove && P.friends[d.remove]) removeFriendAsk(d.remove);
+  });
 }
+function friendSince(f) {
+  if (!f.since) return 'kort geleden';
+  const d = new Date(f.since);
+  return d.getDate() + ' ' + ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'][d.getMonth()];
+}
+function friendTrio(k) { return mpEmojiTrio('vriend:' + k); }
 
 /* host: kamer maken, speel-QR tonen, wachten tot het maatje scant */
 async function mpHostQR() {
@@ -2890,6 +3568,277 @@ function checkPlayFragment() {
   return handlePlayString(rest);
 }
 
+/* ---------- vrienden ----------
+   Vrienden worden kan alleen in een kamer, en alleen als beide kinderen
+   ja zeggen. Het gedeelde geheim K komt uit ECDH over de relay (de server
+   ziet twee publieke sleutels, nooit K); drie plaatjes uit K zijn de
+   vingerafdruk. Uitnodigen later: een met K versleuteld briefje in een
+   brievenbus waarvan het adres uit K volgt (bus.go). Op de server bestaat
+   geen persoon en geen lijst; zonder K is een bus niet te vinden en een
+   briefje niet te lezen. Vrienden staan in de CRDT, dus versleuteld
+   gesynct naar het tweede apparaat van hetzelfde kind. */
+const ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+let INV = null; /* mijn uitstaande uitnodiging: {fid, bus, bewijs} */
+let friendPollTimer = 0;
+const busCache = new Map();
+let seenInv = [];
+try { seenInv = JSON.parse(localStorage.getItem('schaakheld-inv')) || []; } catch (e) {}
+if (!Array.isArray(seenInv)) seenInv = [];
+function markSeen(id) {
+  seenInv.push(id);
+  if (seenInv.length > 60) seenInv = seenInv.slice(-60);
+  try { localStorage.setItem('schaakheld-inv', JSON.stringify(seenInv)); } catch (e) {}
+}
+
+async function hkdfBits(secretStr, info, n) {
+  const km = await crypto.subtle.importKey('raw', utf8b(secretStr), 'HKDF', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: utf8b('schaakheld1'), info: utf8b(info) }, km, n * 8);
+  return new Uint8Array(bits);
+}
+async function sha256hex(str) {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', utf8b(str)));
+  let hex = '';
+  for (let i = 0; i < d.length; i++) hex += (d[i] >> 4).toString(16) + (d[i] & 15).toString(16);
+  return hex;
+}
+/* rol a = wie de vriendschap vroeg, b = wie ja zei; elk heeft zijn eigen bus */
+function myRole(f) { return f.host ? 'a' : 'b'; }
+function theirRole(f) { return f.host ? 'b' : 'a'; }
+async function busFor(f, role) {
+  const key = f.k + ':' + role;
+  if (!busCache.has(key)) {
+    const bewijs = b64url(await hkdfBits(f.k, 'bus-' + role, 32));
+    busCache.set(key, { bewijs, bus: await sha256hex(bewijs) });
+  }
+  return busCache.get(key);
+}
+async function ecdhStart() {
+  const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
+  const pub = b64url(new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey)));
+  return { kp, pub };
+}
+async function ecdhFinish(kp, theirPub) {
+  const bytes = b64urlBytes(theirPub);
+  if (!bytes) throw new Error('kapotte sleutel');
+  const pub = await crypto.subtle.importKey('raw', bytes, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: pub }, kp.privateKey, 256));
+  return b64url(await hkdfBits(b64url(shared), 'vriend', 32));
+}
+function geldigePub(p) { return typeof p === 'string' && /^[A-Za-z0-9_-]{40,140}$/.test(p); }
+
+/* de vraag over de relay, na een potje */
+async function vriendVragen() {
+  if (!MP || !MP.peerOn || MP.viaFriend) return;
+  try { MP.ecdh = await ecdhStart(); } catch (e) { showToast('Dat lukt hier niet 😕'); return; }
+  mpSend({ t: 'vriend?', pub: MP.ecdh.pub });
+  showToast('Gevraagd! Wachten op ' + mpNaam() + '… 🤝', true);
+}
+function mpOnVriendVraag(m) {
+  if (!MP || MP.viaFriend || !geldigePub(m.pub)) return;
+  if (MP.ecdh) {
+    /* allebei tegelijk gevraagd: de kant met de kleinste publieke sleutel
+       antwoordt met zijn eigen sleutelpaar, de andere kant negeert de vraag
+       en wacht op dat antwoord. Zo komt er één K uit, aan beide kanten. */
+    if (MP.ecdh.pub < m.pub) {
+      const e = MP.ecdh;
+      MP.ecdh = null;
+      ecdhFinish(e.kp, m.pub).then(async k => {
+        mpSend({ t: 'vriend', pub: e.pub });
+        await bewaarVriend(k, false);
+        vriendKlaar(k);
+      }).catch(() => {});
+    }
+    return;
+  }
+  const naam = escHtml(mpNaam());
+  showModal('<div class="m-emoji">🤝</div><h2>' + naam + ' wil vrienden worden!</h2>' +
+    '<p>Dan kunnen jullie elkaar de volgende keer met één tik uitnodigen.<br>Jullie moeten allebei op Ja tikken.</p>' +
+    '<div class="m-btns"><button class="btn sun" id="vrJa">Ja, vrienden! 🤝</button>' +
+    '<button class="btn plain" id="vrNee">Nu niet</button></div>', () => {
+      $('vrJa').addEventListener('click', async () => {
+        closeModal();
+        try {
+          const e = await ecdhStart();
+          const k = await ecdhFinish(e.kp, m.pub);
+          mpSend({ t: 'vriend', pub: e.pub });
+          await bewaarVriend(k, false);
+          vriendKlaar(k);
+        } catch (err) { showToast('Dat lukte niet 😕'); }
+      });
+      $('vrNee').addEventListener('click', () => { closeModal(); mpSend({ t: 'vriend', nee: true }); });
+    });
+}
+async function mpOnVriend(m) {
+  if (!MP || !MP.ecdh) return;
+  if (m.nee === true) { MP.ecdh = null; showToast(mpNaam() + ' wil nu even niet 🙂'); return; }
+  if (!geldigePub(m.pub)) return;
+  try {
+    const k = await ecdhFinish(MP.ecdh.kp, m.pub);
+    MP.ecdh = null;
+    await bewaarVriend(k, true);
+    vriendKlaar(k);
+  } catch (err) { MP.ecdh = null; }
+}
+async function bewaarVriend(k, host) {
+  const id = (await sha256hex(k)).slice(0, 16);
+  const oud = P.friends[id];
+  setFriend(id, { k, naam: mpNaam(), host, weg: false, since: oud && oud.since ? oud.since : Date.now() });
+  if (MP) MP.viaFriend = id;
+  renderFriends();
+}
+/* vervangt het eindscherm van het potje: de plaatjes moeten meteen te
+   vergelijken zijn, en revanche of stoppen blijft mogelijk */
+function vriendKlaar(k) {
+  closeModal();
+  const naam = escHtml(mpNaam());
+  showModal('<div class="m-emoji">🎉</div><h2>Jullie zijn nu vrienden!</h2>' +
+    '<p style="font-size:2.2em;letter-spacing:.2em">' + friendTrio(k) + '</p>' +
+    '<p>Staan bij ' + naam + ' dezelfde drie plaatjes? Dan klopt het.<br>' +
+    'Je vindt ' + naam + ' straks onder 🤝 Vrienden.</p>' +
+    '<div class="m-btns"><button class="btn sun" id="vrOk">🔁 Revanche!</button>' +
+    '<button class="btn plain" id="vrEind">🏠 Stoppen</button></div>', () => {
+      $('vrOk').addEventListener('click', () => {
+        $('vrOk').disabled = true;
+        $('vrOk').textContent = '🔁 Wachten op ' + mpNaam() + '…';
+        mpRevanche();
+      });
+      $('vrEind').addEventListener('click', () => { closeModal(); mpVerlaat(); });
+    });
+}
+
+/* uitnodigen: kamer maken, briefje in de bus van de vriend, wachten */
+async function inviteFriend(fid) {
+  const f = P.friends[fid];
+  if (!f || f.weg) return;
+  if (INV || MP || session) { showToast('Je bent al met een potje bezig 🐢'); return; }
+  let resp = null;
+  if (netAvailable()) {
+    try {
+      const r = await fetch(SYNC_URL + '/v1/room', { method: 'POST' });
+      if (r.status === 200) resp = await r.json();
+    } catch (e) {}
+  }
+  if (!resp || !resp.room) { showToast('De server doet even niet mee… probeer zo nog eens! 🛜'); return; }
+  const to = await busFor(f, theirRole(f));
+  const blob = b64url(await sealJSON(f.k, 'uitnodiging',
+    { id: b64url(randBytes(9)), room: resp.room, seat: resp.guest, naam: P.name || 'kampioen', ts: Date.now() }));
+  try {
+    await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob }) });
+  } catch (e) {}
+  INV = { fid, bus: to.bus, bewijs: to.bewijs };
+  mpStart(resp.room, resp.seat, true);
+  MP.viaFriend = fid;
+  showModal('<div class="m-emoji">🐢</div><h2>Wachten op ' + escHtml(f.naam) + '…</h2>' +
+    '<p>' + escHtml(f.naam) + ' krijgt een seintje zodra ' + (f.naam ? 'de app open gaat' : 'SchaakHeld open gaat') + '. Zeg het gerust even!</p>' +
+    '<div class="m-btns"><button class="btn plain" id="invStop">Stop met wachten</button></div>',
+    () => $('invStop').addEventListener('click', inviteCancel));
+  renderFriends();
+}
+/* briefje weghalen (uitnodiging ingetrokken of niet meer nodig) */
+async function inviteClear() {
+  const inv = INV;
+  INV = null;
+  if (!inv || !netAvailable()) return;
+  try {
+    await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bus: inv.bus, bewijs: inv.bewijs, blob: '' }) });
+  } catch (e) {}
+}
+function inviteCancel() {
+  closeModal();
+  inviteClear();
+  mpVerlaat();
+  renderFriends();
+}
+
+/* ontvangen: op het startscherm om de zoveel tijd de eigen bussen opvragen */
+function friendPollSoon(ms) {
+  clearTimeout(friendPollTimer);
+  friendPollTimer = setTimeout(friendPoll, ms == null ? 15000 : ms);
+}
+const BUS_BATCH = 64; /* maxBusCheck in bus.go */
+function geldigeUitnodiging(inv) {
+  return !!inv && typeof inv === 'object' && typeof inv.id === 'string' && inv.id.length <= 24 &&
+    ID_RE.test(String(inv.room)) && ID_RE.test(String(inv.seat)) &&
+    isFinite(+inv.ts) && Date.now() - +inv.ts < 15 * 60000;
+}
+/* Wie zelf zit te wachten op een uitnodiging (INV) blijft wel zijn bus lezen:
+   nodigen twee vrienden elkaar tegelijk uit, dan houdt rol a zijn
+   uitnodiging en gaat rol b op die van de ander in. */
+async function friendPoll() {
+  friendPollTimer = 0;
+  const wachtend = !!INV;
+  if (!netAvailable() || session || (MP && !wachtend) || (modalOpen && !wachtend)) { friendPollSoon(); return; }
+  const ids = Object.keys(P.friends || {}).filter(id => !P.friends[id].weg);
+  if (!ids.length) { friendPollSoon(30000); return; }
+  const buses = {};
+  for (const id of ids) buses[(await busFor(P.friends[id], myRole(P.friends[id]))).bus] = id;
+  const alle = Object.keys(buses);
+  try {
+    const blobs = {};
+    for (let i = 0; i < alle.length; i += BUS_BATCH) {
+      const r = await fetch(SYNC_URL + '/v1/bus/check', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bussen: alle.slice(i, i + BUS_BATCH) }) });
+      if (r.status === 200) { const data = await r.json(); Object.assign(blobs, (data && data.blobs) || {}); }
+    }
+    for (const bus in blobs) {
+      const fid = buses[bus];
+      const bytes = fid ? b64urlBytes(String(blobs[bus])) : null;
+      if (!bytes) continue;
+      let inv = null;
+      try { inv = await openJSON(P.friends[fid].k, 'uitnodiging', bytes); } catch (e) {}
+      if (!geldigeUitnodiging(inv) || seenInv.includes(inv.id)) continue;
+      if (INV) {
+        if (INV.fid !== fid || myRole(P.friends[fid]) === 'a') continue; /* de ander gaat op de onze in */
+        inviteClear();
+        closeModal();
+        mpStop();
+      }
+      if (showInvite(fid, inv)) break;
+    }
+  } catch (e) {}
+  friendPollSoon();
+}
+/* pas als de vraag echt op het scherm staat is het briefje 'gezien'; anders
+   komt het bij de volgende ronde gewoon terug */
+function showInvite(fid, inv) {
+  const f = P.friends[fid];
+  if (!f || session || MP || modalOpen) return false;
+  markSeen(inv.id);
+  showModal('<div class="m-emoji">♟️</div><h2>' + escHtml(f.naam) + ' wil een potje spelen!</h2>' +
+    '<p>Doe je mee? Wie wit krijgt, hoor je zo.</p>' +
+    '<div class="m-btns"><button class="btn sun" id="invJa">Ja, spelen! 🎉</button>' +
+    '<button class="btn plain" id="invNee">Nu niet</button></div>', () => {
+      $('invJa').addEventListener('click', () => {
+        closeModal();
+        mpStart(inv.room, inv.seat, false);
+        MP.viaFriend = fid;
+        showModal('<div class="m-emoji">🤝</div><h2>Verbinden…</h2><p>Even wachten… ⏳</p>' +
+          '<div class="m-btns"><button class="btn plain" id="mpNee4">Stoppen</button></div>',
+          () => $('mpNee4').addEventListener('click', () => { closeModal(); mpVerlaat(); }));
+      });
+      $('invNee').addEventListener('click', closeModal);
+    });
+  return true;
+}
+function removeFriendAsk(fid) {
+  const f = P.friends[fid];
+  if (!f) return;
+  showModal('<div class="m-emoji">👋</div><h2>' + escHtml(f.naam) + ' weghalen?</h2>' +
+    '<p>Dan kunnen jullie elkaar niet meer uitnodigen. Vrienden worden kan altijd weer na een potje samen.</p>' +
+    '<div class="m-btns"><button class="btn plain" id="rmVrJa">Ja, weghalen</button>' +
+    '<button class="btn sun" id="rmVrNee">Nee, houden!</button></div>', () => {
+      $('rmVrJa').addEventListener('click', () => {
+        setFriend(fid, Object.assign({}, f, { weg: true }));
+        closeModal();
+        renderFriends();
+      });
+      $('rmVrNee').addEventListener('click', closeModal);
+    }, true);
+}
+
 /* ---------- in-app QR-scanner ----------
    Nodig omdat een QR scannen met de iOS-camera de link in Safari opent, niet
    in de geinstalleerde home-scherm-app (die zijn eigen opslag heeft). Met
@@ -2908,7 +3857,7 @@ function openScanner(kind) {
   const prefix = kind === 'play' ? PLAY_PREFIX : LINK_PREFIX;
   const ander = kind === 'play' ? LINK_PREFIX : PLAY_PREFIX;
   const titel = kind === 'play' ? 'Scan de speel-QR 🤝' : 'Scan de koppel-QR 🔑';
-  const terug = kind === 'play' ? mpFlow : linkEntryFlow;
+  const terug = kind === 'play' ? () => showHomeTab('vrienden') : linkEntryFlow;
   const gum = navigator.mediaDevices && navigator.mediaDevices.getUserMedia
     ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices) : null;
   showModal('<div class="m-emoji">📷</div><h2>' + titel + '</h2>' +
@@ -3096,7 +4045,6 @@ function updateHud() {
   $('xpFill').style.width = (next ? (P.xp - L.xp) / (next.xp - L.xp) * 100 : 100) + '%';
   $('statStars').textContent = P.stars;
   $('statWins').textContent = P.wins;
-  $('statStreak').textContent = P.best;
   $('heyName').textContent = P.name || 'kampioen';
   $('sndBtn').textContent = P.sound ? '🔊' : '🔇';
 }
@@ -3409,8 +4357,8 @@ const LOSS_TIPS = [
   'Turbo’s geheim: kijk bij elke zet wat de ander terug kan doen.',
   'Turbo’s geheim: ruil alleen als je evenveel of meer punten krijgt.'
 ];
-const MODE_TITLES = { scan: '🔍 Speurogen', safe: '🕵️ Valstrik-detector', best3: '🥇 De Beste Zet',
-  trucs: '🎒 Turbo’s Trucendoos', game: '🏆 Potje tegen Turbo' };
+const MODE_TITLES = { game: '🏆 Potje tegen Turbo' };
+for (const k of DRILL_KINDS) MODE_TITLES[k] = DRILLS[k].e + ' ' + DRILLS[k].naam;
 
 /* ---------- patronen: benoemen wat er op het bord gebeurt ---------- */
 const PATTERNS = {
@@ -3418,7 +4366,8 @@ const PATTERNS = {
   penning: { e: '📌', n: 'Penning', les: 'Een stuk kan niet weg, want er staat iets belangrijkers achter.' },
   spies: { e: '🍢', n: 'Spies', les: 'Het belangrijke stuk staat voorop en moet vluchten. Jij pakt wat erachter staat.' },
   aftrek: { e: '🎭', n: 'Aftrekaanval', les: 'Je verplaatst één stuk, en het stuk erachter valt ineens aan. Twee dreigingen tegelijk!' },
-  mat1: { e: '👑', n: 'Matzet', les: 'De koning staat schaak en kan nergens meer heen. Schaakmat!' }
+  mat1: { e: '👑', n: 'Matzet', les: 'De koning staat schaak en kan nergens meer heen. Schaakmat!' },
+  mat2: { e: '👑👑', n: 'Mat in twee', les: 'Eerst een zet waar de ander niks tegen kan doen, dan pas de matzet. Een plan!' }
 };
 
 function patName(S, sq) { return NAME_NL[S.board[sq].toLowerCase()]; }
@@ -3486,6 +4435,7 @@ function renderPatBook() {
 let session = null;
 
 function goHome() {
+  if (INV) inviteClear(); /* wie wegloopt laat geen briefje liggen */
   if (MP) mpStop(); /* weglopen uit een online potje = netjes gedag zeggen */
   session = null;
   clearBD();
@@ -3494,6 +4444,7 @@ function goHome() {
   $('predictBar').classList.add('hidden');
   $('patience').classList.add('hidden');
   $('cloudBar').classList.add('hidden');
+  $('meters').classList.add('hidden');
   const cloudFrame = document.querySelector('.board-frame');
   if (cloudFrame) cloudFrame.classList.remove('cloud', 'flip');
   stopPatience();
@@ -3501,10 +4452,12 @@ function goHome() {
   showHomeTab('spelen'); /* terug op het startscherm sta je weer op Spelen */
   $('homeBubble').textContent = pick(HOME_LINES);
   renderHome();
+  friendPollSoon(800); /* thuis: snel kijken of er een uitnodiging ligt */
 }
 
 /* ---------- drills ---------- */
 function startDrill(kind) {
+  if (kind === 'opening') { openingChooser(); return; }
   session = { kind, S: null, round: 0, earned: 0, task: null, phase: 'idle', lastType: null };
   showScreen('play');
   $('modeTitle').textContent = MODE_TITLES[kind];
@@ -3519,8 +4472,10 @@ function startDrill(kind) {
 
 function updateDrillStars() {
   if (!session || session.kind === 'game') return;
+  const vorm = vormTxt(session.kind);
   $('drillStars').innerHTML = '⭐ Sterren dit rondje: <b>' + session.earned + '</b>' +
-    (P.streak >= 2 ? ' &nbsp;·&nbsp; 🔥 <b>' + P.streak + '</b> op een rij!' : '');
+    (P.streak >= 2 ? ' &nbsp;·&nbsp; 🔥 <b>' + P.streak + '</b> op een rij!' : '') +
+    (vorm ? ' &nbsp;·&nbsp; ' + vorm : '');
 }
 
 function nextRound() {
@@ -3537,7 +4492,9 @@ function nextRound() {
   setTimeout(() => {
     if (!session || session.kind === 'game') { spin(false); return; }
     let ok = false;
+    session.diff = 0.5;
     try { ok = buildRound(); } catch (e) { ok = false; }
+    session.t0 = Date.now();
     spin(false);
     if (!ok) {
       say('Oeps, dat lukte even niet. Nog een keer proberen!');
@@ -3550,20 +4507,28 @@ function nextRound() {
 function buildRound() {
   const kind = session.kind;
   if (kind === 'scan') return buildScan();
-  if (kind === 'safe') return buildSafe();
-  if (kind === 'best3') return buildBest3();
+  /* De Beste Zet wisselt kiezen-uit-drie af met de valstrik-vraag: allebei
+     "denk eerst wat Turbo daarna doet" */
+  if (kind === 'best3') return session.round % 2 === 0 ? buildSafe() : buildBest3();
   if (kind === 'trucs') return buildTrucs();
+  if (kind === 'koning') return buildKoning();
+  if (kind === 'opening') return buildOpening();
   return false;
 }
+/* zetten vergelijken op van/naar/promotie: de generator en het bord maken
+   verschillende objecten */
+function sameMove(a, b) { return a.from === b.from && a.to === b.to && (a.promo || null) === (b.promo || null); }
 
 /* --- trucendrills: vind de vork/penning/spies/aftrek/matzet --- */
-const TRUC_TYPES = ['vork', 'vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat1'];
+const TRUC_TYPES = ['vork', 'vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat1', 'mat2'];
+const TRUC_DIFF = { vork: .4, penning: .6, spies: .6, aftrek: .7, mat1: .5, mat2: .9 };
 const TRUC_TEXTS = {
   vork: ['Vind de VORK! 🍴', 'Speel een zet die twee stukken van Turbo tegelijk aanvalt. Kies wel een veilig veld!'],
   penning: ['Zet een PENNING! 📌', 'Zet een stuk van Turbo vast: het mag niet meer weg, omdat er iets belangrijkers achter staat.'],
   spies: ['Zet een SPIES! 🍢', 'Val de koning of dame aan zodat die moet vluchten, en pak daarna wat erachter staat.'],
   aftrek: ['AFTREKAANVAL! 🎭', 'Verplaats een stuk zodat het stuk erachter ineens aanvalt.'],
-  mat1: ['SCHAAKMAT in één zet! 👑', 'Turbo’s koning kan nergens meer heen. Vind de winnende zet!']
+  mat1: ['SCHAAKMAT in één zet! 👑', 'Turbo’s koning kan nergens meer heen. Vind de winnende zet!'],
+  mat2: ['SCHAAKMAT in twéé zetten! 👑👑', 'Eerst een zet waar Turbo niks tegen kan doen, dan mat. Wat je ook probeert: Turbo mag antwoorden, en dan moet het mat zijn.']
 };
 
 function buildTrucs() {
@@ -3577,6 +4542,7 @@ function buildTrucs() {
   session.S = task.S;
   session.phase = 'puzzle';
   session.tries = 0;
+  session.diff = TRUC_DIFF[task.type] || .5;
   task.hintUsed = false;
   BD.mode = 'puzzle';
   renderBoard();
@@ -3602,10 +4568,34 @@ function trucHint() {
 }
 
 function puzzleAttempt(m) {
-  if (!session || session.phase !== 'puzzle') return;
+  if (!session) return;
+  if (session.kind === 'koning') { koningAttempt(m); return; }
+  if (session.phase === 'puzzle2') { mate2Second(m); return; }
+  if (session.phase !== 'puzzle') return;
   const t = session.task;
   const type = t.type;
   const info = patternsAfterMove(session.S, m);
+  if (type === 'mat2' && patternMatches(session.S, m, type, info)) {
+    /* stap 1 goed: Turbo verdedigt zich zo goed mogelijk, dan moet jij mat geven */
+    session.phase = 'busy';
+    BD.mode = 'off';
+    BD.glow.clear();
+    playMove(m, () => {
+      const S = session.S;
+      const reply = rootScores(S, 2)[0];
+      say('Goed! Turbo probeert nog te ontsnappen met <b>' + moveNameNL(S, reply.m) + '</b>… 🐢');
+      setTimeout(() => {
+        playMove(reply.m, () => {
+          session.mate2Answers = matingMoves(S, 1);
+          session.phase = 'puzzle2';
+          BD.mode = 'puzzle';
+          renderBoard();
+          say('Nu jij: geef SCHAAKMAT! 👑');
+        });
+      }, 700);
+    });
+    return;
+  }
   if (patternMatches(session.S, m, type, info)) {
     session.phase = 'review';
     BD.mode = 'off';
@@ -3615,7 +4605,6 @@ function puzzleAttempt(m) {
       BD.glow.clear();
       renderBoard();
       countPattern(type);
-      bumpDay('trucs', 1);
       const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
       awardRound(stars, (type === 'mat1' ? 'SCHAAKMAT! 👑 Turbo kan geen kant meer op!' :
         (co ? co.what : 'Gevonden!')) + ' Zo herken je een ' + PATTERNS[type].n.toLowerCase() + '!');
@@ -3626,7 +4615,7 @@ function puzzleAttempt(m) {
   clearSel();
   renderBoard();
   snd.bad();
-  const near = (type !== 'mat1' && patternMatches(session.S, m, type,
+  const near = (type !== 'mat1' && type !== 'mat2' && patternMatches(session.S, m, type,
     Object.assign({}, info, { safe: true })) && !info.safe) ?
     'Bijna! Dat lijkt op een ' + PATTERNS[type].n.toLowerCase() +
     ', maar Turbo kan je stuk daar zó pakken. Zoek een véilig veld!' : null;
@@ -3635,6 +4624,7 @@ function puzzleAttempt(m) {
     BD.mode = 'off';
     const ans = t.answers[0];
     const name = moveNameNL(session.S, ans.m);
+    if (type === 'mat2') { revealMate2(ans.m); return; }
     const co = type === 'mat1' ? null : patternCallout(session.S, ans.m);
     BD.arrows = [{ from: ans.m.from, to: ans.m.to, cls: 'a-leaf' }];
     playMove(ans.m, () => {
@@ -3650,8 +4640,65 @@ function puzzleAttempt(m) {
   }
 }
 
+/* mat in 2, stap 2: de matzet zelf. Eén misser mag (dan nog 1 ster). */
+function mate2Second(m) {
+  const S = session.S, t = session.task;
+  if (session.mate2Answers.some(a => sameMove(a, m))) {
+    session.phase = 'review';
+    BD.mode = 'off';
+    playMove(m, () => {
+      countPattern('mat2');
+      const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
+      awardRound(stars, 'SCHAAKMAT in twee! 👑👑 Eerst de dwingende zet, dan de genadeklap. Zo denkt een echte schaker!');
+    });
+    return;
+  }
+  session.tries++;
+  clearSel();
+  renderBoard();
+  snd.bad();
+  if (session.tries >= 2) {
+    session.phase = 'review';
+    BD.mode = 'off';
+    const ans = session.mate2Answers[0];
+    const ansName = moveNameNL(S, ans);
+    BD.arrows = [{ from: ans.from, to: ans.to, cls: 'a-leaf' }];
+    playMove(ans, () => {
+      BD.arrows = [];
+      renderBoard();
+      awardRound(0, 'Dit was hem: <b>' + ansName + '</b> is mat. Je eerste zet was al goed, de tweede zie je de volgende keer! 💪');
+    });
+  } else say('Nog geen mat: Turbo’s koning kan dan nog weg. Kijk welk veld je nog niet dekt! 👑');
+}
+/* de hele matvoering voorspelen na twee missers */
+function revealMate2(first) {
+  const S = session.S;
+  const firstName = moveNameNL(S, first);
+  BD.arrows = [{ from: first.from, to: first.to, cls: 'a-leaf' }];
+  BD.glow.clear();
+  playMove(first, () => {
+    if (!session || session.kind !== 'trucs') return;
+    const reply = rootScores(S, 2)[0];
+    setTimeout(() => {
+      if (!session || session.kind !== 'trucs') return;
+      BD.arrows = [];
+      playMove(reply.m, () => {
+        if (!session || session.kind !== 'trucs') return;
+        const mate = matingMoves(S, 1)[0];
+        setTimeout(() => {
+          if (!session || session.kind !== 'trucs' || !mate) return;
+          BD.arrows = [{ from: mate.from, to: mate.to, cls: 'a-leaf' }];
+          playMove(mate, () => {
+            awardRound(0, 'Kijk: eerst <b>' + firstName + '</b>, Turbo moet wel, en dan mat. Zo’n plan in twee stappen zie jij de volgende keer! 💪');
+          });
+        }, 600);
+      });
+    }, 600);
+  });
+}
+
 /* --- scan drill --- */
-const SCAN_TYPES = ['attacked', 'capture', 'mobility', 'free'];
+const SCAN_TYPES = ['attacked', 'capture', 'mobility', 'free', 'threat'];
 function buildScan() {
   let type = pick(SCAN_TYPES);
   if (type === session.lastType) type = pick(SCAN_TYPES);
@@ -3661,11 +4708,17 @@ function buildScan() {
   session.task = task;
   session.S = task.S;
   session.phase = 'marking';
+  /* moeilijkheid: meer doelen en een voller bord is lastiger; dreigingen
+     vragen een extra denkstap */
+  session.diff = Math.min(1, .15 + task.targets.length * .12 + piecesOf(task.S, 'w').length * .012 + (type === 'threat' ? .2 : 0));
   BD.mode = 'mark';
   if (type === 'mobility') BD.glow.add(task.extra);
   renderBoard();
   let main, sub;
-  if (type === 'attacked') {
+  if (type === 'threat') {
+    main = 'Wat dreigt Turbo? Tik jóuw stukken aan die hij nu met winst kan pakken, als hij aan zet zou zijn!';
+    sub = 'Doe alsof jij past. Kijk bij elk stuk van Turbo: wat kan hij dan slaan, en pak jij dan iets terug?';
+  } else if (type === 'attacked') {
     main = 'Tik al jóuw witte stukken aan die Turbo aanvalt!';
     sub = 'Een stuk is aangevallen als een groen stuk het zou kunnen slaan. Kijk bij élk wit stuk!';
   } else if (type === 'capture') {
@@ -3698,7 +4751,7 @@ function scanCheck() {
   renderBoard();
   const errs = bad.size + missed.size;
   const stars = errs === 0 ? 3 : (errs === 1 ? 2 : (good.size >= Math.ceil(T.size / 2) ? 1 : 0));
-  if (stars === 3) { bump('c.perfectScans', 1); bumpDay('perfectScans', 1); }
+  if (stars === 3) { bump('c.perfectScans', 1); }
   const msgs = {
     3: 'PERFECT gespeurd! Alles gevonden! 🎉',
     2: 'Bijna perfect! Eéntje fout. Turbo legt het uit! 👇',
@@ -3762,6 +4815,29 @@ function scanExplanations(task, bad, missed) {
       else
         out.push('✖ Naar ' + alg(sq) + ' kan een ' + hn + ' niet: zo springt hij niet, of iets staat in de weg.');
     }
+  } else if (task.type === 'threat') {
+    const det = task.details || [];
+    for (const sq of missed) {
+      const d = det.find(x => x.sq === sq);
+      if (!d) continue;
+      const nmA = NAME_NL[S.board[d.move.from].toLowerCase()] + ' op ' + alg(d.move.from);
+      if (d.gain >= d.victim - 30)
+        out.push('🔴 Gemist: Turbo’s ' + nmA + ' kan jouw ' + nm(sq) + ' zo pakken, en niemand pakt terug. Die staat te kijk!');
+      else
+        out.push('🔴 Gemist: Turbo’s ' + nmA + ' slaat jouw ' + nm(sq) + ' (' + pts(d.victim) + '). Jij slaat terug, maar pakt maar ' +
+          pts(d.victim - d.gain) + '. Winst voor Turbo!');
+    }
+    for (const sq of bad) {
+      const p = S.board[sq];
+      if (!p) out.push('✖ Op ' + alg(sq) + ' staat geen stuk.');
+      else if (colorOf(p) === 'b') out.push('✖ De ' + nm(sq) + ' is van Turbo. Tik jóuw stukken aan die in gevaar zijn!');
+      else if (!attacked(S, sq, 'b')) out.push('✖ Jouw ' + nm(sq) + ' wordt door niemand aangevallen. Die staat veilig!');
+      else {
+        const dfd = findAttacker(S, sq, 'w');
+        out.push('✖ Jouw ' + nm(sq) + ' wordt wel aangevallen, maar ' + (dfd >= 0 ? 'jouw ' + nm(dfd) + ' dekt hem' : 'de ruil is niet goed voor Turbo') +
+          ': als Turbo slaat, pak jij terug en verliest híj punten.');
+      }
+    }
   } else { /* free / winst */
     const det = task.details || [];
     for (const sq of missed) {
@@ -3800,6 +4876,7 @@ function buildSafe() {
   session.task = task;
   session.S = task.S;
   session.phase = 'answer';
+  session.diff = task.trap ? Math.min(1, .35 + Math.max(0, 900 - task.loss) / 1500) : .4;
   BD.mode = 'off';
   BD.arrows = [{ from: task.move.from, to: task.move.to, cls: 'a-sun' }];
   renderBoard();
@@ -3821,7 +4898,7 @@ function safeAnswer(saidTrap) {
   setOptions(null);
   const t = session.task;
   const correct = saidTrap === t.trap;
-  if (correct) { bump('c.safeCorrect', 1); bumpDay('safeCorrect', 1); }
+  if (correct) { bump('c.safeCorrect', 1); }
   BD.arrows = [];
   if (t.trap) {
     const pn = moveNameNL2After(t);
@@ -3863,6 +4940,9 @@ function buildBest3() {
   session.phase = 'choose';
   session.tries = 0;
   session.picked = null;
+  /* kleiner verschil tussen de beste en de een-na-beste = lastiger */
+  const gap = Math.min(...task.options.filter(o => o !== task.best).map(o => task.best.deep - o.deep));
+  session.diff = Math.min(1, Math.max(.2, 1 - (gap - 180) / 1200));
   BD.mode = 'off';
   renderBoard();
   setTask('<b>Welke zet is de BESTE voor wit?</b>' +
@@ -3955,7 +5035,7 @@ function best3Confirm() {
   if (o === t.best) {
     session.phase = 'review';
     btn.classList.add('right');
-    if (session.tries === 1) { bump('c.best3Gold', 1); bumpDay('best3Gold', 1); }
+    if (session.tries === 1) { bump('c.best3Gold', 1); }
     const lines = best3Explanations(t);
     BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-leaf' }];
     playMove(o.m, () => {
@@ -4007,9 +5087,141 @@ function best3Confirm() {
   }
 }
 
+/* --- koning ontsnapt: verdedigen --- */
+const KONING_DIFF = { schaak: .4, mat1: .6, mat2: .85, stuk: .5 };
+const KONING_TEXTS = {
+  schaak: ['Je staat SCHAAK! 👑', 'Red je koning: weglopen, ertussen zetten, of de aanvaller slaan. Er is maar één goede manier!'],
+  mat1: ['Turbo dreigt MAT in één! 😱', 'Als jij niets doet, is het volgende zet mat. Welke zet voorkomt dat?'],
+  mat2: ['Turbo dreigt MAT in twee! 😱😱', 'Turbo heeft een plan van twee zetten. Kijk wat hij wil, en zet er een stokje voor.'],
+  stuk: ['Red je stuk! 🛡️', 'Een stuk van jou hangt: Turbo pakt het zo af. Zet het weg, dek het, of val zelf iets aan.']
+};
+/* de koningspuzzels komen uit de vooraf geverifieerde voorraad (src/koning.js);
+   binnen een sessie geen herhaling zolang de voorraad dat toelaat */
+function pickKoningTask() {
+  const pool = typeof KONING_POOL !== 'undefined' ? KONING_POOL : [];
+  if (!pool.length) return genKingTask(null, 3);
+  session.usedPool = session.usedPool || new Set();
+  let cands = pool.map((p, i) => i).filter(i => !session.usedPool.has(i));
+  if (!cands.length) { session.usedPool.clear(); cands = pool.map((p, i) => i); }
+  const i = cands[Math.floor(Math.random() * cands.length)];
+  session.usedPool.add(i);
+  const p = pool[i];
+  const S = parseFEN(p.fen);
+  const answers = p.answers.map(k => legalMoves(S).find(m => moveKey(m) === k)).filter(Boolean).map(m => ({ m, info: null }));
+  if (!answers.length) return null;
+  return { S, type: p.type, answers };
+}
+function buildKoning() {
+  const wantPiece = session.lastType !== 'stuk' && Math.random() < 0.4;
+  const task = wantPiece ? genPieceTask() : (pickKoningTask() || genPieceTask());
+  if (!task) return false;
+  session.lastType = task.type;
+  session.task = task;
+  session.S = task.S;
+  session.phase = 'puzzle';
+  session.tries = 0;
+  session.diff = KONING_DIFF[task.type] || .5;
+  task.hintUsed = false;
+  BD.mode = 'puzzle';
+  if (task.type !== 'stuk') BD.check = task.S.kings.w;
+  renderBoard();
+  const tx = KONING_TEXTS[task.type];
+  setTask('<b>' + tx[0] + '</b><div class="sub">' + tx[1] + '</div>');
+  say(task.type === 'stuk' ? 'Kijk eerst: welk stuk van jou wordt aangevallen, en door wie? 🐢' :
+    'Kijk eerst: welk stuk van mij valt aan? En waar kan je koning nog heen? 🐢');
+  setActions([{ label: '💡 Hint', cls: 'plain small', fn: koningHint, id: 'hint' }]);
+  return true;
+}
+function koningHint() {
+  if (!session || session.phase !== 'puzzle' || session.kind !== 'koning') return;
+  const t = session.task;
+  if (t.hintUsed) return;
+  t.hintUsed = true;
+  BD.glow.add(t.type === 'stuk' ? t.hang.sq : t.answers[0].m.from);
+  renderBoard();
+  say(t.type === 'stuk' ? 'Psst… dát stuk staat in gevaar. (Nu nog maximaal 2 sterren.)' :
+    'Psst… met dat glimmende stuk kun je je redden. (Nu nog maximaal 2 sterren.)');
+  if (actionBtns.hint) actionBtns.hint.disabled = true;
+}
+/* hoe redt de zet het stuk: weg, gedekt, of tegenaanval */
+function stukHow(S, m, hang) {
+  if (m.from === hang.sq) return 'Weggezet: buiten bereik. 🏃';
+  makeMove(S, m);
+  const dekt = findAttacker(S, hang.sq, 'w') >= 0;
+  unmakeMove(S);
+  if (dekt) return 'Gedekt: als Turbo slaat, pak jij terug en verliest hij punten. 🛡️';
+  return 'Tegenaanval: Turbo heeft nu zelf iets te redden. ⚔️';
+}
+function koningAttempt(m) {
+  if (!session || session.phase !== 'puzzle') return;
+  const t = session.task, S = session.S;
+  /* een zet die het potje meteen beëindigt (mat voor Turbo, of remise) is
+     per definitie ook een ontsnapping */
+  makeMove(S, m);
+  const eindigt = gameStatus(S).over;
+  unmakeMove(S);
+  if (eindigt || t.answers.some(a => sameMove(a.m, m))) {
+    session.phase = 'review';
+    BD.mode = 'off';
+    BD.glow.clear();
+    BD.check = null;
+    const how = t.type === 'stuk' ? stukHow(S, m, t.hang) : null;
+    playMove(m, () => {
+      const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
+      awardRound(stars, t.type === 'stuk' ? ('Gered! ' + how) :
+        'Gered! 🛡️ Turbo’s plan is van tafel. Eerst kijken wat er dreigt, dán zetten: precies zo!');
+    });
+    return;
+  }
+  session.tries++;
+  clearSel();
+  renderBoard();
+  snd.bad();
+  if (session.tries >= 2) {
+    session.phase = 'review';
+    BD.mode = 'off';
+    const ans = t.answers[0].m;
+    BD.glow.clear();
+    BD.check = null;
+    BD.arrows = [{ from: ans.from, to: ans.to, cls: 'a-leaf' }];
+    const how = t.type === 'stuk' ? stukHow(S, ans, t.hang) : null;
+    const ansName = moveNameNL(S, ans);
+    playMove(ans, () => {
+      awardRound(0, 'Dit was de redding: <b>' + ansName + '</b>. ' + (how || 'Daarna kan Turbo niet meer mat zetten.') +
+        ' Volgende keer zie jij hem! 💪');
+    });
+    return;
+  }
+  /* laat zien wat er dan gebeurt: Turbo slaat toe, en het bord komt terug */
+  session.phase = 'busy';
+  BD.mode = 'off';
+  playMove(m, () => {
+    const reply = rootScores(S, 2)[0];
+    BD.arrows = [{ from: reply.m.from, to: reply.m.to, cls: 'a-coral' }];
+    renderBoard();
+    setTimeout(() => {
+      playMove(reply.m, () => {
+        const st2 = gameStatus(S);
+        const cap = S.hist[S.hist.length - 1].cap;
+        const txt = st2.over && st2.reason === 'mat' ? 'Schaakmat! 😱 Dat was dus niet de redding.' :
+          (t.type === 'stuk' && cap ? 'Turbo pakt je ' + NAME_NL[cap.toLowerCase()] + ' gewoon af. 😬' :
+            'Turbo speelt <b>' + moveNameNL(S, reply.m) + '</b> en het gevaar is er nog. 😬');
+        setTimeout(() => {
+          unmakeMove(S); unmakeMove(S);
+          BD.arrows = []; BD.last = null;
+          BD.check = t.type === 'stuk' ? null : S.kings.w;
+          renderBoard();
+          session.phase = 'puzzle'; BD.mode = 'puzzle';
+          say(txt + ' Nog één poging!');
+        }, 900);
+      });
+    }, 600);
+  });
+}
+
 /* --- shared drill scoring --- */
-function awardRound(stars, msg) {
-  if (!session || session.kind === 'game') return;
+/* de boekhouding van één opdracht: sterren, reeks, XP, vorm-log, weekteller */
+function scoreTask(stars) {
   session.earned += stars;
   if (stars >= 2) {
     P.streak++;
@@ -4020,17 +5232,22 @@ function awardRound(stars, msg) {
   } else P.streak = 0;
   bump('stars', stars);
   saveP();
+  logResult(session.kind, session.diff, Date.now() - (session.t0 || Date.now()), stars);
+  bumpWeek('opdr', 1);
   if (stars > 0) {
     addXP(stars * 10, '⭐'.repeat(stars));
-    bumpDay('stars', stars);
   }
   if (stars === 3) { snd.good(); burstCenter(); }
   else if (stars > 0) snd.star();
   else snd.bad();
   checkBadges();
-  say(msg);
   updateDrillStars();
   updateHud();
+}
+function awardRound(stars, msg) {
+  if (!session || session.kind === 'game') return;
+  scoreTask(stars);
+  say(msg);
   setActions([{ label: 'Volgende ▶', cls: 'sun', fn: nextRound }]);
 }
 
@@ -4039,7 +5256,7 @@ function drillSummary() {
   const emoji = e >= 12 ? '🤩' : (e >= 7 ? '😃' : '🙂');
   const line = e >= 12 ? 'WAUW! Jij hebt echte speurogen!' :
     (e >= 7 ? 'Lekker bezig! Je wordt steeds sterker.' : 'Goed geoefend! Oefenen maakt je supersterk.');
-  if (e >= 12) { snd.win(); celebrate(); } else snd.good();
+  if (e >= 12) { snd.win(); celebrate(); bumpWeek('top.' + session.kind, 1); } else snd.good();
   const kind = session.kind;
   showModal('<div class="m-emoji">' + emoji + '</div><h2>Rondje klaar!</h2>' +
     '<p>Je verdiende <b>' + e + '</b> van de 15 sterren.<br>' + line + '</p>' +
@@ -4049,6 +5266,278 @@ function drillSummary() {
       $('mHome').addEventListener('click', goHome);
     });
 }
+
+/* ---------- openingsschool: structuur leren zien ----------
+   Twee vormen. De coach: je speelt de eerste acht zetten tegen Turbo (die
+   uit het boek speelt) en elke zet krijgt sterren op grond van wat er op
+   het bord verandert: centrum, ontwikkeling, koningsveiligheid, tempo, plus
+   een engine-check zodat een 'nette' zet die een stuk weggeeft gewoon een
+   valstrik heet. De paden: drie korte openingen met per zet het waarom. */
+const PADEN = [
+  { id: 'italiaans', naam: 'Italiaans', kleur: 'w', e: '♔', sub: 'Loper op c4, kijkt naar f7',
+    moves: 'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3 g8f6 d2d3 d7d6 e1g1 e8g8'.split(' '),
+    hint: ['Een pion naar het midden.', 'Je paard naar buiten, richting e5.', 'Je loper richting f7.',
+      'De pion voor je paard een stapje: een steuntje voor d4.', 'De pion voor je dame een stapje: dek e4.', 'Rokeren: je koning twee stappen naar rechts.'],
+    why: ['Een pion in het midden! Zo maak je ruimte voor je loper en je dame.',
+      'Je paard naar buiten, en hij valt meteen de pion op e5 aan.',
+      'De loper kijkt naar f7: het zwakste veld van zwart, alleen de koning past erop.',
+      'Een steuntje: straks wil je d4 spelen en het hele midden pakken.',
+      'Je pion op e4 is gedekt en je loper op c1 kan straks naar buiten.',
+      'Rokade! Je koning veilig in de hoek, je toren doet mee.'] },
+  { id: 'londen', naam: 'Londen', kleur: 'w', e: '♔', sub: 'Loper op f4, stevig als een kasteel',
+    moves: 'd2d4 d7d5 c1f4 g8f6 e2e3 e7e6 g1f3 c7c5 c2c3 b8c6 f1d3 f8d6 b1d2 e8g8 e1g1'.split(' '),
+    hint: ['Een pion naar het midden, de dame-kant.', 'Je loper van c1 meteen naar buiten, naar f4.', 'De pion voor je koning een stapje.',
+      'Je paard naar buiten, richting het midden.', 'De pion voor je paard een stapje: een muurtje voor d4.', 'Je andere loper naar buiten, richting h7.',
+      'Je tweede paard naar buiten (via d2).', 'Rokeren: je koning twee stappen naar rechts.'],
+    why: ['Pion in het midden, en de weg vrij voor je loper op c1.',
+      'De loper meteen naar buiten, vóórdat e3 hem opsluit.',
+      'Je pion op d4 is gedekt, en de loper op f1 kan eruit.',
+      'Paard naar buiten, richting het midden.',
+      'Een stevig muurtje: d4 staat als een huis.',
+      'De loper kijkt naar h7, waar straks de zwarte koning woont.',
+      'Het tweede paard doet mee. Alle stukken naar buiten!',
+      'Rokade: koning veilig, klaar voor de partij.'] },
+  { id: 'zwart-e4', naam: 'Antwoord op 1.e4', kleur: 'b', e: '♚', sub: 'De spiegel-Italiaan, met zwart',
+    moves: 'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3 g8f6 d2d3 d7d6 e1g1 e8g8'.split(' '),
+    hint: ['Zet ook een pion in het midden.', 'Je paard naar buiten, hij dekt e5.', 'Je loper naar buiten, richting f2.',
+      'Je tweede paard naar buiten, richting e4.', 'De pion voor je dame een stapje: dek e5.', 'Rokeren: je koning twee stappen naar rechts.'],
+    why: ['Jij pakt óók het midden. Gelijk oversteken!',
+      'Je paard dekt e5 en kijkt naar het midden.',
+      'Jouw loper kijkt naar f2, net zoals die van wit naar f7.',
+      'Tweede paard naar buiten, en hij valt e4 aan.',
+      'Je pion op e5 staat nu als een huis, en je loper op c8 kan eruit.',
+      'Rokade: koning veilig. Nu kan de echte partij beginnen.'] }
+];
+const COACH_MOVES = 8;
+const CENTER = ['d4', 'e4', 'd5', 'e5'].map(sqFromAlg);
+const HOME_MINOR = { w: ['b1', 'g1', 'c1', 'f1'].map(sqFromAlg), b: ['b8', 'g8', 'c8', 'f8'].map(sqFromAlg) };
+/* de drie meters, berekend uit het bord voor kleur col */
+function principles(S, col) {
+  let centrum = 0;
+  for (const sq of CENTER) {
+    const p = S.board[sq];
+    if (p && colorOf(p) === col && p.toLowerCase() === 'p') centrum += 2;
+    if (attacked(S, sq, col)) centrum += 1;
+  }
+  let dev = 0;
+  for (const sq of HOME_MINOR[col]) {
+    const p = S.board[sq];
+    if (!(p && colorOf(p) === col && (p.toLowerCase() === 'n' || p.toLowerCase() === 'b'))) dev++;
+  }
+  return { centrum, dev };
+}
+function openingChooser() {
+  const padBtn = p => {
+    const n = (P.c.pad && P.c.pad[p.id]) || 0;
+    return '<button class="opt-btn" data-pad="' + p.id + '"><span class="opt-tag">' + p.e + '</span><span>' + p.naam +
+      (p.kleur === 'b' ? ' (zwart)' : ' (wit)') + '<span class="o-sub">' + p.sub + ' · ' + (n ? n + '× uitgespeeld' : 'nog niet gespeeld') + '</span></span></button>';
+  };
+  showModal('<div class="m-emoji">📖</div><h2>Openingsschool</h2>' +
+    '<p>Een partij begint altijd hetzelfde: het midden pakken, je stukken naar buiten, je koning veilig, en geen tijd verspillen.</p>' +
+    '<div class="opt-list" style="text-align:left">' +
+    '<button class="opt-btn" id="opCoach"><span class="opt-tag">🧭</span><span>Speel ' + COACH_MOVES + ' zetten met de coach' +
+    '<span class="o-sub">Turbo kijkt mee en geeft sterren per zet.</span></span></button>' +
+    PADEN.map(padBtn).join('') + '</div>', () => {
+      $('opCoach').addEventListener('click', () => { closeModal(); startOpening('coach', null); });
+      document.querySelectorAll('[data-pad]').forEach(b => {
+        b.addEventListener('click', () => { closeModal(); startOpening('pad', PADEN.find(p => p.id === b.dataset.pad)); });
+      });
+    }, true);
+}
+function startOpening(mode, pad) {
+  const color = pad ? pad.kleur : 'w';
+  const maxMoves = pad ? Math.floor((pad.moves.length + (color === 'w' ? 1 : 0)) / 2) : COACH_MOVES;
+  session = { kind: 'opening', mode, pad, S: newGame(), color, kidMoves: 0, maxMoves, earned: 0, round: 0,
+    phase: 'move', tries: 0, hintUsed: false, castled: false, movedTo: new Set(),
+    diff: mode === 'pad' ? .5 : .6, t0: Date.now() };
+  showScreen('play');
+  $('modeTitle').textContent = '📖 ' + (pad ? pad.naam : 'De vier regels');
+  $('gameInfo').classList.add('hidden');
+  $('patience').classList.add('hidden');
+  $('predictBar').classList.add('hidden');
+  $('drillStars').classList.remove('hidden');
+  $('meters').classList.toggle('hidden', mode !== 'coach');
+  setTask(null); setOptions(null);
+  clearBD();
+  const frame = document.querySelector('.board-frame');
+  if (frame) frame.classList.toggle('flip', color === 'b');
+  renderBoard();
+  updateDrillStars();
+  setActions(mode === 'pad' ? [{ label: '💡 Hint', cls: 'plain small', fn: openingHint, id: 'hint' }] : []);
+  if (color === 'b') { BD.mode = 'off'; say('Jij speelt met zwart. Wit begint… ⏳'); setTimeout(openingTurbo, 500); }
+  else kidOpeningTurn();
+}
+function renderMeters() {
+  if (!session || session.kind !== 'opening' || session.mode !== 'coach') return;
+  const pr = principles(session.S, session.color);
+  const row = (e, naam, val, max, txt) => '<div class="meter"><span class="m-l">' + e + ' ' + naam + '</span>' +
+    '<span class="m-t"><i style="width:' + Math.round(Math.min(1, val / max) * 100) + '%"></i></span><span class="m-v">' + txt + '</span></div>';
+  $('meters').innerHTML = row('🎯', 'Centrum', pr.centrum, 12, pr.centrum + '/12') +
+    row('🐎', 'Ontwikkeling', pr.dev, 4, pr.dev + '/4') +
+    row('🏰', 'Koning veilig', session.castled ? 1 : 0, 1, session.castled ? 'ja' : 'nog niet');
+}
+function kidOpeningTurn() {
+  if (!session || session.kind !== 'opening') return;
+  const st = gameStatus(session.S);
+  if (st.over) { openingEnd(); return; }
+  if (session.kidMoves >= session.maxMoves) { openingEnd(); return; }
+  session.tries = 0;
+  session.hintUsed = false;
+  session.t0 = Date.now();
+  BD.mode = 'opening';
+  $('roundChip').textContent = 'Zet ' + (session.kidMoves + 1) + ' van ' + session.maxMoves;
+  renderMeters();
+  if (actionBtns.hint) actionBtns.hint.disabled = false;
+  /* na een zet blijft de uitleg van die zet staan; de volgende tip staat in het taakvak */
+  if (session.mode === 'pad') {
+    setTask('<b>Zet ' + (session.kidMoves + 1) + '</b><div class="sub">' + session.pad.hint[session.kidMoves] + '</div>');
+    if (session.kidMoves === 0) say('Speel het pad na. Bij elke zet vertel ik waarom hij goed is. 📖');
+  } else {
+    setTask('<b>Jouw zet</b><div class="sub">Midden pakken, een stuk naar buiten, of je koning veilig. Kijk ook wat Turbo dreigt!</div>');
+    if (session.kidMoves === 0) say('Speel maar! Ik geef sterren voor elke zet die iets opbouwt. 🧭');
+  }
+}
+function openingHint() {
+  if (!session || session.kind !== 'opening' || session.mode !== 'pad' || BD.mode !== 'opening') return;
+  const k = session.pad.moves[session.S.hist.length];
+  const m = legalMoves(session.S).find(x => moveKey(x) === k);
+  if (!m) return;
+  session.hintUsed = true;
+  BD.arrows = [{ from: m.from, to: m.to, cls: 'a-sun' }];
+  renderBoard();
+  say('Kijk, deze pijl. (Met hint nog maximaal 2 sterren.)');
+  if (actionBtns.hint) actionBtns.hint.disabled = true;
+}
+/* beoordeling van een coach-zet: engine-check eerst, dan de principes */
+function coachEval(S, m) {
+  const col = S.turn;
+  const before = principles(S, col);
+  const scored = rootScores(S, 2);
+  const mine = scored.find(x => sameMove(x.m, m));
+  const blunder = mine && scored[0].score - mine.score >= 150;
+  const book = bookMoves(S).has(moveKey(m));
+  const piece = S.board[m.from].toLowerCase();
+  const cap = isCapture(S, m);
+  const goodCap = cap && seeSquare(S, m.to) > 0;
+  const again = session.movedTo.has(m.from) && !cap;
+  const queenEarly = piece === 'q' && session.kidMoves < 5 && !goodCap;
+  const castled = m.flags === 'K' || m.flags === 'Q';
+  makeMove(S, m);
+  const after = principles(S, col);
+  let punish = null;
+  if (blunder) { const r = rootScores(S, 2); punish = r.length ? moveNameNL(S, r[0].m) : null; }
+  unmakeMove(S);
+  const dC = after.centrum - before.centrum, dD = after.dev - before.dev;
+  let score = (book ? 3 : 0) + dC * .5 + dD * 2 + (castled ? 3 : 0) + (goodCap ? 2 : 0) - (again ? 2 : 0) - (queenEarly ? 2 : 0);
+  const plus = [], min = [];
+  if (book) plus.push('Een echte boekzet! 📖');
+  if (castled) plus.push('Rokade: koning veilig, toren doet mee. 🏰');
+  if (goodCap) plus.push('Je wint materiaal. 🏅');
+  if (dD > 0) plus.push('Een stuk naar buiten. 🐎');
+  if (dC > 0) plus.push('Je pakt meer van het midden. 🎯');
+  if (again) min.push('Dit stuk zette je al: in de opening liever elk stuk één keer.');
+  if (queenEarly) min.push('Je dame zo vroeg? Turbo jaagt erop. Eerst je kleine stukken.');
+  if (dC < 0) min.push('Je grip op het midden wordt minder.');
+  let stars, msg;
+  if (blunder) {
+    stars = 0;
+    msg = 'Oei, een valstrik: Turbo speelt dan <b>' + (punish || 'iets sterks') + '</b> en dat kost je wat. Kijk vóór je zet wat Turbo terug kan doen!';
+  } else {
+    stars = score >= 2.5 ? 3 : (score >= 1 ? 2 : (score >= 0 ? 1 : 0));
+    msg = (plus.length ? plus.join(' ') : 'Prima, maar het midden, een nieuw stuk of de rokade was nog sterker.') +
+      (min.length ? ' ' + min.join(' ') : '');
+  }
+  return { stars, msg, castled };
+}
+function onOpeningMove(m) {
+  if (!session || session.kind !== 'opening' || BD.mode !== 'opening') return;
+  const S = session.S;
+  if (session.mode === 'pad') {
+    const k = session.pad.moves[S.hist.length];
+    if (moveKey(m) !== k) {
+      session.tries++;
+      snd.bad();
+      clearSel();
+      if (session.tries >= 2) {
+        const exp = legalMoves(S).find(x => moveKey(x) === k);
+        BD.arrows = [{ from: exp.from, to: exp.to, cls: 'a-leaf' }];
+        renderBoard();
+        say('Deze bedoel ik: <b>' + moveNameNL(S, exp) + '</b>. Speel hem maar!');
+      } else {
+        renderBoard();
+        say('Niet die. ' + session.pad.hint[session.kidMoves] + ' Probeer nog eens!');
+      }
+      return;
+    }
+    const stars = session.tries === 0 ? (session.hintUsed ? 2 : 3) : (session.tries === 1 ? 2 : 1);
+    const why = session.pad.why[session.kidMoves];
+    finishOpeningMove(m, stars, why, m.flags === 'K' || m.flags === 'Q');
+    return;
+  }
+  const ev = coachEval(S, m);
+  finishOpeningMove(m, ev.stars, ev.msg, ev.castled);
+}
+function finishOpeningMove(m, stars, msg, castled) {
+  BD.mode = 'off';
+  BD.arrows = [];
+  session.movedTo.add(m.to);
+  if (castled) session.castled = true;
+  playMove(m, () => {
+    if (!session || session.kind !== 'opening') return;
+    session.kidMoves++;
+    scoreTask(stars);
+    say(msg + (stars === 3 ? ' ⭐⭐⭐' : ''));
+    renderMeters();
+    const st = gameStatus(session.S);
+    if (st.over) { openingEnd(); return; }
+    if (session.kidMoves >= session.maxMoves) { setTimeout(openingEnd, 900); return; }
+    setTimeout(openingTurbo, 900);
+  });
+}
+/* Turbo antwoordt uit het pad zolang de partij het pad volgt, anders uit het
+   boek of met zijn gewone zet; wijkt het pad af, dan neemt de coach het over */
+function openingTurbo() {
+  if (!session || session.kind !== 'opening') return;
+  const S = session.S;
+  let m = null;
+  if (session.mode === 'pad') {
+    const k = session.pad.moves[S.hist.length];
+    m = k ? legalMoves(S).find(x => moveKey(x) === k) : null;
+    if (!m) {
+      session.mode = 'coach';
+      session.maxMoves = Math.max(session.maxMoves, session.kidMoves + 3);
+      $('meters').classList.remove('hidden');
+      setActions([]);
+      say('Het pad is hier op. Nu spelen we door met de coach! 🧭');
+    }
+  }
+  if (!m) m = bookMove(S) || pickMove(S, 2);
+  if (!m) { openingEnd(); return; }
+  playMove(m, () => { if (session && session.kind === 'opening') kidOpeningTurn(); });
+}
+function openingEnd() {
+  if (!session || session.kind !== 'opening') return;
+  BD.mode = 'off';
+  const e = session.earned, max = session.maxMoves * 3;
+  const top = e >= Math.round(max * .8);
+  if (top) { snd.win(); celebrate(); bumpWeek('top.opening', 1); } else snd.good();
+  const pad = session.pad;
+  if (pad && session.mode === 'pad') bump('c.pad.' + pad.id, 1);
+  const pr = principles(session.S, session.color);
+  showModal('<div class="m-emoji">' + (top ? '🤩' : '📖') + '</div><h2>' + (pad ? 'Pad uitgespeeld!' : 'Opening klaar!') + '</h2>' +
+    '<p>Je verdiende <b>' + e + '</b> van de ' + max + ' sterren.<br>' +
+    (pad && session.mode === 'pad' ? 'Je kent de ' + pad.naam + ' nu al een stuk beter. Probeer hem in een potje!' :
+      'Centrum ' + pr.centrum + '/12, ' + pr.dev + ' van je 4 lichte stukken naar buiten, koning ' + (session.castled ? 'veilig' : 'nog niet gerokeerd') + '.') + '</p>' +
+    '<div class="m-btns"><button class="btn sun" id="opAgain">Nog een keer! 🔁</button>' +
+    '<button class="btn plain" id="opOther">📖 Iets anders kiezen</button>' +
+    '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', () => {
+      const mode = pad ? 'pad' : 'coach';
+      $('opAgain').addEventListener('click', () => { closeModal(); startOpening(mode, pad); });
+      $('opOther').addEventListener('click', () => { closeModal(); goHome(); openingChooser(); });
+      $('mHome').addEventListener('click', goHome);
+    });
+}
+function buildOpening() { return false; }
 
 /* ---------- game vs Turbo ---------- */
 const TURBO_NAMES = { 1: '🍼 Baby Turbo', 2: '🐢 Turbo', 3: '🚀 Super Turbo' };
@@ -4096,10 +5585,100 @@ function gameActions() {
   setActions([
     { label: '☁️ Denkwolk', cls: 'plain small', fn: enterCloud, id: 'cloudBtn' },
     { label: '↩ Zet terug', cls: 'plain small', fn: undoMove, id: 'undo' },
-    { label: '👀 Speurbril (' + session.tips + ')', cls: 'plain small', fn: useTip, id: 'tip' }
+    { label: '👀 Speurbril (' + session.tips + ')', cls: 'plain small', fn: useTip, id: 'tip' },
+    { label: '🤝 Remise?', cls: 'plain small', fn: offerDraw, id: 'drawBtn' },
+    { label: '🏳️ Opgeven', cls: 'plain small', fn: resignAsk, id: 'resignBtn' }
   ]);
   if (actionBtns.tip) actionBtns.tip.title = 'Laat alle aangevallen stukken even oplichten. Drie keer per potje.';
   if (actionBtns.cloudBtn) actionBtns.cloudBtn.title = 'Oefenbord: probeer zetten uit zonder dat het telt.';
+}
+
+/* ---------- opgeven en remise: een potje verlaat je niet zomaar ----------
+   Weglopen uit een potje is opgeven, en dat vraagt eerst om bevestiging.
+   Remise vraag je aan: Turbo neemt hem alleen aan als de stand echt gelijk
+   is en er genoeg gespeeld is; online moet je maatje ja zeggen. Een potje
+   dat door opgeven of remise eindigt telt pas mee (tellers, weekdoel) na
+   twintig zetten, anders is opgeven een sterrenfabriek. */
+const MIN_PLIES_TELT = 20;
+function resignAsk() {
+  if (!session || session.kind !== 'game' || session.over) return;
+  const naam = session.online ? escHtml(mpNaam()) : 'Turbo';
+  showModal('<div class="m-emoji">🏳️</div><h2>Opgeven?</h2>' +
+    '<p>Dan heeft ' + naam + ' dit potje gewonnen.' +
+    (session.online ? '<br>Jullie kunnen daarna wel revanche spelen.' : '<br>Vechten tot het eind is vaak slimmer: Turbo maakt ook fouten!') + '</p>' +
+    '<div class="m-btns"><button class="btn sun" id="rsNee">↩️ Nee, doorspelen</button>' +
+    '<button class="btn plain" id="rsJa">🏳️ Ja, ik geef op</button></div>', () => {
+      $('rsNee').addEventListener('click', closeModal);
+      $('rsJa').addEventListener('click', () => { closeModal(); resignNow(); });
+    }, true);
+}
+function resignNow() {
+  if (!session || session.kind !== 'game' || session.over) return;
+  if (session.cloud) exitCloud();
+  const mij = session.online ? session.myColor : 'w';
+  if (session.online) mpSend({ t: 'opgave', gameNo: MP ? MP.gameNo : 0 });
+  endGame({ over: true, result: other(mij), reason: 'opgave' });
+}
+/* Turbo neemt remise aan bij een gelijke stand na genoeg zetten; anders
+   speelt hij door en mag je het pas tien zetten later weer vragen */
+function turboAcceptsDraw(S) {
+  if (S.hist.length < MIN_PLIES_TELT) return false;
+  return Math.abs(evalWhite(S)) <= 120;
+}
+function offerDraw() {
+  if (!session || session.kind !== 'game' || session.over || BD.mode !== 'move') return;
+  const S = session.S;
+  if (session.online) {
+    if (session.drawAsked != null && S.hist.length - session.drawAsked < 10) {
+      say('Je hebt net al remise aangeboden. Speel eerst nog even door. 🐢');
+      return;
+    }
+    session.drawAsked = S.hist.length;
+    mpSend({ t: 'remise?', gameNo: MP ? MP.gameNo : 0 });
+    say('Je biedt remise aan… wachten wat ' + mpNaam() + ' zegt. 🤝');
+    return;
+  }
+  if (turboAcceptsDraw(S)) {
+    say('Remise? Ja, dat vind ik ook: het staat gelijk. Goed gespeeld! 🤝');
+    endGame({ over: true, result: 'd', reason: 'remise' });
+    return;
+  }
+  if (session.drawAsked != null && S.hist.length - session.drawAsked < 10) {
+    say('Je vroeg het net al. Speel eerst nog tien zetten, dan mag je het weer vragen. 🐢');
+    return;
+  }
+  session.drawAsked = S.hist.length;
+  say(S.hist.length < MIN_PLIES_TELT ? 'Remise? Nu al? Nee hoor, we zijn net begonnen! Speel maar door. 🐢' :
+    (evalWhite(S) > 0 ? 'Remise? Nee, jij staat beter! Probeer maar te winnen. 🐢' : 'Remise? Nee hoor, ik sta goed. Speel maar door! 🐢'));
+}
+/* online: het maatje biedt remise aan */
+function mpOnRemiseVraag(m) {
+  if (!session || !session.online || session.over || !MP || +m.gameNo !== MP.gameNo) return;
+  showModal('<div class="m-emoji">🤝</div><h2>' + escHtml(mpNaam()) + ' biedt remise aan</h2>' +
+    '<p>Gelijkspel: niemand wint, niemand verliest. Vind je dat goed?</p>' +
+    '<div class="m-btns"><button class="btn sun" id="rmJa">🤝 Ja, remise</button>' +
+    '<button class="btn plain" id="rmNee">Nee, doorspelen</button></div>', () => {
+      $('rmJa').addEventListener('click', () => {
+        closeModal();
+        mpSend({ t: 'remise', ok: true, gameNo: MP ? MP.gameNo : 0 });
+        if (session && session.online && !session.over) endGame({ over: true, result: 'd', reason: 'remise' });
+      });
+      $('rmNee').addEventListener('click', () => {
+        closeModal();
+        mpSend({ t: 'remise', ok: false, gameNo: MP ? MP.gameNo : 0 });
+      });
+    });
+}
+function mpOnRemise(m) {
+  if (!session || !session.online || session.over || !MP || +m.gameNo !== MP.gameNo) return;
+  if (session.drawAsked == null) return; /* alleen een antwoord op ons eigen aanbod telt */
+  if (m.ok === true) endGame({ over: true, result: 'd', reason: 'remise' });
+  else { say(mpNaam() + ' wil doorspelen. Oké, dan gaan we door! 💪'); showToast(mpNaam() + ' wil doorspelen 💪'); }
+}
+function mpOnOpgave(m) {
+  if (!session || !session.online || session.over || !MP || +m.gameNo !== MP.gameNo) return;
+  closeModal(); /* een openstaande remise-vraag is nu zinloos */
+  endGame({ over: true, result: session.myColor, reason: 'opgave' });
 }
 
 /* ---------- denkwolk: vrij vooruitdenken op een droomkopie van het bord ---------- */
@@ -4139,7 +5718,6 @@ function cloudMoveDone() {
   if (!c.counted && session.S.hist.length > 0) {
     c.counted = true;
     bump('c.cloudUsed', 1);
-    bumpDay('cloud', 1);
     checkBadges();
   }
   const st = gameStatus(session.S);
@@ -4306,10 +5884,10 @@ function onCell(sq) {
     else { clearSel(); renderBoard(); }
     return;
   }
-  if (BD.mode !== 'move') return;
+  if (BD.mode !== 'move' && BD.mode !== 'opening') return;
   const S = session.S;
-  /* online kan het kind zwart zijn; anders is het altijd wit */
-  const mij = session.online ? session.myColor : 'w';
+  /* online en in de openingsschool kan het kind zwart zijn; anders altijd wit */
+  const mij = session.online ? session.myColor : (session.kind === 'opening' ? session.color : 'w');
   if (S.turn !== mij) return;
   const p = S.board[sq];
   if (BD.sel == null) {
@@ -4322,7 +5900,7 @@ function onCell(sq) {
     const m = mv.find(x => x.promo === 'q') || mv[0];
     clearSel();
     renderBoard();
-    onKidMove(m);
+    if (session.kind === 'opening') onOpeningMove(m); else onKidMove(m);
     return;
   }
   if (p && colorOf(p) === mij) trySelect(sq);
@@ -4365,7 +5943,6 @@ function commitKid(m) {
   if (!session.online && patFull) {
     addXP(5, 'Denk-bonus! 🐢');
     bump('c.patienceBonus', 1);
-    bumpDay('patience', 1);
     checkBadges();
   }
   const S = session.S;
@@ -4442,11 +6019,9 @@ function resolvePredict(sq) {
   BD.mode = 'off';
   $('predictBar').classList.add('hidden');
   if (sq != null) {
-    bumpDay('predictTries', 1);
     if (sq === m.from) {
       addXP(15, 'Goed voorspeld! 🔮');
       bump('c.predictHits', 1);
-      bumpDay('predictHits', 1);
       checkBadges();
       snd.star();
       showToast('🔮 Goed voorspeld!', true);
@@ -4574,7 +6149,7 @@ function endGameOnline(st, drawTxt) {
   } else if (st.result === ik) {
     emoji = '🏆';
     h = 'JIJ WINT!';
-    p = 'Schaakmat! Wat een partij, kampioen!';
+    p = st.reason === 'opgave' ? escHtml(mpNaam()) + ' geeft op. Goed gespeeld, kampioen!' : 'Schaakmat! Wat een partij, kampioen!';
     /* alleen een eigen online-teller: NIET de gedeelde 'wins' of de
        dag-'wins', want die geven via de dagmissies en de "versla Turbo"-
        trofee XP, en twee kinderen op een bank zouden dat zo farmen. Online
@@ -4585,32 +6160,44 @@ function endGameOnline(st, drawTxt) {
   } else {
     emoji = '💪';
     h = escHtml(mpNaam()) + ' wint dit potje';
-    p = 'Schaakmat… maar goed gespeeld! Pak je revanche!';
+    p = (st.reason === 'opgave' ? 'Je gaf op. Dat mag, maar de volgende keer vecht je door!' : 'Schaakmat… maar goed gespeeld!') + ' Pak je revanche!';
     snd.bad();
   }
   checkBadges();
+  const vriendKnop = MP && !MP.viaFriend ? '<button class="btn plain" id="mpVriend">🤝 Vrienden worden</button>' : '';
   showModal('<div class="m-emoji">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p>' +
-    '<div class="m-btns"><button class="btn sun" id="mpRev">🔁 Revanche!</button>' +
+    '<div class="m-btns"><button class="btn sun" id="mpRev">🔁 Revanche!</button>' + vriendKnop +
     '<button class="btn plain" id="mpEind">🏠 Stoppen</button></div>', () => {
       $('mpRev').addEventListener('click', () => {
         $('mpRev').disabled = true;
         $('mpRev').textContent = '🔁 Wachten op ' + mpNaam() + '…';
         mpRevanche();
       });
+      if (vriendKnop) $('mpVriend').addEventListener('click', () => {
+        $('mpVriend').disabled = true;
+        $('mpVriend').textContent = '🤝 Gevraagd…';
+        vriendVragen();
+      });
       $('mpEind').addEventListener('click', () => { closeModal(); mpVerlaat(); });
     });
 }
 
 function endGame(st) {
-  if (!session || session.kind !== 'game') return;
+  /* een potje eindigt precies één keer: een zet-animatie die nog uitloopt
+     of een laat relay-bericht mag geen tweede einde inluiden */
+  if (!session || session.kind !== 'game' || session.over) return;
   session.over = true;
   BD.mode = 'off';
   stopPatience();
   renderBoard();
   const drawTxt = { pat: 'Pat! De koning kan nergens meer heen, maar staat geen schaak.',
-    '50': 'Vijftig zetten zonder slaan of pionzet.', materiaal: 'Te weinig stukken om mat te zetten.' };
-  bump('c.gamesPlayed', 1);
-  if (session.online) { endGameOnline(st, drawTxt); return; }
+    '50': 'Vijftig zetten zonder slaan of pionzet.', materiaal: 'Te weinig stukken om mat te zetten.',
+    remise: 'Remise afgesproken: jullie vonden het allebei gelijk.' };
+  /* opgeven of remise vlak na het begin telt nergens voor mee */
+  const telt = (st.reason !== 'opgave' && st.reason !== 'remise') || session.S.hist.length >= MIN_PLIES_TELT;
+  if (telt) bump('c.gamesPlayed', 1);
+  if (session.online) { if (telt) bumpWeek('online', 1); endGameOnline(st, drawTxt); return; }
+  if (telt) bumpWeek('potjes' + session.level, 1);
   let emoji, h, p, xp;
   if (st.result === 'w') {
     emoji = '🏆'; h = 'JE HEBT GEWONNEN!';
@@ -4622,19 +6209,20 @@ function endGame(st) {
     xp = gameWinXP(session.level);
     if (xp === TIRED_XP) p += '<br><small>Deze Turbo is moe van al dat verliezen: kleine bonus. Probeer een sterkere Turbo, of kom morgen terug!</small>';
     P.day.winsByLvl[session.level] = (P.day.winsByLvl[session.level] || 0) + 1;
-    bumpDay('wins', 1);
+    bumpWeek('wins' + session.level, 1);
     snd.win(); celebrate();
   } else if (st.result === 'b') {
     emoji = '🐢'; h = 'Turbo wint dit potje';
-    p = 'Schaakmat… maar goed volgehouden! Van elke partij word je slimmer.<br><small>💡 ' +
+    p = (st.reason === 'opgave' ? 'Je gaf op. Dat mag, maar de volgende keer vecht je door: ik maak ook fouten!' :
+      'Schaakmat… maar goed volgehouden! Van elke partij word je slimmer.') + '<br><small>💡 ' +
       pick(LOSS_TIPS) + '</small>';
-    xp = 15; snd.bad();
+    xp = telt ? 15 : 0; snd.bad();
   } else {
     emoji = '🤝'; h = 'Gelijkspel!';
     p = drawTxt[st.reason] || 'Niemand wint, niemand verliest.';
-    xp = 30; snd.good();
+    xp = telt ? 30 : 0; snd.good();
   }
-  addXP(xp, st.result === 'w' ? 'Gewonnen! 🏆' : 'Goed gespeeld!');
+  if (xp) addXP(xp, st.result === 'w' ? 'Gewonnen! 🏆' : 'Goed gespeeld!');
   checkBadges();
   saveP();
   const lvl = session.level;
@@ -4735,107 +6323,263 @@ function renderBadges() {
   }).join('');
 }
 
-/* Daily missions: three per day, picked from the pool with a date seed so the
-   set is the same all day. Purely a bonus: skipping a day costs nothing. */
-const MISSIONS = [
-  { id: 'win1', e: '🏆', n: 'Win een potje van Turbo', sub: 'Maakt niet uit tegen welke Turbo.', t: 1, k: 'wins' },
-  { id: 'ster12', e: '⭐', n: 'Verdien 12 sterren', sub: 'Sterren verdien je in alle oefenspellen.', t: 12, k: 'stars' },
-  { id: 'scan3', e: '🔍', n: '3 perfecte speurrondes', sub: 'Perfect = drie sterren bij Speurogen.', t: 3, k: 'perfectScans' },
-  { id: 'voorspel3', e: '🔮', n: 'Doe 3 voorspellingen', sub: 'Tik tijdens het paarse balkje het stuk aan dat Turbo gaat spelen. Raden mag!', t: 3, k: 'predictTries' },
-  { id: 'valstrik3', e: '🕵️', n: 'Ontmasker 3 valstrikken', sub: 'Goed antwoorden bij de Valstrik-detector.', t: 3, k: 'safeCorrect' },
-  { id: 'goud2', e: '🥇', n: '2 keer goud bij De Beste Zet', sub: 'Goud = meteen de beste zet kiezen.', t: 2, k: 'best3Gold' },
-  { id: 'denk3', e: '🐢', n: 'Verdien 3 denk-bonussen', sub: 'Wacht in een potje tot de denk-meter vol is en zet dan pas.', t: 3, k: 'patience' },
-  { id: 'wolk2', e: '☁️', n: 'Denk 2 keer vooruit in de denkwolk', sub: 'In een potje: knop ☁️ Denkwolk. Probeer daar een plan uit.', t: 2, k: 'cloud' },
-  { id: 'truc3', e: '🎒', n: 'Doe 3 trucendrills goed', sub: 'Vind de vork, penning of matzet in Turbo’s Trucendoos.', t: 3, k: 'trucs' }
-];
-const MISSION_XP = 40, ALL_MISSIONS_XP = 50;
-
+/* ---------- weekdoel en vorm ----------
+   Goodreads-stijl: zeven bolletjes voor de dagen, een doel dat het kind
+   zelf kiest, en vriendelijke voortgang. Geen reeks die kapot kan. De
+   tellers zijn gewone CRDT-counters per ISO-week (bumpWeek), dus twee
+   iPads tellen samen. De dag-teller (per apparaat) blijft alleen voor de
+   afnemende winst-XP bestaan. */
 function todayStr() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0');
 }
-
-function freshDay(t) {
-  return { date: t, wins: 0, stars: 0, perfectScans: 0, predictHits: 0, predictTries: 0,
-    safeCorrect: 0, best3Gold: 0, patience: 0, cloud: 0, trucs: 0, winsByLvl: { 1: 0, 2: 0, 3: 0 },
-    done: {}, allDone: false };
-}
-
+function freshDay(t) { return { date: t, winsByLvl: { 1: 0, 2: 0, 3: 0 } }; }
 function ensureDay() {
   const t = todayStr();
-  if (!P.day || P.day.date !== t) {
-    P.day = freshDay(t);
+  if (!P.day || P.day.date !== t) { P.day = freshDay(t); saveP(); }
+  else P.day.winsByLvl = Object.assign({ 1: 0, 2: 0, 3: 0 }, P.day.winsByLvl || {});
+}
+
+const DAG_NAMEN = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
+const GOAL_XP = 60;
+function curWeek() { return isoWeek(); }
+function dagIdx() { return (new Date().getDay() + 6) % 7; }
+function wkGet(week, key) { return (P.wk && P.wk[week] && +P.wk[week][key]) || 0; }
+function bumpWeek(key, n) {
+  const W = curWeek();
+  bump('wk.' + W + '.' + key, n);
+  bump('wk.' + W + '.d' + dagIdx(), 1);
+  checkGoal();
+}
+/* "op niveau L" telt L en sterker mee: wie Super Turbo verslaat heeft het
+   doel "versla Turbo" ook gehaald */
+function goalProgress(g, week) {
+  week = week || curWeek();
+  const K = GOAL_KINDS[g.kind];
+  if (K.lvl) {
+    let s = 0;
+    for (let l = g.lvl; l <= 3; l++) s += wkGet(week, (g.kind === 'potjes' ? 'potjes' : 'wins') + l);
+    return s;
+  }
+  return wkGet(week, K.key(g));
+}
+function goalText(g) { return GOAL_KINDS[g.kind].txt(g); }
+function goalDoneWeek(W) { return !!(DOC.max.goal && DOC.max.goal[W]); }
+function checkGoal() {
+  const g = P.weekGoal;
+  if (!g) return;
+  const W = curWeek();
+  if (goalProgress(g, W) >= g.n && !goalDoneWeek(W)) {
+    /* geen bump: de bonus is een max-register, dus na een merge met het
+       andere apparaat telt hij nog steeds maar één keer */
+    DOC.max.goal[W] = GOAL_XP;
+    P.xp += GOAL_XP;
     saveP();
-  } else {
-    /* oudere dag-objecten kunnen velden missen na een app-update */
-    P.day = Object.assign(freshDay(t), P.day);
-    P.day.winsByLvl = Object.assign({ 1: 0, 2: 0, 3: 0 }, P.day.winsByLvl || {});
-  }
-}
-
-/* FNV-1a over de datum plus een murmur-mixer per keuze: buurdagen krijgen zo
-   echt verschillende missiesets (de oude hash koos twee dagen bijna hetzelfde). */
-function missionsFor(date) {
-  let h = 2166136261 >>> 0;
-  for (const ch of date) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
-  const picks = [];
-  const pool = MISSIONS.slice();
-  while (picks.length < 3 && pool.length) {
-    h ^= h >>> 16; h = Math.imul(h, 0x85EBCA6B) >>> 0;
-    h ^= h >>> 13; h = Math.imul(h, 0xC2B2AE35) >>> 0;
-    h ^= h >>> 16;
-    picks.push(pool.splice(h % pool.length, 1)[0]);
-  }
-  return picks;
-}
-
-function dayMissions() {
-  ensureDay();
-  return missionsFor(P.day.date);
-}
-
-function bumpDay(key, n) {
-  ensureDay();
-  P.day[key] += n;
-  saveP();
-  checkMissions();
-}
-
-function checkMissions() {
-  ensureDay();
-  const ms = dayMissions();
-  for (const m of ms) {
-    if (!P.day.done[m.id] && P.day[m.k] >= m.t) {
-      P.day.done[m.id] = true;
-      saveP();
-      showToast('🎯 Missie klaar: ' + m.e + '!', true);
-      addXP(MISSION_XP, 'Missie: ' + m.n);
-    }
-  }
-  if (!P.day.allDone && ms.every(m => P.day.done[m.id])) {
-    P.day.allDone = true;
-    saveP();
+    syncSoon();
     celebrate();
-    addXP(ALL_MISSIONS_XP, 'Alle missies van vandaag! 🎁');
+    showToast('🎯 Weekdoel gehaald!', true);
+    floatXP('+' + GOAL_XP + ' ⭐ Weekdoel gehaald! 🎯');
+    updateHud();
+    checkLevelUp();
   }
 }
+function goalLine(cur, n) {
+  if (cur >= n) return 'Gehaald! 🎉 Meer mag altijd.';
+  const rest = n - cur;
+  if (cur === 0) return 'Nog ' + rest + ' te gaan. Jij kunt dat!';
+  if (cur / n >= .5) return 'Lekker bezig! Nog ' + rest + ' te gaan.';
+  return 'Goed begin! Nog ' + rest + ' te gaan.';
+}
+function weekDots(W) {
+  const today = dagIdx();
+  return DAG_NAMEN.map((d, i) => {
+    const on = wkGet(W, 'd' + i) > 0;
+    return '<span class="day' + (on ? ' on' : '') + (i === today ? ' today' : '') + '"><i>' +
+      (on ? '✔' : '') + '</i>' + d + '</span>';
+  }).join('');
+}
+function renderWeek() {
+  const el = $('weekCard');
+  if (!el) return;
+  const W = curWeek(), g = P.weekGoal;
+  let h = '<div class="week">' + weekDots(W) + '</div>';
+  if (g) {
+    const cur = goalProgress(g, W), pct = Math.min(100, Math.round(cur / g.n * 100));
+    h += '<div class="goal' + (cur >= g.n ? ' done' : '') + '"><span class="g-name">Mijn doel: ' +
+      goalText(g) + '<span class="g-sub">' + goalLine(cur, g.n) + '</span>' +
+      '<span class="g-bar"><i style="width:' + pct + '%"></i></span></span>' +
+      '<span class="g-prog">' + Math.min(cur, g.n) + ' / ' + g.n + '</span></div>';
+  } else {
+    h += '<div class="goal"><span class="g-name">Nog geen doel deze week.' +
+      '<span class="g-sub">Kies iets wat je leuk vindt. Klein mag ook!</span></span></div>';
+  }
+  h += '<div class="btn-row"><button class="btn plain small" id="goalBtn">🎯 ' +
+    (g ? 'Doel aanpassen' : 'Kies een doel') + '</button>' +
+    '<button class="btn plain small" id="weeksBtn">📜 Vorige weken</button></div>';
+  el.innerHTML = h;
+  $('goalBtn').addEventListener('click', goalFlow);
+  $('weeksBtn').addEventListener('click', weeksFlow);
+}
+/* het strookje op Spelen: dezelfde bolletjes, een regel voortgang, tik = Ik */
+function renderWeekStrip() {
+  const el = $('weekStrip');
+  if (!el) return;
+  const W = curWeek(), g = P.weekGoal;
+  const dots = DAG_NAMEN.map((d, i) => '<i class="' + (wkGet(W, 'd' + i) > 0 ? 'on' : '') +
+    (i === dagIdx() ? ' today' : '') + '"></i>').join('');
+  let txt, sub;
+  if (g) {
+    const cur = goalProgress(g, W);
+    txt = Math.min(cur, g.n) + ' van ' + g.n + ': ' + goalText(g);
+    sub = goalLine(cur, g.n);
+  } else {
+    const actief = DAG_NAMEN.filter((d, i) => wkGet(W, 'd' + i) > 0).length;
+    txt = actief ? 'Deze week al ' + actief + (actief === 1 ? ' dag' : ' dagen') + ' geoefend' : 'Nieuwe week, nieuwe kansen!';
+    sub = 'Tik hier om een weekdoel te kiezen.';
+  }
+  el.innerHTML = '<span class="dots">' + dots + '</span><span class="ws-txt">' + txt +
+    '<span class="ws-sub">' + sub + '</span></span><span class="ws-arrow">›</span>';
+}
 
-function renderMissions() {
-  const list = $('missionList');
-  if (!list) return;
-  ensureDay();
-  list.innerHTML = dayMissions().map(m => {
-    const cur = Math.min(P.day[m.k] || 0, m.t);
-    const done = !!P.day.done[m.id];
-    return '<div class="mission' + (done ? ' done' : '') + '"><span>' + m.e + '</span>' +
-      '<span class="m-name">' + m.n +
-      '<span class="m-sub">' + m.sub + '</span>' +
-      '<span class="m-bar"><i style="width:' + Math.round(cur / m.t * 100) + '%"></i></span></span>' +
-      '<span class="m-prog">' + (done ? '✔ +' + MISSION_XP + ' ⭐' : cur + '/' + m.t) + '</span></div>';
-  }).join('') + (P.day.allDone ?
-    '<div class="mission done"><span>🎁</span><span class="m-name">Alles af! Dagbonus binnen!</span>' +
-    '<span class="m-prog">+' + ALL_MISSIONS_XP + ' ⭐</span></div>' : '');
+function goalFlow() {
+  const g = P.weekGoal;
+  const st = { kind: g ? g.kind : 'opdr', n: g ? g.n : null, lvl: g ? (g.lvl || 2) : 2, game: g ? (g.game || 'scan') : 'scan' };
+  const chip = (cls, id, val, label, on) => '<button class="chip' + (on ? ' on' : '') + (cls ? ' ' + cls : '') +
+    '" data-' + id + '="' + val + '">' + label + '</button>';
+  const render = () => {
+    const K = GOAL_KINDS[st.kind];
+    if (st.n == null || !K.ns.includes(st.n)) st.n = K.ns[1];
+    $('goalKinds').innerHTML = Object.keys(GOAL_KINDS).map(k =>
+      chip('', 'kind', k, GOAL_KINDS[k].e + ' ' + GOAL_KINDS[k].naam, k === st.kind)).join('');
+    $('goalSub').innerHTML = K.lvl ? [1, 2, 3].map(l => chip('', 'lvl', l, TURBO_NAMES[l], l === st.lvl)).join('') :
+      (K.game ? DRILL_KINDS.map(d => chip('', 'game', d, DRILLS[d].e + ' ' + DRILLS[d].naam, d === st.game)).join('') : '');
+    $('goalNs').innerHTML = K.ns.map(n => chip('big', 'n', n, n, n === st.n)).join('');
+    $('goalPreview').innerHTML = 'Elke week ' + goalText(normGoal(st)) + '. ' + goalMotto(st);
+  };
+  showModal('<div class="m-emoji">🎯</div><h2>Wat wordt je doel deze week?</h2>' +
+    '<p>Kies iets wat je leuk vindt. Je mag het altijd veranderen.</p>' +
+    '<div class="chips" id="goalKinds"></div><div class="chips" id="goalSub"></div>' +
+    '<div class="chips" id="goalNs"></div>' +
+    '<div class="bubble" id="goalPreview" style="text-align:left;margin-bottom:16px"></div>' +
+    '<div class="m-btns"><button class="btn sun" id="goalOk">Dat is mijn doel! 🎯</button>' +
+    '<button class="btn plain" id="goalNone">' + (g ? 'Geen doel meer' : 'Nog even geen doel') + '</button></div>', () => {
+      const onChip = e => {
+        const t = e.target && e.target.dataset ? e.target.dataset : null;
+        if (!t) return;
+        if (t.kind) { st.kind = t.kind; st.n = null; }
+        else if (t.lvl) st.lvl = +t.lvl;
+        else if (t.game) st.game = t.game;
+        else if (t.n) st.n = +t.n;
+        else return;
+        snd.select();
+        render();
+      };
+      for (const id of ['goalKinds', 'goalSub', 'goalNs']) $(id).addEventListener('click', onChip);
+      $('goalOk').addEventListener('click', () => {
+        setPref('weekGoal', normGoal(st));
+        closeModal();
+        showToast('🎯 Doel gezet!', true);
+        renderHome();
+        checkGoal();
+      });
+      $('goalNone').addEventListener('click', () => {
+        setPref('weekGoal', null);
+        closeModal();
+        renderHome();
+      });
+      render();
+    }, true);
+}
+function goalMotto(g) {
+  const per = g.kind === 'opdr' ? Math.ceil(g.n / 5) : null;
+  if (per) return 'Dat is er ' + per + ' per schooldag. Goed te doen! 🐢';
+  if (g.kind === 'top') return 'Een topronde is 12 sterren of meer in één rondje. 🌟';
+  if (g.kind === 'wins') return 'Langzaam denken is snel winnen! 🐢';
+  if (g.kind === 'vriend') return 'Nodig een vriend uit via 🤝 Vrienden.';
+  return 'Uitspelen telt, winnen hoeft niet. 🐢';
+}
+function weekLabel(i) { return i === 0 ? 'Deze week' : (i === 1 ? 'Vorige week' : i + ' weken geleden'); }
+function weeksFlow() {
+  const rows = recentWeeks(8).map((W, i) => {
+    const potjes = wkGet(W, 'potjes1') + wkGet(W, 'potjes2') + wkGet(W, 'potjes3');
+    const dagen = DAG_NAMEN.filter((d, j) => wkGet(W, 'd' + j) > 0).length;
+    const delen = [];
+    if (wkGet(W, 'opdr')) delen.push(wkGet(W, 'opdr') + ' opdrachten');
+    if (potjes) delen.push(potjes + (potjes === 1 ? ' potje' : ' potjes'));
+    if (wkGet(W, 'online')) delen.push(wkGet(W, 'online') + ' met een vriend');
+    return '<div class="goal' + (goalDoneWeek(W) ? ' done' : '') + '"><span class="g-name">' + weekLabel(i) +
+      '<span class="g-sub">' + (delen.length ? delen.join(' · ') + ' · ' + dagen + (dagen === 1 ? ' dag' : ' dagen') : 'niets gedaan, en dat is ook prima') +
+      '</span></span><span class="g-prog">' + (goalDoneWeek(W) ? '🎯 gehaald' : '') + '</span></div>';
+  }).join('');
+  showModal('<div class="m-emoji">📜</div><h2>Jouw weken</h2><div style="text-align:left">' + rows + '</div>' +
+    '<div class="m-btns" style="margin-top:14px"><button class="btn sun" id="weeksOk">Klaar</button></div>',
+    () => $('weeksOk').addEventListener('click', closeModal), true);
+}
+/* eerste keer thuis in een nieuwe week: vriendelijk terugkijken, nooit een
+   verwijt, en het doel blijft standaard staan */
+function checkNewWeek() {
+  const W = curWeek();
+  if (P.weekSeen === W) return;
+  const vorige = P.weekSeen;
+  P.weekSeen = W;
+  saveP();
+  const g = P.weekGoal;
+  if (!vorige || !g) return;
+  const cur = goalProgress(g, weekBefore(1));
+  const gehaald = cur >= g.n;
+  showModal('<div class="m-emoji">' + (gehaald ? '🎉' : '🌱') + '</div><h2>Nieuwe week!</h2>' +
+    '<p>Vorige week: <b>' + Math.min(cur, g.n) + ' van ' + g.n + '</b> (' + goalText(g) + ').<br>' +
+    (gehaald ? 'Doel gehaald, kampioen!' : (cur > 0 ? 'Mooi geoefend. Deze week weer een frisse start!' : 'Geeft niks. Deze week een frisse start!')) + '</p>' +
+    '<div class="m-btns"><button class="btn sun" id="wkKeep">Zelfde doel houden 👍</button>' +
+    '<button class="btn plain" id="wkNew">Ander doel kiezen</button></div>', () => {
+      $('wkKeep').addEventListener('click', closeModal);
+      $('wkNew').addEventListener('click', () => { closeModal(); goalFlow(); });
+    });
+}
+
+/* vorm-score per oefenspel: trefkans, moeilijkheid, tempo en hoe vaak je
+   oefent, over de laatste 14 dagen, met de 14 dagen ervoor als vergelijking.
+   Tempo telt zacht mee: binnen de richttijd is vol, drie keer zo lang is
+   nog 0,3. Langzaam denken blijft dus lonen, alleen eindeloos treuzelen niet. */
+function vormWindow(kind, from, to) {
+  const rows = Object.values((P.log && P.log[kind]) || {}).filter(r => r[0] >= from && r[0] < to);
+  if (!rows.length) return null;
+  const ref = DRILLS[kind].ref;
+  let hit = 0, diff = 0, tempo = 0, nd = 0;
+  for (const r of rows) {
+    hit += r[3] / 3;
+    tempo += Math.min(1, Math.max(0.3, 1 - (r[2] - ref) / (3 * ref)));
+    if (r[3] >= 2) { diff += r[1]; nd++; }
+  }
+  const n = rows.length;
+  const score = 100 * (0.45 * hit / n + 0.25 * (nd ? diff / nd : 0) + 0.15 * tempo / n + 0.15 * Math.min(1, n / 20));
+  return { score: Math.round(score), n };
+}
+function vormInfo(kind) {
+  const now = Date.now(), d14 = 14 * 86400000;
+  const cur = vormWindow(kind, now - d14, now + 1);
+  if (!cur) return null;
+  const prev = vormWindow(kind, now - 2 * d14, now - d14);
+  return { score: cur.score, n: cur.n, delta: prev ? cur.score - prev.score : null };
+}
+function vormTxt(kind) {
+  const v = vormInfo(kind);
+  if (!v) return '';
+  return '📈 Vorm <b>' + v.score + '</b>' + (v.delta == null || v.delta === 0 ? '' :
+    ' <span class="vorm-d">' + (v.delta > 0 ? '↑' : '↓') + Math.abs(v.delta) + '</span>');
+}
+function renderVorm() {
+  const el = $('vormList');
+  if (!el) return;
+  el.innerHTML = DRILL_KINDS.map(k => {
+    const v = vormInfo(k);
+    return '<div class="vorm-row"><span class="vorm-e">' + DRILLS[k].e + '</span><span class="vorm-n">' + DRILLS[k].naam +
+      (v ? '<span class="vorm-sub">' + v.n + (v.n === 1 ? ' opdracht' : ' opdrachten') + ' in 14 dagen</span>' :
+        '<span class="vorm-sub">nog geen vorm: speel een rondje!</span>') + '</span>' +
+      (v ? '<span class="vorm-s">' + v.score + (v.delta == null || v.delta === 0 ? '' :
+        ' <span class="vorm-d">' + (v.delta > 0 ? '↑' : '↓') + Math.abs(v.delta) + '</span>') + '</span>' : '') + '</div>';
+  }).join('');
 }
 
 function renderLevelPath() {
@@ -4864,21 +6608,25 @@ function renderLevelPath() {
 function renderHome() {
   updateHud();
   renderPatBook();
-  renderMissions();
+  renderWeek();
+  renderWeekStrip();
+  renderVorm();
   renderLevelPath();
   renderThemes();
   renderBadges();
 }
 
-/* twee tabs op het startscherm: Spelen (kiezen wat je doet) en Ik
-   (voortgang, trofeeën). Zo blijft het startscherm rustig. */
+/* drie tabs op het startscherm: Spelen (kiezen wat je doet), Vrienden
+   (uitnodigen of samen spelen) en Ik (week, vorm, trofeeën). */
+const HOME_TABS = { spelen: 'tabSpelen', vrienden: 'tabVrienden', ik: 'tabIk' };
 function showHomeTab(name) {
-  const ik = name === 'ik';
-  $('view-spelen').classList.toggle('hidden', ik);
-  $('view-ik').classList.toggle('hidden', !ik);
-  $('tabSpelen').classList.toggle('on', !ik);
-  $('tabIk').classList.toggle('on', ik);
-  if (ik) renderHome(); /* Ik-inhoud vers, voortgang kan net veranderd zijn */
+  if (!HOME_TABS[name]) name = 'spelen';
+  for (const t in HOME_TABS) {
+    $('view-' + t).classList.toggle('hidden', t !== name);
+    $(HOME_TABS[t]).classList.toggle('on', t === name);
+  }
+  if (name !== 'spelen') renderHome(); /* inhoud vers, voortgang kan net veranderd zijn */
+  if (name === 'vrienden') renderFriends();
   try { window.scrollTo(0, 0); } catch (e) {}
 }
 
@@ -4900,18 +6648,21 @@ document.querySelectorAll('.mode-card').forEach(b => {
   b.addEventListener('click', () => {
     const mode = b.dataset.mode;
     if (mode === 'game') startGameFlow();
-    else if (mode === 'online') mpFlow();
+    else if (mode === 'online') showHomeTab('vrienden');
     else startDrill(mode);
   });
 });
+$('weekStrip').addEventListener('click', () => { showHomeTab('ik'); if (!P.weekGoal) goalFlow(); });
+$('vrScan').addEventListener('click', () => openScanner('play'));
+$('vrToon').addEventListener('click', mpHostQR);
+$('vrWoord').addEventListener('click', mpWordFlow);
 $('backBtn').addEventListener('click', () => {
-  /* midden in een potje samen is ← Home net zo onomkeerbaar als Stoppen */
-  if (MP && session && session.online && !session.over) { mpStopVragen(); return; }
+  /* midden in een potje is weglopen opgeven: eerst vragen */
+  if (session && session.kind === 'game' && !session.over && !session.cloud) { resignAsk(); return; }
   goHome();
 });
 $('setBtn').addEventListener('click', openSettings);
-$('tabSpelen').addEventListener('click', () => showHomeTab('spelen'));
-$('tabIk').addEventListener('click', () => showHomeTab('ik'));
+for (const t in HOME_TABS) $(HOME_TABS[t]).addEventListener('click', () => showHomeTab(t));
 function confirmReset() {
   showModal('<div class="m-emoji">🗑️</div><h2>Alles wissen?</h2>' +
     '<p>Je naam, je <b>' + P.stars + '</b> sterren, je level en je trofeeën gaan dan weg.<br>Weet je het heel zeker?</p>' +
@@ -4968,8 +6719,10 @@ showScreen('home');
 if (!checkPlayFragment() && !checkLinkFragment()) {
   if (!P.name && !ACC) askWelcome();
   else if (!P.name) askName();
+  else checkNewWeek();
 }
 if (ACC) syncNow();
+friendPollSoon(1500);
 
 /* PWA: op GitHub Pages cachet de service worker de app voor offline gebruik.
    In omgevingen zonder sw.js faalt dit stil. */

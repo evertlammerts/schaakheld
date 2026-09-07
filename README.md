@@ -12,22 +12,51 @@ De app traint twee vaardigheden die jonge schakers vaak overslaan:
 
 ## Spelvormen
 
-- **Speurogen.** Speuropdrachten op steeds een nieuw bord: tik alle
-  aangevallen stukken aan, alles wat je kunt slaan, alle velden waar een stuk
-  heen kan, of het stuk dat je met winst kunt slaan.
-- **Valstrik-detector.** Je ziet een voorgenomen zet. Veilig, of pakt de
-  tegenstander daarna iets af? Bij een fout speelt Turbo de straf voor.
-- **De Beste Zet.** Drie kandidaat-zetten, kies de beste. Bij een verkeerde
-  keuze zie je wat er dan gebeurt, en mag je opnieuw.
-- **Turbo's Trucendoos.** Vind de vork, penning, spies, aftrekaanval of
-  matzet in een gegenereerde stelling. Dezelfde patronen worden overal in
-  de app benoemd zodra ze op het bord verschijnen, en het Trucenboekje op
-  het startscherm houdt bij hoe vaak je ze al gespot hebt.
-- **Potje tegen Turbo.** Een echte partij op drie sterktes. Met een
-  denk-meter die geduld beloont, een voorspel-bonus (raad welk stuk Turbo
-  gaat spelen), een blunder-alarm dat waarschuwt zonder voor te zeggen,
-  een strategie-coach en een denkwolk: een droomkopie van het bord waarop
-  je vrij vooruit mag proberen (ook Turbo's stukken) voordat je echt zet.
+Het startscherm heeft drie tabs: **Spelen**, **Vrienden** en **Ik**.
+
+Twee potjes:
+
+- **Potje tegen Turbo.** Een echte partij op drie sterktes. Turbo opent
+  uit een klein openingsboek en Super Turbo denkt met een tijdsbudget
+  (iteratief verdiepen, transpositietabel). Met een denk-meter die geduld
+  beloont, een voorspel-bonus, een blunder-alarm dat waarschuwt zonder
+  voor te zeggen, een strategie-coach en een denkwolk: een droomkopie van
+  het bord om vrij vooruit te proberen. Een potje verlaat je niet zomaar:
+  je kunt remise aanbieden (Turbo neemt alleen aan bij een echt gelijke
+  stand) of opgeven.
+- **Potje met een vriend.** Samen spelen via een speel-QR of wederzijdse
+  woordcodes. Na een potje kunnen jullie vrienden worden (allebei ja
+  tikken); daarna nodig je elkaar met één tik uit.
+
+Vijf oefenspellen, elk vijf opdrachten per rondje met uitleg bij elke
+fout:
+
+- **Speurogen.** Tik alle aangevallen stukken aan, alles wat je kunt
+  slaan, alle velden waar een stuk heen kan, het stuk dat je met winst
+  kunt slaan, of wat Turbo dreigt te pakken als jij zou passen.
+- **De Beste Zet.** Om en om: kies de beste van drie zetten, of
+  beoordeel een voorgenomen zet als veilig of valstrik. Bij een verkeerde
+  keuze zie je wat er dan gebeurt.
+- **Turbo's Trucendoos.** Vind de vork, penning, spies, aftrekaanval,
+  mat in een of mat in twee. Het Trucenboekje op het Ik-tabblad houdt bij
+  hoe vaak je ze al gespot hebt.
+- **Koning ontsnapt.** Verdedigen: je staat schaak of Turbo dreigt mat,
+  en precies een of twee zetten redden je. Of een stuk van je
+  hangt: wegzetten, dekken of tegenaanvallen. De koningspuzzels komen uit
+  een vooraf met de engine gegenereerde en dieper nagerekende voorraad
+  (`tools/make-koning.js`), omdat de bewijsvoering per puzzel tientallen
+  seconden kost.
+- **Openingsschool.** Structuur leren zien. De coach beoordeelt de eerste
+  acht zetten op centrum, ontwikkeling, koningsveiligheid en tempo (met
+  een engine-check: een nette zet die een stuk weggeeft heet gewoon een
+  valstrik). Drie openingspaden (Italiaans, Londen, zwart tegen 1.e4)
+  vertellen per zet waarom.
+
+Motivatie zonder straf: een **weekdoel** dat het kind zelf kiest (zoveel
+opdrachten, potjes of toprondes per week) met zeven bolletjes voor de
+dagen, en een **vorm-score** per oefenspel over de laatste veertien dagen
+(trefkans, moeilijkheid, tempo en hoe vaak je oefent). Daarnaast levels
+met meesterproeven, trofeeen en bordkleuren.
 
 Fouten worden altijd uitgelegd: wie valt aan, wie verdedigt, en waarom een
 ruil wel of niet gunstig is. Onder het bord staat een puntenwijzer
@@ -35,9 +64,13 @@ ruil wel of niet gunstig is. Onder het bord staat een puntenwijzer
 
 ## Spelen
 
-Open `index.html` in een browser. Meer is er niet: geen dependencies, geen
-server, geen build-tooling. Voortgang (sterren, levels, trofeeën,
-instellingen) staat in localStorage.
+Open `index.html` in een browser. Geen dependencies, geen build-tooling.
+Voortgang (sterren, levels, trofeeen, weekdoel, vorm, vrienden,
+instellingen) staat in localStorage als een CRDT-document en kan via
+`server/` versleuteld gesynct worden naar een tweede apparaat. Diezelfde
+kleine Go-server relayt de zetten van potjes met een vriend en bewaart de
+versleutelde uitnodigingen (brievenbussen); zonder server werkt alles
+behalve samen spelen.
 
 De site is een PWA: één keer online openen, daarna werkt alles offline
 (vliegtuigstand incluis). Op een iPad of telefoon: "Zet op beginscherm",
@@ -61,10 +94,14 @@ Alles zit in een enkel HTML-bestand, opgebouwd uit drie delen in `src/`:
 
 - `head.html`: opmaak en styling.
 - `engine.js`: schaaklogica. 0x88-bordrepresentatie, volledige legale
-  zetgeneratie (rokade, en passant, promotie), mat/pat-detectie, een kleine
-  alpha-beta-zoeker met quiescence voor de computertegenstander, static
-  exchange evaluation voor de ruil-oordelen, en generatoren die
-  oefenposities maken via zelfspel met ruis.
+  zetgeneratie (rokade, en passant, promotie), mat/pat-detectie, een
+  alpha-beta-zoeker met quiescence voor de oefeningen, een zoeker met
+  tijdsbudget (iteratief verdiepen, Zobrist-hash, transpositietabel,
+  killer/history-ordening, schaak-extensie) voor Super Turbo, een klein
+  openingsboek, static exchange evaluation voor de ruil-oordelen, mat-in-N
+  via de zoeker, en generatoren die oefenposities maken via zelfspel met
+  ruis (ook verdedigingsopdrachten: mat-dreiging of hangend stuk met een
+  of twee reddende zetten).
 - `tail.html`: de gehele gebruikersinterface.
 
 De zetgeneratie is geverifieerd met perft-tests op vijf standaardposities

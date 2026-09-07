@@ -14,8 +14,11 @@ if [ ! -x "$JSC" ]; then
 fi
 "$JSC" test/run-engine.js
 sed '$ s@</script>@@' src/tail.html > .tmp-ui.js
-"$JSC" test/run-flow.js
-rm -f .tmp-ui.js
+"$JSC" test/run-flow.js | tee .tmp-flow.log
+# jsc geeft bij een gefaalde of afgebroken flowsuite gewoon 0 terug; de
+# uitkomst staat in de laatste regel
+grep -q 'ALL FLOW TESTS PASSED' .tmp-flow.log || { echo "FAIL flowtests"; rm -f .tmp-ui.js .tmp-flow.log; exit 1; }
+rm -f .tmp-ui.js .tmp-flow.log
 
 # PWA-bestanden: manifest parseert, sw.js registreert zijn listeners zonder
 # fouten (onder een mini-shim), en de iconen zijn echte PNG's.
