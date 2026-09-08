@@ -153,7 +153,6 @@
   .mode-card .mc-title { font-size: 19px; font-weight: bold; }
   .mode-card .mc-sub { font-size: 14px; color: var(--ink-soft); line-height: 1.35; }
   .mc-scan { background: #FFF3D0; }
-  .mc-safe { background: var(--coral-soft); }
   .mc-best { background: #E0F1FD; }
   .mc-trucs { background: #F1E7FF; }
   .mc-game { background: var(--leaf-soft); }
@@ -1296,6 +1295,10 @@ const ZOB = (() => {
   const ep = []; for (let f = 0; f < 8; f++) ep.push([next(), next()]);
   return { pcs, castle, ep, side: [next(), next()] };
 })();
+/* The 11 lowest bits of the second word do not fit in the 53-bit key. They
+   stay here until the next hashOf call and go into the TT entry, so that a
+   colliding position is recognised instead of read back as a score. */
+let hashLow = 0;
 function hashOf(S) {
   let a = 0, b = 0;
   for (let sq = 0; sq < 128; sq++) {
@@ -1306,6 +1309,7 @@ function hashOf(S) {
   if (S.turn === 'b') { a ^= ZOB.side[0]; b ^= ZOB.side[1]; }
   for (const c of 'KQkq') if (S.castle[c]) { a ^= ZOB.castle[c][0]; b ^= ZOB.castle[c][1]; }
   if (S.ep >= 0) { const z = ZOB.ep[S.ep & 15]; a ^= z[0]; b ^= z[1]; }
+  hashLow = (b >>> 0) & 2047;
   return (a >>> 0) * 2097152 + ((b >>> 0) >>> 11);
 }
 const TT = new Map();
@@ -1346,10 +1350,10 @@ function think(S, budgetMs, maxDepth) {
     if (chk) depth++;
     if (depth <= 0) return quiesce(S, alpha, beta, 6, evalSTM, tick);
     if (S.half >= 100) return 0;
-    const key = hashOf(S);
+    const key = hashOf(S), low = hashLow;
     const e = TT.get(key);
     let ttMove = null;
-    if (e) {
+    if (e && e.v === low) {
       ttMove = e.m;
       if (e.d >= depth) {
         const s = fromTT(e.s, ply);
@@ -1380,7 +1384,7 @@ function think(S, budgetMs, maxDepth) {
         }
       }
     }
-    TT.set(key, { d: depth, s: toTT(best, ply), f: best <= alpha0 ? 2 : (best >= beta ? 1 : 0), m: bestM });
+    TT.set(key, { d: depth, s: toTT(best, ply), f: best <= alpha0 ? 2 : (best >= beta ? 1 : 0), m: bestM, v: low });
     return best;
   }
   const rootMoves = legalMoves(S);
@@ -1958,14 +1962,19 @@ function genMate2Task(rng) {
    depth-2 pass only prunes; the expensive pass decides. */
 const SAVE_DEPTH = 4;
 /* Is white really saved after its move (black to move)? Two conditions, via
-   the TT-backed searcher (check extensions, no deadline): black has no forced
-   mate within SAVE_DEPTH/2 moves, and black is not clearly winning anyway: a
-   "save" that only postpones a lost game teaches nothing, and forced mates
-   just beyond the horizon come with a crushing score. Proving "no mate" at
-   depth 6 costs seconds on a full board, so this is the honest bound. */
+   the TT-backed searcher (check extensions): black has no forced mate within
+   SAVE_DEPTH/2 moves, and black is not clearly winning anyway: a "save" that
+   only postpones a lost game teaches nothing, and forced mates just beyond
+   the horizon come with a crushing score. Proving "no mate" at depth 6 costs
+   seconds on a full board, so this is the honest bound. Check extensions have
+   no bound of their own, hence the budget; only a search that reached
+   SAVE_DEPTH proves anything, so anything shallower is dropped. */
 const SAVE_MAX_EVAL = 300;
+const SAVE_MS = 1200;
 function saveHolds(S) {
-  const r = think(S, 1e12, SAVE_DEPTH);
+  const r = think(S, SAVE_MS, SAVE_DEPTH);
+  if (r.score <= -MATE + 100) return true; /* white mates: settled at any depth */
+  if (r.depth < SAVE_DEPTH) return false;
   return r.score < Math.min(MATE - SAVE_DEPTH - 1, SAVE_MAX_EVAL);
 }
 /* The same position with the colours swapped and the board mirrored: the
@@ -2097,7 +2106,7 @@ if (typeof module !== 'undefined') {
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
-    winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, saveHolds, colorFlipped,
+    winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think };
 }
 'use strict';
@@ -3139,8 +3148,8 @@ function mpNaam() { return (MP && MP.peerName) || 'je maatje'; }
 
 function mpStart(room, seat, host) {
   MP = { room, seat, host, ws: null, open: false, peerOn: false, peerName: '',
-    myColor: null, gameNo: 0, revMine: false, revTheirs: false,
-    backoff: 1000, weg: false, syncWanted: false, pogingen: 0, reTimer: 0 };
+    myColor: null, gameNo: 0, revMine: false, revTheirs: false, hunVraag: null, bewijzenP: null,
+    backoff: 1000, weg: false, syncWanted: false, pogingen: 0, reTimer: 0, wachtTimer: 0 };
   mpConnect();
 }
 
@@ -3190,6 +3199,7 @@ function mpStop() {
   if (!MP) return;
   MP.weg = true;
   if (MP.reTimer) clearTimeout(MP.reTimer); /* geen herverbind-timer die na een nieuw potje afgaat */
+  if (MP.wachtTimer) clearTimeout(MP.wachtTimer);
   mpSend({ t: 'weg' });
   try { if (MP.ws) MP.ws.close(); } catch (e) {}
   MP = null;
@@ -3198,18 +3208,39 @@ function mpStop() {
   $('trayTurboLabel').textContent = 'Turbo pakte:';
 }
 
-/* de verbinding komt niet meer terug: eerlijk zeggen en naar huis */
+/* de verbinding komt niet meer terug: eerlijk zeggen en naar huis. Ook
+   buiten een potje, want anders blijft een wachtscherm eeuwig draaien */
 function mpVerbindingWeg() {
+  const inSpel = !!(session && session.online);
   mpStop();
-  if (session && session.online) {
-    session.over = true;
-    BD.mode = 'off';
-    showModal('<div class="m-emoji">📡</div><h2>De verbinding is weg</h2>' +
-      '<p>Jammer! Maak samen een nieuwe code om verder te spelen.</p>' +
-      '<div class="m-btns"><button class="btn sun" id="mpVwOk">🏠 Naar huis</button></div>', () => {
-        $('mpVwOk').addEventListener('click', () => { closeModal(); goHome(); });
+  if (inSpel) { session.over = true; BD.mode = 'off'; }
+  dropModal('mpwacht');
+  showModal('<div class="m-emoji">📡</div><h2>De verbinding is weg</h2>' +
+    '<p>' + (inSpel ? 'Jammer! Maak samen een nieuwe code om verder te spelen.' :
+      'Het lukt niet om verbinding te maken. Probeer het zo nog eens!') + '</p>' +
+    '<div class="m-btns"><button class="btn sun" id="mpVwOk">🏠 Naar huis</button></div>', () => {
+      $('mpVwOk').addEventListener('click', () => { closeModal(); goHome(); });
+    });
+}
+
+/* Wie een uitnodiging aanneemt of een code invoert verwacht iemand die er NU
+   klaarzit. Blijft het stil, dan is die kant weg (app dicht, telefoon in de
+   zak) en zeggen we dat eerlijk in plaats van eeuwig te laten wachten. */
+const MAATJE_WACHT = 25000;
+function mpWachtOpMaatje(naam) {
+  const mp = MP;
+  if (!mp) return;
+  clearTimeout(mp.wachtTimer);
+  mp.wachtTimer = setTimeout(() => {
+    if (MP !== mp || mp.peerOn) return;
+    mpStop();
+    dropModal('mpwacht');
+    showModal('<div class="m-emoji">🐢</div><h2>' + escHtml(naam) + ' is er nu even niet</h2>' +
+      '<p>Misschien staat SchaakHeld bij ' + escHtml(naam) + ' niet open. Zeg het even, en probeer het dan opnieuw!</p>' +
+      '<div class="m-btns"><button class="btn sun" id="mpStilOk">🏠 Naar huis</button></div>', () => {
+        $('mpStilOk').addEventListener('click', () => { closeModal(); goHome(); });
       });
-  }
+  }, MAATJE_WACHT);
 }
 
 function mpMsg(m) {
@@ -3219,7 +3250,7 @@ function mpMsg(m) {
       /* de server heeft het stoeltoken geaccepteerd: dit telt als een
          geslaagde (her)verbinding, dus het opgeef-budget mag terug op nul */
       MP.pogingen = 0;
-      mpSend({ t: 'hallo', naam: P.name || 'kampioen' });
+      mpHallo();
       /* midden in een potje herverbonden: vraag de stand op */
       if (session && session.online && !session.over) { MP.syncWanted = true; mpSend({ t: 'sync?' }); }
       break;
@@ -3227,7 +3258,7 @@ function mpMsg(m) {
       MP.peerOn = !!m.aan;
       /* de ander is er (weer): stel jezelf voor, die kant miste alles
          van voor zijn verbinding */
-      if (m.aan) mpSend({ t: 'hallo', naam: P.name || 'kampioen' });
+      if (m.aan) mpHallo();
       if (session && session.online && !session.over) {
         say(m.aan ? (mpNaam() + ' is er weer! 🎉') : ('De verbinding met ' + mpNaam() + ' hapert… ⏳ Speel rustig door, zetten komen straks vanzelf goed.'));
       }
@@ -3239,6 +3270,7 @@ function mpMsg(m) {
          Zoë) blijven. Zo is mpNaam() overal veilig te gebruiken. */
       MP.peerName = String(m.naam || '').replace(/[<>&\x00-\x1f]/g, '').trim().slice(0, 14);
       MP.peerOn = true;
+      mpHerkenVriend(m.bewijzen);
       mpOnHallo();
       break;
     case 'start':
@@ -3289,7 +3321,7 @@ function mpMsg(m) {
 function mpOnHallo() {
   if (session && session.online) return; /* herverbinden, geen nieuw feest */
   if (INV) inviteClear(); /* de uitnodiging is aangekomen: briefje kan weg */
-  closeModal(); /* het wachtscherm (QR of verbinden) mag weg */
+  dropModal('mpwacht'); /* het wachtscherm (QR, verbinden of uitnodiging) mag weg */
   const trio = '<p style="font-size:2.2em;letter-spacing:.2em">' + mpEmojiTrio(MP.room) + '</p>';
   if (MP.host) {
     showModal('<div class="m-emoji">🎉</div><h2>Verbonden met ' + escHtml(mpNaam()) + '!</h2>' + trio +
@@ -3497,12 +3529,6 @@ function renderFriends() {
         '<button class="btn sun small" data-invite="' + id + '">Uitnodigen</button>') +
       '<button class="icon-btn f-rm" data-remove="' + id + '" title="Weghalen">✕</button></div>';
   }).join('');
-  el.addEventListener('click', e => {
-    const d = e.target && e.target.dataset ? e.target.dataset : {};
-    if (d.invite && P.friends[d.invite]) inviteFriend(d.invite);
-    else if (d.cancel) inviteCancel();
-    else if (d.remove && P.friends[d.remove]) removeFriendAsk(d.remove);
-  });
 }
 function friendSince(f) {
   if (!f.since) return 'kort geleden';
@@ -3532,7 +3558,7 @@ async function mpHostQR() {
     '<p>Wachten op je maatje… ⏳</p>' +
     '<div class="m-btns"><button class="btn plain" id="mpNee">Stoppen</button></div>', () => {
       $('mpNee').addEventListener('click', () => { closeModal(); mpVerlaat(); });
-    });
+    }, false, 'mpwacht');
 }
 
 /* verwerkt de inhoud van een speel-QR ("room.seat", het stuk na SHPLAY1:),
@@ -3551,7 +3577,8 @@ function handlePlayString(rest) {
         mpStart(room, seat, false);
         showModal('<div class="m-emoji">🤝</div><h2>Verbinden…</h2><p>Even wachten… ⏳</p>' +
           '<div class="m-btns"><button class="btn plain" id="mpNee2">Stoppen</button></div>',
-          () => $('mpNee2').addEventListener('click', () => { closeModal(); mpVerlaat(); }));
+          () => $('mpNee2').addEventListener('click', () => { closeModal(); mpVerlaat(); }), false, 'mpwacht');
+        mpWachtOpMaatje('Je maatje');
       });
       $('mpNee').addEventListener('click', closeModal);
     });
@@ -3602,6 +3629,54 @@ async function sha256hex(str) {
   for (let i = 0; i < d.length; i++) hex += (d[i] >> 4).toString(16) + (d[i] & 15).toString(16);
   return hex;
 }
+/* Vriendschapsbewijs. Uit K en het kamernummer volgt een waarde die alleen
+   twee vrienden kunnen maken; die gaan mee in het hallo. Ziet een kant een
+   van zijn eigen waarden terug, dan weet hij dat hij de ander al kent, en
+   biedt de app "vrienden worden" niet nog eens aan (dat zou een tweede
+   geheim maken met dezelfde persoon). De relay geeft het hallo door en ziet
+   de waarden dus, maar kan er niets mee: zonder K is er niets uit te
+   rekenen, en per kamer zijn ze anders, dus ook niet te volgen. */
+const BEWIJS_RE = /^[A-Za-z0-9_-]{16}$/;
+function mpBewijzen() {
+  const mp = MP;
+  if (!mp.bewijzenP) {
+    mp.bewijzenP = (async () => {
+      const ids = Object.keys(P.friends || {}).filter(id => !P.friends[id].weg).slice(0, MAX_FRIENDS);
+      const uit = new Map();
+      await Promise.all(ids.map(async id => {
+        uit.set(b64url(await hkdfBits(P.friends[id].k, 'hallo-' + mp.room, 12)), id);
+      }));
+      return uit;
+    })().catch(() => new Map());
+  }
+  return mp.bewijzenP;
+}
+async function mpHallo() {
+  const mp = MP;
+  if (!mp) return;
+  const mijn = await mpBewijzen();
+  if (MP !== mp) return;
+  /* aanvullen met willekeur tot een vaste lengte: anders verraadt de lijst
+     aan de relay hoeveel vrienden dit kind heeft */
+  const lijst = [...mijn.keys()];
+  while (lijst.length < MAX_FRIENDS) lijst.push(b64url(randBytes(12)));
+  for (let i = lijst.length - 1; i > 0; i--) {
+    const j = randBytes(1)[0] % (i + 1);
+    const t = lijst[i]; lijst[i] = lijst[j]; lijst[j] = t;
+  }
+  mpSend({ t: 'hallo', naam: P.name || 'kampioen', bewijzen: lijst });
+}
+async function mpHerkenVriend(bewijzen) {
+  const mp = MP;
+  if (!mp || mp.viaFriend || !Array.isArray(bewijzen)) return;
+  const mijn = await mpBewijzen();
+  if (MP !== mp || mp.viaFriend) return;
+  for (const b of bewijzen.slice(0, MAX_FRIENDS)) {
+    if (typeof b !== 'string' || !BEWIJS_RE.test(b)) continue;
+    const fid = mijn.get(b);
+    if (fid) { mp.viaFriend = fid; return; }
+  }
+}
 /* rol a = wie de vriendschap vroeg, b = wie ja zei; elk heeft zijn eigen bus */
 function myRole(f) { return f.host ? 'a' : 'b'; }
 function theirRole(f) { return f.host ? 'b' : 'a'; }
@@ -3630,9 +3705,26 @@ function geldigePub(p) { return typeof p === 'string' && /^[A-Za-z0-9_-]{40,140}
 /* de vraag over de relay, na een potje */
 async function vriendVragen() {
   if (!MP || !MP.peerOn || MP.viaFriend) return;
+  /* de ander was ons net voor: dan is 'vrienden worden' gewoon ja zeggen.
+     Allebei apart vragen zou twee geheimen maken, en van het tweede weet
+     de ander niets. */
+  if (MP.hunVraag) { dropModal('vriendvraag'); vriendJa(); return; }
   try { MP.ecdh = await ecdhStart(); } catch (e) { showToast('Dat lukt hier niet 😕'); return; }
   mpSend({ t: 'vriend?', pub: MP.ecdh.pub });
   showToast('Gevraagd! Wachten op ' + mpNaam() + '… 🤝', true);
+}
+/* ja zeggen op de vraag van de ander: onze kant van de ECDH erbij, bewaren */
+async function vriendJa() {
+  if (!MP || MP.viaFriend || !MP.hunVraag) return;
+  const pub = MP.hunVraag;
+  MP.hunVraag = null;
+  try {
+    const e = await ecdhStart();
+    const k = await ecdhFinish(e.kp, pub);
+    mpSend({ t: 'vriend', pub: e.pub });
+    await bewaarVriend(k, false);
+    vriendKlaar(k);
+  } catch (err) { showToast('Dat lukte niet 😕'); }
 }
 function mpOnVriendVraag(m) {
   if (!MP || MP.viaFriend || !geldigePub(m.pub)) return;
@@ -3651,23 +3743,19 @@ function mpOnVriendVraag(m) {
     }
     return;
   }
+  MP.hunVraag = m.pub;
   const naam = escHtml(mpNaam());
   showModal('<div class="m-emoji">🤝</div><h2>' + naam + ' wil vrienden worden!</h2>' +
     '<p>Dan kunnen jullie elkaar de volgende keer met één tik uitnodigen.<br>Jullie moeten allebei op Ja tikken.</p>' +
     '<div class="m-btns"><button class="btn sun" id="vrJa">Ja, vrienden! 🤝</button>' +
     '<button class="btn plain" id="vrNee">Nu niet</button></div>', () => {
-      $('vrJa').addEventListener('click', async () => {
+      $('vrJa').addEventListener('click', () => { closeModal(); vriendJa(); });
+      $('vrNee').addEventListener('click', () => {
         closeModal();
-        try {
-          const e = await ecdhStart();
-          const k = await ecdhFinish(e.kp, m.pub);
-          mpSend({ t: 'vriend', pub: e.pub });
-          await bewaarVriend(k, false);
-          vriendKlaar(k);
-        } catch (err) { showToast('Dat lukte niet 😕'); }
+        if (MP) MP.hunVraag = null;
+        mpSend({ t: 'vriend', nee: true });
       });
-      $('vrNee').addEventListener('click', () => { closeModal(); mpSend({ t: 'vriend', nee: true }); });
-    });
+    }, false, 'vriendvraag');
 }
 async function mpOnVriend(m) {
   if (!MP || !MP.ecdh) return;
@@ -3684,7 +3772,8 @@ async function bewaarVriend(k, host) {
   const id = (await sha256hex(k)).slice(0, 16);
   const oud = P.friends[id];
   setFriend(id, { k, naam: mpNaam(), host, weg: false, since: oud && oud.since ? oud.since : Date.now() });
-  if (MP) MP.viaFriend = id;
+  if (MP) { MP.viaFriend = id; MP.hunVraag = null; MP.bewijzenP = null; }
+  dropModal('vriendvraag'); /* alsnog ja zeggen zou een tweede geheim maken */
   renderFriends();
 }
 /* vervangt het eindscherm van het potje: de plaatjes moeten meteen te
@@ -3727,19 +3816,45 @@ async function inviteFriend(fid) {
     await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob }) });
   } catch (e) {}
-  INV = { fid, bus: to.bus, bewijs: to.bewijs };
+  INV = { fid, bus: to.bus, bewijs: to.bewijs, tot: Date.now() + INVITE_TTL };
   mpStart(resp.room, resp.seat, true);
   MP.viaFriend = fid;
-  showModal('<div class="m-emoji">🐢</div><h2>Wachten op ' + escHtml(f.naam) + '…</h2>' +
-    '<p>' + escHtml(f.naam) + ' krijgt een seintje zodra ' + (f.naam ? 'de app open gaat' : 'SchaakHeld open gaat') + '. Zeg het gerust even!</p>' +
-    '<div class="m-btns"><button class="btn plain" id="invStop">Stop met wachten</button></div>',
-    () => $('invStop').addEventListener('click', inviteCancel));
+  wachtScherm();
   renderFriends();
+}
+/* Het briefje ligt tien minuten in de bus (busTTL in bus.go). Daarna kan de
+   uitnodiging niet meer aankomen, dus houdt het wachtscherm ook op. */
+const INVITE_TTL = 10 * 60000;
+let inviteTimer = 0;
+function inviteVerlopen() {
+  const f = INV && P.friends[INV.fid];
+  if (!f) return;
+  inviteClear();
+  if (MP) mpStop();
+  dropModal('mpwacht');
+  showModal('<div class="m-emoji">🐢</div><h2>' + escHtml(f.naam) + ' heeft niet gekeken</h2>' +
+    '<p>De uitnodiging is verlopen. Zeg het even, en nodig ' + escHtml(f.naam) + ' dan opnieuw uit!</p>' +
+    '<div class="m-btns"><button class="btn sun" id="invOudOk">🏠 Naar huis</button></div>', () => {
+      $('invOudOk').addEventListener('click', () => { closeModal(); goHome(); });
+    });
+}
+/* het wachtscherm van een verstuurde uitnodiging; het gaat even opzij als er
+   ondertussen zelf een uitnodiging binnenkomt, en komt dan hier weer terug */
+function wachtScherm() {
+  const f = INV && P.friends[INV.fid];
+  if (!f || modalOpen) return;
+  clearTimeout(inviteTimer);
+  inviteTimer = setTimeout(inviteVerlopen, Math.max(0, (INV.tot || 0) - Date.now()));
+  showModal('<div class="m-emoji">🐢</div><h2>Wachten op ' + escHtml(f.naam) + '…</h2>' +
+    '<p>' + escHtml(f.naam) + ' krijgt een seintje zodra de app open gaat. Zeg het gerust even!</p>' +
+    '<div class="m-btns"><button class="btn plain" id="invStop">Stop met wachten</button></div>',
+    () => $('invStop').addEventListener('click', inviteCancel), false, 'mpwacht');
 }
 /* briefje weghalen (uitnodiging ingetrokken of niet meer nodig) */
 async function inviteClear() {
   const inv = INV;
   INV = null;
+  clearTimeout(inviteTimer);
   if (!inv || !netAvailable()) return;
   try {
     await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3774,7 +3889,8 @@ async function friendPoll() {
   const ids = Object.keys(P.friends || {}).filter(id => !P.friends[id].weg);
   if (!ids.length) { friendPollSoon(30000); return; }
   const buses = {};
-  for (const id of ids) buses[(await busFor(P.friends[id], myRole(P.friends[id]))).bus] = id;
+  const mijn = await Promise.all(ids.map(id => busFor(P.friends[id], myRole(P.friends[id]))));
+  ids.forEach((id, i) => { buses[mijn[i].bus] = id; });
   const alle = Object.keys(buses);
   try {
     const blobs = {};
@@ -3790,13 +3906,12 @@ async function friendPoll() {
       let inv = null;
       try { inv = await openJSON(P.friends[fid].k, 'uitnodiging', bytes); } catch (e) {}
       if (!geldigeUitnodiging(inv) || seenInv.includes(inv.id)) continue;
-      if (INV) {
-        if (INV.fid !== fid || myRole(P.friends[fid]) === 'a') continue; /* de ander gaat op de onze in */
-        inviteClear();
-        closeModal();
-        mpStop();
-      }
+      /* kruisende uitnodigingen tussen dezelfde twee: rol a houdt de zijne */
+      if (INV && INV.fid === fid && myRole(P.friends[fid]) === 'a') continue;
+      const eigenWacht = !!INV && modalOpen && modalKey === 'mpwacht' && !modalQueue.length;
+      if (eigenWacht) closeModal();
       if (showInvite(fid, inv)) break;
+      wachtScherm(); /* niet getoond: ons eigen scherm terug */
     }
   } catch (e) {}
   friendPollSoon();
@@ -3805,7 +3920,7 @@ async function friendPoll() {
    komt het bij de volgende ronde gewoon terug */
 function showInvite(fid, inv) {
   const f = P.friends[fid];
-  if (!f || session || MP || modalOpen) return false;
+  if (!f || session || (MP && !INV) || modalOpen) return false;
   markSeen(inv.id);
   showModal('<div class="m-emoji">♟️</div><h2>' + escHtml(f.naam) + ' wil een potje spelen!</h2>' +
     '<p>Doe je mee? Wie wit krijgt, hoor je zo.</p>' +
@@ -3813,13 +3928,20 @@ function showInvite(fid, inv) {
     '<button class="btn plain" id="invNee">Nu niet</button></div>', () => {
       $('invJa').addEventListener('click', () => {
         closeModal();
+        /* wij gaan op de zijne in: onze eigen uitnodiging kan nu pas weg */
+        if (INV) inviteClear();
+        if (MP) mpStop();
         mpStart(inv.room, inv.seat, false);
         MP.viaFriend = fid;
         showModal('<div class="m-emoji">🤝</div><h2>Verbinden…</h2><p>Even wachten… ⏳</p>' +
           '<div class="m-btns"><button class="btn plain" id="mpNee4">Stoppen</button></div>',
-          () => $('mpNee4').addEventListener('click', () => { closeModal(); mpVerlaat(); }));
+          () => $('mpNee4').addEventListener('click', () => { closeModal(); mpVerlaat(); }), false, 'mpwacht');
+        mpWachtOpMaatje(f.naam);
       });
-      $('invNee').addEventListener('click', closeModal);
+      $('invNee').addEventListener('click', () => {
+        closeModal();
+        wachtScherm();
+      });
     });
   return true;
 }
@@ -3973,7 +4095,8 @@ function mpWordFlow() {
               mpStart(uit.room, uit.seat, uit.host === true);
               showModal('<div class="m-emoji">🤝</div><h2>Verbinden…</h2><p>Gevonden! Even wachten… ⏳</p>' +
                 '<div class="m-btns"><button class="btn plain" id="mpNee3">Stoppen</button></div>',
-                () => $('mpNee3').addEventListener('click', () => { closeModal(); mpVerlaat(); }));
+                () => $('mpNee3').addEventListener('click', () => { closeModal(); mpVerlaat(); }), false, 'mpwacht');
+              mpWachtOpMaatje('Je maatje');
               return;
             }
             if (r.status !== 204) break;
@@ -4286,31 +4409,39 @@ function spin(show, txt) {
    Met cancelable=true krijgt de modal een ✕ en sluit hij ook via een tik
    naast de kaart of Escape. Zonder die vlag sluit alleen een eigen knop,
    zodat keuzes met gevolgen (wissen, level-up, verbinden) bewust blijven. */
-let modalQueue = [], modalOpen = false, modalCancelable = false;
-function renderModal(html, setup, cancelable) {
+let modalQueue = [], modalOpen = false, modalCancelable = false, modalKey = null;
+function renderModal(html, setup, cancelable, key) {
   modalCancelable = !!cancelable;
+  modalKey = key || null;
   $('modalBox').innerHTML = (cancelable ?
     '<button class="m-close" id="mClose" aria-label="Sluiten">✕</button>' : '') + html;
   if (cancelable) $('mClose').addEventListener('click', closeModal);
   if (setup) setup();
 }
-function showModal(html, setup, cancelable) {
-  if (modalOpen) { modalQueue.push([html, setup, cancelable]); return; }
+function showModal(html, setup, cancelable, key) {
+  if (modalOpen) { modalQueue.push([html, setup, cancelable, key]); return; }
   modalOpen = true;
   $('overlay').classList.remove('hidden');
-  renderModal(html, setup, cancelable);
+  renderModal(html, setup, cancelable, key);
 }
 function closeModal() {
   stopScan(); /* een openstaande camera vrijgeven zodra de modal wijzigt */
   if (modalQueue.length) {
     const next = modalQueue.shift();
-    renderModal(next[0], next[1], next[2]);
+    renderModal(next[0], next[1], next[2], next[3]);
     return;
   }
   modalOpen = false;
   modalCancelable = false;
+  modalKey = null;
   $('overlay').classList.add('hidden');
   modalQueue = [];
+}
+/* Een vraag waarvan het antwoord niet meer telt mag niet alsnog gesteld
+   worden: wachtte hij in de rij, dan verdwijnt hij hier. */
+function dropModal(key) {
+  modalQueue = modalQueue.filter(m => m[3] !== key);
+  if (modalOpen && modalKey === key) closeModal();
 }
 $('overlay').addEventListener('click', e => {
   /* alleen een tik op de achtergrond zelf, niet in de kaart */
@@ -4512,7 +4643,6 @@ function buildRound() {
   if (kind === 'best3') return session.round % 2 === 0 ? buildSafe() : buildBest3();
   if (kind === 'trucs') return buildTrucs();
   if (kind === 'koning') return buildKoning();
-  if (kind === 'opening') return buildOpening();
   return false;
 }
 /* zetten vergelijken op van/naar/promotie: de generator en het bord maken
@@ -5319,10 +5449,15 @@ function principles(S, col) {
     if (p && colorOf(p) === col && p.toLowerCase() === 'p') centrum += 2;
     if (attacked(S, sq, col)) centrum += 1;
   }
+  /* tel de eigen lichte stukken die van hun beginveld af zijn, niet de lege
+     beginvelden: een geslagen paard staat niet buiten */
   let dev = 0;
-  for (const sq of HOME_MINOR[col]) {
+  for (let sq = 0; sq < 128; sq++) {
+    if (sq & 0x88) continue;
     const p = S.board[sq];
-    if (!(p && colorOf(p) === col && (p.toLowerCase() === 'n' || p.toLowerCase() === 'b'))) dev++;
+    if (!p || colorOf(p) !== col) continue;
+    const t = p.toLowerCase();
+    if ((t === 'n' || t === 'b') && HOME_MINOR[col].indexOf(sq) < 0) dev++;
   }
   return { centrum, dev };
 }
@@ -5537,8 +5672,6 @@ function openingEnd() {
       $('mHome').addEventListener('click', goHome);
     });
 }
-function buildOpening() { return false; }
-
 /* ---------- game vs Turbo ---------- */
 const TURBO_NAMES = { 1: '🍼 Baby Turbo', 2: '🐢 Turbo', 3: '🚀 Super Turbo' };
 
@@ -6656,9 +6789,19 @@ $('weekStrip').addEventListener('click', () => { showHomeTab('ik'); if (!P.weekG
 $('vrScan').addEventListener('click', () => openScanner('play'));
 $('vrToon').addEventListener('click', mpHostQR);
 $('vrWoord').addEventListener('click', mpWordFlow);
+/* #friendList zelf blijft staan, alleen de knoppen erin worden hertekend:
+   hier een keer luisteren, niet bij elke renderFriends() opnieuw */
+$('friendList').addEventListener('click', e => {
+  const d = e.target && e.target.dataset ? e.target.dataset : {};
+  if (d.invite && P.friends[d.invite]) inviteFriend(d.invite);
+  else if (d.cancel) inviteCancel();
+  else if (d.remove && P.friends[d.remove]) removeFriendAsk(d.remove);
+});
 $('backBtn').addEventListener('click', () => {
-  /* midden in een potje is weglopen opgeven: eerst vragen */
-  if (session && session.kind === 'game' && !session.over && !session.cloud) { resignAsk(); return; }
+  /* in de denkwolk brengt ← je eerst terug naar het echte bord; midden in
+     een potje is weglopen opgeven en dat vraagt eerst */
+  if (session && session.cloud) { exitCloud(); return; }
+  if (session && session.kind === 'game' && !session.over) { resignAsk(); return; }
   goHome();
 });
 $('setBtn').addEventListener('click', openSettings);

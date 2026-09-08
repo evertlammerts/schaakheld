@@ -20,7 +20,7 @@ function makeEl(id) {
   });
   Object.defineProperty(el, 'innerHTML', {
     get: () => el._html,
-    set: v => { el._html = String(v); el.children = []; }
+    set: v => { el._html = String(v); el.children = []; __versHtml(v); }
   });
   Object.defineProperty(el, 'textContent', {
     get: () => el._text || el._html.replace(/<[^>]*>/g, ''),
@@ -29,9 +29,7 @@ function makeEl(id) {
   el.appendChild = c => { el.children.push(c); return c; };
   el.querySelectorAll = () => [];
   el.querySelector = () => null;
-  /* keep only the latest handler per type: real DOM nodes are recreated per
-     innerHTML write, the shim caches them, so accumulation is a shim artifact */
-  el.addEventListener = (t, fn) => { el._ev[t] = [fn]; };
+  el.addEventListener = (t, fn) => { (el._ev[t] || (el._ev[t] = [])).push(fn); };
   el.style.setProperty = function () {};
   el.getBoundingClientRect = () => ({ left: 0, top: 0, right: 100, bottom: 20, width: 40, height: 40 });
   el.remove = () => {};
@@ -43,6 +41,15 @@ function makeEl(id) {
   return el;
 }
 var __els = {};
+/* Een element met een id in vers geschreven HTML is in een echte browser een
+   nieuwe knoop: zijn luisteraars zijn weg. De shim geeft hetzelfde gecachete
+   object terug, dus wissen we ze hier. Het element waarin geschreven wordt
+   blijft wel bestaan, dus daar stapelen luisteraars op, net als echt. */
+function __versHtml(html) {
+  const re = /id="([^"]+)"/g;
+  let m;
+  while ((m = re.exec(html)) !== null) { const el = __els[m[1]]; if (el) el._ev = {}; }
+}
 var document = {
   getElementById(id) { return __els[id] || (__els[id] = makeEl(id)); },
   createElement() { return makeEl('_c' + (elc++)); },
@@ -86,6 +93,18 @@ TextDecoder.prototype.decode = function (bytes) {
 var __seed = 0x1234567;
 function __ksBytes(s) { const b = []; for (let i = 0; i < s.length; i++) b.push(s.charCodeAt(i) & 255); return b; }
 function __keyTag(k) { let t = 0; for (const b of __ksBytes(k)) t = (t * 31 + b) >>> 0; return t; }
+/* Bytes uit een 32-bit sleutel via xorshift. Een LCG (h = h*a + c mod 2^32)
+   geeft in zijn laagste byte alleen de laagste byte van de vorige stand door:
+   alle uitvoer hing dan aan acht bits, en twee verschillende sleuteluitwisselingen
+   leverden met kans 1/256 hetzelfde geheim. */
+function __bytesUit(h, n) {
+  const out = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0;
+    out[i] = h & 255;
+  }
+  return out;
+}
 var crypto = {
   getRandomValues(arr) {
     for (let i = 0; i < arr.length; i++) {
@@ -98,10 +117,8 @@ var crypto = {
     digest(alg, bytes) {
       bytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
       let h = 2166136261;
-      const out = new Uint8Array(32);
       for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 16777619) >>> 0;
-      for (let i = 0; i < 32; i++) { h = (Math.imul(h, 1103515245) + 12345) >>> 0; out[i] = h & 255; }
-      return Promise.resolve(out.buffer);
+      return Promise.resolve(__bytesUit(h, 32).buffer);
     },
     importKey(fmt, keyBytes, alg) {
       if (alg && alg.name === 'ECDH') return Promise.resolve({ ecdhPub: Array.from(keyBytes) });
@@ -111,7 +128,6 @@ var crypto = {
     /* HKDF-bits: deterministisch uit sleutel plus info; ECDH-bits: symmetrisch
        (beide kanten leiden hetzelfde af), pub = priv in deze nep */
     deriveBits(params, key, bits) {
-      const n = bits / 8, out = new Uint8Array(n);
       let seed;
       if (params.name === 'ECDH') {
         const a = key.ecdhPriv.join(','), b = params.public.ecdhPub.join(',');
@@ -119,8 +135,7 @@ var crypto = {
       } else seed = key.k + '|' + Array.from(params.info).join(',');
       let h = 2166136261;
       for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619) >>> 0;
-      for (let i = 0; i < n; i++) { h = (Math.imul(h, 1103515245) + 12345) >>> 0; out[i] = h & 255; }
-      return Promise.resolve(out.buffer);
+      return Promise.resolve(__bytesUit(h, bits / 8).buffer);
     },
     generateKey(alg) {
       const raw = new Uint8Array(32);
@@ -152,7 +167,14 @@ var crypto = {
 /* Nep-fetch met dezelfde semantiek als de Go-server (koppelcodes eenmalig,
    profielblobs met bearer secret, kamers en wederzijdse paren), zodat de
    flows end-to-end testbaar zijn. */
-var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, teller: 0 };
+var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, klok: 0, teller: 0 };
+/* grenzen en TTL uit bus.go; __server.klok schuift de nep-klok vooruit zodat
+   een flowtest een bus kan laten verlopen */
+var BUS_TTL = 10 * 60000, MAX_BUSES = 512, MAX_BUS_BLOB = 4 << 10, MAX_BUS_CHECK = 64;
+function __busNu() { return Date.now() + __server.klok; }
+function __veegBussen() {
+  for (var id in __server.buses) if (__server.buses[id].tot <= __busNu()) delete __server.buses[id];
+}
 function __nieuwToken() { return 'tok' + (++__server.teller) + 'x'.repeat(16); }
 function __nieuweKamer() {
   const id = 'kamer' + (++__server.teller) + 'k'.repeat(12);
@@ -178,19 +200,30 @@ var fetch = function (url, opts) {
     });
     if (m === 'POST' && path === '/v1/link') { __server.links[body.code] = body.payload; res(204); }
     else if (m === 'POST' && path === '/v1/bus') {
-      /* zelfde regels als bus.go: bus = sha256(bewijs), leeg blob wist */
+      /* zelfde regels als bus.go: bus = sha256(bewijs), leeg blob wist, een
+         bus houdt het briefje BUS_TTL lang, en vol is vol (een bestaande bus
+         mag wel vervangen worden) */
       crypto.subtle.digest('SHA-256', new TextEncoder().encode(body.bewijs)).then(function (d) {
         var hex = '';
         var bytes = new Uint8Array(d);
         for (var i = 0; i < 32; i++) hex += (bytes[i] >> 4).toString(16) + (bytes[i] & 15).toString(16);
-        if (!/^[a-f0-9]{64}$/.test(body.bus) || hex !== body.bus || !/^[A-Za-z0-9_-]{8,64}$/.test(body.bewijs)) { res(400); return; }
-        if (body.blob === '') delete __server.buses[body.bus]; else __server.buses[body.bus] = body.blob;
+        if (!/^[a-f0-9]{64}$/.test(body.bus) || hex !== body.bus || !/^[A-Za-z0-9_-]{8,64}$/.test(body.bewijs) ||
+          String(body.blob == null ? '' : body.blob).length > MAX_BUS_BLOB) { res(400); return; }
+        __veegBussen();
+        if (body.blob === '') { delete __server.buses[body.bus]; res(204); return; }
+        if (!(body.bus in __server.buses) && Object.keys(__server.buses).length >= MAX_BUSES) { res(429); return; }
+        __server.buses[body.bus] = { blob: body.blob, tot: __busNu() + BUS_TTL };
         res(204);
       });
     }
     else if (m === 'POST' && path === '/v1/bus/check') {
+      var vraag = body.bussen || [];
+      if (vraag.length > MAX_BUS_CHECK) { res(400); return; }
+      __veegBussen();
       var blobs = {};
-      (body.bussen || []).forEach(function (id) { if (id in __server.buses) blobs[id] = __server.buses[id]; });
+      vraag.forEach(function (id) {
+        if (/^[a-f0-9]{64}$/.test(id) && (id in __server.buses)) blobs[id] = __server.buses[id].blob;
+      });
       res(200, { blobs: blobs });
     }
     else if (m === 'POST' && path === '/v1/room') {
@@ -311,16 +344,24 @@ function WebSocket(url) {
   };
 }
 
-/* manual timer queue */
-var __timers = [], __tid = 1;
-var setTimeout = function (fn, ms) { __timers.push({ fn, ms: ms || 0, id: __tid }); return __tid++; };
+/* Handmatige tijd. Een timer krijgt een moment op een virtuele klok en
+   drainTimers loopt standaard vijf seconden vooruit: zo loopt een timer van
+   een halve minuut (wachten op een maatje) niet mee in een drain die een
+   animatie van 900 ms afhandelt. Geef een groter venster mee om hem wel te
+   laten aflopen. */
+var __timers = [], __tid = 1, __klok = 0;
+var setTimeout = function (fn, ms) { __timers.push({ fn, at: __klok + (ms || 0), id: __tid }); return __tid++; };
 var clearTimeout = function (id) { __timers = __timers.filter(t => t.id !== id); };
-function drainTimers(max) {
+function drainTimers(max, venster) {
   max = max || 400;
+  const grens = __klok + (venster == null ? 5000 : venster);
   let n = 0;
-  while (__timers.length && n < max) {
-    __timers.sort((a, b) => a.ms - b.ms);
-    const t = __timers.shift();
+  while (n < max) {
+    __timers.sort((a, b) => a.at - b.at);
+    const t = __timers[0];
+    if (!t || t.at > grens) break;
+    __timers.shift();
+    if (t.at > __klok) __klok = t.at;
     n++;
     t.fn();
   }

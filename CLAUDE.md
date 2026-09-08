@@ -47,6 +47,11 @@ README.md voor de spelvormen en de opbouw.
 - Vrienden: het geheim K komt uit ECDH over de relay (server ziet het niet),
   bus-id = sha256(HKDF(K, 'bus-<rol>')). Zonder K is een bus niet te vinden
   en een briefje niet te lezen. Op de server bestaat geen persoon of lijst.
+  Het `hallo` draagt per vriend HKDF(K, 'hallo-<kamer>'): wie een eigen
+  waarde terugziet weet dat hij de ander al kent, en dan biedt de app
+  "vrienden worden" niet nog eens aan (dat maakte een tweede geheim met
+  dezelfde persoon). Per kamer anders en aangevuld met willekeur tot een
+  vaste lengte, dus de relay heeft er niets aan (ook het aantal niet).
 - Ontwerp en achtergrond: memo
   `~/projects/memos/schaakheld/2026-08-14-multiplayer-en-sync-ontwerp.md`.
 

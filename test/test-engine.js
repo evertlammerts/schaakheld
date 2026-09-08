@@ -327,6 +327,15 @@ for (const wantTrap of [true, false]) {
     check('king pool ' + p.type + ': every other move loses (mate or clearly lost)', lost, rest.length);
     check('king pool ' + p.type + ': board untouched', E.toFEN(S), p.fen);
   }
+  /* check extensions have no bound of their own, so saveHolds leans on its
+     time budget; in a position where depth SAVE_DEPTH is too expensive it
+     stops and reports "not saved" rather than running on */
+  const heavy = E.parseFEN('qqqqkqqq/8/8/8/8/8/8/QQQQKQQQ b - - 0 1');
+  const tSave = Date.now();
+  const heavyHolds = E.saveHolds(heavy);
+  const dtSave = Date.now() - tSave;
+  check('saveHolds: stays within its budget (' + dtSave + 'ms)', dtSave < 2 * E.SAVE_MS, true);
+  check('saveHolds: an unproven position is not a save', heavyHolds, false);
   const t = E.genKingTask(null, 1);
   check('king: live generator smoke (one attempt)', t === null || (t.S.turn === 'w' && t.answers.length >= 1 && t.answers.length <= 2), true);
   check('colorFlipped: mirrors and swaps', E.toFEN(E.colorFlipped(E.parseFEN('k7/8/2K5/8/8/8/8/7R w - - 0 1'))), '7r/8/8/8/8/2k5/8/K7 b - - 0 1');

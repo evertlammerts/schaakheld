@@ -190,6 +190,12 @@ ok('principes: e4 = pion in het midden plus een aanval op d5', principles(pS0, '
 makeMove(pS0, legalMoves(pS0).find(function (m) { return moveKey(m) === 'e7e5'; }));
 makeMove(pS0, legalMoves(pS0).find(function (m) { return moveKey(m) === 'g1f3'; }));
 ok('principes: paard naar buiten telt als ontwikkeling', principles(pS0, 'w').dev === 1);
+/* een geslagen paard staat niet buiten: het lege beginveld telt niet mee */
+var pS1 = parseFEN('4k3/8/8/8/8/8/b7/1N2K3 b - - 0 1');
+var devVoor = principles(pS1, 'w').dev;
+makeMove(pS1, legalMoves(pS1).find(function (m) { return moveKey(m) === 'a2b1'; }));
+ok('principes: een geslagen paard op zijn beginveld telt niet als ontwikkeling',
+  devVoor === 0 && principles(pS1, 'w').dev === 0);
 
 goHome();
 startDrill('opening');
@@ -488,6 +494,15 @@ ok('wolk: dromer-trofee', !!P.badges.wolk);
 exitCloud();
 ok('wolk: terug naar echt, bord intact', session.S === realS && toFEN(session.S) === realFen &&
   BD.mode === 'move' && !session.cloud && realS.hist.length === 0);
+/* ← in de wolk is geen opgeven: eerst het echte bord terug, pas daarna weglopen */
+enterCloud();
+fire(__els.backBtn, 'click');
+ok('wolk: ← brengt terug naar echt en het potje loopt door', !!session && session.kind === 'game' &&
+  !session.cloud && !session.over && BD.mode === 'move' && __els.overlay.classList.contains('hidden'));
+fire(__els.backBtn, 'click');
+ok('wolk: nog een ← vraagt gewoon om opgeven', __els.modalBox.innerHTML.indexOf('Opgeven?') >= 0 &&
+  !!session && !session.over);
+fire(__els.rsNee, 'click');
 /* patroon-duiding in de partij: kid speelt een vork, Turbo benoemt hem */
 P.guard = false; P.predict = false;
 session.S = parseFEN('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1');
@@ -1440,6 +1455,16 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   /* ---------- vrienden: worden (ECDH over de relay), uitnodigen (brievenbus), weghalen ---------- */
   goHome();
   DOC.friends = {}; P.friends = DOC.friends;
+  /* de nep-crypto moet verschillende uitwisselingen ook echt verschillende
+     geheimen geven, anders lopen twee vriendschappen in de tests stil in
+     elkaar over */
+  var proefGeheim = {};
+  for (i = 0; i < 40; i++) {
+    var pA = await ecdhStart(), pB = await ecdhStart();
+    proefGeheim[await ecdhFinish(pA.kp, pB.pub)] = 1;
+  }
+  ok('nep-crypto: veertig uitwisselingen geven veertig verschillende geheimen',
+    Object.keys(proefGeheim).length === 40);
   var vk = __nieuweKamer();
   mpStart(vk.id, vk.host, true);
   var vmaat = new WebSocket('ws://nep');
@@ -1476,10 +1501,62 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   fire(__els.vrEind, 'click');
   await tikje();
   var fid = fids[0];
+  /* later nog eens samen spelen via een verse kamer: het hallo draagt per
+     vriend een bewijs uit K en het kamernummer, dus herkennen de twee
+     elkaar en wordt "vrienden worden" niet nog eens aangeboden - dat zou
+     een tweede geheim met dezelfde persoon maken */
   mpStart(vk.id, vk.host, true);
   await tikje();
-  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila' }));
+  var onsHallo = vmaat.inbox.filter(function (m) { return m.t === 'hallo'; }).pop();
+  var bewijsMila = b64url(await hkdfBits(mK, 'hallo-' + vk.id, 12));
+  ok('bewijs: ons hallo draagt het bewijs dat alleen Mila kan narekenen, tussen willekeur die niets zegt',
+    !!onsHallo && Array.isArray(onsHallo.bewijzen) && onsHallo.bewijzen.length === MAX_FRIENDS &&
+    onsHallo.bewijzen.indexOf(bewijsMila) >= 0 && onsHallo.bewijzen.indexOf(mK) < 0 &&
+    onsHallo.bewijzen.every(function (b) { return /^[A-Za-z0-9_-]{16}$/.test(b); }));
+  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', bewijzen: [bewijsMila] }));
   await tikje();
+  ok('bewijs: wij herkennen Mila aan haar bewijs', MP.viaFriend === fid);
+  closeModal();
+  session = { kind: 'game', online: true, myColor: 'w', over: false, S: parseFEN('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1') };
+  BD.mode = 'move';
+  commitKid(legalMoves(session.S).find(function (x) { return alg(x.to) === 'a8'; }));
+  await tikje();
+  ok('bewijs: het eindscherm biedt geen tweede vriendschap aan',
+    __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0 && __els.modalBox.innerHTML.indexOf('Vrienden worden') < 0);
+  closeModal();
+  session = null;
+  /* een bewijs uit een andere kamer telt niet, en rommel evenmin */
+  mpStop();
+  mpStart(vk.id, vk.host, true);
+  await tikje();
+  var bewijsElders = b64url(await hkdfBits(mK, 'hallo-andere-kamer', 12));
+  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', bewijzen: [bewijsElders] }));
+  await tikje();
+  ok('bewijs: een bewijs uit een andere kamer herkent niets', MP.viaFriend == null);
+  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', bewijzen: 'geen lijst' }));
+  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', bewijzen: [1, null, {}, 'kort', 'x'.repeat(400)] }));
+  await tikje();
+  ok('bewijs: rommel in het hallo doet niets en breekt niets', MP.viaFriend == null && !!MP && MP.peerOn === true);
+  modalQueue.length = 0;
+  closeModal();
+  /* de relay leest hoogstens 4 KB per bericht (maxWsBytes in room.go), dus
+     ook het hallo van een kind met een volle vriendenlijst moet passen */
+  var echteVrienden = P.friends;
+  P.friends = {};
+  for (i = 0; i < MAX_FRIENDS + 5; i++) {
+    P.friends['vriendje' + i] = { k: 'geheim-nummer-' + i + '-abcdefghij', naam: 'V' + i, host: true, weg: false, since: 1 };
+  }
+  mpStop();
+  mpStart(vk.id, vk.host, true);
+  await tikje();
+  var volHallo = vmaat.inbox.filter(function (m) { return m.t === 'hallo'; }).pop();
+  ok('bewijs: ook met een volle vriendenlijst blijft het hallo even lang en onder de 4 KB van de relay',
+    !!volHallo && volHallo.bewijzen.length === MAX_FRIENDS && JSON.stringify(volHallo).length < 4096 &&
+    volHallo.bewijzen.length === onsHallo.bewijzen.length);
+  P.friends = echteVrienden;
+  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila' })); /* haar naam terug op de verse verbinding */
+  await tikje();
+  modalQueue.length = 0;
   closeModal();
   /* andersom: het maatje vraagt, wij zeggen nee en daarna ja */
   MP.viaFriend = null;
@@ -1500,6 +1577,37 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('vriend: als ja-zegger opgeslagen met rol b', !!P.friends[fid2] && P.friends[fid2].host === false && P.friends[fid2].k === mK2);
   closeModal();
   ok('vriend: kapotte sleutel wordt genegeerd', (function () { mpOnVriendVraag({ t: 'vriend?', pub: 'x<script>' }); return __els.overlay.classList.contains('hidden'); })());
+  /* zijn vraag komt binnen terwijl het eindscherm nog open staat: dan wacht
+     hij in de rij en zien wij hem niet. Tikken wij dan zelf op "vrienden
+     worden", dan is dat ja zeggen op zijn vraag. Twee losse vragen zouden
+     twee geheimen maken, waarvan de ander er maar een kent. */
+  MP.viaFriend = null;
+  MP.hunVraag = null;
+  var voorDub = Object.keys(P.friends).length;
+  vmaat.inbox.length = 0;
+  showModal('<div class="m-emoji">🏆</div><h2>JIJ WINT!</h2>', function () {});
+  var dubKp = await ecdhStart();
+  vmaat.send(JSON.stringify({ t: 'vriend?', pub: dubKp.pub }));
+  await tikje();
+  ok('vriend: zijn vraag wacht achter het eindscherm', modalQueue.length === 1 &&
+    __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0);
+  await vriendVragen();
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  var dubAntw = vmaat.inbox.filter(function (m) { return m.t === 'vriend' && m.pub; })[0];
+  var dubK = dubAntw ? await ecdhFinish(dubKp.kp, dubAntw.pub) : null;
+  var dubFid = dubK ? (await sha256hex(dubK)).slice(0, 16) : null;
+  ok('vriend: zelf vragen is dan ja zeggen, één vriendschap met hetzelfde geheim',
+    !vmaat.inbox.some(function (m) { return m.t === 'vriend?'; }) &&
+    Object.keys(P.friends).length === voorDub + 1 && !!dubFid && !!P.friends[dubFid] &&
+    P.friends[dubFid].k === dubK && P.friends[dubFid].host === false);
+  ok('vriend: de wachtende vraag is weg en kan niet alsnog beantwoord worden',
+    modalQueue.length === 0 && __els.modalBox.innerHTML.indexOf('wil vrienden worden') < 0 &&
+    MP.hunVraag === null);
+  /* en andersom: is de vraag wel op tijd te zien, dan blijft ja zeggen ja zeggen */
+  setFriend(dubFid, Object.assign({}, P.friends[dubFid], { weg: true }));
+  closeModal();
+  await tikje();
   /* allebei tegelijk gevraagd: één K aan beide kanten, geen dubbele vrienden */
   MP.viaFriend = null;
   var voorKruis = Object.keys(P.friends).length;
@@ -1539,9 +1647,9 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     !!MP && MP.host === true && MP.viaFriend === fid && __els.modalBox.innerHTML.indexOf('Wachten op Mila') >= 0);
   var theirBus = await busFor(P.friends[fid], theirRole(P.friends[fid]));
   ok('uitnodiging: de bus is die van Mila (rol b) en het briefje is versleuteld', bussen[0] === theirBus.bus &&
-    __server.buses[bussen[0]].indexOf(MP.room) < 0);
+    __server.buses[bussen[0]].blob.indexOf(MP.room) < 0);
   ok('uitnodiging: zonder K is het briefje niet te lezen', await (async function () {
-    try { await openJSON('verkeerd-geheim-12345678901234567890', 'uitnodiging', b64urlBytes(__server.buses[bussen[0]])); return false; }
+    try { await openJSON('verkeerd-geheim-12345678901234567890', 'uitnodiging', b64urlBytes(__server.buses[bussen[0]].blob)); return false; }
     catch (e) { return true; }
   })());
   renderFriends();
@@ -1579,15 +1687,32 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   for (i = 0; i < 30; i++) await null;
   ok('uitnodiging: en dan wel getoond', __els.modalBox.innerHTML.indexOf('wil een potje spelen') >= 0 && seenInv.length === 1);
   fire(__els.invNee, 'click');
-  /* twee vrienden nodigen elkaar tegelijk uit: rol b (wij, host=false) trekt
-     de eigen uitnodiging in en gaat op die van rol a in */
+  /* twee vrienden nodigen elkaar tegelijk uit: rol b (wij, host=false) krijgt
+     de vraag te zien en houdt zijn eigen uitnodiging tot het kind ja zegt */
   seenInv = [];
   INV = { fid: fid, bus: 'x'.repeat(64), bewijs: 'y'.repeat(20) };
   MP = { room: 'r', seat: 's', host: true, myColor: null, gameNo: 0, open: false, weg: false, ws: null };
   await friendPoll();
   for (i = 0; i < 30; i++) await null;
-  ok('uitnodiging: gekruist, rol b gaat op de ander in', INV === null && __els.modalBox.innerHTML.indexOf('wil een potje spelen') >= 0);
+  ok('uitnodiging: gekruist, rol b krijgt de vraag en houdt zolang zijn eigen uitnodiging',
+    INV !== null && __els.modalBox.innerHTML.indexOf('wil een potje spelen') >= 0);
   fire(__els.invNee, 'click');
+  ok('uitnodiging: nu niet = ons eigen wachtscherm komt terug',
+    INV !== null && __els.modalBox.innerHTML.indexOf('Wachten op Mila') >= 0);
+  closeModal();
+  /* wel ja zeggen: dan pas gaat onze eigen uitnodiging eraan */
+  seenInv = [];
+  INV = { fid: fid, bus: 'x'.repeat(64), bewijs: 'y'.repeat(20) };
+  MP = { room: 'r', seat: 's', host: true, myColor: null, gameNo: 0, open: false, weg: false, ws: null };
+  await friendPoll();
+  for (i = 0; i < 30; i++) await null;
+  fire(__els.invJa, 'click');
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  ok('uitnodiging: ja = eigen uitnodiging weg, wij zijn gast in zijn kamer',
+    INV === null && !!MP && MP.host === false && MP.viaFriend === fid);
+  mpStop(); MP = null;
+  closeModal();
   /* rol a laat de eigen uitnodiging staan en negeert de gekruiste */
   seenInv = [];
   setFriend(fid, Object.assign({}, P.friends[fid], { host: true }));
@@ -1609,10 +1734,115 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var r400 = await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: {}, body: JSON.stringify({ bus: theirBus.bus, bewijs: 'ander-bewijs-1234567890', blob: 'x' }) });
   ok('uitnodiging: zonder het juiste bewijs weigert de server', r400.status === 400);
 
-  /* weghalen: tombstone in de CRDT, lijst leeg */
+  /* de rest van de bus-semantiek uit bus.go: een briefje blijft tien minuten
+     liggen, een te groot briefje mag niet, meer dan 64 bussen tegelijk
+     opvragen ook niet, en vol is vol */
+  INV = null; MP = null; session = null;
+  setFriend(fid, Object.assign({}, P.friends[fid], { host: false })); /* onze eigen bus is rol b */
+  var mijnBus = await busFor(P.friends[fid], myRole(P.friends[fid]));
+  var briefje = b64url(await sealJSON(P.friends[fid].k, 'uitnodiging',
+    { id: 'oudbriefje', room: 'kamer-oud-12345', seat: 'stoel-oud-12345', naam: 'Mila', ts: Date.now() }));
+  await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bus: mijnBus.bus, bewijs: mijnBus.bewijs, blob: briefje }) });
+  for (i = 0; i < 20; i++) await null;
+  __server.klok += BUS_TTL + 60000;
+  seenInv = [];
+  await friendPoll();
+  for (i = 0; i < 30; i++) await null;
+  ok('bus: een briefje ouder dan tien minuten is verlopen en komt niet meer omhoog',
+    __els.overlay.classList.contains('hidden') && Object.keys(__server.buses).length === 0 && seenInv.length === 0);
+  __server.klok = 0;
+  clearTimeout(friendPollTimer);
+  var rGroot = await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: {},
+    body: JSON.stringify({ bus: mijnBus.bus, bewijs: mijnBus.bewijs, blob: 'x'.repeat(MAX_BUS_BLOB + 1) }) });
+  ok('bus: een te groot briefje weigert de server', rGroot.status === 400 && Object.keys(__server.buses).length === 0);
+  var teveel = [];
+  for (i = 0; i < MAX_BUS_CHECK + 1; i++) teveel.push(i.toString(16).padStart(64, '0'));
+  var rVeel = await fetch(SYNC_URL + '/v1/bus/check', { method: 'POST', headers: {}, body: JSON.stringify({ bussen: teveel }) });
+  ok('bus: meer dan 64 bussen in een keer opvragen weigert de server', rVeel.status === 400);
+  for (i = 0; i < MAX_BUSES; i++) __server.buses[i.toString(16).padStart(64, '0')] = { blob: 'x', tot: __busNu() + BUS_TTL };
+  var rVol = await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: {},
+    body: JSON.stringify({ bus: mijnBus.bus, bewijs: mijnBus.bewijs, blob: briefje }) });
+  ok('bus: vol is vol, een nieuwe bus komt er niet meer bij', rVol.status === 429 && !(mijnBus.bus in __server.buses));
+  __server.buses[mijnBus.bus] = { blob: 'oud', tot: __busNu() + BUS_TTL };
+  var rVerv = await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: {},
+    body: JSON.stringify({ bus: mijnBus.bus, bewijs: mijnBus.bewijs, blob: briefje }) });
+  ok('bus: een bestaande bus mag ook bij een volle server vervangen worden',
+    rVerv.status === 204 && __server.buses[mijnBus.bus].blob === briefje);
+  __server.buses = {};
+
+  /* wie zelf op iemand wacht moet een uitnodiging van een ander nog steeds
+     te zien krijgen: met twee vermeldingen van hetzelfde kind (een kapotte
+     en een goede) bleven anders allebei de kanten eeuwig wachten */
+  seenInv = [];
+  INV = null; MP = null; session = null;
+  closeModal();
+  setFriend(fid2, { k: mK2, naam: 'Bo', host: false, weg: false, since: Date.now() });
+  await inviteFriend(fid);
+  for (i = 0; i < 30; i++) await null;
+  ok('twee kanten: wij wachten op Mila',
+    !!INV && INV.fid === fid && __els.modalBox.innerHTML.indexOf('Wachten op Mila') >= 0);
+  var busBo = await busFor(P.friends[fid2], myRole(P.friends[fid2]));
+  var kamerBo = __nieuweKamer();
+  var briefBo = b64url(await sealJSON(mK2, 'uitnodiging',
+    { id: 'bobriefje', room: kamerBo.id, seat: kamerBo.gast, naam: 'Bo', ts: Date.now() }));
+  await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: {},
+    body: JSON.stringify({ bus: busBo.bus, bewijs: busBo.bewijs, blob: briefBo }) });
+  for (i = 0; i < 20; i++) await null;
+  await friendPoll();
+  for (i = 0; i < 30; i++) await null;
+  ok('twee kanten: de uitnodiging van Bo komt langs ons eigen wachtscherm heen',
+    __els.modalBox.innerHTML.indexOf('Bo wil een potje spelen') >= 0 && !!INV && INV.fid === fid);
+  fire(__els.invNee, 'click');
+  ok('twee kanten: nu niet = ons wachtscherm terug en onze uitnodiging staat nog',
+    !!INV && INV.fid === fid && __els.modalBox.innerHTML.indexOf('Wachten op Mila') >= 0);
+  /* na tien minuten is het briefje uit de bus en houdt het wachten op */
+  drainTimers(400, INVITE_TTL + 60000);
+  for (i = 0; i < 30; i++) await null;
+  ok('twee kanten: een verlopen uitnodiging stopt met wachten en zegt het',
+    INV === null && MP === null && __els.modalBox.innerHTML.indexOf('heeft niet gekeken') >= 0);
+  fire(__els.invOudOk, 'click');
+  for (i = 0; i < 20; i++) await null;
+  setFriend(fid2, Object.assign({}, P.friends[fid2], { weg: true }));
+  __server.buses = {};
+
+  /* een uitnodiging aannemen van een kamer waar niemand (meer) zit - zijn app
+     ging dicht - laat "Verbinden…" niet eeuwig draaien */
+  seenInv = [];
+  INV = null; MP = null; session = null;
+  closeModal();
+  var stil = __nieuweKamer();
+  var stilBrief = b64url(await sealJSON(P.friends[fid].k, 'uitnodiging',
+    { id: 'stilbriefje', room: stil.id, seat: stil.gast, naam: 'Mila', ts: Date.now() }));
+  await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: {},
+    body: JSON.stringify({ bus: mijnBus.bus, bewijs: mijnBus.bewijs, blob: stilBrief }) });
+  for (i = 0; i < 20; i++) await null;
+  await friendPoll();
+  for (i = 0; i < 30; i++) await null;
+  ok('stille kamer: de vraag komt gewoon op het scherm', __els.modalBox.innerHTML.indexOf('wil een potje spelen') >= 0);
+  fire(__els.invJa, 'click');
+  for (i = 0; i < 30; i++) await null;
+  drainTimers();
+  ok('stille kamer: eerst verbinden', !!MP && MP.host === false &&
+    __els.modalBox.innerHTML.indexOf('Verbinden') >= 0);
+  drainTimers(400, MAATJE_WACHT + 5000);
+  for (i = 0; i < 30; i++) await null;
+  ok('stille kamer: daarna een eerlijke melding in plaats van eeuwig wachten',
+    MP === null && __els.modalBox.innerHTML.indexOf('is er nu even niet') >= 0);
+  fire(__els.mpStilOk, 'click');
+  for (i = 0; i < 20; i++) await null;
+  __server.buses = {};
+  setFriend(fid, Object.assign({}, P.friends[fid], { host: true }));
+
+  /* weghalen: tombstone in de CRDT, lijst leeg. De lijst wordt bij elk bezoek
+     opnieuw getekend, dus een tik mag maar een keer aankomen */
   showHomeTab('vrienden');
+  showHomeTab('spelen');
+  showHomeTab('vrienden');
+  renderFriends();
   fire(__els.friendList, 'click', { target: { dataset: { remove: fid } } });
-  ok('vriend: weghalen vraagt eerst', __els.modalBox.innerHTML.indexOf('Mila weghalen') >= 0);
+  ok('vriend: weghalen vraagt eerst, en na vier keer tekenen nog steeds maar een keer',
+    __els.modalBox.innerHTML.indexOf('Mila weghalen') >= 0 && modalQueue.length === 0);
   fire(__els.rmVrJa, 'click');
   ok('vriend: weg = tombstone, lijst leeg', P.friends[fid].weg === true && DOC.friends[fid].weg === true &&
     __els.friendList.innerHTML.indexOf('Nog geen vrienden') >= 0);

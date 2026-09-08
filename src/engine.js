@@ -438,6 +438,10 @@ const ZOB = (() => {
   const ep = []; for (let f = 0; f < 8; f++) ep.push([next(), next()]);
   return { pcs, castle, ep, side: [next(), next()] };
 })();
+/* The 11 lowest bits of the second word do not fit in the 53-bit key. They
+   stay here until the next hashOf call and go into the TT entry, so that a
+   colliding position is recognised instead of read back as a score. */
+let hashLow = 0;
 function hashOf(S) {
   let a = 0, b = 0;
   for (let sq = 0; sq < 128; sq++) {
@@ -448,6 +452,7 @@ function hashOf(S) {
   if (S.turn === 'b') { a ^= ZOB.side[0]; b ^= ZOB.side[1]; }
   for (const c of 'KQkq') if (S.castle[c]) { a ^= ZOB.castle[c][0]; b ^= ZOB.castle[c][1]; }
   if (S.ep >= 0) { const z = ZOB.ep[S.ep & 15]; a ^= z[0]; b ^= z[1]; }
+  hashLow = (b >>> 0) & 2047;
   return (a >>> 0) * 2097152 + ((b >>> 0) >>> 11);
 }
 const TT = new Map();
@@ -488,10 +493,10 @@ function think(S, budgetMs, maxDepth) {
     if (chk) depth++;
     if (depth <= 0) return quiesce(S, alpha, beta, 6, evalSTM, tick);
     if (S.half >= 100) return 0;
-    const key = hashOf(S);
+    const key = hashOf(S), low = hashLow;
     const e = TT.get(key);
     let ttMove = null;
-    if (e) {
+    if (e && e.v === low) {
       ttMove = e.m;
       if (e.d >= depth) {
         const s = fromTT(e.s, ply);
@@ -522,7 +527,7 @@ function think(S, budgetMs, maxDepth) {
         }
       }
     }
-    TT.set(key, { d: depth, s: toTT(best, ply), f: best <= alpha0 ? 2 : (best >= beta ? 1 : 0), m: bestM });
+    TT.set(key, { d: depth, s: toTT(best, ply), f: best <= alpha0 ? 2 : (best >= beta ? 1 : 0), m: bestM, v: low });
     return best;
   }
   const rootMoves = legalMoves(S);
@@ -1100,14 +1105,19 @@ function genMate2Task(rng) {
    depth-2 pass only prunes; the expensive pass decides. */
 const SAVE_DEPTH = 4;
 /* Is white really saved after its move (black to move)? Two conditions, via
-   the TT-backed searcher (check extensions, no deadline): black has no forced
-   mate within SAVE_DEPTH/2 moves, and black is not clearly winning anyway: a
-   "save" that only postpones a lost game teaches nothing, and forced mates
-   just beyond the horizon come with a crushing score. Proving "no mate" at
-   depth 6 costs seconds on a full board, so this is the honest bound. */
+   the TT-backed searcher (check extensions): black has no forced mate within
+   SAVE_DEPTH/2 moves, and black is not clearly winning anyway: a "save" that
+   only postpones a lost game teaches nothing, and forced mates just beyond
+   the horizon come with a crushing score. Proving "no mate" at depth 6 costs
+   seconds on a full board, so this is the honest bound. Check extensions have
+   no bound of their own, hence the budget; only a search that reached
+   SAVE_DEPTH proves anything, so anything shallower is dropped. */
 const SAVE_MAX_EVAL = 300;
+const SAVE_MS = 1200;
 function saveHolds(S) {
-  const r = think(S, 1e12, SAVE_DEPTH);
+  const r = think(S, SAVE_MS, SAVE_DEPTH);
+  if (r.score <= -MATE + 100) return true; /* white mates: settled at any depth */
+  if (r.depth < SAVE_DEPTH) return false;
   return r.score < Math.min(MATE - SAVE_DEPTH - 1, SAVE_MAX_EVAL);
 }
 /* The same position with the colours swapped and the board mirrored: the
@@ -1239,6 +1249,6 @@ if (typeof module !== 'undefined') {
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
-    winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, saveHolds, colorFlipped,
+    winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think };
 }
