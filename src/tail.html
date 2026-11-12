@@ -2765,19 +2765,13 @@ function scanCheck() {
   const errs = bad.size + missed.size;
   const stars = errs === 0 ? 3 : (errs === 1 ? 2 : (good.size >= Math.ceil(T.size / 2) ? 1 : 0));
   if (stars === 3) { bump('c.perfectScans', 1); }
-  const msgs = {
-    3: 'PERFECT gespeurd! Alles gevonden! 🎉',
-    2: 'Bijna perfect! Eéntje fout. Turbo legt het uit! 👇',
-    1: 'Goed geprobeerd! Turbo legt uit wat je miste. 👇',
-    0: 'Geen zorgen, zo leer je het! Turbo legt alles uit. 👇'
-  };
   const expl = scanExplanations(session.task, bad, missed).map(e => e.replace(/^[^A-Za-zÀ-ÿ<]+/, ''));
   /* de eerste reden staat in de strook boven het bord, de rest in de uitleg eronder */
   const rest = expl.slice(1);
   setTask('<div class="e-head">' + (stars === 3 ? 'Perfect gespeurd!' : 'Zo zit het') + '</div><div class="e-body">' +
     (rest.length ? '<p>Nog ' + rest.length + (rest.length === 1 ? ' ding:' : ' dingen:') + '</p><ul>' +
       rest.map(e => '<li>' + e + '</li>').join('') + '</ul>' : '') + '</div>');
-  awardRound(stars, msgs[stars] + (expl.length ? ' ' + expl[0] : ''));
+  awardRound(stars, expl.length ? expl[0] : 'PERFECT gespeurd! Alles gevonden! 🎉');
 }
 
 /* Kid points from centipawns, consistent with the Puntenwijzer (queen 950 -> 9). */
@@ -3628,9 +3622,10 @@ function startGame(level, bewaard) {
 
 function gameActions() {
   setActions([
-    { label: '☁️ Denkwolk', cls: 'plain small helper', fn: enterCloud, id: 'cloudBtn' },
-    { label: '👀 Speurbril (' + session.tips + ')', cls: 'plain small helper', fn: useTip, id: 'tip' },
-    { label: '↩ Zet terug', cls: 'plain small helper', fn: undoMove, id: 'undo' }
+    /* in de zijkolom staat het plaatje boven het woord, op de telefoon ernaast */
+    { label: '☁️\nDenkwolk', cls: 'plain small helper', fn: enterCloud, id: 'cloudBtn' },
+    { label: '👀\nSpeurbril ' + session.tips, cls: 'plain small helper', fn: useTip, id: 'tip', disabled: session.tips <= 0 },
+    { label: '↩\nZet terug', cls: 'plain small helper', fn: undoMove, id: 'undo' }
   ]);
   if (actionBtns.tip) actionBtns.tip.title = 'Laat alle aangevallen stukken even oplichten. Drie keer per potje.';
   if (actionBtns.cloudBtn) actionBtns.cloudBtn.title = 'Oefenbord: probeer zetten uit zonder dat het telt.';
@@ -4135,7 +4130,7 @@ function useTip() {
   session.tips--;
   bewaarPotje();
   if (actionBtns.tip) {
-    actionBtns.tip.textContent = '👀 Speurbril (' + session.tips + ')';
+    actionBtns.tip.textContent = '👀\nSpeurbril ' + session.tips;
     if (session.tips === 0) actionBtns.tip.disabled = true;
   }
   BD.spy = spy;

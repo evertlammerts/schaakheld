@@ -553,17 +553,18 @@
     background: var(--surface); font-size: 20px; font-weight: 700; cursor: pointer;
   }
   @media (max-width: 399px) { .play-bar { gap: 6px; } .back-btn { padding: 6px 10px; } }
-  @media (max-height: 659px) and (orientation: portrait) {
-    .play-strip { padding: 4px 12px 12px; }
-    .play-strip .s-txt { line-height: 1.3; }
-  }
   .play-strip {
     grid-area: strip; position: relative; margin: 0 var(--g); min-height: 0;
     display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px 14px; border-radius: 16px;
     background: var(--surface); border: var(--border); overflow: hidden;
   }
   .play-strip .mascot { flex: none; width: 28px; height: 28px; font-size: 18px; display: grid; place-items: center; }
-  .play-strip .s-txt { flex: 1; min-width: 0; max-height: 100%; overflow-y: auto; font-size: var(--fs-md); line-height: 1.35; }
+  /* een hoogte in procenten houdt WebKit hier niet vast; de strook heeft een vaste hoogte, dus die telt */
+  .play-strip .s-txt { flex: 1; min-width: 0; max-height: calc(var(--strip-h) - 22px); overflow-y: auto; font-size: var(--fs-md); line-height: 1.35; }
+  @media (max-height: 659px) and (orientation: portrait) {
+    .play-strip { padding: 4px 12px 12px; }
+    .play-strip .s-txt { line-height: 1.3; max-height: calc(var(--strip-h) - 16px); }
+  }
   /* langere tekst scrolt in de strook; een zachte rand onderaan zegt dat er meer staat */
   .play-strip::after { content: ''; position: absolute; left: 0; right: 0; bottom: 10px; height: 10px;
     background: linear-gradient(rgba(255, 255, 255, 0), var(--strip-bg, #FFFFFF)); pointer-events: none; }
@@ -654,7 +655,9 @@
     .tegen { order: 3; flex-basis: 100%; }
     .meer-btn { margin-left: auto; }
     .play-bottom .action-row .btn { white-space: normal; font-size: var(--fs-cap); min-height: 52px; padding: 0 6px; }
+    .play-bottom .action-row .btn.helper { white-space: pre-line; }
     .play-strip { margin: 0; height: auto; min-height: 88px; max-height: 180px; }
+    .play-strip .s-txt { max-height: 158px; }
   }
   @media (orientation: landscape) and (min-width: 1100px) { .play { --side: 340px; } }
 
@@ -5207,19 +5210,13 @@ function scanCheck() {
   const errs = bad.size + missed.size;
   const stars = errs === 0 ? 3 : (errs === 1 ? 2 : (good.size >= Math.ceil(T.size / 2) ? 1 : 0));
   if (stars === 3) { bump('c.perfectScans', 1); }
-  const msgs = {
-    3: 'PERFECT gespeurd! Alles gevonden! 🎉',
-    2: 'Bijna perfect! Eéntje fout. Turbo legt het uit! 👇',
-    1: 'Goed geprobeerd! Turbo legt uit wat je miste. 👇',
-    0: 'Geen zorgen, zo leer je het! Turbo legt alles uit. 👇'
-  };
   const expl = scanExplanations(session.task, bad, missed).map(e => e.replace(/^[^A-Za-zÀ-ÿ<]+/, ''));
   /* de eerste reden staat in de strook boven het bord, de rest in de uitleg eronder */
   const rest = expl.slice(1);
   setTask('<div class="e-head">' + (stars === 3 ? 'Perfect gespeurd!' : 'Zo zit het') + '</div><div class="e-body">' +
     (rest.length ? '<p>Nog ' + rest.length + (rest.length === 1 ? ' ding:' : ' dingen:') + '</p><ul>' +
       rest.map(e => '<li>' + e + '</li>').join('') + '</ul>' : '') + '</div>');
-  awardRound(stars, msgs[stars] + (expl.length ? ' ' + expl[0] : ''));
+  awardRound(stars, expl.length ? expl[0] : 'PERFECT gespeurd! Alles gevonden! 🎉');
 }
 
 /* Kid points from centipawns, consistent with the Puntenwijzer (queen 950 -> 9). */
@@ -6070,9 +6067,10 @@ function startGame(level, bewaard) {
 
 function gameActions() {
   setActions([
-    { label: '☁️ Denkwolk', cls: 'plain small helper', fn: enterCloud, id: 'cloudBtn' },
-    { label: '👀 Speurbril (' + session.tips + ')', cls: 'plain small helper', fn: useTip, id: 'tip' },
-    { label: '↩ Zet terug', cls: 'plain small helper', fn: undoMove, id: 'undo' }
+    /* in de zijkolom staat het plaatje boven het woord, op de telefoon ernaast */
+    { label: '☁️\nDenkwolk', cls: 'plain small helper', fn: enterCloud, id: 'cloudBtn' },
+    { label: '👀\nSpeurbril ' + session.tips, cls: 'plain small helper', fn: useTip, id: 'tip', disabled: session.tips <= 0 },
+    { label: '↩\nZet terug', cls: 'plain small helper', fn: undoMove, id: 'undo' }
   ]);
   if (actionBtns.tip) actionBtns.tip.title = 'Laat alle aangevallen stukken even oplichten. Drie keer per potje.';
   if (actionBtns.cloudBtn) actionBtns.cloudBtn.title = 'Oefenbord: probeer zetten uit zonder dat het telt.';
@@ -6577,7 +6575,7 @@ function useTip() {
   session.tips--;
   bewaarPotje();
   if (actionBtns.tip) {
-    actionBtns.tip.textContent = '👀 Speurbril (' + session.tips + ')';
+    actionBtns.tip.textContent = '👀\nSpeurbril ' + session.tips;
     if (session.tips === 0) actionBtns.tip.disabled = true;
   }
   BD.spy = spy;
