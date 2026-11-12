@@ -9,6 +9,7 @@ package main
 //   - de server ziet alleen versleutelde bytes, nooit inhoud
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
@@ -77,12 +78,13 @@ type server struct {
 	cfg config
 	mux *http.ServeMux
 
-	mu       sync.Mutex // beschermt links, accounts, rooms, pending en de profielbestanden
+	mu       sync.Mutex // beschermt alle tabellen hieronder en de profielbestanden
 	links    map[string]linkEntry
 	accounts int // aantal profielbestanden, begrensd door maxAccounts
 	rooms    map[string]*room
 	pending  map[string]*pendingPair
 	buses    map[string]busEntry
+	potjes   map[string]potjeEntry
 
 	// losse semaforen (elk cfg.redeemSlots breed) voor de
 	// onge-authenticeerde schrijfpaden, zodat een vloed op het ene pad
@@ -93,6 +95,7 @@ type server struct {
 	roomC   chan struct{}
 	pairC   chan struct{}
 	busC    chan struct{}
+	potjeC  chan struct{}
 
 	wsActive atomic.Int32 // gelijktijdige websocket-verbindingen, begrensd door maxWsConns
 }
@@ -122,12 +125,14 @@ func newServer(cfg config) (*server, error) {
 		rooms:   map[string]*room{},
 		pending: map[string]*pendingPair{},
 		buses:   map[string]busEntry{},
+		potjes:  map[string]potjeEntry{},
 		redeemC: make(chan struct{}, cfg.redeemSlots),
 		linkC:   make(chan struct{}, cfg.redeemSlots),
 		putC:    make(chan struct{}, cfg.redeemSlots),
 		roomC:   make(chan struct{}, cfg.redeemSlots),
 		pairC:   make(chan struct{}, cfg.redeemSlots),
 		busC:    make(chan struct{}, cfg.redeemSlots),
+		potjeC:  make(chan struct{}, cfg.redeemSlots),
 	}
 	entries, err := os.ReadDir(cfg.dataDir)
 	if err != nil {
@@ -152,6 +157,7 @@ func newServer(cfg config) (*server, error) {
 	mux.HandleFunc("GET /v1/room/ws", s.handleRoomWS)
 	mux.HandleFunc("POST /v1/bus", s.handleBusPost)
 	mux.HandleFunc("POST /v1/bus/check", s.handleBusCheck)
+	mux.HandleFunc("POST /v1/potje", s.handlePotjePost)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "ok\n")
 	})
@@ -486,6 +492,23 @@ func readJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) bool {
 		return false
 	}
 	if err := json.Unmarshal(body, v); err != nil {
+		http.Error(w, "geen geldige json", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+// readJSONStrict weigert ook een veld dat v niet kent: wat de server niet
+// nodig heeft, hoort hij niet te krijgen.
+func readJSONStrict(w http.ResponseWriter, r *http.Request, limit int64, v any) bool {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
+	if err != nil {
+		http.Error(w, "body te groot", http.StatusRequestEntityTooLarge)
+		return false
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	if dec.Decode(v) != nil || dec.More() {
 		http.Error(w, "geen geldige json", http.StatusBadRequest)
 		return false
 	}

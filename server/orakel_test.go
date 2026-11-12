@@ -276,7 +276,8 @@ func leesPotjes(s *server, ids ...string) potjesGelezen {
 
 func TestOrakelPotjeSchrijvenEnLezen(t *testing.T) {
 	s, _ := newTestServer(t, nil)
-	nogNiet(t, "[6.10] een potjesbus: schrijven met het bewijs, lezen via de check, opnieuw schrijven vervangt", func(t tb) {
+	// [6.10] een potjesbus: schrijven met het bewijs, lezen via de check, opnieuw schrijven vervangt
+	func(t tb) {
 		bewijs, bus := potjeBus("a")
 		if c := schrijfPotje(s, bewijs, bus, "potje-1"); c != 204 {
 			t.Fatalf("schrijven: %d, wil 204", c)
@@ -290,12 +291,13 @@ func TestOrakelPotjeSchrijvenEnLezen(t *testing.T) {
 		if g := leesPotjes(s, bus); g.Blobs[bus] != "potje-2" || len(g.Blobs) != 1 {
 			t.Fatalf("het tweede vervangt het eerste: %+v", g)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeBewijsEnGrootte(t *testing.T) {
 	s, _ := newTestServer(t, nil)
-	nogNiet(t, "[6.10] een potjesbus vraagt het juiste bewijs en houdt hoogstens 4096 tekens", func(t tb) {
+	// [6.10] een potjesbus vraagt het juiste bewijs en houdt hoogstens 4096 tekens
+	func(t tb) {
 		bewijs, bus := potjeBus("a")
 		_, ander := potjeBus("b")
 		if c := schrijfPotje(s, bewijs, ander, "x"); c != 400 {
@@ -310,12 +312,13 @@ func TestOrakelPotjeBewijsEnGrootte(t *testing.T) {
 		if c := schrijfPotje(s, bewijs, bus, strings.Repeat("a", 4096)); c != 204 {
 			t.Fatalf("precies 4096 tekens: %d, wil 204", c)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeLeeftDertigDagen(t *testing.T) {
 	s, clk := newTestServer(t, nil)
-	nogNiet(t, "[6.10] een potjesbus leeft 30 dagen na het laatste schrijven", func(t tb) {
+	// [6.10] een potjesbus leeft 30 dagen na het laatste schrijven
+	func(t tb) {
 		bewijs, bus := potjeBus("a")
 		if c := schrijfPotje(s, bewijs, bus, "x"); c != 204 {
 			t.Fatalf("schrijven: %d", c)
@@ -328,12 +331,13 @@ func TestOrakelPotjeLeeftDertigDagen(t *testing.T) {
 		if g := leesPotjes(s, bus); len(g.Blobs) != 0 {
 			t.Fatalf("na 30 dagen hoort hij weg te zijn: %+v", g)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeSchrijvenVerlengt(t *testing.T) {
 	s, clk := newTestServer(t, nil)
-	nogNiet(t, "[6.10] elk schrijven verlengt, ook met dezelfde bytes", func(t tb) {
+	// [6.10] elk schrijven verlengt, ook met dezelfde bytes
+	func(t tb) {
 		bewijs, bus := potjeBus("a")
 		if c := schrijfPotje(s, bewijs, bus, "x"); c != 204 {
 			t.Fatalf("schrijven: %d", c)
@@ -350,12 +354,13 @@ func TestOrakelPotjeSchrijvenVerlengt(t *testing.T) {
 		if g := leesPotjes(s, bus); len(g.Blobs) != 0 {
 			t.Fatalf("op dag 50 hoort hij weg te zijn: %+v", g)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeLezenVerlengtNiet(t *testing.T) {
 	s, clk := newTestServer(t, nil)
-	nogNiet(t, "[6.10] lezen verlengt een potjesbus niet", func(t tb) {
+	// [6.10] lezen verlengt een potjesbus niet
+	func(t tb) {
 		bewijs, bus := potjeBus("a")
 		if c := schrijfPotje(s, bewijs, bus, "x"); c != 204 {
 			t.Fatalf("schrijven: %d", c)
@@ -368,12 +373,13 @@ func TestOrakelPotjeLezenVerlengtNiet(t *testing.T) {
 		if g := leesPotjes(s, bus); len(g.Blobs) != 0 {
 			t.Fatalf("op dag 30 hoort hij weg te zijn, ook na het lezen: %+v", g)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeLeegWist(t *testing.T) {
 	s, _ := newTestServer(t, nil)
-	nogNiet(t, "[6.10] een leeg potje wist de bus", func(t tb) {
+	// [6.10] een leeg potje wist de bus
+	func(t tb) {
 		bewijs, bus := potjeBus("a")
 		if c := schrijfPotje(s, bewijs, bus, "x"); c != 204 {
 			t.Fatalf("schrijven: %d", c)
@@ -388,12 +394,13 @@ func TestOrakelPotjeLeegWist(t *testing.T) {
 		if c := schrijfPotje(s, onbekend, onbekendeBus, ""); c != 204 {
 			t.Fatalf("een onbekende bus wissen: %d, wil 204", c)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeVolMaaktPlaats(t *testing.T) {
 	s, clk := newTestServer(t, nil)
-	nogNiet(t, "[6.10] bij 1024 potjesbussen maakt de langst niet geschreven bus plaats", func(t tb) {
+	// [6.10] bij 1024 potjesbussen maakt de langst niet geschreven bus plaats
+	func(t tb) {
 		var bussen []string
 		schrijf := func(i int) {
 			bewijs, bus := potjeBus(fmt.Sprintf("v%04d", i))
@@ -434,13 +441,14 @@ func TestOrakelPotjeVolMaaktPlaats(t *testing.T) {
 			t.Fatalf("de langst niet geschreven bus hoort plaats te maken, niet de oudste: de tweede %v, de derde %v",
 				a[bussen[1]], a[bussen[2]])
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeEnUitnodigingApart(t *testing.T) {
 	sU, _ := newTestServer(t, nil)
 	sP, clkP := newTestServer(t, nil)
-	nogNiet(t, "[6.10] potjesbussen en uitnodigingen hebben elk hun eigen tabel en leven", func(t tb) {
+	// [6.10] potjesbussen en uitnodigingen hebben elk hun eigen tabel en leven
+	func(t tb) {
 		for i := 0; i < 512; i++ {
 			b := fmt.Sprintf("uitnodiging-%04d-0123456789abcdef", i)
 			if c := doe(sU, "POST", "/v1/bus", map[string]string{"bus": busID(b), "bewijs": b, "blob": "x"}).Code; c != 204 {
@@ -467,7 +475,7 @@ func TestOrakelPotjeEnUitnodigingApart(t *testing.T) {
 		if g.Blobs[eerste] != "x" || g.Blobs[busID(u)] != "" {
 			t.Fatalf("na 10 minuten: het potje hoort er te zijn en de uitnodiging niet: %+v", g)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeEigenRem(t *testing.T) {
@@ -476,7 +484,8 @@ func TestOrakelPotjeEigenRem(t *testing.T) {
 		c.redeemSlots = 1
 		c.queueWait = 20 * time.Millisecond
 	})
-	nogNiet(t, "[6.10] een potje schrijven wacht niet op de plek van de uitnodigingen", func(t tb) {
+	// [6.10] een potje schrijven wacht niet op de plek van de uitnodigingen
+	func(t tb) {
 		b := "uitnodiging-0123456789abcdef"
 		klaar := make(chan int, 1)
 		go func() {
@@ -492,12 +501,13 @@ func TestOrakelPotjeEigenRem(t *testing.T) {
 		if c != 204 {
 			t.Fatalf("potje terwijl de uitnodigingen hun plek bezet houden: %d, wil 204", c)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeVastVertraagd(t *testing.T) {
 	s, _ := newTestServer(t, func(c *config) { c.redeemDelay = 30 * time.Millisecond })
-	nogNiet(t, "[6.10] schrijven en lezen van een potjesbus duren de vaste vertraging", func(t tb) {
+	// [6.10] schrijven en lezen van een potjesbus duren de vaste vertraging
+	func(t tb) {
 		bewijs, bus := potjeBus("a")
 		start := time.Now()
 		c := schrijfPotje(s, bewijs, bus, "x")
@@ -509,13 +519,14 @@ func TestOrakelPotjeVastVertraagd(t *testing.T) {
 		if d := time.Since(start); d < 30*time.Millisecond {
 			t.Fatalf("lezen na %v, wil minstens 30ms", d)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeWegNaHerstart(tt *testing.T) {
 	dir := tt.TempDir()
 	s1, _ := newTestServer(tt, func(c *config) { c.dataDir = dir })
-	nogNiet(tt, "[6.10] een herstart verliest de potjesbussen en verder niets", func(t tb) {
+	// [6.10] een herstart verliest de potjesbussen en verder niets
+	func(t tb) {
 		bewijs, bus := potjeBus("a")
 		if c := schrijfPotje(s1, bewijs, bus, "x"); c != 204 {
 			t.Fatalf("schrijven: %d", c)
@@ -545,7 +556,7 @@ func TestOrakelPotjeWegNaHerstart(tt *testing.T) {
 		if g := leesPotjes(s2, bus); g.Ongewijzigd[bus] != 3600 {
 			t.Fatalf("na de herstart telt de tijd vanaf het opnieuw schrijven: %+v", g)
 		}
-	})
+	}(tt)
 }
 
 // een klok die op verzoek bij elke vraag een seconde verder loopt
@@ -566,7 +577,8 @@ func (k *tikKlok) now() time.Time {
 
 func TestOrakelPotjeOngewijzigd(t *testing.T) {
 	s, clk := newTestServer(t, nil)
-	nogNiet(t, "[6.10] de check meldt hoe lang de bytes van een potjesbus gelijk bleven", func(t tb) {
+	// [6.10] de check meldt hoe lang de bytes van een potjesbus gelijk bleven
+	func(t tb) {
 		bewijs, bus := potjeBus("a")
 		if c := schrijfPotje(s, bewijs, bus, "zet-1"); c != 204 {
 			t.Fatalf("schrijven: %d", c)
@@ -593,13 +605,14 @@ func TestOrakelPotjeOngewijzigd(t *testing.T) {
 		if g := leesPotjes(s, bus); g.Blobs[bus] != "zet-2" || g.Ongewijzigd[bus] != 0 {
 			t.Fatalf("wissen en opnieuw maken begint vers, ook met dezelfde bytes: %+v", g)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeOngewijzigdEenMoment(t *testing.T) {
 	klok := &tikKlok{t: time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)}
 	s, _ := newTestServer(t, func(c *config) { c.now = klok.now })
-	nogNiet(t, "[6.10] alle tijden in een antwoord komen van hetzelfde moment", func(t tb) {
+	// [6.10] alle tijden in een antwoord komen van hetzelfde moment
+	func(t tb) {
 		bewijsA, busA := potjeBus("a")
 		bewijsB, busB := potjeBus("b")
 		if schrijfPotje(s, bewijsA, busA, "x") != 204 || schrijfPotje(s, bewijsB, busB, "y") != 204 {
@@ -612,12 +625,13 @@ func TestOrakelPotjeOngewijzigdEenMoment(t *testing.T) {
 		if len(g.Ongewijzigd) != 2 || g.Ongewijzigd[busA] != g.Ongewijzigd[busB] {
 			t.Fatalf("twee bussen van hetzelfde moment, in een antwoord: %+v", g)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeGeenOnbekendeVelden(t *testing.T) {
 	s, _ := newTestServer(t, nil)
-	nogNiet(t, "[6.11] een potjesbus kent alleen bus, bewijs en blob", func(t tb) {
+	// [6.11] een potjesbus kent alleen bus, bewijs en blob
+	func(t tb) {
 		bewijs, bus := potjeBus("a")
 		w := doe(s, "POST", "/v1/potje", map[string]string{"bus": bus, "bewijs": bewijs, "blob": "x", "naam": "Fien"})
 		if w.Code != 400 {
@@ -629,12 +643,13 @@ func TestOrakelPotjeGeenOnbekendeVelden(t *testing.T) {
 		if c := schrijfPotje(s, bewijs, bus, "x"); c != 204 {
 			t.Fatalf("met precies bus, bewijs en blob: %d, wil 204", c)
 		}
-	})
+	}(t)
 }
 
 func TestOrakelPotjeGeenOpsomming(t *testing.T) {
 	s, _ := newTestServer(t, nil)
-	nogNiet(t, "[6.11] geen pad somt potjesbussen op", func(t tb) {
+	// [6.11] geen pad somt potjesbussen op
+	func(t tb) {
 		bewijs, bus := potjeBus("a")
 		if c := schrijfPotje(s, bewijs, bus, "x"); c != 204 {
 			t.Fatalf("schrijven: %d", c)
@@ -648,5 +663,5 @@ func TestOrakelPotjeGeenOpsomming(t *testing.T) {
 		if w := doe(s, "POST", "/v1/bus/check", map[string]any{"bussen": []string{}}); strings.Contains(w.Body.String(), bus) {
 			t.Fatalf("een lege check noemt een bus: %q", w.Body.String())
 		}
-	})
+	}(t)
 }
