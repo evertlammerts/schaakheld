@@ -2081,6 +2081,7 @@ function showModal(html, setup, cancelable, key) {
   if (modalOpen) { modalQueue.push([html, setup, cancelable, key]); return; }
   modalOpen = true;
   $('overlay').classList.remove('hidden');
+  $('overlay').scrollTop = 0;
   renderModal(html, setup, cancelable, key);
 }
 function closeModal() {

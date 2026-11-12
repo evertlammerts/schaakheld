@@ -563,17 +563,19 @@
   .drill-stars { font-size: 15px; background: var(--card); border-radius: 16px; padding: 10px 14px; box-shadow: var(--shadow); }
 
   /* ---------- overlay & modal ---------- */
+  /* De overlay scrolt en het venster staat met margin: auto in het midden:
+     past het niet, dan begint het bovenaan en is de laatste knop te bereiken. */
   .overlay {
     position: fixed; inset: 0; z-index: 90;
     background: rgba(23, 69, 111, .45);
-    display: grid; place-items: center; padding: 18px;
+    display: flex; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 18px;
   }
   .overlay.hidden { display: none; }
   .modal {
     position: relative;
     background: var(--card); border-radius: 26px; padding: 26px 24px;
     max-width: 430px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,.25);
-    text-align: center; animation: pop-in .25s ease;
+    text-align: center; animation: pop-in .25s ease; margin: auto;
   }
   /* Zichtbare knop, niet alleen een zwevend kruisje: een gevulde cirkel met
      een rand die ook op wit opvalt (3:1), zoals de andere knoppen. */
@@ -4460,6 +4462,7 @@ function showModal(html, setup, cancelable, key) {
   if (modalOpen) { modalQueue.push([html, setup, cancelable, key]); return; }
   modalOpen = true;
   $('overlay').classList.remove('hidden');
+  $('overlay').scrollTop = 0;
   renderModal(html, setup, cancelable, key);
 }
 function closeModal() {
