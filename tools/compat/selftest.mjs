@@ -314,7 +314,7 @@ try {
   fs.copyFileSync(path.join(REPO, 'build.sh'), path.join(schoon, 'build.sh'));
   const bron = {
     'head.html': '<title>Proef</title>\n<style>\n  body { color: #123; }\n</style>\n<main id="m">hoi</main>\n<script>\n',
-    'engine.js': "'use strict';\nconst PROEF = 1;\n", 'koning.js': '\n', 'words.js': '\n', 'qr.js': '\n', 'jsqr.js': '\n',
+    'engine.js': "'use strict';\nconst PROEF = 1;\n", 'koning.js': '\n', 'trucs.js': '\n', 'words.js': '\n', 'qr.js': '\n', 'jsqr.js': '\n',
     'tail.html': 'function hallo() { return PROEF; }\n</script>\n',
     'sw.js': "const VERSION = 'proef-__VERSION__';\nself.addEventListener('install', function () {});\n"
   };

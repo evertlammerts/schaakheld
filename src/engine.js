@@ -1428,6 +1428,28 @@ function keyMoment(S) {
   return chooseMoment(moments);
 }
 
+/* --- the verified stock of tricks (src/trucs.js, made by tools/make-trucs.js) --- */
+
+/* A type serves only with this many verified puzzles: fewer, and a child who
+   plays daily recognises the positions within a week (decision D24). */
+const TRUC_MIN = 15;
+/* "<board> <side>|<type>|<answer>[,<answer>]" as a task, or null. */
+function trucTask(line) {
+  const parts = String(line).split('|');
+  if (parts.length !== 3) return null;
+  const S = parseFEN(parts[0] + ' - - 0 1');
+  const legal = legalMoves(S);
+  const answers = parts[2].split(',').map(k => legal.find(m => moveKey(m) === k));
+  if (!answers.length || answers.some(m => !m)) return null;
+  return { S, type: parts[1], answers: answers.map(m => ({ m, info: null })) };
+}
+/* The trick types the stock can serve. */
+function trucTypes(pool) {
+  const count = {};
+  for (const line of pool || []) { const t = String(line).split('|')[1]; count[t] = (count[t] || 0) + 1; }
+  return Object.keys(count).filter(t => count[t] >= TRUC_MIN);
+}
+
 /* --- Dutch names --- */
 
 const NAME_NL = { p: 'pion', n: 'paard', b: 'loper', r: 'toren', q: 'dame', k: 'koning' };
@@ -1456,5 +1478,5 @@ if (typeof module !== 'undefined') {
     winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
     repetitions, positionKey, SUPER_NODES, CHECK_NODES, checkSafeTask, checkPieceTask,
-    POINTS, moveMoment, chooseMoment, keyMoment, mateReply };
+    POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes };
 }

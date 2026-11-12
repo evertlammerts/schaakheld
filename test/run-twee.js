@@ -10,6 +10,7 @@ var __VASTE_OPMAAK = (function () {
 load('test/dom-shim.js');
 load('src/engine.js');
 load('src/koning.js');
+load('src/trucs.js');
 load('src/words.js');
 load('src/qr.js');
 load('src/jsqr.js');

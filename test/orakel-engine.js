@@ -146,7 +146,7 @@
     return false;
   };
 
-  nogNiet('[5.1] elke truc in de voorraad: leesbaar, wit aan zet, legale antwoorden, het type herkend, en genoeg per type', function (check) {
+  regel('[5.1] elke truc in de voorraad: leesbaar, wit aan zet, legale antwoorden, het type herkend, en genoeg per type', function (check) {
     check('er is een voorraad TRUC_POOL', typeof TRUC_POOL !== 'undefined' && Array.isArray(TRUC_POOL) && TRUC_POOL.length > 0);
     if (typeof TRUC_POOL === 'undefined') return;
     const perType = {}, gezien = new Set(), slecht = [];
@@ -161,12 +161,30 @@
       gezien.add(regel.split('|')[0]);
     }
     check('elke regel klopt' + (slecht.length ? ' (niet: ' + slecht.slice(0, 3).join('; ') + ')' : ''), slecht.length === 0);
-    check('elk type dat erin staat heeft er minstens 40 (' + JSON.stringify(perType) + ')',
-      Object.keys(perType).every(function (k) { return perType[k] >= 40; }));
-    check('vork en mat in twee staan erin', (perType.vork || 0) >= 40 && (perType.mat2 || 0) >= 40);
+    check('elk type dat erin staat heeft er minstens 15 (' + JSON.stringify(perType) + ')',
+      Object.keys(perType).every(function (k) { return perType[k] >= 15; }));
+    check('vork en mat in twee staan erin, met het doel van 40', (perType.vork || 0) >= 40 && (perType.mat2 || 0) >= 40);
   });
 
-  nogNiet('[5.1] een steekproef van vijf per type: elk antwoord wint ook bij diep nadenken minstens 1,5 punt', function (check) {
+  /* D24: een type telt mee vanaf 15 geverifieerde puzzels */
+  regel('[5.1] een type met 14 trucs blijft uit de Trucendoos, met 15 doet het mee', function (check) {
+    const regels = function (type, n) { const r = []; for (let i = 0; i < n; i++) r.push('8/8/8/8/8/8/8/K6k w|' + type + '|a1a2'); return r; };
+    const types = E.trucTypes(regels('penning', 14).concat(regels('spies', 15), regels('vork', 150)));
+    check('penning met 14: uit', types.indexOf('penning') < 0);
+    check('spies met 15: in', types.indexOf('spies') >= 0);
+    check('vork met 150: in', types.indexOf('vork') >= 0);
+    check('een lege voorraad: niets', E.trucTypes([]).length === 0);
+  });
+
+  regel('[5.1] een regel uit de voorraad wordt een opdracht met de stand, het type en de antwoorden', function (check) {
+    const t = E.trucTask('6k1/5ppp/8/8/8/8/5PPP/R5K1 w|mat1|a1a8');
+    check('de stand, wit aan zet', !!t && E.toFEN(t.S) === '6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1');
+    check('het type en het antwoord', !!t && t.type === 'mat1' && t.answers.length === 1 && E.moveKey(t.answers[0].m) === 'a1a8');
+    check('een antwoord dat geen zet is: geen opdracht', E.trucTask('6k1/5ppp/8/8/8/8/5PPP/R5K1 w|mat1|a1a9') === null);
+    check('kapot: geen opdracht', E.trucTask('kapot') === null);
+  });
+
+  regel('[5.1] een steekproef van vijf per type: elk antwoord wint ook bij diep nadenken minstens 1,5 punt', function (check) {
     if (!check('er is een voorraad TRUC_POOL', typeof TRUC_POOL !== 'undefined' && Array.isArray(TRUC_POOL))) return;
     if (!knoopbudget(check)) return;
     const rng = vast(20261112);
