@@ -779,7 +779,7 @@ async function orakelFlow() {
   await nogNiet('[3.1] geval 7: na een potje zonder sleutelmoment: R6, niet de laatst geoefende', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
-    a.ev('bump("xp", 500); bump("c.gamesPlayed", 5); logResult("scan", 0.5, 20000, 3); P.lastKind = "game"');
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); logResult("scan", 0.5, 20000, 3); P.lastKind = "game"');
     const r = await stap(a);
     check('R6, niet Speurogen', r.rule === 'R6' && r.action.kind !== 'scan');
   });
@@ -803,10 +803,23 @@ async function orakelFlow() {
   await nogNiet('[3.1] geval 10: twee oefeningen gelijk: de eerste in de leervolgorde', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
-    a.ev('bump("xp", 500); bump("c.gamesPlayed", 5); P.lastKind = "game";' +
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game";' +
       '["scan", "koning", "opening"].forEach(function (k) { logResult(k, 0.5, 20000, 3); logResult(k, 0.5, 20000, 3); })');
     const r = await stap(a);
     check('De Beste Zet voor de Trucendoos', r.rule === 'R6' && r.action.kind === 'best3');
+  });
+
+  /* learning.md 1.7: zolang de poort "5 perfecte speurrondes" open is, kiest R6
+     eerst Speurogen, ook als dat de laatst geoefende is; R7 speelt dan L* */
+  await nogNiet('[3.1] de poort "5 perfecte speurrondes" staat open: R6 kiest Speurogen, R7 speelt tegen Turbo', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.gamesPlayed", 5); logResult("scan", 0.5, 20000, 3); P.lastKind = "game"');
+    let r = await stap(a);
+    check('R6 Speurogen', r.rule === 'R6' && r.action.kind === 'scan');
+    a.ev('P.lastKind = "scan"');
+    r = await stap(a);
+    check('R7 op niveau 2', r.rule === 'R7' && r.action.go === 'game' && r.action.level === 2);
   });
 
   await nogNiet('[3.2] alle vijf oefeningen en beide spelknoppen staan op Spelen, wat de kaart ook zegt', async function (check) {
@@ -924,20 +937,28 @@ async function orakelFlow() {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('setPref("weekGoal", { kind: "opdr", n: 10 })');
-    zetDatum('2026-11-17T09:00:00');
-    const b = herlaad(a);
+    /* de app onthoudt de week pas bij een start met een naam: nog een keer
+       openen in de eerste week, zoals een kind dat doet */
+    const a2 = herlaad(a);
     await wacht();
-    check('nieuwe week, nieuwe kansen', /Nieuwe week, nieuwe kansen/.test(b.modal()) && !/0 van 10/.test(b.modal()));
+    zetDatum('2026-11-17T09:00:00');
+    const b = herlaad(a2);
+    await wacht();
+    check('testopzet: er is een kaart van de nieuwe week', b.open() && /week/i.test(b.scherm()));
+    check('nieuwe week, nieuwe kansen', /Nieuwe week, nieuwe kansen/.test(b.scherm()) && !/\b0 van 10\b/.test(b.scherm()));
   });
 
   await nogNiet('[3.9] een gehaald doel: "Vorige week: doel gehaald!"', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('setPref("weekGoal", { kind: "opdr", n: 2 }); bumpWeek("opdr", 2)');
-    zetDatum('2026-11-17T09:00:00');
-    const b = herlaad(a);
+    const a2 = herlaad(a);
     await wacht();
-    check('de zin', /Vorige week: doel gehaald!/.test(b.modal()));
+    zetDatum('2026-11-17T09:00:00');
+    const b = herlaad(a2);
+    await wacht();
+    check('testopzet: er is een kaart van de nieuwe week', b.open() && /week/i.test(b.scherm()));
+    check('de zin', /Vorige week: doel gehaald!/.test(b.scherm()));
   });
 
   await nogNiet('[3.10] compat: een document van nu laadt met alles, krijgt geen vraag, en de nieuwe velden komen erbij', async function (check) {
@@ -1008,6 +1029,9 @@ async function orakelFlow() {
   });
 
   await nogNiet('[4.10] de koppelcode zegt in hele minuten hoe lang hij werkt, en biedt daarna een nieuwe', async function (check) {
+    /* met een vaste datum loopt de klok van Date mee met de timers, zoals op een
+       echt apparaat; een app die de tijd leest in plaats van tikken telt, ziet hem */
+    zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     await a.ev('linkShareFlow()');
     await wacht();
