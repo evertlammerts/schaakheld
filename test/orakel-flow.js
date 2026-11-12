@@ -126,6 +126,84 @@ async function orakelFlow() {
     check('de stand na slag en rokades, wit aan zet', b.fen() === toFEN(naSpelen(zetten)));
   });
 
+  await regel('[1.1] herladen terwijl je schaak staat: de koning staat rood, net als voor het herladen', async function (check) {
+    const zetten = ['f2f3', 'e7e5', 'e1f2', 'd8h4'];
+    const rood = function (x) { return [...x.el('board').children].filter(function (c) { return /\bcheck\b/.test(c.className); }).length; };
+    const laatste = function (x) { return [...x.el('board').children].filter(function (c) { return /\blast\b/.test(c.className); }).length; };
+    const a = nieuwKind({ opslag: opslagMetPotje(1, zetten) });
+    await wacht();
+    a.tik('verderKaart');
+    await wacht();
+    check('testopzet: wit staat schaak', a.get('inCheck(session.S)') === true);
+    check('een rood veld, op de koning, en de laatste zet gemarkeerd', rood(a) === 1 && a.get('BD.check') === a.get('session.S.kings.w') && laatste(a) === 2);
+    const b = herlaad(a);
+    await wacht();
+    b.tik('verderKaart');
+    await wacht();
+    check('na herladen dezelfde markering', rood(b) === 1 && b.get('BD.check') === b.get('session.S.kings.w') && laatste(b) === 2);
+  });
+
+  await regel('[1.1] een teruggenomen zet en een gebruikte speurbril staan ook bewaard', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'd7d5']) });
+    await wacht();
+    a.tik('verderKaart');
+    await wacht();
+    tikTekst(a, 'Speurbril');
+    await wacht();
+    check('testopzet: de speurbril is gebruikt', a.get('session.tips') === 2);
+    await zetEnWacht(a, 'g1f3');
+    tikTekst(a, 'Zet terug');
+    await wacht();
+    check('testopzet: de zet is terug', a.get('session.S.hist.length') === 2);
+    const b = herlaad(a);
+    await wacht();
+    b.tik('verderKaart');
+    await wacht();
+    check('na herladen de stand van na het terugnemen', b.fen() === toFEN(naSpelen(['e2e4', 'd7d5'])));
+    check('en de speurbril is nog steeds gebruikt', b.get('session.tips') === 2);
+  });
+
+  await regel('[1.1] de trucbonus telt per potje, ook over Pauze en herladen heen', async function (check) {
+    const zetten = ['b1c3', 'e7e6', 'c3b5', 'd8e7'];
+    const metDrie = nieuwKind({ opslag: opslagMetPotje(1, zetten, { patXP: 3 }) });
+    await wacht();
+    metDrie.tik('verderKaart');
+    await wacht();
+    const xp3 = metDrie.get('P.xp');
+    await zetEnWacht(metDrie, 'b5c7');
+    check('testopzet: de vork telt als truc', metDrie.get('P.c.pat.vork') === 1);
+    check('drie bonussen al gehad in dit potje: geen trucbonus meer', metDrie.get('P.xp') === xp3);
+    const zonder = nieuwKind({ opslag: opslagMetPotje(1, zetten) });
+    await wacht();
+    zonder.tik('verderKaart');
+    await wacht();
+    const xp0 = zonder.get('P.xp');
+    await zetEnWacht(zonder, 'b5c7');
+    check('een potje zonder dat veld telt als nul: de bonus komt', zonder.get('P.xp') === xp0 + 10);
+    const r = opgeslagen(zonder, POTJE);
+    check('en het bewaarde potje telt hem', !!r && r.patXP === 1);
+  });
+
+  await regel('[1.1] een verkeerde telling van de hulp kost het potje niet en geeft niets extra', async function (check) {
+    const zetten = ['b1c3', 'e7e6', 'c3b5', 'd8e7'];
+    for (const tips of [99, 'x']) {
+      const a = nieuwKind({ opslag: opslagMetPotje(1, zetten, { tips: tips }) });
+      await wacht();
+      check('tips ' + JSON.stringify(tips) + ': de Verder-kaart opent het potje', /Verder:/.test(tekstVan(a, 'verder')) && !/kan ik niet/.test(tekstVan(a, 'verder')));
+      a.tik('verderKaart');
+      await wacht();
+      check('tips ' + JSON.stringify(tips) + ': dezelfde stand en geen hulp erbij', opSpeelscherm(a) && a.fen() === toFEN(naSpelen(zetten)) && a.get('session.tips') === 0);
+    }
+    const b = nieuwKind({ opslag: opslagMetPotje(1, zetten, { drawAsked: 'x', patXP: 'x' }) });
+    await wacht();
+    b.tik('verderKaart');
+    await wacht();
+    check('een verkeerde remise- en trucbonusteller: het potje opent', opSpeelscherm(b) && b.fen() === toFEN(naSpelen(zetten)));
+    const xp = b.get('P.xp');
+    await zetEnWacht(b, 'b5c7');
+    check('en geeft geen trucbonus', b.get('P.c.pat.vork') === 1 && b.get('P.xp') === xp);
+  });
+
   await regel('[1.1] een potje zonder zet wordt niet bewaard: Pauze vraagt niets en zegt dat het nog niet begonnen was', async function (check) {
     const a = nieuwKind();
     await startPotje(a, 1);
@@ -178,6 +256,30 @@ async function orakelFlow() {
     check('in een rondje zonder antwoord nog niet', !bewaardInBeeld(a));
     await scanGoed(a);
     check('na een antwoord wel, en het rondje staat bewaard', bewaardInBeeld(a) && !!opgeslagen(a, RONDJES));
+  });
+
+  await regel('[1.2] lukt bewaren niet, dan staat er geen "✔ bewaard" en zegt Pauze het', async function (check) {
+    const weigert = function (sleutel) {
+      const o = maakOpslag(), schrijf = o.setItem;
+      o.setItem = function (k, v) { if (k === sleutel) throw new Error('vol'); return schrijf.call(this, k, v); };
+      return o;
+    };
+    const a = nieuwKind({ opslag: weigert(POTJE) });
+    await startPotje(a, 1);
+    await zetEnWacht(a, 'e2e4');
+    check('geen "✔ bewaard" in beeld', !(zichtbaar(a, 'bewaard') && /✔/.test(tekstVan(a, 'bewaard'))));
+    check('wel dat het niet bewaard is', zichtbaar(a, 'bewaard') && /niet/.test(tekstVan(a, 'bewaard')));
+    a.tik('backBtn');
+    await wacht(500);
+    check('Pauze zegt niet "Bewaard"', toastTekst(a) !== '' && !/Bewaard/.test(toastTekst(a)));
+    check('en er staat geen Verder-kaart voor een potje', !/Verder:/.test(tekstVan(a, 'verder')));
+    const b = nieuwKind({ opslag: weigert(RONDJES) });
+    await startOefening(b, 'scan');
+    await scanGoed(b);
+    check('rondje: geen "✔ bewaard"', !(zichtbaar(b, 'bewaard') && /✔/.test(tekstVan(b, 'bewaard'))));
+    b.tik('backBtn');
+    await wacht(500);
+    check('rondje: Pauze zegt niet "Bewaard"', toastTekst(b) !== '' && !/Bewaard/.test(toastTekst(b)));
   });
 
   await regel('[1.2] een rondje zonder antwoord zegt bij Pauze dat het nog niet begonnen was', async function (check) {
@@ -295,6 +397,33 @@ async function orakelFlow() {
     check('het potje is weg', opgeslagen(a, POTJE) === null);
   });
 
+  await regel('[1.4] Alles wissen midden in een potje of een rondje: daarna loopt er niets meer van door', async function (check) {
+    const a = nieuwKind();
+    await startPotje(a, 1);
+    await zetEnWacht(a, 'e2e4');
+    check('testopzet: het potje staat bewaard', !!opgeslagen(a, POTJE));
+    a.tik('setBtn');
+    await wacht();
+    a.tik('setReset');
+    await wacht();
+    a.tik('rstGo');
+    await wacht(3000);
+    check('geen potje meer bezig en niet meer op het speelscherm', a.get('session') === null && !opSpeelscherm(a));
+    check('en er komt niets terug in de opslag', opgeslagen(a, POTJE) === null);
+    const b = nieuwKind();
+    await startOefening(b, 'scan');
+    await scanGoed(b);
+    check('testopzet: het rondje staat bewaard', !!opgeslagen(b, RONDJES));
+    b.tik('setBtn');
+    await wacht();
+    b.tik('setReset');
+    await wacht();
+    b.tik('rstGo');
+    await wacht(3000);
+    check('geen rondje meer bezig en niet meer op het speelscherm', b.get('session') === null && !opSpeelscherm(b));
+    check('en geen rondje in de opslag', opgeslagen(b, RONDJES) === null);
+  });
+
   await regel('[1.4] niets anders haalt het bewaarde potje weg', async function (check) {
     const a = nieuwKind();
     await startPotje(a, 1);
@@ -363,6 +492,21 @@ async function orakelFlow() {
     await startOefening(a, 'best3');
     check('De Beste Zet gaat verder bij opdracht 3, met zijn 6 sterren', /opdracht 3 van 5/i.test(tekstVan(a, 'roundChip')) &&
       /\b6\b/.test(tekstVan(a, 'drillStars')));
+  });
+
+  await regel('[1.5] een rondje met een verkeerde vorm wordt weggehaald, en daarna wordt er weer bewaard', async function (check) {
+    for (const ruw of ['{"scan":{"round":7,"earned":0}}', '{"scan":5}', '[1,2]', '"tekst"']) {
+      const o = maakOpslag();
+      o.setItem(RONDJES, ruw);
+      const a = nieuwKind({ opslag: o });
+      await wacht();
+      check(ruw + ': niets op de Verder-kaart', !/Speurogen|Opdracht/.test(tekstVan(a, 'verder')));
+      await startOefening(a, 'scan');
+      check(ruw + ': Speurogen begint bij opdracht 1', /opdracht 1 van 5/i.test(tekstVan(a, 'roundChip')));
+      await scanGoed(a);
+      const r = opgeslagen(a, RONDJES);
+      check(ruw + ': na een antwoord staat het rondje bewaard', !!r && !Array.isArray(r) && !!r.scan && r.scan.round === 1);
+    }
   });
 
   await regel('[1.6] een rondje bewaart telling en sterren, Pauze zegt het, en opnieuw starten gaat verder', async function (check) {

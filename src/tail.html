@@ -2008,7 +2008,7 @@ function animateMove(m, done) {
 }
 
 /* Een timer van een opdracht of potje hoort bij die sessie: is het kind
-   intussen weg of met iets anders bezig, dan doet hij niets (B24). */
+   intussen weg of met iets anders bezig, dan doet hij niets. */
 function later(fn, ms) {
   const mine = session;
   return setTimeout(() => { if (session === mine) fn(); }, ms);
@@ -2287,37 +2287,55 @@ function goHome(tab) {
    de lijst zetten; nagespeeld door legalMoves geeft die altijd dezelfde
    stand. Wat niet te lezen is, blijft staan tot het kind kiest. */
 const POTJE_KEY = 'schaakheld-potje', RONDJES_KEY = 'schaakheld-rondjes';
+/* lezen geeft de tekst of null; schrijven en weghalen zeggen of het lukte */
 function opslag(k, v) {
   try {
     if (v === undefined) return localStorage.getItem(k);
     if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v);
-  } catch (e) {}
-  return null;
+    return true;
+  } catch (e) { return v === undefined ? null : false; }
+}
+const NIET_BEWAARD = 'niet bewaard';
+/* "bewaard" staat er alleen na een schrijfactie die lukte */
+function toonBewaard(gelukt) {
+  const el = $('bewaard');
+  el.textContent = gelukt ? '✔ bewaard' : NIET_BEWAARD;
+  el.classList.remove('hidden');
+  if (session) session.nietBewaard = !gelukt;
 }
 function leesPotje() {
   const ruw = opslag(POTJE_KEY);
   if (ruw == null) return null;
   try {
     const r = JSON.parse(ruw);
-    if (!r || r.v !== 1 || ![1, 2, 3].includes(r.level) || !Array.isArray(r.moves)) return { kapot: true };
+    if (!r || r.v !== 1 || !Number.isInteger(r.level) || !(r.level in TURBO_NAMES) || !Array.isArray(r.moves)) return { kapot: true };
     const S = newGame();
     for (const k of r.moves) {
       const m = legalMoves(S).find(x => moveKey(x) === k);
       if (!m) return { kapot: true };
       makeMove(S, m);
     }
-    return gameStatus(S).over ? { kapot: true } : { r, S };
+    if (gameStatus(S).over) return { kapot: true };
+    /* een verkeerde telling van de hulp kost het kind het potje niet; ze geeft dan niets extra */
+    const geheel = (x, min, max) => Number.isInteger(x) && x >= min && x <= max;
+    if (!geheel(r.tips, 0, 3)) r.tips = 0;
+    if (!(r.drawAsked === null || geheel(r.drawAsked, 0, r.moves.length))) r.drawAsked = null;
+    if (r.patXP === undefined) r.patXP = 0;
+    else if (!geheel(r.patXP, 0, 3)) r.patXP = 3;
+    return { r, S };
   } catch (e) { return { kapot: true }; }
 }
 /* een potje zonder zet is er nog niet: dan staat er ook niets */
 function bewaarPotje() {
   if (!session || session.kind !== 'game' || session.online || session.over) return;
   const S = session.cloud ? session.cloud.realS : session.S;
-  if (!S.hist.length) { opslag(POTJE_KEY, null); return; }
-  opslag(POTJE_KEY, JSON.stringify({ v: 1, level: session.level, moves: S.hist.map(h => moveKey(h.m)),
+  if (!S.hist.length) { opslag(POTJE_KEY, null); $('bewaard').classList.add('hidden'); return; }
+  const gelukt = opslag(POTJE_KEY, JSON.stringify({ v: 1, level: session.level, moves: S.hist.map(h => moveKey(h.m)),
     tips: session.tips, drawAsked: session.drawAsked == null ? null : session.drawAsked,
-    started: session.started, updated: Date.now() }));
-  $('bewaard').classList.remove('hidden');
+    started: session.started, updated: Date.now(), patXP: session.patXP || 0 }));
+  /* een oudere stand mag niet blijven staan alsof hij de laatste is */
+  if (!gelukt) opslag(POTJE_KEY, null);
+  toonBewaard(gelukt);
 }
 /* De sterren van een rondje staan al in het profiel; een rondje dat niet te
    lezen is, gaat dus weg en de oefening begint opnieuw. */
@@ -2342,12 +2360,14 @@ function bewaarRondje() {
     session.af = true;
     wisRondje(session.kind);
     if (session.earned >= 12) bumpWeek('top.' + session.kind, 1);
+    toonBewaard(true);
   } else {
     const r = leesRondjes();
     r[session.kind] = { round: session.round, earned: session.earned };
-    opslag(RONDJES_KEY, JSON.stringify(r));
+    const gelukt = opslag(RONDJES_KEY, JSON.stringify(r));
+    if (!gelukt) wisRondje(session.kind);
+    toonBewaard(gelukt);
   }
-  $('bewaard').classList.remove('hidden');
 }
 function wisRondje(kind) {
   const r = leesRondjes();
@@ -2366,19 +2386,22 @@ function ditApparaat() {
   return 'dit apparaat';
 }
 
+const POTJE_NIET_BEWAARD = 'Dit potje kon ik niet bewaren, dus het is weg. Wat al bewaard was, blijft staan.';
+const RONDJE_NIET_BEWAARD = 'Dit rondje kon ik niet bewaren. Wat al bewaard was, blijft staan.';
 /* Pauze: nooit een vraag, het potje of rondje blijft staan */
 function pauze() {
   if (session && session.cloud) exitCloud();
   let melding = null;
   if (session && session.kind === 'game' && !session.over) {
     bewaarPotje();
-    melding = session.S.hist.length ? 'Bewaard. Je kunt later verder bij zet ' + zetNummer(session.S) + '.' : 'Dit potje was nog niet begonnen.';
+    melding = !session.S.hist.length ? 'Dit potje was nog niet begonnen.' :
+      session.nietBewaard ? POTJE_NIET_BEWAARD : '✔ Bewaard. Je kunt later verder bij zet ' + zetNummer(session.S) + '.';
   } else if (session && session.kind === 'opening') {
-    melding = 'Je sterren zijn bewaard. De les begint de volgende keer opnieuw.';
+    melding = '✔ Je sterren zijn bewaard. De les begint de volgende keer opnieuw.';
   } else if (session && session.kind !== 'game') {
     const r = leesRondjes()[session.kind];
-    melding = session.af ? 'Rondje klaar! Je sterren zijn bewaard.' :
-      r ? 'Bewaard. Je kunt later verder bij opdracht ' + (r.round + 1) + '.' : 'Dit rondje was nog niet begonnen.';
+    melding = session.af ? 'Rondje klaar! Je sterren zijn bewaard.' : session.nietBewaard ? RONDJE_NIET_BEWAARD :
+      r ? '✔ Bewaard. Je kunt later verder bij opdracht ' + (r.round + 1) + '.' : 'Dit rondje was nog niet begonnen.';
   }
   goHome(terugTab);
   if (melding) showToast(melding, false, 6000);
@@ -2407,13 +2430,13 @@ function renderVerder() {
   if (!items.length) { el.innerHTML = ''; return; }
   const eerste = items[0];
   let h = eerste.kapot ?
-    '<div class="verder-kaart kapot"><span class="vk-titel">Dit potje kan ik niet meer openen.</span>' +
-    '<span class="vk-zin">Het is misschien kapot, of van een nieuwere SchaakHeld.</span>' +
+    '<div class="verder-kaart kapot"><span class="vk-titel">Dit potje kan ik niet meer openen. Sorry!</span>' +
+    '<span class="vk-zin">Je XP, sterren en trofeeën zijn niet kwijt.</span>' +
     '<button class="btn plain small" id="verderWeg">Weghalen</button></div>' :
     '<button class="verder-kaart" id="verderKaart"><span class="vk-titel">' + eerste.titel + '</span>' +
     '<span class="vk-zin">' + eerste.zin + '</span><span class="vk-knop">▶ ' + eerste.knop + '</span></button>';
   items.slice(1).forEach((it, i) => {
-    h += '<button class="verder-ook" data-ook="' + (i + 1) + '">Ook nog: ' + it.ook + ' ›</button>';
+    h += '<button class="verder-ook" data-ook="' + (i + 1) + '"><span>Ook nog: ' + it.ook + '</span><span class="vo-pijl">›</span></button>';
   });
   if (!eerste.kapot) h += '<div class="verder-bewaard">✔ Je ' + eerste.wat + ' blijft staan op ' + ditApparaat() +
     ', ook als je de app dichtdoet.</div>';
@@ -2441,7 +2464,7 @@ function startDrill(kind) {
   $('drillStars').classList.remove('hidden');
   setTask(null); setOptions(null);
   updateDrillStars();
-  if (verder) $('bewaard').classList.remove('hidden');
+  if (verder) toonBewaard(true);
   nextRound();
 }
 
@@ -3173,7 +3196,7 @@ function koningAttempt(m) {
     const reply = rootScores(S, 2)[0];
     BD.arrows = [{ from: reply.m.from, to: reply.m.to, cls: 'a-coral' }];
     renderBoard();
-    /* de naam van de zet kan alleen voordat hij gespeeld is (B01) */
+    /* de naam van een zet is alleen te maken voordat hij gespeeld is */
     const replyName = moveNameNL(S, reply.m);
     later(() => {
       playMove(reply.m, () => {
@@ -3520,10 +3543,10 @@ function openingEnd() {
     });
 }
 /* ---------- game vs Turbo ---------- */
-const TURBO_NAMES = { 1: '🍼 Baby Turbo', 2: '🐢 Turbo', 3: '🚀 Super Turbo' };
+const TURBO_NAMES = { 1: '😴 Slaapkop Turbo', 2: '🐢 Turbo', 3: '🚀 Super Turbo' };
 
 /* Winst-XP per sterkte; vanaf de derde winst per dag op dezelfde sterkte nog
-   maar een fooi, zodat Baby Turbo verslaan geen XP-fabriek is. */
+   maar een fooi, zodat Slaapkop Turbo verslaan geen XP-fabriek is. */
 const WIN_XP = { 1: 40, 2: 100, 3: 180 };
 const TIRED_XP = 15;
 function gameWinXP(level) {
@@ -3540,7 +3563,7 @@ function startGameFlow() {
     '<p>Je potje tegen ' + TURBO_NAMES[b.r.level] + ', zet ' + zetNummer(b.S) + ', ' +
     (b.S.turn === 'w' ? 'jij bent aan zet' : 'Turbo is aan zet') + '.<br>Een nieuw potje? Dan stopt dit potje, en telt het als opgegeven.</p>';
   showModal('<div class="m-emoji">🐢</div><h2>Tegen wie speel je?</h2>' + bovenaan + '<div class="m-btns">' +
-    '<button class="btn plain lvl-btn" data-lvl="1"><span class="l-emoji">🍼</span><span><b>Baby Turbo</b><span class="l-sub">Doet soms een dutje. Lekker oefenen!</span></span></button>' +
+    '<button class="btn plain lvl-btn" data-lvl="1"><span class="l-emoji">😴</span><span><b>Slaapkop Turbo</b><span class="l-sub">Doet soms een dutje. Fijn om mee te beginnen.</span></span></button>' +
     '<button class="btn plain lvl-btn" data-lvl="2"><span class="l-emoji">🐢</span><span><b>Turbo</b><span class="l-sub">Denkt al best goed na.</span></span></button>' +
     '<button class="btn plain lvl-btn" data-lvl="3"><span class="l-emoji">🚀</span><span><b>Super Turbo</b><span class="l-sub">Kijkt ver vooruit. Pittig!</span></span></button>' +
     '</div>', () => {
@@ -3570,7 +3593,8 @@ function geefBewaardOp() {
 
 function startGame(level, bewaard) {
   session = { kind: 'game', S: bewaard ? bewaard.S : newGame(), level, tips: bewaard ? bewaard.r.tips : 3, over: false,
-    pending: null, drawAsked: bewaard ? bewaard.r.drawAsked : null, started: bewaard ? bewaard.r.started : Date.now() };
+    pending: null, drawAsked: bewaard ? bewaard.r.drawAsked : null, started: bewaard ? bewaard.r.started : Date.now(),
+    patXP: bewaard ? bewaard.r.patXP || 0 : 0 };
   showScreen('play');
   $('modeTitle').textContent = MODE_TITLES.game;
   $('roundChip').textContent = TURBO_NAMES[level];
@@ -3585,9 +3609,13 @@ function startGame(level, bewaard) {
   updateToggles();
   gameActions();
   const laatste = session.S.hist[session.S.hist.length - 1];
-  if (laatste) { BD.last = [laatste.m.from, laatste.m.to]; renderBoard(); }
+  if (laatste) BD.last = [laatste.m.from, laatste.m.to];
+  BD.check = inCheck(session.S) ? session.S.kings[session.S.turn] : null;
+  renderBoard();
   bewaarPotje();
   if (session.S.turn === 'w') kidTurn(); else { BD.mode = 'off'; turboTurn(); }
+  if (bewaard) say('Welkom terug! Je potje staat nog precies zo. ' +
+    (session.S.turn !== 'w' ? 'Ik ben aan zet.' : inCheck(session.S) ? 'Je staat schaak!' : 'Jij bent aan zet.'));
 }
 
 function gameActions() {
@@ -3976,6 +4004,7 @@ function commitKid(m) {
       countPattern(co.key);
       if ((session.patXP || 0) < 3) {
         session.patXP = (session.patXP || 0) + 1;
+        bewaarPotje();
         addXP(10, 'Truc: ' + PATTERNS[co.key].n + '! ' + PATTERNS[co.key].e);
       }
       say('Dat is een ' + co.what + ' Goed gezien van jou! 🌟');
@@ -4229,7 +4258,7 @@ function endGame(st, stil) {
     p = (st.reason === 'opgave' ? 'Je gaf op. Dat mag, maar de volgende keer vecht je door: ik maak ook fouten!' :
       'Schaakmat… maar goed volgehouden! Van elke partij word je slimmer.') + '<br><small>💡 ' +
       pick(LOSS_TIPS) + '</small>';
-    xp = telt ? 15 : 0; snd.bad();
+    xp = telt ? 15 : 0; if (!stil) snd.bad();
   } else {
     emoji = '🤝'; h = 'Gelijkspel!';
     p = drawTxt[st.reason] || 'Niemand wint, niemand verliest.';
@@ -4682,7 +4711,7 @@ $('friendList').addEventListener('click', e => {
   else if (d.remove && P.friends[d.remove]) removeFriendAsk(d.remove);
 });
 $('backBtn').addEventListener('click', () => {
-  /* een potje met een vriend blijft tot increment 4 zoals het was */
+  /* een potje met een vriend wordt niet bewaard: weggaan is daar opgeven, en dat vraagt eerst */
   if (session && session.online && !session.over) { resignAsk(); return; }
   pauze();
 });
@@ -4711,9 +4740,7 @@ function confirmReset() {
         P = viewFromDoc(DOC);
         saveP();
         applyTheme();
-        renderHome();
-        showHomeTab('spelen');
-        closeModal();
+        goHome('spelen');
         askName();
       });
     });

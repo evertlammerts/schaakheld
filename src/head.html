@@ -310,6 +310,7 @@
   .back-btn {
     border: none; cursor: pointer; background: var(--card); box-shadow: var(--shadow);
     border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: bold;
+    white-space: nowrap; min-height: 44px;
   }
   #modeTitle { font-size: 19px; font-weight: bold; }
   .bewaard { font-size: 13px; font-weight: bold; color: var(--ink-soft); white-space: nowrap; }
@@ -329,10 +330,13 @@
   }
   .verder-kaart.kapot { cursor: default; }
   .verder-ook {
-    display: block; width: 100%; margin-top: 6px; border: none; background: none; cursor: pointer;
-    font-family: var(--font); font-size: 14px; color: var(--ink); text-align: left; padding: 8px 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px;
+    margin-top: 8px; padding: 10px 16px; cursor: pointer; text-align: left;
+    background: var(--card); border: 1px solid rgba(23, 69, 111, .12); border-radius: 16px;
+    font-family: var(--font); font-size: 14px; font-weight: bold; color: var(--ink);
   }
-  .verder-bewaard { margin: 6px 16px 0; font-size: 12.5px; color: var(--ink-soft); }
+  .verder-ook .vo-pijl { font-size: 18px; }
+  .verder-bewaard { margin: 6px 16px 0; font-size: 13px; color: var(--ink); }
   #roundChip {
     margin-left: auto; background: var(--card); border-radius: 999px; padding: 7px 14px;
     font-size: 14px; box-shadow: var(--shadow); font-variant-numeric: tabular-nums;
@@ -570,6 +574,7 @@
   .tgl.on { background: var(--leaf-soft); color: var(--leaf-deep); box-shadow: inset 0 0 0 2px var(--leaf); }
 
   .drill-stars { font-size: 15px; background: var(--card); border-radius: 16px; padding: 10px 14px; box-shadow: var(--shadow); }
+  .drill-stars.hidden { display: none; }
 
   /* ---------- overlay & modal ---------- */
   /* De overlay scrolt en het venster staat met margin: auto in het midden:
@@ -615,7 +620,7 @@
   .toast {
     position: fixed; left: 16px; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     margin: 0 auto; max-width: 440px; z-index: 96; text-align: center;
-    background: var(--coral); color: #fff; font-size: 19px; font-weight: bold; line-height: 1.35;
+    background: var(--ink); color: #fff; font-size: 19px; font-weight: bold; line-height: 1.35;
     padding: 12px 18px; border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,.25);
     animation: toast-in .25s ease; pointer-events: none;
   }
@@ -794,7 +799,7 @@
 
   <section id="scr-play" class="screen hidden">
     <div class="playbar">
-      <button id="backBtn" class="back-btn" aria-label="Even weg, je potje blijft bewaard">‹ Pauze</button>
+      <button id="backBtn" class="back-btn">‹ Pauze</button>
       <span id="modeTitle"></span>
       <span id="bewaard" class="bewaard hidden">✔ bewaard</span>
       <span id="roundChip"></span>

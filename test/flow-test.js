@@ -566,7 +566,7 @@ fire(__els.goalKinds, 'click', { target: { dataset: { kind: 'potjes' } } });
 ok('weekdoel: potjes-sjabloon toont de drie Turbo\'s', __els.goalSub.innerHTML.indexOf('Super Turbo') >= 0);
 fire(__els.goalSub, 'click', { target: { dataset: { lvl: '1' } } });
 fire(__els.goalNs, 'click', { target: { dataset: { n: '2' } } });
-ok('weekdoel: voorbeeldzin klopt', __els.goalPreview.innerHTML.indexOf('2 potjes tegen 🍼 Baby Turbo of sterker') >= 0);
+ok('weekdoel: voorbeeldzin klopt', __els.goalPreview.innerHTML.indexOf('2 potjes tegen 😴 Slaapkop Turbo of sterker') >= 0);
 /* eerdere potjes in deze suite tellen al mee: de weektellers zijn echt.
    Daarom eerst het aantal dat het doel nodig heeft boven de huidige stand
    zetten, via de kiezer kan dat niet (vaste aantallen), dus direct. */
@@ -581,7 +581,7 @@ renderHome();
 ok('weekdoel: kaart toont doel en stand', __els.weekCard.innerHTML.indexOf('Mijn doel: ' + (potjesNu + 2) + ' potjes') >= 0 &&
   __els.weekCard.innerHTML.indexOf(potjesNu + ' / ' + (potjesNu + 2)) >= 0);
 ok('weekstrip: op Spelen zichtbaar', __els.weekStrip.innerHTML.indexOf(potjesNu + ' van ' + (potjesNu + 2)) >= 0);
-/* een potje op Super Turbo telt mee voor "Baby Turbo of sterker" */
+/* een potje op Super Turbo telt mee voor "Slaapkop Turbo of sterker" */
 bumpWeek('potjes3', 1);
 ok('weekdoel: sterkere Turbo telt mee', goalProgress(P.weekGoal) === potjesNu + 1 && P.xp === xpG);
 bumpWeek('potjes1', 1);
