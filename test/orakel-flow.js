@@ -204,6 +204,53 @@ async function orakelFlow() {
     check('en geeft geen trucbonus', b.get('P.c.pat.vork') === 1 && b.get('P.xp') === xp);
   });
 
+  /* de app gaat direct na de hulp of het aanbod dicht, zonder zet ertussen */
+  await nogNiet('[1.1] de Speurbril gebruiken en meteen dichtdoen: na het openen is hij nog steeds gebruikt', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5', 'g1f3', 'b8c6']) });
+    await wacht();
+    a.tik('verderKaart');
+    await wacht();
+    tikTekst(a, 'Speurbril');
+    await wacht();
+    check('testopzet: de speurbril is gebruikt', a.get('session.tips') === 2);
+    const b = herlaad(a);
+    await wacht();
+    b.tik('verderKaart');
+    await wacht();
+    check('na het openen nog 2 over', b.get('session.tips') === 2 &&
+      knopTeksten(b).some(function (t) { return /Speurbril\D*2/.test(t); }));
+  });
+
+  await nogNiet('[1.1] remise aanbieden en meteen dichtdoen: na het openen staat het aanbod er nog', async function (check) {
+    const zetten = ['e2e4', 'e7e5', 'g1f3', 'b8c6'];
+    const a = nieuwKind({ opslag: opslagMetPotje(1, zetten) });
+    await wacht();
+    a.tik('verderKaart');
+    await wacht();
+    await biedRemise(a);
+    check('testopzet: Turbo wil nog geen remise, het aanbod staat', !a.get('session.over') && a.get('session.drawAsked') === zetten.length);
+    const b = herlaad(a);
+    await wacht();
+    const r = opgeslagen(b, POTJE);
+    check('het aanbod staat bewaard', !!r && r.drawAsked === zetten.length);
+    b.tik('verderKaart');
+    await wacht();
+    check('en het potje gaat verder met dat aanbod', opSpeelscherm(b) && b.get('session.drawAsked') === zetten.length);
+  });
+
+  for (const niveau of [7, 0]) {
+    await nogNiet('[1.1] een bewaard potje op niveau ' + niveau + ', dat niet bestaat, gaat niet open maar staat op de kaart om weg te halen', async function (check) {
+      const o = opslagMetPotje(niveau, ['e2e4', 'e7e5']), ruw = o.getItem(POTJE);
+      const a = nieuwKind({ opslag: o });
+      await wacht();
+      check('de Verder-kaart zegt dat het niet open kan', zichtbaar(a, 'verder') && tekstVan(a, 'verder').indexOf('kan ik niet meer openen') >= 0 &&
+        !/Verder:/.test(tekstVan(a, 'verder')));
+      const b = herlaad(a);
+      await wacht();
+      check('het staat er na herladen nog, onveranderd', b.opslag.getItem(POTJE) === ruw);
+    });
+  }
+
   await nogNiet('[1.1] een potje zonder zet wordt niet bewaard: Pauze vraagt niets en zegt dat het nog niet begonnen was', async function (check) {
     const a = nieuwKind();
     await startPotje(a, 1);
