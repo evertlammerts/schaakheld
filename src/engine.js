@@ -642,10 +642,10 @@ function pickMove(S, level, rng, budgetMs) {
    (punish = opponent's reply), with mate: true when that reply mates. */
 function blunderCheck(S, m) {
   makeMove(S, m);
-  const mates = matingMoves(S, 1);
-  const afterMine = mates.length ? 0 : forcedMaterial(S);
+  const mate = mateReply(S);
+  const afterMine = mate ? 0 : forcedMaterial(S);
   unmakeMove(S);
-  if (mates.length) return { loss: MATE, punish: mates[0], mate: true };
+  if (mate) return { loss: MATE, punish: mate, mate: true };
   const mySign = S.turn === 'w' ? 1 : -1;
   let bestAlt = -Infinity;
   for (const alt of legalMoves(S)) {
@@ -661,6 +661,19 @@ function blunderCheck(S, m) {
     unmakeMove(S);
     const punish = reply.length ? reply[0].m : null;
     return { loss, punish };
+  }
+  return null;
+}
+
+/* A reply that mates at once, or null. Only a reply that gives check can
+   mate, so most replies skip the costly full move generation that
+   matingMoves(S, 1) does for each of them. */
+function mateReply(S) {
+  for (const m of legalMoves(S)) {
+    makeMove(S, m);
+    const mate = inCheck(S) && legalMoves(S).length === 0;
+    unmakeMove(S);
+    if (mate) return m;
   }
   return null;
 }
@@ -857,7 +870,7 @@ function scoreAfter(S, m) {
   makeMove(S, m);
   const st = gameStatus(S);
   const r = st.over ? { score: st.reason === 'mat' ? -MATE : 0, m: null } : think(S, 60000, 8, { nodes: CHECK_NODES });
-  const mateNext = !st.over && matingMoves(S, 1).length > 0;
+  const mateNext = !st.over && !!mateReply(S);
   unmakeMove(S);
   return { white: -r.score, reply: r.m, mateNext };
 }
@@ -1374,11 +1387,14 @@ function moveMoment(S, m) {
     if (net <= -200) return Object.assign(base, { kind: 'ruil', loss: -net, sq: alg(m.to) });
     if (net >= 250) return Object.assign(base, { kind: 'goed', gain: net, sq: alg(m.to) });
   }
-  const mates = matingMoves(S, 1);
+  makeMove(S, m);
+  const mated = inCheck(S) && legalMoves(S).length === 0;
+  unmakeMove(S);
+  if (mated) return null;
+  const mate = mateReply(S);
+  if (mate) return Object.assign(base, { kind: 'gemist', loss: 1000, mateWith: moveKey(mate) });
   const wins = winnableCaptures(S).filter(x => x.gain >= 300);
-  const took = mates.some(x => x.from === m.from && x.to === m.to) || wins.some(x => capturedSq(S, m) === x.sq && isCapture(S, m));
-  if (!took && (mates.length || wins.length)) {
-    if (mates.length) return Object.assign(base, { kind: 'gemist', loss: 1000, mateWith: moveKey(mates[0]) });
+  if (wins.length && !wins.some(x => isCapture(S, m) && capturedSq(S, m) === x.sq)) {
     const w = wins.reduce((a, b) => b.gain > a.gain ? b : a);
     return Object.assign(base, { kind: 'gemist', loss: w.gain, sq: alg(w.sq), piece: NAME_NL[S.board[w.sq].toLowerCase()],
       points: POINTS[S.board[w.sq].toLowerCase()], with: moveKey(w.move) });
@@ -1440,5 +1456,5 @@ if (typeof module !== 'undefined') {
     winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
     repetitions, positionKey, SUPER_NODES, CHECK_NODES, checkSafeTask, checkPieceTask,
-    POINTS, moveMoment, chooseMoment, keyMoment };
+    POINTS, moveMoment, chooseMoment, keyMoment, mateReply };
 }
