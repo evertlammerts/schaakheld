@@ -363,7 +363,7 @@ async function orakelTwee() {
   });
 
   /* zelfde grenzen als de Go-test van 4.10: na 9,5 minuten nog wel, na 10,5 niet meer */
-  await nogNiet('[4.10] de nep-server: een koppelcode werkt tien minuten, daarna niet meer', async function (check) {
+  await regel('[4.10] de nep-server: een koppelcode werkt tien minuten, daarna niet meer', async function (check) {
     const klok = __server.klok;
     const post = function (pad, body) { return fetch('https://test.local' + pad, { method: 'POST', body: JSON.stringify(body) }); };
     try {

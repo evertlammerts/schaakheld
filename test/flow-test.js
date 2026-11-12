@@ -1863,6 +1863,14 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('kamers: in elke kamer iemand, dan weigert de server en blijft het bij de grens',
     stK4 === 429 && Object.keys(__server.wsrooms).length === MAX_KAMERS);
   __server.wsrooms = kamersVoor;
+  /* koppelcodes uit server.go: vol is vol, ook voor een code die er al staat */
+  var linksVoor = __server.links;
+  __server.links = {};
+  for (j = 0; j < MAX_LINKS; j++) __server.links['code-' + j] = { payload: 'x', tot: __busNu() + LINK_TTL };
+  var rL = await fetch(SYNC_URL + '/v1/link', { method: 'POST', headers: {},
+    body: JSON.stringify({ code: 'code-0', payload: 'nieuw' }) });
+  ok('koppelcode: vol is vol, ook voor een code die er al staat', rL.status === 429 && __server.links['code-0'].payload === 'x');
+  __server.links = linksVoor;
 
   /* wie zelf op iemand wacht moet een uitnodiging van een ander nog steeds
      te zien krijgen: met twee vermeldingen van hetzelfde kind (een kapotte

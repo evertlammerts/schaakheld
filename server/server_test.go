@@ -110,17 +110,34 @@ func TestLinkTTL(t *testing.T) {
 	s, clk := newTestServer(t, nil)
 	do(t, s, "POST", "/v1/link", "", jsonBody(t, map[string]string{
 		"code": "aap-noot-mies-wim", "payload": "x"}))
-	clk.advance(6 * time.Minute)
+	do(t, s, "POST", "/v1/link", "", jsonBody(t, map[string]string{
+		"code": "kat-vis-boom-lamp", "payload": "y"}))
+	clk.advance(10*time.Minute - time.Second)
 	w := do(t, s, "POST", "/v1/link/redeem", "", jsonBody(t, map[string]string{
 		"code": "aap-noot-mies-wim"}))
+	if w.Code != 200 {
+		t.Fatalf("een seconde voor tien minuten moet de code nog werken, kreeg %d", w.Code)
+	}
+	clk.advance(time.Second)
+	w = do(t, s, "POST", "/v1/link/redeem", "", jsonBody(t, map[string]string{
+		"code": "kat-vis-boom-lamp"}))
 	if w.Code != 404 {
-		t.Fatalf("verlopen code moet 404 zijn, kreeg %d", w.Code)
+		t.Fatalf("op tien minuten moet de code op zijn, kreeg %d", w.Code)
 	}
 	s.mu.Lock()
 	n := len(s.links)
 	s.mu.Unlock()
 	if n != 0 {
 		t.Fatalf("verlopen entries niet opgeruimd: %d over", n)
+	}
+}
+
+func TestLinkGrensBovenWatEenSpuiterHaalt(t *testing.T) {
+	// wie zo snel registreert als de server toelaat, krijgt de tabel niet
+	// vol: anders krijgt een echt kind 429 op zijn koppelcode
+	levend := int(linkTTL/defaultDelay) * defaultSlots
+	if levend >= defaultMaxLinks {
+		t.Fatalf("er kunnen %d codes tegelijk leven, de grens is %d", levend, defaultMaxLinks)
 	}
 }
 

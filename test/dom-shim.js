@@ -479,9 +479,11 @@ var crypto = {
    profielblobs met bearer secret, kamers en wederzijdse paren), zodat de
    flows end-to-end testbaar zijn. */
 var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, klok: 0, teller: 0 };
-/* grenzen en TTL uit bus.go en room.go; __server.klok schuift de klok van de
-   nep-server vooruit zodat een test een bus of een kamer kan laten verlopen */
+/* grenzen en TTL uit bus.go, room.go en server.go; __server.klok schuift de
+   klok van de nep-server vooruit zodat een test een bus, een kamer of een
+   koppelcode kan laten verlopen */
 var BUS_TTL = 10 * 60000, MAX_BUSES = 512, MAX_BUS_BLOB = 4 << 10, MAX_BUS_CHECK = 64;
+var LINK_TTL = 10 * 60000, MAX_LINKS = 8192;
 var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000, MAX_KAMERS = 64;
 function __busNu() { return Date.now() + __server.klok; }
 function __veegBussen() {
@@ -538,7 +540,13 @@ var fetch = function (url, opts) {
       json: () => Promise.resolve(data),
       arrayBuffer: () => Promise.resolve(data instanceof Uint8Array ? data.buffer.slice(0) : new ArrayBuffer(0))
     });
-    if (m === 'POST' && path === '/v1/link') { __server.links[body.code] = body.payload; res(204); }
+    if (m === 'POST' && path === '/v1/link') {
+      /* zoals server.go: vol is vol, ook voor een code die er al staat */
+      for (const c in __server.links) if (__server.links[c].tot <= __busNu()) delete __server.links[c];
+      if (Object.keys(__server.links).length >= MAX_LINKS) { res(429); return; }
+      __server.links[body.code] = { payload: body.payload, tot: __busNu() + LINK_TTL };
+      res(204);
+    }
     else if (m === 'POST' && path === '/v1/bus') {
       /* zelfde regels als bus.go: bus = sha256(bewijs), leeg blob wist, een
          bus houdt het briefje BUS_TTL lang, en vol is vol (een bestaande bus
@@ -598,7 +606,7 @@ var fetch = function (url, opts) {
     else if (m === 'POST' && path === '/v1/link/redeem') {
       const p = __server.links[body.code];
       delete __server.links[body.code];
-      p === undefined ? res(404) : res(200, { payload: p });
+      (p === undefined || p.tot <= __busNu()) ? res(404) : res(200, { payload: p.payload });
     } else if (path.indexOf('/v1/profile/') === 0) {
       const id = path.slice('/v1/profile/'.length);
       const prof = __server.profiles[id];

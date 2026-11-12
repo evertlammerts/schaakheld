@@ -235,7 +235,8 @@ func TestOrakelKamerMetPotjeHoogstens48Uur(t *testing.T) {
 
 func TestOrakelKoppelcodeTienMinuten(t *testing.T) {
 	s, clk := newTestServer(t, nil)
-	nogNiet(t, "[4.10] een koppelcode werkt tien minuten", func(t tb) {
+	// [4.10] een koppelcode werkt tien minuten
+	func(t tb) {
 		doe(s, "POST", "/v1/link", map[string]string{"code": "aap-noot-mies-wim", "payload": "x"})
 		clk.advance(9*time.Minute + 30*time.Second)
 		if w := doe(s, "POST", "/v1/link/redeem", map[string]string{"code": "aap-noot-mies-wim"}); w.Code != 200 {
@@ -246,5 +247,5 @@ func TestOrakelKoppelcodeTienMinuten(t *testing.T) {
 		if w := doe(s, "POST", "/v1/link/redeem", map[string]string{"code": "kat-vis-boom-lamp"}); w.Code != 404 {
 			t.Fatalf("na 10,5 minuten moet de code op zijn, kreeg %d", w.Code)
 		}
-	})
+	}(t)
 }
