@@ -6,3 +6,4 @@ function require(p) { return module.exports; }
 load('src/koning.js');
 load('src/engine.js');
 load('test/test-engine.js');
+load('test/orakel-engine.js');
