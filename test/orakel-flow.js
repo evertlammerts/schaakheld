@@ -1145,14 +1145,14 @@ async function orakelFlow() {
     const vraag = strook(a);
     tikTekst(a, 'Hint');
     await wacht();
-    check('de hint onder het bord', /^Het stuk dat nu oplicht, staat in gevaar\. Met deze hint is de opdracht nog 2 sterren waard\.$/.test(onderZin(a)));
+    check('de hint onder het bord', onderZin(a) === 'Je toren op a1 wordt aangevallen door de loper op c3. Met deze hint is de opdracht nog 2 sterren waard.');
     zet(a, 'g1h1');
     await wacht(4000);
     check('Turbo pakt de toren: de zet staat erbij, en "toch" want het was het hangende stuk', /^Turbo speelt .+ en pakt toch je toren\. Probeer nog een zet\.$/.test(onderZin(a)));
     check('de strook houdt de vraag', strook(a) === vraag);
     zet(a, 'a1a2');
     await wacht(3000);
-    check('gered: oordeel en reden', /Gered/.test(tekstVan(a, 'taskBox')) && /Weggezet\./.test(tekstVan(a, 'taskBox')) && strook(a) === vraag);
+    check('gered: oordeel en reden', /Gered/.test(tekstVan(a, 'taskBox')) && /Weggezet: daar kan Turbo hem niet pakken\./.test(tekstVan(a, 'taskBox')) && strook(a) === vraag);
   });
 
   await regel('[2.4] De Beste Zet: drie keuzes op een rij, en na de eerste tik vraagt de strook wat Turbo daarna doet', async function (check) {

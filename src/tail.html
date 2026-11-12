@@ -3431,7 +3431,8 @@ function buildKoning() {
   session.diff = KONING_DIFF[task.type] || .5;
   task.hintUsed = false;
   BD.mode = 'puzzle';
-  if (task.type !== 'stuk') BD.check = task.S.kings.w;
+  /* rood betekent schaak: een matdreiging zonder schaak kleurt de koning niet */
+  BD.check = inCheck(task.S) ? task.S.kings.w : null;
   renderBoard();
   const n = task.answers.length;
   opdrachtVan('koning.' + task.type, { goed: n === 1 ? 'Er is één goede zet.' :
@@ -3441,24 +3442,71 @@ function buildKoning() {
 }
 function koningHint() {
   if (!session || session.phase !== 'puzzle' || session.kind !== 'koning') return;
-  const t = session.task;
+  const t = session.task, S = t.S;
   if (t.hintUsed) return;
   t.hintUsed = true;
   BD.glow.add(t.type === 'stuk' ? t.hang.sq : t.answers[0].m.from);
   renderBoard();
-  const koning = t.type !== 'stuk' && t.answers[0].m.from === t.S.kings.w;
-  hulpZin((t.type === 'stuk' ? 'Het stuk dat nu oplicht, staat in gevaar.' : koning ? 'Je koning moet het zelf doen.' :
-    'Met het stuk dat nu oplicht, kun je je redden.') + ' Met deze hint is de opdracht nog 2 sterren waard.');
+  const koning = t.type !== 'stuk' && t.answers[0].m.from === S.kings.w;
+  const van = t.type === 'stuk' && t.hang.move ? t.hang.move.from : -1;
+  hulpZin((t.type === 'stuk' ? (van >= 0 ? 'Je ' + NAME_NL[S.board[t.hang.sq].toLowerCase()] + ' op ' + alg(t.hang.sq) +
+    ' wordt aangevallen door ' + hetStuk(S.board[van]) + ' op ' + alg(van) + '.' : 'Het stuk dat nu oplicht, staat in gevaar.') :
+    koning ? 'Je koning moet het zelf doen.' : 'Met het stuk dat nu oplicht, kun je je redden.') + ' Met deze hint is de opdracht nog 2 sterren waard.');
   if (actionBtns.hint) actionBtns.hint.disabled = true;
 }
-/* hoe redt de zet het stuk; alleen wat de code kan waarmaken: "weggezet" zegt niet dat het nieuwe veld veilig is */
+function hetNaam(n) { return (n === 'paard' ? 'het ' : 'de ') + n; }
+/* Hoe een zet het hangende stuk redde (saveKind in de engine), als de reden onder "Gered!";
+   null bij "anders": dan alleen de kop (rijen S1 tot S11 van de schaakcoach) */
 function stukHow(S, m, hang) {
-  if (m.from === hang.sq) return 'Weggezet.';
-  makeMove(S, m);
-  const dekt = findAttacker(S, hang.sq, 'w') >= 0;
-  unmakeMove(S);
-  if (dekt) return 'Gedekt: slaat Turbo, dan pak jij terug.';
-  return 'Turbo wint nu niets meer.';
+  const k = saveKind(S, m, hang.sq), p = S.board[hang.sq], stuk = NAME_NL[p.toLowerCase()];
+  switch (k.kind) {
+    case 'aanvaller': return 'Je slaat de aanvaller.';
+    case 'slaat': return 'Je ' + stuk + ' slaat ' + hetNaam(k.took) + ' (' + ptsNL(k.a * 100) + ') en staat daar veilig.';
+    case 'weg': return 'Weggezet: daar kan Turbo ' + hemVan(p) + ' niet pakken.';
+    case 'schaak': return 'Schaak! Daarmee win je tijd: Turbo moet eerst zijn koning redden.';
+    case 'weg-gedekt': return 'Weggezet naar ' + k.sq + ': daar is ' + (p.toLowerCase() === 'n' ? 'het' : 'hij') + ' gedekt.';
+    case 'ruil': return m.from === hang.sq ?
+      'Ruil: je ' + stuk + ' slaat ' + hetNaam(k.took) + ' (' + ptsNL(k.a * 100) + '); Turbo slaat terug (' + ptsNL(k.b * 100) + ').' :
+      'Je ' + stuk + ' is niet te redden, maar jij pakt ' + hetNaam(k.took) + ' (' + k.a + ' tegen ' + ptsNL(k.b * 100) + ').';
+    case 'ertussen': return 'Ertussen: je ' + NAME_NL[S.board[m.from].toLowerCase()] + ' staat nu tussen ' +
+      (hang.move ? hetStuk(S.board[hang.move.from]) : 'de aanvaller') + ' en je ' + stuk + '.';
+    case 'gedekt': return 'Gedekt: slaat Turbo, dan pak jij terug.';
+    case 'tegenaanval': return 'Tegenaanval: Turbo heeft nu zelf iets te redden.';
+    default: return null;
+  }
+}
+/* De dreiging van een koningspuzzel: het stuk dat schaak geeft, of de matzet die Turbo dreigt */
+function koningDreiging(S, type) {
+  if (type === 'schaak') { const a = findAttacker(S, S.kings.w, 'b'); return a >= 0 ? { van: a, naar: S.kings.w } : null; }
+  const N = nullMoved(S), mm = matingMoves(N, 1)[0];
+  return mm ? { van: mm.from, naar: mm.to, zet: moveNameNL(N, mm) } : null;
+}
+/* Hoe het antwoord de koning redde: weglopen, de aanvaller slaan, ertussen, of het matveld dekken */
+function koningHoe(S, m, d) {
+  if (m.from === S.kings.w) return 'Je koning loopt weg.';
+  if (d && m.to === d.van) return 'Je slaat de aanvaller.';
+  if (d && between(d.van, d.naar, m.to)) return 'Je zet een stuk ertussen.';
+  return d && d.zet ? 'Je dekt het veld ' + alg(d.naar) + '.' : 'Je zet een stuk ertussen.';
+}
+/* De redenen na een gered koningspuzzel: wat dreigde, en hoe het antwoord het tegenhield */
+function koningRedenen(S, t, m) {
+  if (t.type === 'stuk') { const z = stukHow(S, m, t.hang); return z ? [z] : []; }
+  const d = koningDreiging(S, t.type);
+  const eerst = t.type === 'schaak' ? (d ? 'Je stond schaak van ' + hetStuk(S.board[d.van]) + ' op ' + alg(d.van) + '.' : null) :
+    (d && d.zet ? 'Turbo dreigde mat met ' + d.zet + '.' : null);
+  return [eerst, koningHoe(S, m, d)].filter(Boolean);
+}
+/* Na Turbo's matzet: wie schaak geeft, en twee lege velden naast de koning die ook gedekt zijn */
+function matUitleg(S) {
+  const a = findAttacker(S, S.kings.w, 'b');
+  if (a < 0) return '';
+  const velden = [];
+  for (const d of [-17, -16, -15, -1, 1, 15, 16, 17]) {
+    const sq = S.kings.w + d;
+    if (!(sq & 0x88) && !S.board[sq] && attacked(S, sq, 'b')) velden.push(alg(sq));
+  }
+  return ' ' + hoofd(hetStuk(S.board[a])) + ' op ' + alg(a) + ' geeft schaak' +
+    (velden.length >= 2 ? ', en ' + velden[0] + ' en ' + velden[1] + ' zijn gedekt.' : '.');
 }
 function koningAttempt(m) {
   if (!session || session.phase !== 'puzzle') return;
@@ -3473,10 +3521,10 @@ function koningAttempt(m) {
     BD.mode = 'off';
     BD.glow.clear();
     BD.check = null;
-    const how = t.type === 'stuk' ? stukHow(S, m, t.hang) : null;
+    const redenen = koningRedenen(S, t, m);
     playMove(m, () => {
       const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
-      awardRound(stars, 'Gered! 🛡️', t.type === 'stuk' ? how : 'Turbo\'s plan is van tafel. Eerst kijken wat er dreigt, dan zetten.');
+      awardRound(stars, 'Gered! 🛡️', redenen);
     });
     return;
   }
@@ -3484,21 +3532,7 @@ function koningAttempt(m) {
   clearSel();
   renderBoard();
   snd.bad();
-  if (session.tries >= 2) {
-    session.phase = 'review';
-    BD.mode = 'off';
-    const ans = t.answers[0].m;
-    BD.glow.clear();
-    BD.check = null;
-    BD.arrows = [{ from: ans.from, to: ans.to, cls: 'a-leaf' }];
-    const how = t.type === 'stuk' ? stukHow(S, ans, t.hang) : null;
-    const ansName = moveNameNL(S, ans);
-    playMove(ans, () => {
-      awardRound(0, 'Zo zit het', 'De redding was <b>' + ansName + '</b>. ' + (how || 'Daarna kan Turbo niet meer mat zetten.'));
-    });
-    return;
-  }
-  /* laat zien wat er dan gebeurt: Turbo slaat toe, en het bord komt terug */
+  /* laat zien wat er dan gebeurt, ook bij de laatste poging (decision D21): Turbo slaat toe, en het bord komt terug */
   session.phase = 'busy';
   BD.mode = 'off';
   playMove(m, () => {
@@ -3513,17 +3547,32 @@ function koningAttempt(m) {
         const cap = S.hist[S.hist.length - 1].cap;
         /* "toch" alleen als Turbo het stuk pakt dat al hing */
         const hing = t.type === 'stuk' && reply.m.to === (m.from === t.hang.sq ? m.to : t.hang.sq);
-        const txt = st2.over && st2.reason === 'mat' ? 'Turbo speelt <b>' + replyName + '</b>: schaakmat. Dat was dus niet de redding.' :
+        const txt = st2.over && st2.reason === 'mat' ? 'Turbo speelt <b>' + replyName + '</b>: schaakmat.' + matUitleg(S) :
           t.type === 'stuk' && cap ? 'Turbo speelt <b>' + replyName + '</b> en pakt ' + (hing ? 'toch je ' + NAME_NL[cap.toLowerCase()] :
             'je ' + NAME_NL[cap.toLowerCase()] + ' op ' + alg(reply.m.to)) + '.' :
             'Turbo speelt <b>' + replyName + '</b>, en het gevaar is er nog.';
+        if (session.tries >= 2) hulpZin(txt);
         later(() => {
           unmakeMove(S); unmakeMove(S);
           BD.arrows = []; BD.last = null;
-          BD.check = t.type === 'stuk' ? null : S.kings.w;
+          BD.check = inCheck(S) ? S.kings.w : null;
           renderBoard();
-          session.phase = 'puzzle'; BD.mode = 'puzzle';
-          hulpZin(txt + ' Probeer nog een zet.');
+          if (session.tries < 2) {
+            session.phase = 'puzzle'; BD.mode = 'puzzle';
+            hulpZin(txt + ' Probeer nog een zet.');
+            return;
+          }
+          /* na de tweede poging: de redding */
+          session.phase = 'review';
+          const ans = t.answers[0].m;
+          BD.glow.clear();
+          BD.check = null;
+          BD.arrows = [{ from: ans.from, to: ans.to, cls: 'a-leaf' }];
+          const redenen = koningRedenen(S, t, ans);
+          const ansName = moveNameNL(S, ans);
+          playMove(ans, () => {
+            awardRound(0, 'Zo zit het', ['De redding was <b>' + ansName + '</b>.'].concat(redenen));
+          });
         }, 900);
       });
     }, 600);

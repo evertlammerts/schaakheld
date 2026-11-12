@@ -285,14 +285,14 @@ async function orakelFlow5() {
     ['ruil na een zet', '4k3/8/4b3/2n5/2B5/8/8/6K1 w - - 0 1', 'c4e6', 'Ruil: je loper slaat de loper (3 punten); Turbo slaat terug (3 punten).'],
     ['de aanvaller slaan', '6k1/8/8/3p4/2P1N3/8/8/6K1 w - - 0 1', 'c4d5', 'Je slaat de aanvaller.'],
     ['ertussen', '6k1/8/3q4/8/7B/8/5P1R/5K2 w - - 0 1', 'h4g3', 'Ertussen: je loper staat nu tussen de dame en je toren.'],
-    ['gedekt', '4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1', 'd2d3', 'Gedekt: slaat Turbo, dan pak jij terug.', true],
+    ['gedekt', '4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1', 'd2d3', 'Gedekt: slaat Turbo, dan pak jij terug.'],
     ['het stuk slaat zelf', '3rk3/8/8/8/1n6/8/3Q4/6K1 w - - 0 1', 'd2b4', 'Je dame slaat het paard (3 punten) en staat daar veilig.'],
     ['het stuk slaat zelf een pion', 'r1b1kb1r/1pp2ppp/p1npq3/3N4/3PpQ2/2P5/PP2PPPP/1R2KBNR w - - 0 1', 'd5c7', 'Je paard slaat de pion (1 punt) en staat daar veilig.'],
     ['tegenaanval', '1r2k1nr/ppp1pp1N/4q1p1/8/4n3/N4Q2/PPPP1PPP/R1B2K1R w - - 0 1', 'd2d3', 'Tegenaanval: Turbo heeft nu zelf iets te redden.'],
     ['schaak', '2kr1b1r/ppp2ppp/n2q1n2/3pp3/3N1QbP/3BP3/PPPP1PP1/RNB3KR w - - 0 1', 'd3f5', 'Schaak! Daarmee win je tijd: Turbo moet eerst zijn koning redden.']
   ];
   for (const g of RED) {
-    await (g[4] ? regel : nogNiet)('[5.5] Red je stuk, ' + g[0] + ': "' + g[3] + '"', async function (check) {
+    await regel('[5.5] Red je stuk, ' + g[0] + ': "' + g[3] + '"', async function (check) {
       const a = nieuwKind();
       await startOefening(a, 'koning');
       zetOpdracht(a, g[1], 'stuk', [g[2]], HANG5);
@@ -304,7 +304,7 @@ async function orakelFlow5() {
     });
   }
 
-  await nogNiet('[5.5] Red je stuk: de hint noemt het stuk en wie het aanvalt', async function (check) {
+  await regel('[5.5] Red je stuk: de hint noemt het stuk en wie het aanvalt', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'koning');
     zetOpdracht(a, '4k3/8/4b3/2n5/2B5/8/8/6K1 w - - 0 1', 'stuk', ['c4e2'], HANG5);
@@ -313,7 +313,7 @@ async function orakelFlow5() {
     check('de hint', onder5(a) === 'Je loper op c4 wordt aangevallen door de loper op e6. Met deze hint is de opdracht nog 2 sterren waard.');
   });
 
-  await nogNiet('[5.5] Koning ontsnapt: de koning is alleen rood als hij schaak staat', async function (check) {
+  await regel('[5.5] Koning ontsnapt: de koning is alleen rood als hij schaak staat', async function (check) {
     const mat = KONING_POOL.filter(function (p) { return p.type === 'mat1'; })[0];
     const schaak = KONING_POOL.filter(function (p) { return p.type === 'schaak'; })[0];
     if (!check('testopzet: in de voorraad staat een matdreiging zonder schaak', !!mat && !inCheck(parseFEN(mat.fen)))) return;
@@ -514,7 +514,7 @@ async function orakelFlow5() {
   const MAT5 = ['r2qk2r/pp1nnppp/8/3p1b2/1p1K4/5N1P/PBP1PPP1/R2Q1B1R w - - 1 1', 'd4e3'];
   for (const g of [['uit schaak', 'schaak', SCHAAK5, ['Je stond schaak van de toren op g4.', 'Je koning loopt weg.']],
     ['een matdreiging', 'mat1', MAT5, ['Turbo dreigde mat met ' + moveNameNL(nullMoved(parseFEN(MAT5[0])), matingMoves(nullMoved(parseFEN(MAT5[0])), 1)[0]) + '.', 'Je koning loopt weg.']]]) {
-    await nogNiet('[5.5] Koning ontsnapt, gered ' + g[0] + ': "' + g[3].join(' ') + '"', async function (check) {
+    await regel('[5.5] Koning ontsnapt, gered ' + g[0] + ': "' + g[3].join(' ') + '"', async function (check) {
       const a = nieuwKind();
       await startOefening(a, 'koning');
       zetOpdracht(a, g[2][0], g[1], [g[2][1]]);
@@ -525,7 +525,24 @@ async function orakelFlow5() {
     });
   }
 
-  await nogNiet('[5.5] Koning ontsnapt, een poging die in mat loopt: "Turbo speelt {zet}: schaakmat." en wie schaak geeft', async function (check) {
+  /* D21: ook in Koning ontsnapt speelt Turbo zijn antwoord op de tweede poging, en dan pas komt het antwoord */
+  await regel('[5.5] Koning ontsnapt: ook de tweede foute poging krijgt Turbo\'s antwoord op het bord, en dan de redding', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    zetOpdracht(a, MAT5[0], 'mat1', [MAT5[1]]);
+    const h0 = a.get('session.S.hist.length');
+    for (const [i, k] of [[1, 'a1b1'], [2, 'a2a3']]) {
+      zet(a, k);
+      const gezien = await zagOoit(function () {
+        return a.get('session.S.hist.length') === h0 + 2 && a.get('moveKey(session.S.hist[' + h0 + '].m)') === k;
+      }, 6000);
+      check('poging ' + i + ': Turbo antwoordt op het bord', gezien);
+      await wacht(6000);
+    }
+    check('daarna de redding', a.get('session.phase') === 'review' && redenen5(a).some(function (r) { return /^De redding was /.test(r); }));
+  });
+
+  await regel('[5.5] Koning ontsnapt, een poging die in mat loopt: "Turbo speelt {zet}: schaakmat." en wie schaak geeft', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'koning');
     zetOpdracht(a, MAT5[0], 'mat1', [MAT5[1]]);
@@ -754,7 +771,7 @@ async function orakelFlow5() {
 
   /* ---------- 5.5: Red je stuk, de stukken ruilen terwijl het stuk verloren is ---------- */
 
-  await nogNiet('[5.5] Red je stuk, het stuk is niet te redden maar het kind pakt evenveel: "Je loper is niet te redden, maar jij pakt de loper (3 tegen 3 punten)."', async function (check) {
+  await regel('[5.5] Red je stuk, het stuk is niet te redden maar het kind pakt evenveel: "Je loper is niet te redden, maar jij pakt de loper (3 tegen 3 punten)."', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'koning');
     zetOpdracht(a, 'r2q1k1r/ppp2ppp/2nb1n2/3pp3/4PBb1/3P2Q1/PPPNBPPP/2R2K1R w - - 0 1', 'stuk', ['e2g4'], HANG5);
@@ -794,7 +811,7 @@ async function orakelFlow5() {
 
   /* ---------- 5.5: na twee missers zegt de app wat de redding of de truc was ---------- */
 
-  await nogNiet('[5.5] Koning ontsnapt, na twee missers: "De redding was {zet}." en hoe', async function (check) {
+  await regel('[5.5] Koning ontsnapt, na twee missers: "De redding was {zet}." en hoe', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'koning');
     zetOpdracht(a, SCHAAK5[0], 'schaak', [SCHAAK5[1]]);

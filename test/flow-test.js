@@ -188,9 +188,10 @@ puzzleAttempt(pRa2);
 drainTimers();
 ok('stuk: weggezet = 3 sterren met uitleg', session.phase === 'review' && session.earned - kEarned === 3 &&
   __els.taskBox.innerHTML.indexOf('Weggezet') >= 0);
-ok('stuk: dekken wordt herkend', stukHow(parseFEN('6k1/8/8/8/8/2b5/8/R4RK1 w - - 0 1'),
-  legalMoves(parseFEN('6k1/8/8/8/8/2b5/8/R4RK1 w - - 0 1')).find(function (m) { return alg(m.from) === 'f1' && alg(m.to) === 'b1'; }),
-  { sq: sqFromAlg('a1') }).indexOf('Gedekt') >= 0);
+/* gedekt alleen als slaan Turbo niets oplevert (de schaakcoach): Lxa1 Txa1 wint hem 2 punten, d3 dekt het paard wel echt */
+ok('stuk: dekken wordt herkend', (stukHow(parseFEN('4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1'),
+  legalMoves(parseFEN('4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1')).find(function (m) { return alg(m.from) === 'd2' && alg(m.to) === 'd3'; }),
+  { sq: sqFromAlg('e4') }) || '').indexOf('Gedekt') >= 0);
 
 /* ---------- openingsschool ---------- */
 var pS0 = newGame();
@@ -319,6 +320,15 @@ ok('dreiging: gedekte pion is geen winst voor Turbo', threatDetails(thS2).length
 ok('dreiging: in schaak geen dreigingsopdracht', threatDetails(parseFEN('6k1/8/8/8/8/2b5/8/R3K3 w - - 0 1')).length === 0);
 
 /* ---------- De Beste Zet: even rondes zijn de valstrik-vraag ---------- */
+/* een vaste reeks toevalsgetallen: de valstrik-vraag heeft een zoekbudget en
+   geeft soms niets, dan komt een keuze uit drie (fix list item 27) */
+var best3Random = Math.random, best3Zaad = 27;
+Math.random = function () {
+  best3Zaad = (best3Zaad + 0x6D2B79F5) >>> 0;
+  var x = Math.imul(best3Zaad ^ (best3Zaad >>> 15), best3Zaad | 1);
+  x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+  return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+};
 startDrill('best3');
 drainTimers();
 ok('best3 r1: kiezen uit drie', session.round === 1 && !!(session.task && session.task.options));
@@ -340,6 +350,7 @@ safeAnswer(!session.task.trap);
 drainTimers();
 ok('safe: wrong scores 0', session.earned === earnedBefore);
 ok('safe: review phase after wrong', session.phase === 'review');
+Math.random = best3Random;
 
 /* ---------- best3 drill ---------- */
 wisRondje('best3'); /* [1.6] het rondje hierboven is bewaard; deze test wil een vers rondje */
