@@ -2341,11 +2341,14 @@ function wisRondje(kind) {
 }
 /* de zet die nu aan de beurt is, zoals in de partijnotatie */
 function zetNummer(S) { return Math.floor(S.hist.length / 2) + 1; }
-function apparaatNaam() {
+/* een iPad meldt zich als Mac; alleen het aanraakscherm verraadt hem */
+function ditApparaat() {
   const ua = navigator.userAgent || '';
-  if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'iPad';
-  if (/iPhone|iPod/.test(ua)) return 'iPhone';
-  return /Android|Mobile/.test(ua) ? 'telefoon' : 'computer';
+  if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'deze iPad';
+  if (/iPhone|iPod/.test(ua)) return 'deze iPhone';
+  if (/Android/.test(ua) && /Mobile/.test(ua)) return 'deze telefoon';
+  if (/Macintosh|Windows|X11|CrOS/.test(ua) && !/Android/.test(ua)) return 'deze laptop';
+  return 'dit apparaat';
 }
 
 /* Pauze: nooit een vraag, het potje of rondje blijft staan */
@@ -2397,7 +2400,7 @@ function renderVerder() {
   items.slice(1).forEach((it, i) => {
     h += '<button class="verder-ook" data-ook="' + (i + 1) + '">Ook nog: ' + it.ook + ' ›</button>';
   });
-  if (!eerste.kapot) h += '<div class="verder-bewaard">✔ Je ' + eerste.wat + ' blijft staan op deze ' + apparaatNaam() +
+  if (!eerste.kapot) h += '<div class="verder-bewaard">✔ Je ' + eerste.wat + ' blijft staan op ' + ditApparaat() +
     ', ook als je de app dichtdoet.</div>';
   el.innerHTML = h;
   if (eerste.kapot) $('verderWeg').addEventListener('click', () => { opslag(POTJE_KEY, null); renderVerder(); });
