@@ -1515,7 +1515,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var mpVoor = MP;
   await mpHostQR();
   ok('[4.1] mp: met een bewaard vriendenpotje geen nieuw potje erover heen', MP === mpVoor &&
-    !!leesSamen() && leesSamen().r.gameId === 'potje-test-2' && /nog een potje met Fien/.test(__els.toast.textContent));
+    !!leesSamen() && leesSamen().r.gameId === 'potje-test-2' && /Je potje met Fien loopt nog/.test(__els.toast.textContent));
   mpStop(true);
   opslag(SAMEN_KEY, null);
 

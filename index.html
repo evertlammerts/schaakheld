@@ -3087,7 +3087,7 @@ async function linkShareFlow() {
   const tot = Date.now() + LINK_MS;
   showModal('<div class="m-emoji">🔑</div><h2>Nieuw apparaat koppelen</h2>' +
     (serverOk
-      ? '<p>Typ deze vier woorden in de app. Of scan de code.</p>' +
+      ? '<p>Tik op het nieuwe apparaat op Ik heb al een profiel. Typ daar deze vier woorden, of scan de code.</p>' +
         '<div class="w-chips">' + w.map((x, i) => '<span class="w-chip"><b>' + (i + 1) + '</b> ' + x + '</span>').join('') + '</div>' +
         '<p id="linkTijd"></p>'
       : '<p><small>Geen verbinding met de server: alleen de QR-route werkt nu.</small></p>') +
@@ -3102,7 +3102,7 @@ async function linkShareFlow() {
         if (!$('linkTijd')) return;
         const over = tot - Date.now();
         if (over <= 0) {
-          $('linkTijd').textContent = 'Deze code is op.';
+          $('linkTijd').textContent = 'Deze code werkt niet meer.';
           $('linkNieuw').classList.remove('hidden');
           return;
         }
@@ -3121,9 +3121,10 @@ function woordVeld(id) {
   return '<input id="' + id + '" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" ' +
     'enterkeyhint="done" placeholder="typ de woorden…">';
 }
-function woordInvoer(n, ids) {
+function woordInvoer(n, ids, onbekend) {
   const gekozen = [];
-  let fout = '';
+  let fout = '', wacht = false;
+  const kenIkNiet = w => "'" + escHtml(w) + "' ken ik niet. " + (onbekend || 'Kijk nog eens op het andere scherm.');
   const norm = w => w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   /* een heel woord, of een begin van minstens vier letters dat maar bij één woord past */
   const vind = w => {
@@ -3135,7 +3136,9 @@ function woordInvoer(n, ids) {
   const teken = () => {
     $(ids.chips).innerHTML = gekozen.map((w, i) => '<button class="w-chip" data-i="' + i + '"><b>' + (i + 1) + '</b> ' + w + '</button>').join('') +
       (fout ? '<div class="w-fout">' + fout + '</div>' : '');
-    $(ids.knop).disabled = gekozen.length !== n;
+    /* een exact woord dat nog in het veld staat, neemt de knop zelf mee */
+    const inVeld = gekozen.length === n - 1 && WOORDEN.includes(norm($(ids.inp).value.trim()));
+    $(ids.knop).disabled = wacht || !(gekozen.length === n || inVeld);
   };
   const suggest = rest => {
     const x = norm(rest);
@@ -3152,19 +3155,21 @@ function woordInvoer(n, ids) {
       const d = delen.shift();
       if (!d) continue;
       const w = vind(d);
-      if (!w) { fout = "'" + escHtml(d) + "' ken ik niet. Kijk nog eens op het andere scherm."; delen.unshift(d); break; }
+      if (!w) { fout = kenIkNiet(d); delen.unshift(d); break; }
       gekozen.push(w);
     }
     if (!fout && rest && gekozen.length < n) {
       const x = norm(rest);
-      const exact = WOORDEN.includes(x) && gekozen.length === n - 1;
+      /* het laatste woord telt vanzelf alleen als geen langer lijstwoord ermee begint (adem, ademen) */
+      const exact = WOORDEN.includes(x) && gekozen.length === n - 1 && !WOORDEN.some(k => k !== x && k.startsWith(x));
       if (klaar || exact) {
         const w = vind(rest);
         if (w) { gekozen.push(w); rest = ''; }
-        else fout = "'" + escHtml(rest) + "' ken ik niet. Kijk nog eens op het andere scherm.";
-      } else if (!WOORDEN.some(k => k.startsWith(x))) fout = "'" + escHtml(rest) + "' ken ik niet. Kijk nog eens op het andere scherm.";
+        else fout = kenIkNiet(rest);
+      } else if (!WOORDEN.some(k => k.startsWith(x))) fout = kenIkNiet(rest);
     }
-    veld.value = delen.concat(rest ? [rest] : []).join(' ');
+    /* een woord dat niet klopt blijft staan, met de spatie erachter: wat het kind daarna typt is een nieuw woord */
+    veld.value = delen.length ? delen.concat([rest]).join(' ') : rest;
     suggest(fout ? '' : rest);
     teken();
   };
@@ -3188,7 +3193,9 @@ function woordInvoer(n, ids) {
   teken();
   return {
     woorden: () => { verwerk(true); return gekozen.length === n ? gekozen.slice() : null; },
-    wis: () => { gekozen.length = 0; fout = ''; teken(); }
+    wis: () => { gekozen.length = 0; fout = ''; teken(); },
+    /* terwijl de app zoekt, zet een andere chip de knop niet weer aan */
+    wacht: aan => { wacht = aan; teken(); }
   };
 }
 
@@ -3272,7 +3279,7 @@ function checkLinkFragment() {
    geen entropie en voorkomt typefouten */
 function linkEntryFlow() {
   showModal('<div class="m-emoji">🔑</div><h2>Profiel ophalen</h2>' +
-    '<p>Vraag op het andere apparaat een koppelcode (🔑 onderaan het startscherm).</p>' +
+    '<p>Vraag op het andere apparaat een koppelcode: tik daar op ⚙️ bovenaan, dan op Speel op een ander apparaat.</p>' +
     '<p>Typ hier de vier woorden:</p>' + woordVeld('wordInp') +
     '<div id="wordChips" class="w-chips"></div><div id="wordSugg" class="w-suggs"></div>' +
     '<div class="m-btns"><button class="btn sun" id="linkGo" disabled>Koppel! 🔑</button>' +
@@ -3445,7 +3452,7 @@ function openSamen() {
   if (st.over) { endGame(st); return; }
   BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off';
   if (remiseVraagOpen()) { toonRemiseVraag(); return; }
-  say(!MP.open && MP.pogingen > 0 ? 'Er is nu geen verbinding. Jullie potje blijft staan.' :
+  say(!MP.open && MP.pogingen > 0 ? GEEN_NET_SPEL :
     MP.S.turn === MP.myColor ? 'Jij bent aan zet! 💭' : mpNaam() + ' is aan zet… ⏳');
 }
 function toonSamenScherm() {
@@ -3470,7 +3477,7 @@ function toonSamenScherm() {
    aan beide kanten hetzelfde einde, dat voor niemand telt */
 function mpKamerWeg() {
   const inBeeld = samenInBeeld();
-  samenWeg = { naam: mpNaam(), fid: MP.viaFriend || null };
+  samenWeg = { naam: mpNaam(), fid: MP.viaFriend || null, gameId: MP.gameId };
   mpStop(true);
   if (inBeeld) { session.over = true; BD.mode = 'off'; toonKamerWeg(); } else thuisVerversen();
 }
@@ -3478,11 +3485,13 @@ function toonKamerWeg() {
   const w = samenWeg;
   if (!w) return;
   samenWeg = null;
-  opslag(SAMEN_KEY, null);
+  /* alleen het potje dat stopte; een nieuw potje dat intussen begon, blijft */
+  const b = leesSamen();
+  if (b && !b.kapot && b.r.gameId === w.gameId) opslag(SAMEN_KEY, null);
   const f = w.fid && P.friends[w.fid] && !P.friends[w.fid].weg ? w.fid : null;
   const naam = escHtml(w.naam);
   showModal('<div class="m-emoji">🔌</div><h2>Het potje met ' + naam + ' is gestopt</h2>' +
-    '<p>De verbinding was te lang weg. Dit potje telt niet mee.</p>' +
+    '<p>De verbinding viel weg. Dit potje telt voor niemand mee.</p>' +
     '<div class="m-btns">' + (f ? '<button class="btn sun" id="kwNieuw">Nieuw potje met ' + naam + '</button>' : '') +
     '<button class="btn ' + (f ? 'plain' : 'sun') + '" id="kwHuis">🏠 Naar huis</button></div>', () => {
       if (f) $('kwNieuw').addEventListener('click', () => { closeModal(); goHome('vrienden'); inviteFriend(f); });
@@ -3490,10 +3499,15 @@ function toonKamerWeg() {
     });
 }
 
+/* een vriendenpotje dat niet te lezen is, haalt een nieuw potje weg: dat hoort het kind eerst (regel 1.5) */
+function samenKapotZin() {
+  const b = leesSamen();
+  return b && b.kapot ? '<p>Je oude vriendenpotje kan ik niet meer openen. Een nieuw potje haalt het weg.</p>' : '';
+}
 /* er is nog een vriendenpotje: een nieuw zou het overschrijven */
 function samenBezet() {
   if (!samenLoopt()) return false;
-  showToast('Je hebt nog een potje met ' + mpNaam() + '. Speel dat eerst verder.');
+  showToast('Je potje met ' + mpNaam() + ' loopt nog. Speel dat eerst uit.');
   return true;
 }
 function mpStart(room, seat, host) {
@@ -3644,7 +3658,7 @@ function mpMsg(m) {
       if (m.aan) { mpHallo(); stuurStand(); }
       /* eerlijk: de ander is weg, het potje blijft staan; geen belofte dat zetten vanzelf komen */
       if (samenInBeeld() && !session.over) {
-        say(m.aan ? (mpNaam() + ' is er weer! 🎉') : (mpNaam() + ' is even weg. Jullie potje blijft staan. Je mag ook even iets anders doen; het staat bij Verder.'));
+        say(m.aan ? (mpNaam() + ' is er weer! 🎉') : (mpNaam() + ' is er nu niet. Jullie potje blijft staan. Ga gerust iets anders doen: het staat bij Verder.'));
       }
       break;
     case 'hallo':
@@ -3713,7 +3727,7 @@ function mpOnHallo() {
   if (MP.host) {
     showModal('<div class="m-emoji">🎉</div><h2>Verbonden met ' + escHtml(mpNaam()) + '!</h2>' + trio +
       '<p>Zien jullie allebei dezelfde drie plaatjes? Dan zit je echt bij elkaar!</p>' +
-      '<p><b>' + escHtml(P.name || 'Jij') + ' start het potje.</b></p>' +
+      '<p><b>Jij start het potje. Tik op Spelen!</b></p>' +
       '<div class="m-btns"><button class="btn sun" id="mpGo">▶ Spelen!</button>' +
       '<button class="btn plain" id="mpNee">Stoppen</button></div>', () => {
         $('mpGo').addEventListener('click', () => { closeModal(); mpHostStart(); });
@@ -3755,6 +3769,8 @@ function mpBeginGame(S0) {
   clearTimeout(MP.wachtTimer);
   MP.revMine = MP.revTheirs = false;
   Object.assign(MP, { S: S0 || newGame(), over: false, result: null, offer: null, shown: false, bekend: false });
+  /* een nieuw potje met dezelfde vriend: de kaart van het gestopte potje mag weg */
+  if (samenWeg && (samenWeg.fid ? samenWeg.fid === MP.viaFriend : samenWeg.naam === mpNaam())) samenWeg = null;
   session = { kind: 'game', online: true, S: MP.S, level: 0, tips: 0,
     over: false, pending: null, myColor: MP.myColor };
   bewaarSamen();
@@ -3782,8 +3798,9 @@ function mpOnZet(m) {
   /* de zet hoort meteen bij het potje; het schuiven is alleen wat het kind ziet, ook als het intussen naar huis gaat */
   const inBeeld = samenInBeeld() && !session.over, wasCap = isCapture(S, zet);
   makeMove(S, zet);
-  bewaarSamen();
+  const gelukt = bewaarSamen();
   if (!inBeeld) { thuisVerversen(); return; }
+  toonBewaard(gelukt);
   BD.mode = 'off';
   animateMove(zet, () => {
     if (!samenInBeeld() || session.S !== S) return;
@@ -3799,6 +3816,7 @@ function mpOnZet(m) {
   });
 }
 function zegBeurt() { say(MP.S.turn === MP.myColor ? 'Jij bent aan zet! 💭' : mpNaam() + ' is aan zet… ⏳'); }
+const SAMEN_NIET_BEWAARD = 'Dit potje kon ik niet bewaren. Laat de app open, dan kunnen jullie verder.';
 const GEEN_NET_SPEL = 'Er is nu geen verbinding. Ik blijf het proberen. Jullie potje blijft staan.';
 
 /* De stand van de ander, na een verbinding of zodra die terug is. We spelen de zettenlijst vanaf de
@@ -3998,7 +4016,7 @@ async function mpHostQR() {
   }
   mpStart(resp.room, resp.seat, true);
   const url = location.origin + location.pathname + '#' + PLAY_PREFIX + resp.room + '.' + resp.guest;
-  showModal('<div class="m-emoji">🤝</div><h2>Samen spelen</h2>' +
+  showModal('<div class="m-emoji">🤝</div><h2>Samen spelen</h2>' + samenKapotZin() +
     '<p>Laat je maatje deze QR scannen met de camera:</p>' +
     '<div style="width:190px;max-width:60vw;margin:8px auto">' + QR.qrSvg(url) + '</div>' +
     '<p>Wachten op je maatje… ⏳</p>' +
@@ -4014,7 +4032,7 @@ function handlePlayString(rest) {
   if (dot < 0) return false;
   const room = rest.slice(0, dot), seat = rest.slice(dot + 1);
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(room) || !/^[A-Za-z0-9_-]{8,64}$/.test(seat)) return false;
-  showModal('<div class="m-emoji">🤝</div><h2>Meespelen?</h2>' +
+  showModal('<div class="m-emoji">🤝</div><h2>Meespelen?</h2>' + samenKapotZin() +
     '<p>Je maatje wil een potje schaken. Doe je mee?</p>' +
     '<div class="m-btns"><button class="btn sun" id="mpJa">Ja, spelen! 🤝</button>' +
     '<button class="btn plain" id="mpNee">Nee</button></div>', () => {
@@ -4170,7 +4188,12 @@ async function vriendJa() {
     mpSend({ t: 'vriend', pub: e.pub });
     await bewaarVriend(k, false);
     vriendKlaar(k);
-  } catch (err) { say('Dat lukte niet 😕'); vriendKnopTerug(); }
+  } catch (err) {
+    /* wie vroeg, wacht anders voor altijd op een antwoord */
+    mpSend({ t: 'vriend', mislukt: true });
+    say('Dat lukte niet 😕');
+    vriendKnopTerug();
+  }
 }
 function mpOnVriendVraag(m) {
   if (!MP || MP.viaFriend || !geldigePub(m.pub)) return;
@@ -4193,7 +4216,7 @@ function mpOnVriendVraag(m) {
   const naam = escHtml(mpNaam());
   const vak = $('ekVraag');
   if (vak && MP.S && MP.over && session && session.online && session.over && !$('eindkaart').classList.contains('hidden')) {
-    vak.innerHTML = '<p><b>' + naam + ' wil vrienden worden!</b> Jullie moeten allebei op Ja tikken.</p>' +
+    vak.innerHTML = '<p><b>' + naam + ' wil vrienden worden!</b> Dan kunnen jullie elkaar voortaan met één tik uitnodigen.</p>' +
       '<div class="ek-btns"><button class="btn sun" id="ekVrJa">Ja, vrienden! 🤝</button>' +
       '<button class="btn plain" id="ekVrNee">Nu niet</button></div>';
     if ($('mpVriend')) $('mpVriend').classList.add('hidden');
@@ -4220,6 +4243,7 @@ function mpOnVriendVraag(m) {
 async function mpOnVriend(m) {
   if (!MP || !MP.ecdh) return;
   if (m.nee === true) { MP.ecdh = null; say(mpNaam() + ' wil nu even niet 🙂'); vriendKnopTerug(); return; }
+  if (m.mislukt === true) { MP.ecdh = null; say('Vrienden worden lukte niet bij ' + mpNaam() + '. Probeer het nog eens.'); vriendKnopTerug(); return; }
   if (!geldigePub(m.pub)) return;
   try {
     const k = await ecdhFinish(MP.ecdh.kp, m.pub);
@@ -4269,6 +4293,7 @@ async function inviteFriend(fid) {
   const f = P.friends[fid];
   if (!f || f.weg) return;
   const bezet = () => !!(INV || MP || session);
+  if (samenBezet()) return;
   if (bezet()) { showToast('Je bent al met een potje bezig 🐢'); return; }
   let resp = null;
   if (netAvailable()) {
@@ -4281,7 +4306,7 @@ async function inviteFriend(fid) {
   const to = await busFor(f, theirRole(f));
   const invId = b64url(randBytes(9));
   const blob = b64url(await sealJSON(f.k, 'uitnodiging',
-    { id: invId, room: resp.room, seat: resp.guest, naam: P.name || 'kampioen', ts: Date.now() }));
+    vasteLengte({ id: invId, room: resp.room, seat: resp.guest, naam: P.name || 'kampioen', ts: Date.now() })));
   /* tijdens het wachten op de server kan het kind al op een binnengekomen
      uitnodiging zijn ingegaan; dan is onze eigen niet meer aan de orde */
   if (bezet()) return;
@@ -4315,7 +4340,7 @@ function wachtScherm() {
   if (!f || modalOpen) return;
   clearTimeout(inviteTimer);
   inviteTimer = setTimeout(inviteVerlopen, Math.max(0, (INV.tot || 0) - Date.now()));
-  showModal('<div class="m-emoji">🐢</div><h2>Wachten op ' + escHtml(f.naam) + '…</h2>' +
+  showModal('<div class="m-emoji">🐢</div><h2>Wachten op ' + escHtml(f.naam) + '…</h2>' + samenKapotZin() +
     '<p>' + escHtml(f.naam) + ' krijgt een seintje zodra de app open gaat. Zeg het gerust even!</p>' +
     '<div class="m-btns"><button class="btn plain" id="invStop">Stop met wachten</button></div>',
     () => $('invStop').addEventListener('click', inviteCancel), false, 'mpwacht');
@@ -4344,9 +4369,15 @@ function friendPollSoon(ms) {
   friendPollTimer = setTimeout(friendPoll, ms == null ? 15000 : ms);
 }
 const BUS_BATCH = 64; /* maxBusCheck in bus.go */
+/* een uitnodiging en een "Nu niet" zijn op de lijn even lang, zodat de server ze niet uit elkaar kan houden */
+const BRIEFJE_LENGTE = 256;
+function vasteLengte(o) {
+  const kaal = new TextEncoder().encode(JSON.stringify(Object.assign({}, o, { pad: '' }))).length;
+  return Object.assign({}, o, { pad: 'x'.repeat(Math.max(0, BRIEFJE_LENGTE - kaal)) });
+}
 function geldigeUitnodiging(inv) {
-  return !!inv && typeof inv === 'object' && typeof inv.id === 'string' && inv.id.length <= 24 &&
-    ID_RE.test(String(inv.room)) && ID_RE.test(String(inv.seat)) &&
+  return !!inv && typeof inv === 'object' && inv.nee !== true && typeof inv.id === 'string' && inv.id.length <= 24 &&
+    typeof inv.room === 'string' && ID_RE.test(inv.room) && typeof inv.seat === 'string' && ID_RE.test(inv.seat) &&
     isFinite(+inv.ts) && Date.now() - +inv.ts < 15 * 60000;
 }
 /* Wie zelf zit te wachten op een uitnodiging (INV) blijft wel zijn bus lezen:
@@ -4406,7 +4437,7 @@ function showInvite(fid, inv) {
   markSeen(inv.id);
   /* de bus voor een "Nu niet" alvast uitrekenen, zodat het antwoord meteen weg kan */
   const neeBus = busFor(f, theirRole(f));
-  showModal('<div class="m-emoji">♟️</div><h2>' + escHtml(f.naam) + ' wil een potje spelen!</h2>' +
+  showModal('<div class="m-emoji">♟️</div><h2>' + escHtml(f.naam) + ' wil een potje spelen!</h2>' + samenKapotZin() +
     '<p>Doe je mee? Wie wit krijgt, hoor je zo.</p>' +
     '<div class="m-btns"><button class="btn sun" id="invJa">Ja, spelen! 🎉</button>' +
     '<button class="btn plain" id="invNee">Nu niet</button></div>', () => {
@@ -4435,7 +4466,9 @@ async function zegNee(f, bus, op) {
   if (!netAvailable()) return;
   try {
     const to = await bus;
-    const blob = b64url(await sealJSON(f.k, 'uitnodiging', { id: b64url(randBytes(9)), nee: true, op, ts: Date.now() }));
+    /* lege kamer en stoel: ook een app van de release ziet hierin geen uitnodiging */
+    const blob = b64url(await sealJSON(f.k, 'uitnodiging',
+      vasteLengte({ id: b64url(randBytes(9)), nee: true, op, room: '', seat: '', ts: Date.now() })));
     await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob }) });
   } catch (e) {}
@@ -4535,20 +4568,19 @@ function mpWordFlow() {
   }
   const mijnCode = mijn.join('-');
   let bezig = false, gestopt = false;
-  showModal('<div class="m-emoji">🎈</div><h2>Samen spelen op afstand</h2>' +
+  showModal('<div class="m-emoji">🎈</div><h2>Samen spelen op afstand</h2>' + samenKapotZin() +
     '<p>Jouw woorden: <b>' + mijn.map((w, i) => (i + 1) + ' ' + w).join(' &nbsp; ') + '</b>. Zeg ze tegen je maatje.</p>' +
     '<p>Typ hier de woorden van je maatje:</p>' + woordVeld('mpInp') +
     '<div id="mpChips" class="w-chips"></div><div id="mpSugg" class="w-suggs"></div>' +
     '<div class="m-btns"><button class="btn sun" id="mpKoppel" disabled>🤝 Verbind!</button>' +
     '<button class="btn plain" id="mpStopW">Terug</button></div>', () => {
-      const invoer = woordInvoer(2, { chips: 'mpChips', inp: 'mpInp', sugg: 'mpSugg', knop: 'mpKoppel' });
-      const upd = () => { if (bezig) $('mpKoppel').disabled = true; };
+      const invoer = woordInvoer(2, { chips: 'mpChips', inp: 'mpInp', sugg: 'mpSugg', knop: 'mpKoppel' }, 'Vraag het je maatje nog eens.');
       $('mpStopW').addEventListener('click', () => { gestopt = true; closeModal(); });
       $('mpKoppel').addEventListener('click', async () => {
         const hun = invoer.woorden();
         if (!hun || bezig) return;
         bezig = true;
-        upd();
+        invoer.wacht(true);
         $('mpKoppel').textContent = 'Wacht tot je maatje ook op Verbind! tikt…';
         const mine = await lookupCode('SHPLAY1-zoek:', mijnCode);
         const theirs = await lookupCode('SHPLAY1-zoek:', hun.join('-'));
@@ -4576,7 +4608,7 @@ function mpWordFlow() {
         if (!gestopt) showToast('Nog niemand gevonden… kloppen de woorden? 🎈');
         bezig = false;
         $('mpKoppel').textContent = '🤝 Verbind!';
-        $('mpKoppel').disabled = false;
+        invoer.wacht(false);
       });
     });
 }
@@ -5045,8 +5077,10 @@ function showScreen(name) {
   $('play').classList.toggle('oefening', name === 'play' && !!session && session.kind !== 'game');
   setAppH();
   try { window.scrollTo(0, 0); } catch (e) {}
+  /* de letters en cijfers volgen het bord dat nu te zien is: zwart onderaan alleen in een vriendenpotje met zwart */
+  draaiBord(name === 'play' && !!session && !!session.online && session.myColor === 'b');
   if (name === 'play') {
-    $('backBtn').textContent = session && session.online ? '← Home' : '‹ Pauze';
+    $('backBtn').textContent = '‹ Pauze';
     $('bewaard').classList.add('hidden');
     terugTab = laatsteTab;
   }
@@ -5162,7 +5196,11 @@ let session = null;
 function goHome(tab, daarna) {
   if (INV) inviteClear(); /* wie wegloopt laat geen briefje liggen */
   /* een level of trofee die op het speelscherm wachtte, krijgt thuis zijn venster; een melding komt daarna */
-  setTimeout(() => { thuisVieren(); if (daarna) naVensters(daarna); }, 0);
+  setTimeout(() => {
+    /* alleen op een tab thuis waar niets anders openstaat: anders komt het venster over het volgende scherm */
+    if (!session && !modalOpen && $('scr-play').classList.contains('hidden')) thuisVieren();
+    if (daarna) naVensters(daarna);
+  }, 0);
   /* een lopend vriendenpotje houdt zijn verbinding; anders netjes gedag zeggen */
   if (MP && !samenBewaren()) mpStop();
   session = null;
@@ -5324,9 +5362,9 @@ function renderVerder() {
   const items = [];
   const sp = leesSamen();
   if (samenWeg) items.push({ titel: 'Je potje met ' + escHtml(samenWeg.naam) + ' is gestopt', wat: 'potje', knop: 'Bekijk',
-    zin: 'De verbinding was te lang weg. Dit potje telt niet mee.', ook: 'je potje met ' + escHtml(samenWeg.naam), doe: toonKamerWeg, geenBewaard: true });
-  else if (sp && sp.kapot) items.push({ kapot: true, weg: () => opslag(SAMEN_KEY, null) });
-  else if (sp) {
+    zin: 'De verbinding viel weg. Dit potje telt voor niemand mee.', ook: 'je potje met ' + escHtml(samenWeg.naam), doe: toonKamerWeg, geenBewaard: true });
+  if (sp && sp.kapot) items.push({ kapot: true, weg: () => opslag(SAMEN_KEY, null) });
+  else if (sp && !(samenWeg && sp.r.gameId === samenWeg.gameId)) {
     const hier = MP && MP.S && MP.gameId === sp.r.gameId;
     const S = hier ? MP.S : sp.S, naam = escHtml(sp.r.peerName || 'je maatje');
     const uitslag = hier ? MP.result : sp.r.result, gezien = hier ? MP.shown : sp.r.shown === true;
@@ -5335,9 +5373,9 @@ function renderVerder() {
     if (uitslag && !gezien) items.push({ titel: 'Je potje met ' + naam + ' is klaar', wat: 'potje', knop: 'Bekijk',
       zin: 'Kijk hoe het afliep.', ook: 'je potje met ' + naam, doe: openSamen, geenBewaard: true });
     else if (!uitslag) items.push({ titel: 'Verder: je potje met ' + naam, wat: 'potje', knop: 'Speel verder',
-      zin: zonderNet ? 'Er is nu geen verbinding. Je potje blijft staan.' :
+      zin: zonderNet ? 'Er is nu geen verbinding. Probeer het straks nog eens.' :
         (S.turn === sp.r.myColor ? 'Jij bent aan zet.' : naam + ' is aan zet.'),
-      ook: 'je potje met ' + naam, doe: openSamen });
+      ook: 'je potje met ' + naam, doe: openSamen, vriend: true });
   }
   const b = leesPotje();
   if (b && b.kapot) items.push({ kapot: true, weg: () => opslag(POTJE_KEY, null) });
@@ -5366,8 +5404,9 @@ function renderVerder() {
   items.slice(1).forEach((it, i) => {
     h += '<button class="verder-ook" data-ook="' + (i + 1) + '"><span>Ook nog: ' + it.ook + '</span><span class="vo-pijl">›</span></button>';
   });
-  if (!eerste.kapot && !eerste.geenBewaard) h += '<div class="verder-bewaard">✔ Je ' + eerste.wat + ' blijft staan op ' + ditApparaat() +
-    ', ook als je de app dichtdoet.</div>';
+  /* een vriendenpotje leeft hoogstens een dag in de kamer: geen belofte voor altijd */
+  if (!eerste.kapot && !eerste.geenBewaard) h += '<div class="verder-bewaard">✔ Je ' + eerste.wat + (eerste.vriend ?
+    ' blijft vandaag staan op ' + ditApparaat() + '.' : ' blijft staan op ' + ditApparaat() + ', ook als je de app dichtdoet.') + '</div>';
   el.innerHTML = h;
   if (eerste.kapot) $('verderWeg').addEventListener('click', () => { eerste.weg(); renderVerder(); });
   else $('verderKaart').addEventListener('click', eerste.doe);
@@ -6915,7 +6954,8 @@ function commitKid(m) {
     if (session.online) {
       mpSend({ t: 'zet', from: m.from, to: m.to, promo: m.promo || null,
         n: S.hist.length, gameNo: MP ? MP.gameNo : 0 });
-      bewaarSamen();
+      session.samenBewaard = bewaarSamen();
+      toonBewaard(session.samenBewaard);
       if (MP && !MP.open) MP.zetZonderNet = true;
     }
     const st = gameStatus(S);
@@ -6924,7 +6964,8 @@ function commitKid(m) {
     if (session.online) {
       BD.mode = 'off';
       /* zonder verbinding geen belofte dat de ander de zet al ziet (regel 4.3) */
-      say(MP && MP.zetZonderNet ? 'Je zet is bewaard. Er is nu geen verbinding, dus ' + mpNaam() + ' ziet hem nog niet.' :
+      say(!session.samenBewaard ? SAMEN_NIET_BEWAARD :
+        MP && MP.zetZonderNet ? 'Je zet is bewaard. Er is nu geen verbinding, dus ' + mpNaam() + ' ziet hem nog niet.' :
         'Nu ' + mpNaam() + '… 💭');
       return;
     }
@@ -7360,6 +7401,7 @@ const BADGES = [
 /* Een trofee, een level of een gehaald weekdoel wacht op de eindkaart van het potje of rondje. Wat dit
    apparaat aan trofeeën liet zien, staat per apparaat in P.shownBadges, zodat een trofee die nog wachtte als
    het kind pauzeerde of herlaadde thuis komt, en nooit twee keer (D34). */
+let levelOpKaart = null;
 function bewaarVoorKaart(b) { if (session) (session.voorKaart = session.voorKaart || []).push(b); }
 function nogTeTonen() { return BADGES.filter(b => P.badges[b.id] && !P.shownBadges.includes(b.id)); }
 function alsGetoond(lijst) {
@@ -7371,7 +7413,11 @@ function voorKaart() {
   alsGetoond(l);
   if (session) { l.push(...(session.voorKaart || [])); session.voorKaart = []; }
   const cur = levelIdx(P.xp);
-  if (P.lastLevel != null && cur > P.lastLevel) l.push({ e: LEVELS[cur].g, n: 'Level ' + LEVELS[cur].n });
+  /* een level is een badge op één eindkaart; het venster komt thuis */
+  if (P.lastLevel != null && cur > P.lastLevel && cur !== levelOpKaart) {
+    l.push({ e: LEVELS[cur].g, n: 'Level ' + LEVELS[cur].n });
+    levelOpKaart = cur;
+  }
   return l;
 }
 function checkBadges() {
@@ -7774,15 +7820,22 @@ $('friendList').addEventListener('click', e => {
 });
 $('backBtn').addEventListener('click', () => {
   /* een vriendenpotje blijft staan en de verbinding ook: de ander merkt niets */
-  if (session && session.online && !session.over) { bewaarSamen(); goHome(); return; }
+  if (session && session.online && !session.over) {
+    const gelukt = bewaarSamen();
+    goHome(terugTab, gelukt ? null : () => showToast(SAMEN_NIET_BEWAARD, false, 6000));
+    return;
+  }
   pauze();
 });
 $('setBtn').addEventListener('click', openSettings);
 for (const t in HOME_TABS) $(HOME_TABS[t]).addEventListener('click', () => showHomeTab(t));
 function confirmReset() {
+  /* wissen tijdens een vriendenpotje is dat potje opgeven (D35): de vraag zegt het */
+  const sp = leesSamen(), vriend = sp && !sp.kapot && !sp.r.result ? sp.r.peerName || 'je maatje' : null;
   showModal('<div class="m-emoji">🗑️</div><h2>Alles wissen?</h2>' +
     '<p>Je naam, je XP, je sterren, je level, je trofeeën en een potje dat bezig is gaan weg van dit apparaat.' +
-    (ACC ? '<br>Op je andere apparaat blijft alles staan.' : '') + '<br>Weet je het heel zeker?</p>' +
+    (ACC ? '<br>Op je andere apparaat blijft alles staan.' : '') +
+    (vriend ? '<br>Dan geef je ook je potje met ' + escHtml(vriend) + ' op.' : '') + '<br>Weet je het heel zeker?</p>' +
     '<div class="m-btns"><button class="btn coral" id="rstGo">Ja, wis alles</button>' +
     '<button class="btn plain" id="rstNo">Nee, bewaren!</button></div>', () => {
       $('rstNo').addEventListener('click', closeModal);
@@ -7790,8 +7843,13 @@ function confirmReset() {
         try { localStorage.removeItem('schaakheld1'); } catch (e) {}
         opslag(POTJE_KEY, null);
         opslag(RONDJES_KEY, null);
+        if (samenLoopt()) {
+          MP.result = { kind: 'opgave', by: MP.myColor, ply: MP.S.hist.length };
+          mpSend({ t: 'opgave', gameNo: MP.gameNo });
+          stuurStand();
+        }
         opslag(SAMEN_KEY, null);
-        if (MP) mpStop();
+        if (MP) mpStop(true);
         /* wissen is lokaal: dit apparaat ontkoppelt en begint blanco.
            Andere apparaten en de server houden het profiel, dus een
            vergissing is herstelbaar door opnieuw te koppelen. Zonder

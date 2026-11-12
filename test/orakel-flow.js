@@ -3,7 +3,7 @@
    zijn regelnummer. Een kind tikt: het bord via onCell, knoppen op wat erop
    staat. Een opdracht klaarzetten gebeurt zoals de bestaande tests het doen. */
 
-var POTJE = 'schaakheld-potje', RONDJES = 'schaakheld-rondjes';
+var POTJE = 'schaakheld-potje', RONDJES = 'schaakheld-rondjes', SAMEN_O = 'schaakheld-samen';
 var START_FEN_O = toFEN(newGame());
 /* twintig halve zetten zonder slag of herhaling, gelijk materiaal */
 var TWINTIG = ['e2e4', 'e7e5', 'g1f3', 'g8f6', 'f1c4', 'f8c5', 'b1c3', 'b8c6', 'd2d3', 'd7d6',
@@ -2187,6 +2187,96 @@ async function orakelFlow() {
     check('Verbind! staat aan', heeftKlik(a, 'mpKoppel') && !a.el('mpKoppel').disabled && !tikbaar(a, a.el('mpKoppel')));
   });
 
+  /* typen zoals een kind op een telefoon: letter voor letter */
+  async function typLetters(a, veld, tekst) {
+    for (const t of tekst) vulIn(a, veld, veld.value + t);
+    await wacht();
+  }
+
+  await regel('[4.8] letter voor letter, met een fout woord in het midden: dat woord wordt genoemd en plakt niet aan wat volgt', async function (check) {
+    const a = nieuwKind();
+    a.ev('linkEntryFlow()');
+    await wacht();
+    await typLetters(a, a.el('wordInp'), 'lang belofen kaal neer');
+    check('het foute woord wordt genoemd', /'belofen' ken ik niet/.test(a.scherm()));
+    check('niet aan elkaar geplakt', !/belofenkaal/.test(a.el('wordInp').value) && !/belofenkaal/.test(a.scherm()));
+  });
+
+  /* D35: 87 van de 1024 woorden beginnen met een ander lijstwoord, zoals adem en ademen */
+  for (const laatste of ['ademen', 'adem']) {
+    await regel('[4.8] letter voor letter, met als laatste woord "' + laatste + '": de code is wat het kind typte', async function (check) {
+      const a = nieuwKind();
+      globalThis.__gebruikteCode = null;
+      a.ev('linkEntryFlow(); redeemWords = function (c) { globalThis.__gebruikteCode = c; return Promise.resolve(null); }');
+      await wacht();
+      check('testopzet: adem en ademen staan allebei in de lijst', a.get('WOORDEN.includes("adem") && WOORDEN.includes("ademen")'));
+      await typLetters(a, a.el('wordInp'), 'lang beloven kaal ' + laatste);
+      check('de knop staat aan', !a.el('linkGo').disabled);
+      a.tik('linkGo');
+      await wacht();
+      check('de code die de app gebruikt', globalThis.__gebruikteCode === 'lang-beloven-kaal-' + laatste);
+    });
+  }
+
+  await regel('[4.8] voor vrienden zegt een onbekend woord dat het kind het zijn maatje nog eens kan vragen', async function (check) {
+    const a = nieuwKind();
+    a.ev('mpWordFlow()');
+    await wacht();
+    vulIn(a, a.el('mpInp'), 'tafle vuur');
+    await wacht();
+    check('de zin voor vrienden', /'tafle' ken ik niet\. Vraag het je maatje nog eens\./.test(a.scherm()));
+  });
+
+  /* rondjes achter elkaar zonder thuis: het level is een badge op één eindkaart */
+  await regel('[2.5] een level staat als badge op één eindkaart, niet op elke tot het kind thuis is', async function (check) {
+    const a = nieuwKind();
+    a.ev('bump("xp", 140)');
+    await startOefening(a, 'scan');
+    await rondjeGoed(a, 5);
+    tikTekst(a, 'Volgende');
+    await wacht();
+    check('testopzet: de eerste kaart toont het level', /Level Paard/.test(a.scherm()));
+    tikTekst(a, 'Nog een rondje');
+    await wacht();
+    /* het tweede rondje zonder punten: dan blijft het bij level Paard */
+    for (let i = 0; i < 5; i++) { tikTekst(a, 'Klaar'); await wacht(); tikTekst(a, 'Volgende'); await wacht(); }
+    check('de tweede kaart toont het niet nog eens', /Rondje klaar/.test(a.scherm()) && !/Level Paard/.test(a.scherm()));
+    tikTekst(a, 'Naar huis');
+    await wacht();
+    check('thuis het venster, eenmaal', a.ziet('LEVEL OMHOOG'));
+  });
+
+  await regel('[2.5] na een openingsles en "Iets anders kiezen" opent een wachtend venster niet over de volgende les', async function (check) {
+    const a = nieuwKind();
+    a.ev('bump("xp", 140)');
+    await startOefening(a, 'opening');
+    const pad = a.el('modalBox').querySelectorAll('[data-pad]')[0];
+    if (pad) tikEl(a, pad, 'een openingspad');
+    await wacht();
+    a.ev('bump("xp", 20); checkBadges()');
+    check('testopzet: het level wacht', a.get('levelIdx(P.xp) > P.lastLevel'));
+    a.ev('openingEnd()');
+    await wacht();
+    check('testopzet: Iets anders kiezen staat er', kanTikken(a, 'Iets anders kiezen'));
+    tikTekst(a, 'Iets anders kiezen');
+    await wacht();
+    const pad2 = a.el('modalBox').querySelectorAll('[data-pad]')[0];
+    check('testopzet: de keuze van een les', !!pad2);
+    if (pad2) tikEl(a, pad2, 'een openingspad');
+    await wacht();
+    check('in de nieuwe les, zonder levelvenster erover', opSpeelscherm(a) && !a.ziet('LEVEL OMHOOG'));
+  });
+
+  await regel('[4.1] een vriendenpotje dat niet te lezen is: wie een nieuw vriendenpotje begint, hoort eerst dat dat het weghaalt', async function (check) {
+    const o = maakOpslag();
+    o.setItem(SAMEN_O, 'kapot{');
+    const a = maakApparaat('Fien', { opslag: o });
+    await a.ev('mpHostQR()');
+    await wacht();
+    check('het venster zegt het', /kan ik niet meer openen/.test(a.scherm()) && /nieuw potje haalt het weg/i.test(a.scherm()));
+    check('het staat er nog', a.opslag.getItem(SAMEN_O) === 'kapot{');
+  });
+
   await regel('[4.10] de koppelcode zegt in hele minuten hoe lang hij werkt, en biedt daarna een nieuwe', async function (check) {
     /* met een vaste datum loopt de klok van Date mee met de timers, zoals op een
        echt apparaat; een app die de tijd leest in plaats van tikken telt, ziet hem */
@@ -2199,7 +2289,7 @@ async function orakelFlow() {
     await wacht(61000);
     check('na een minuut: 9', /Werkt nog 9 minuten/.test(a.scherm()));
     await wacht(10 * 60000);
-    check('daarna is hij op', /Deze code is op/.test(a.scherm()));
+    check('daarna werkt hij niet meer', /Deze code werkt niet meer/.test(a.scherm()));
     const oud = a.scherm();
     tikTekst(a, 'Nieuwe code');
     await wacht();
