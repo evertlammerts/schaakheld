@@ -1332,7 +1332,7 @@ async function orakelFlow() {
     check('en de nieuwe teller bestaat', a.get('P.c.drie') === 0);
   });
 
-  await nogNiet('[3.8] Instellingen: naam, bordkleur, geluid, de twee hulpjes, ander apparaat, en Alles wissen als laatste', async function (check) {
+  await regel('[3.8] Instellingen: naam, bordkleur, geluid, de twee hulpjes, ander apparaat, en Alles wissen als laatste', async function (check) {
     const a = nieuwKind();
     a.tik('setBtn');
     await wacht();

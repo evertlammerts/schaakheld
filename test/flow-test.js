@@ -969,6 +969,35 @@ ACC = { id: 'testaccountid123', secret: 'testsecret-1234567890' };
 saveAcc();
 saveP();
 var preResetDoc = localStorage.getItem('schaakheld1');
+/* Instellingen: elke keuze werkt meteen, er is geen Klaar en ✕ sluit */
+fire(__els.setBtn, 'click');
+ok('[3.8] instellingen: geen Klaar-knop, wel een kruisje', __els.modalBox.innerHTML.indexOf('Klaar') < 0 && !!__els.mClose);
+var geluid0 = P.sound;
+fire(__els.tglSound, 'click');
+ok('[3.8] instellingen: geluid uit en weer aan', P.sound === !geluid0 && __els.tglSoundSw.textContent === (P.sound ? 'aan' : 'uit') &&
+  DOC.lww.sound.v === P.sound);
+fire(__els.tglSound, 'click');
+ok('[3.8] instellingen: geluid weer zoals het was', P.sound === geluid0);
+var naam0 = P.name;
+__els.setName.value = '   ';
+fire(__els.setName, 'change', { target: __els.setName });
+ok('[3.8] instellingen: een lege naam laat de oude staan', P.name === naam0 && __els.setName.value === naam0);
+var vrij = THEMES.filter(function (t) { return t.lvl <= levelIdx(P.xp) && t.id !== P.theme; })[0];
+var kleurKnop = __els.setThemes.querySelectorAll('.theme-sw').filter(function (b) { return b.dataset.th === (vrij && vrij.id); })[0];
+ok('[3.8] instellingen: testopzet, een andere vrije bordkleur in de lijst', !!vrij && !!kleurKnop &&
+  __els.setThemes.querySelectorAll('.theme-sw').length === THEMES.length);
+fire(kleurKnop, 'click');
+ok('[3.8] instellingen: de bordkleur werkt meteen, hier en bij Ik', P.theme === vrij.id &&
+  __els.setThemes.innerHTML.indexOf('theme-sw sel" data-th="' + vrij.id) >= 0 &&
+  __els.themeRow.innerHTML.indexOf('theme-sw sel" data-th="' + vrij.id) >= 0);
+fire(__els.mClose, 'click');
+ok('[3.8] instellingen: het kruisje sluit', __els.overlay.classList.contains('hidden'));
+var lvlNu = levelIdx(P.xp);
+ok('[3.8] level omhoog: testopzet, een level met een nieuw bord', lvlNu >= 1);
+P.lastLevel = lvlNu - 1;
+checkLevelUp();
+ok('[3.8] level omhoog zegt waar het nieuwe bord staat', __els.modalBox.innerHTML.indexOf('Kies het bij Ik, onder Bordkleuren') >= 0);
+closeLevelUps();
 /* wissen zit nu achter het tandwiel (⚙️ Instellingen) */
 fire(__els.setBtn, 'click');
 ok('instellingen: koppelen en wissen achter het tandwiel',

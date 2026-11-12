@@ -682,6 +682,24 @@
   .modal h2 { margin: 10px 0 8px; font-size: 23px; text-wrap: balance; } /* compat-allow css.properties.text-wrap: voor Safari 17.4 breekt de kop gewoon af */
   .modal p { margin: 0 0 16px; font-size: 15.5px; color: var(--ink-soft); line-height: 1.45; }
   .modal .m-btns { display: flex; flex-direction: column; gap: 10px; }
+  .set-lijst { text-align: left; margin-top: 8px; }
+  .set-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
+    min-height: 48px; padding: 4px 0; border: 0; border-top: var(--border); background: none;
+    font: inherit; font-size: var(--fs-md); color: var(--text); text-align: left; cursor: pointer;
+  }
+  .set-row:first-child { border-top: 0; }
+  .modal .set-row input { width: 60%; margin: 0; padding: 8px 10px; text-align: left; font-size: 17px; }
+  .set-kleur { padding: 10px 0; border-top: var(--border); font-size: var(--fs-md); }
+  .set-kleur .theme-row { margin-top: 8px; }
+  .switch {
+    min-width: 56px; padding: 6px 12px; border-radius: var(--r-pill); border: 1.5px solid var(--line);
+    background: var(--surface-sunk); font-family: var(--font-display); font-weight: var(--fw-bold); text-align: center;
+  }
+  .switch.on { background: var(--success); border-color: var(--success); color: var(--on-success); }
+  .set-pijl { font-size: 24px; color: var(--text-quiet); }
+  .danger-zone { margin-top: var(--sp-6); padding-top: var(--sp-3); border-top: var(--border); }
+  .danger-zone .btn { color: var(--danger); }
   .modal input {
     font-family: var(--font); font-size: 18px; text-align: center;
     border: 3px solid var(--sky); border-radius: 14px; padding: 11px; width: 100%;

@@ -695,6 +695,24 @@
   .modal h2 { margin: 10px 0 8px; font-size: 23px; text-wrap: balance; } /* compat-allow css.properties.text-wrap: voor Safari 17.4 breekt de kop gewoon af */
   .modal p { margin: 0 0 16px; font-size: 15.5px; color: var(--ink-soft); line-height: 1.45; }
   .modal .m-btns { display: flex; flex-direction: column; gap: 10px; }
+  .set-lijst { text-align: left; margin-top: 8px; }
+  .set-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
+    min-height: 48px; padding: 4px 0; border: 0; border-top: var(--border); background: none;
+    font: inherit; font-size: var(--fs-md); color: var(--text); text-align: left; cursor: pointer;
+  }
+  .set-row:first-child { border-top: 0; }
+  .modal .set-row input { width: 60%; margin: 0; padding: 8px 10px; text-align: left; font-size: 17px; }
+  .set-kleur { padding: 10px 0; border-top: var(--border); font-size: var(--fs-md); }
+  .set-kleur .theme-row { margin-top: 8px; }
+  .switch {
+    min-width: 56px; padding: 6px 12px; border-radius: var(--r-pill); border: 1.5px solid var(--line);
+    background: var(--surface-sunk); font-family: var(--font-display); font-weight: var(--fw-bold); text-align: center;
+  }
+  .switch.on { background: var(--success); border-color: var(--success); color: var(--on-success); }
+  .set-pijl { font-size: 24px; color: var(--text-quiet); }
+  .danger-zone { margin-top: var(--sp-6); padding-top: var(--sp-3); border-top: var(--border); }
+  .danger-zone .btn { color: var(--danger); }
   .modal input {
     font-family: var(--font); font-size: 18px; text-align: center;
     border: 3px solid var(--sky); border-radius: 14px; padding: 11px; width: 100%;
@@ -3109,7 +3127,7 @@ function checkLinkFragment() {
 function linkEntryFlow() {
   const gekozen = [];
   showModal('<div class="m-emoji">🔑</div><h2>Profiel ophalen</h2>' +
-    '<p>Vraag op het andere apparaat een koppelcode (🔑 onderaan het startscherm).</p>' +
+    '<p>Vraag op het andere apparaat een koppelcode: tik daar op ⚙️ bovenaan, dan op Speel op een ander apparaat.</p>' +
     '<div class="m-btns"><button class="btn sun" id="linkScan">📷 Scan de QR</button></div>' +
     '<p>…of typ hier de vier woorden:</p>' +
     '<div id="wordChips" style="min-height:1.5em;font-weight:700"></div>' +
@@ -4234,7 +4252,7 @@ function checkLevelUp() {
   snd.level(); celebrate();
   showModal('<div class="m-emoji">' + L.g + '</div><h2>LEVEL OMHOOG!</h2>' +
     '<p>Je bent nu een echte <b>' + L.n + '</b>!' +
-    (th ? '<br><br>🎨 Nieuw bord ontgrendeld: <b>' + th.naam + '</b>!<br>Kies hem op het startscherm.' : '') +
+    (th ? '<br><br>🎨 Nieuw bord ontgrendeld: <b>' + th.naam + '</b>!<br>Kies het bij Ik, onder Bordkleuren.' : '') +
     '</p><div class="m-btns"><button class="btn sun" id="lvlOk">Super! 🎉</button></div>',
     () => $('lvlOk').addEventListener('click', closeModal));
 }
@@ -6870,7 +6888,7 @@ function pickTheme(id) {
   const th = THEMES.find(t => t.id === id);
   if (!th) return;
   if (levelIdx(P.xp) < th.lvl) {
-    showToast('🔒 Vanaf level ' + LEVELS[th.lvl].n + '!');
+    showToast(th.naam + ' krijg je als je ' + LEVELS[th.lvl].n + ' bent. Kijk bij Jouw level hoe.');
     return;
   }
   setPref('theme', id);
@@ -6880,8 +6898,9 @@ function pickTheme(id) {
 }
 
 function renderThemes() {
-  const row = $('themeRow');
-  if (!row) return;
+  ['themeRow', 'setThemes'].forEach(id => { if ($(id)) renderThemeRow($(id)); });
+}
+function renderThemeRow(row) {
   const lvl = levelIdx(P.xp);
   row.innerHTML = THEMES.map(t => {
     const locked = lvl < t.lvl;
@@ -7227,8 +7246,8 @@ function renderLevelPath() {
 }
 function renderIkBewaard() {
   $('ikBewaard').innerHTML = (ACC ? '✔ Bewaard op dit apparaat en je andere apparaat.' :
-    'Alles staat op ' + ditApparaat() + '. Speel je ook op een ander apparaat? Koppel het, dan is alles dubbel bewaard.' +
-    '<br><button class="btn plain small" id="ikKoppel">Ander apparaat</button>') +
+    'Alles staat op ' + ditApparaat() + '. Speel je ook ergens anders? Koppel het, dan is alles dubbel bewaard.' +
+    '<br><button class="btn plain small" id="ikKoppel">🔑 Speel op een ander apparaat</button>') +
     '<small>Een potje of rondje dat nog bezig is, blijft op dit apparaat.</small>';
   if ($('ikKoppel')) $('ikKoppel').addEventListener('click', linkShareFlow);
 }
@@ -7262,26 +7281,37 @@ function showHomeTab(name) {
   try { window.scrollTo(0, 0); } catch (e) {}
 }
 
-/* instellingen achter het tandwiel: koppelen en wissen stonden eerst los
-   op het startscherm en maakten het druk */
+/* geen Klaar-knop: elke keuze werkt meteen en ✕ sluit, want Alles wissen
+   naast Klaar liet kinderen schrikken */
 function openSettings() {
-  showModal('<div class="m-emoji">⚙️</div><h2>Instellingen</h2>' +
-    '<div class="m-btns"><button class="btn plain tgl" id="tglGuard">🛡️ Blunder-alarm</button>' +
-    '<button class="btn plain tgl" id="tglPredict">🔮 Voorspellen</button>' +
-    '<button class="btn sun" id="setLink">🔑 Speel op een ander apparaat</button>' +
-    '<button class="btn plain" id="setReset">🗑️ Alles wissen</button>' +
-    '<button class="btn plain" id="setClose">Klaar</button></div>', () => {
-      const schakel = () => {
-        $('tglGuard').classList.toggle('on', P.guard);
-        $('tglPredict').classList.toggle('on', P.predict);
-      };
+  const SCHAKELS = [['tglSound', 'sound'], ['tglGuard', 'guard'], ['tglPredict', 'predict']];
+  const rij = (id, txt, rechts) => '<button class="set-row" id="' + id + '"><span>' + txt + '</span>' + rechts + '</button>';
+  const schakelRij = (id, txt) => rij(id, txt, '<span class="switch" id="' + id + 'Sw"></span>');
+  showModal('<h2>Instellingen</h2><div class="set-lijst">' +
+    '<label class="set-row"><span>Naam</span><input id="setName" maxlength="14" autocomplete="off" value="' + escHtml(P.name) + '"></label>' +
+    '<div class="set-kleur"><span>Bordkleur</span><div id="setThemes" class="theme-row"></div></div>' +
+    schakelRij('tglSound', '🔊 Geluid') +
+    schakelRij('tglGuard', '🛡️ Blunder-alarm in een potje') +
+    schakelRij('tglPredict', '🔮 Voorspellen in een potje') +
+    rij('setLink', '🔑 Speel op een ander apparaat', '<span class="set-pijl">›</span>') +
+    '</div><div class="danger-zone"><button class="btn plain" id="setReset">Alles wissen</button></div>', () => {
+      const schakel = () => SCHAKELS.forEach(([id, f]) => {
+        $(id + 'Sw').classList.toggle('on', !!P[f]);
+        $(id + 'Sw').textContent = P[f] ? 'aan' : 'uit';
+      });
       schakel();
-      $('tglGuard').addEventListener('click', () => { setPref('guard', !P.guard); schakel(); });
-      $('tglPredict').addEventListener('click', () => { setPref('predict', !P.predict); schakel(); });
+      SCHAKELS.forEach(([id, f]) => $(id).addEventListener('click', () => { setPref(f, !P[f]); schakel(); }));
+      const naam = $('setName');
+      naam.addEventListener('change', () => {
+        const v = naam.value.trim().slice(0, 14);
+        if (!v) { naam.value = P.name; return; }
+        if (v !== P.name) { setPref('name', v); renderHome(); }
+      });
+      naam.addEventListener('keydown', e => { if (e.key === 'Enter') naam.blur(); });
+      renderThemes();
       $('setLink').addEventListener('click', () => { closeModal(); linkShareFlow(); });
       $('setReset').addEventListener('click', () => { closeModal(); confirmReset(); });
-      $('setClose').addEventListener('click', closeModal);
-    });
+    }, true);
 }
 
 /* ---------- init & wiring ---------- */
