@@ -126,6 +126,21 @@ async function orakelFlow() {
     check('de stand na slag en rokades, wit aan zet', b.fen() === toFEN(naSpelen(zetten)));
   });
 
+  await nogNiet('[1.1] een potje zonder zet wordt niet bewaard: Pauze vraagt niets en zegt dat het nog niet begonnen was', async function (check) {
+    const a = nieuwKind();
+    await startPotje(a, 1);
+    check('testopzet: in een potje', opSpeelscherm(a));
+    check('zonder zet staat er niets bewaard', opgeslagen(a, POTJE) === null);
+    a.tik('backBtn');
+    await wacht(500);
+    check('geen vraag, terug op Spelen', !a.open() && opThuis(a));
+    check('na Pauze ook niet', opgeslagen(a, POTJE) === null);
+    check('de melding zegt dat het nog niet begonnen was', /nog niet begonnen/.test(toastTekst(a)));
+    check('geen "Verder:" voor een potje', !/Verder:/.test(tekstVan(a, 'verder')));
+    await startPotje(a, 2);
+    check('een ander niveau kiezen vraagt niets', !a.open() && opSpeelscherm(a) && a.get('session.level') === 2);
+  });
+
   await nogNiet('[1.2] de terugknop heet Pauze, in een potje en in een rondje', async function (check) {
     const a = nieuwKind();
     await startPotje(a, 1);
@@ -149,15 +164,20 @@ async function orakelFlow() {
   });
 
   await nogNiet('[1.2] ✔ bewaard staat in beeld na elke bewaarde zet en elk antwoord', async function (check) {
+    const bewaardInBeeld = function (x) { return zichtbaar(x, 'bewaard') && tekstVan(x, 'bewaard').indexOf('✔ bewaard') >= 0; };
     const a = nieuwKind();
     await startPotje(a, 1);
+    check('in een potje zonder zet nog niet: er is niets bewaard', !bewaardInBeeld(a));
     await zetEnWacht(a, 'e2e4');
-    check('in een potje', zichtbaar(a, 'bewaard') && tekstVan(a, 'bewaard').indexOf('✔ bewaard') >= 0);
+    const r = opgeslagen(a, POTJE);
+    check('na de zetten wel, en dan staan ze ook echt bewaard', bewaardInBeeld(a) && !!r &&
+      r.moves.length === a.get('session.S.hist.length'));
     a.tik('backBtn');
     await wacht();
     await startOefening(a, 'scan');
+    check('in een rondje zonder antwoord nog niet', !bewaardInBeeld(a));
     await scanGoed(a);
-    check('in een rondje', zichtbaar(a, 'bewaard') && tekstVan(a, 'bewaard').indexOf('✔ bewaard') >= 0);
+    check('na een antwoord wel, en het rondje staat bewaard', bewaardInBeeld(a) && !!opgeslagen(a, RONDJES));
   });
 
   await nogNiet('[1.2] een rondje zonder antwoord zegt bij Pauze dat het nog niet begonnen was', async function (check) {
@@ -210,8 +230,7 @@ async function orakelFlow() {
     tikTekst(a, 'Ja');
     await wacht();
     check('een nieuw potje op niveau 3', opSpeelscherm(a) && a.get('session.level') === 3 && a.fen() === START_FEN_O);
-    check('het bewaarde potje is het nieuwe', !!opgeslagen(a, POTJE) && opgeslagen(a, POTJE).level === 3 &&
-      opgeslagen(a, POTJE).moves.length === 0);
+    check('het oude potje is weg, en het nieuwe staat pas na een zet bewaard', opgeslagen(a, POTJE) === null);
     check('tellers gelijk', JSON.stringify(a.get('[P.c.gamesPlayed, P.xp, wkGet(curWeek(), "potjes2")]')) === JSON.stringify(voor));
   });
 
@@ -315,6 +334,36 @@ async function orakelFlow() {
       check('pas "Weghalen" haalt het weg', b.opslag.getItem(POTJE) === null);
     });
   }
+
+  /* een rondje is een telling: de sterren staan al in het profiel, dus weghalen kost niets */
+  await nogNiet('[1.5] rondjes die niet te lezen zijn (kapotte tekst) worden stil weggehaald, en het rondje begint opnieuw', async function (check) {
+    const o = maakOpslag();
+    o.setItem(RONDJES, 'kapot{');
+    const a = nieuwKind({ opslag: o });
+    await wacht();
+    check('geen venster en geen melding', !a.open() && toastTekst(a) === '');
+    check('niets op de Verder-kaart', !/kan ik niet|Speurogen/.test(tekstVan(a, 'verder')));
+    await startOefening(a, 'scan');
+    check('Speurogen begint bij opdracht 1', opSpeelscherm(a) && /opdracht 1 van 5/i.test(tekstVan(a, 'roundChip')));
+    check('de kapotte tekst is weg', a.opslag.getItem(RONDJES) !== 'kapot{');
+  });
+
+  await nogNiet('[1.5] een rondje dat niet te lezen is, wordt weggehaald; het rondje ernaast blijft', async function (check) {
+    const o = maakOpslag();
+    o.setItem(RONDJES, JSON.stringify({ scan: { round: 'drie', earned: null }, best3: { round: 2, earned: 6 } }));
+    const a = nieuwKind({ opslag: o });
+    await wacht();
+    check('geen venster en geen melding', !a.open() && toastTekst(a) === '');
+    await startOefening(a, 'scan');
+    check('Speurogen begint bij opdracht 1', /opdracht 1 van 5/i.test(tekstVan(a, 'roundChip')));
+    const r = opgeslagen(a, RONDJES);
+    check('het kapotte rondje is weg', !r || !r.scan || typeof r.scan.round === 'number');
+    a.tik('backBtn');
+    await wacht();
+    await startOefening(a, 'best3');
+    check('De Beste Zet gaat verder bij opdracht 3, met zijn 6 sterren', /opdracht 3 van 5/i.test(tekstVan(a, 'roundChip')) &&
+      /\b6\b/.test(tekstVan(a, 'drillStars')));
+  });
 
   await nogNiet('[1.6] een rondje bewaart telling en sterren, Pauze zegt het, en opnieuw starten gaat verder', async function (check) {
     const a = nieuwKind();
@@ -526,25 +575,40 @@ async function orakelFlow() {
   const STUK_REDDING = ['a1a2', 'a1a3', 'a1a4', 'a1a6', 'a1a7', 'a1a8', 'a1b1', 'a1c1', 'a1d1', 'a1f1'];
   const schaakTaak = KONING_POOL.find(function (x) { return x.type === 'schaak' && fouteZetZonderMat(x.fen, x.answers); });
   const matTaak = KONING_POOL.find(function (x) { return x.type === 'mat1'; });
+  /* het laatste veld: deze vorm bevriest vandaag al niet, dus de regel staat voor hem als gebouwd */
   const koningGevallen = [
     /* hier noemt de app Turbo's zet nadat hij al gespeeld is: B01 */
-    ['een schaak-opdracht, Turbo antwoordt rustig', 'schaak', schaakTaak.fen, schaakTaak.answers, fouteZetZonderMat(schaakTaak.fen, schaakTaak.answers), null],
+    ['een schaak-opdracht, Turbo antwoordt rustig', 'schaak', schaakTaak.fen, schaakTaak.answers, fouteZetZonderMat(schaakTaak.fen, schaakTaak.answers), null, false],
     ['een matdreiging, Turbo geeft mat', 'mat1', matTaak.fen, matTaak.answers,
-      moveKey(legalMoves(parseFEN(matTaak.fen)).find(function (m) { return matTaak.answers.indexOf(moveKey(m)) < 0; })), null],
-    ['een hangend stuk, Turbo slaat', 'stuk', STUK_FEN, STUK_REDDING, 'g1h1', '{ hang: threatDetails(S)[0] }']
+      moveKey(legalMoves(parseFEN(matTaak.fen)).find(function (m) { return matTaak.answers.indexOf(moveKey(m)) < 0; })), null, true],
+    ['een hangend stuk, Turbo slaat', 'stuk', STUK_FEN, STUK_REDDING, 'g1h1', '{ hang: threatDetails(S)[0] }', true]
   ];
+  /* de tekst die het kind bij de opdracht leest, waar die in deze bouw ook staat */
+  const uitleg = function (a) {
+    return ['bubble', 'strook', 'onder'].filter(function (id) { return zichtbaar(a, id); }).map(function (id) { return tekstVan(a, id); }).join(' ').trim();
+  };
+  /* De woorden van de uitleg horen bij regel 5.5; hier: niets bevriest, Turbo's
+     antwoord staat op het bord, een uitleg vervangt de openingszin, en de
+     opdracht gaat door (nog een poging, of het antwoord staat er). */
   for (const geval of koningGevallen) {
-    await nogNiet('[1.11] Koning ontsnapt, ' + geval[0] + ': niets bevriest en Turbo zegt welke zet hij speelt', async function (check) {
+    await (geval[6] ? regel : nogNiet)('[1.11] Koning ontsnapt, ' + geval[0] + ': niets bevriest, Turbo antwoordt op het bord, een uitleg vervangt de openingszin en de opdracht gaat door', async function (check) {
       const a = nieuwKind();
       await startOefening(a, 'koning');
       zetOpdracht(a, geval[2], geval[1], geval[3], geval[5]);
+      const opening = uitleg(a), h0 = a.get('session.S.hist.length');
+      check('testopzet: er staat een openingszin', opening !== '');
       zet(a, geval[4]);
-      await wacht();
-      check('de opdracht gaat door: weer jouw beurt', a.get('session.phase') === 'puzzle' && a.get('BD.mode') === 'puzzle');
-      check('Turbo zegt welke zet hij speelt', /Turbo/.test(tekstVan(a, 'bubble')) && /[a-h][1-8]/.test(tekstVan(a, 'bubble')));
-      zet(a, geval[3][0]);
-      await wacht();
-      check('de tweede poging gaat met tikken', a.get('session.phase') === 'review');
+      const opBord = await zagOoit(function () {
+        return a.get('session.S.hist.length') === h0 + 2 && a.get('moveKey(session.S.hist[' + h0 + '].m)') === geval[4];
+      }, 5000);
+      check('Turbo\'s antwoord staat op het bord', opBord);
+      const na = uitleg(a);
+      check('een uitleg vervangt de openingszin', na !== '' && na.indexOf(opening) < 0);
+      if (a.get('session.phase') === 'puzzle') {
+        check('nog een poging gaat met tikken', zet(a, geval[3][0]));
+        await wacht();
+      }
+      check('de opdracht gaat door tot het antwoord', a.get('session.phase') === 'review' && kanTikken(a, 'Volgende'));
     });
   }
 
