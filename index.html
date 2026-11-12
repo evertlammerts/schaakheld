@@ -4807,7 +4807,8 @@ function leesRondjes() {
   if (!r || typeof r !== 'object' || Array.isArray(r)) { opslag(RONDJES_KEY, null); return {}; }
   const goed = e => !!e && Number.isInteger(e.round) && e.round >= 1 && e.round <= 4 &&
     Number.isInteger(e.earned) && e.earned >= 0 && e.earned <= 3 * e.round;
-  const kapot = DRILL_KINDS.filter(k => k in r && !goed(r[k]));
+  /* een openingsles houdt alleen zijn sterren, nooit een rondje */
+  const kapot = DRILL_KINDS.filter(k => k in r && (k === 'opening' || !goed(r[k])));
   if (kapot.length) {
     kapot.forEach(k => { delete r[k]; });
     opslag(RONDJES_KEY, Object.keys(r).length ? JSON.stringify(r) : null);
@@ -6059,7 +6060,8 @@ function startGame(level, bewaard) {
   if (laatste) BD.last = [laatste.m.from, laatste.m.to];
   BD.check = inCheck(session.S) ? session.S.kings[session.S.turn] : null;
   renderBoard();
-  bewaarPotje();
+  /* een hervat potje staat al precies zo bewaard; een nieuw potje haalt een oud record weg */
+  if (bewaard) toonBewaard(true); else bewaarPotje();
   if (session.S.turn === 'w') kidTurn(); else { BD.mode = 'off'; turboTurn(); }
   if (bewaard) say('Welkom terug! Je potje staat nog precies zo. ' +
     (session.S.turn !== 'w' ? 'Ik ben aan zet.' : inCheck(session.S) ? 'Je staat schaak!' : 'Jij bent aan zet.'));
