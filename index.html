@@ -21,7 +21,7 @@
     --leaf: #46B466; --leaf-deep: #267A41; --leaf-soft: #DFF3E3;
     --coral: #FF6F59; --coral-deep: #B83C2A; --coral-soft: #FFE3DD;
     --violet: #9B6FE8; --violet-soft: #EFE3FF; --cloud: #9DB4E8; --cloud-soft: #EAF0FF;
-    --cream: #FFF9EC; --white: #FFFFFF; --track: #E4EEF6; --accent-text: #9A5B00; --pc-green: #1F6B45;
+    --cream: #FFF9EC; --white: #FFFFFF; --track: #E4EEF6; --accent-text: #9A5B00; --pc-green: #12402C;
     --board-light: #FFF3D0; --board-dark: #58B7A6;
     --surface: var(--white); --surface-quiet: var(--cream); --surface-sunk: var(--track);
     --line: rgba(23, 69, 111, .12); --text: var(--ink); --text-quiet: var(--ink-quiet);
@@ -318,14 +318,14 @@
   .friend.wait { background: var(--leaf-soft); }
   .friend .f-rm { width: 34px; height: 34px; font-size: 14px; box-shadow: none; background: transparent; color: var(--ink-soft); }
 
-  /* openingsschool: drie meters */
-  .meters { width: 100%; display: flex; flex-direction: column; gap: 6px; background: var(--card); border-radius: 16px; padding: 8px 12px; }
+  /* openingsschool: drie meters op een rij */
+  .meters { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .meters.hidden { display: none; }
-  .meter { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-  .meter .m-l { width: 118px; font-weight: bold; }
-  .meter .m-t { flex: 1; height: 12px; background: #E4EEF6; border-radius: 99px; overflow: hidden; }
-  .meter .m-t i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #BDE8C9, var(--leaf)); transition: width .4s ease; }
-  .meter .m-v { width: 34px; text-align: right; font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .meters .m { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-cap); font-weight: var(--fw-bold); }
+  .meters .m > span:first-child { display: flex; justify-content: space-between; gap: 4px; }
+  .meters .m-v { font-weight: var(--fw-regular); color: var(--text-quiet); font-variant-numeric: tabular-nums; }
+  .meters .bar { display: block; height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
+  .meters .bar i { display: block; height: 100%; background: var(--leaf); border-radius: 999px; }
 
   /* ---------- play screen ---------- */
   .back-btn {
@@ -437,12 +437,17 @@
   .cell.hero-pc { animation: hero-glow 1.4s ease infinite; }
   @keyframes hero-glow { 0%,100% { box-shadow: inset 0 0 0 4px var(--sun) } 50% { box-shadow: inset 0 0 0 8px rgba(255,197,61,.55) } }
   .cell.check { background: radial-gradient(circle, #FF8A76 20%, #FF6F59 100%) !important; animation: pulse-miss 1s ease 3; }
+  /* de hint moet ook op de koning die schaak staat te zien zijn: zijn eigen animatie wint van die van schaak */
+  .cell.check.hero-pc { animation: hero-glow 1.4s ease infinite; }
   .cell.spy { box-shadow: inset 0 0 0 4px #9B6FE8; }
 
   #arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
   .a-sun { stroke: var(--sun-deep); fill: var(--sun-deep); }
   .a-coral { stroke: var(--coral-deep); fill: var(--coral-deep); }
   .a-leaf { stroke: var(--leaf-deep); fill: var(--leaf-deep); }
+  .a-opt-a { stroke: var(--accent-text); fill: var(--accent-text); }
+  .a-opt-b { stroke: var(--coral-deep); fill: var(--coral-deep); }
+  .a-opt-c { stroke: var(--leaf-deep); fill: var(--leaf-deep); }
   #arrows line { stroke-width: 13; stroke-linecap: round; opacity: .9; }
   #arrows polygon { opacity: .9; }
 
@@ -501,6 +506,21 @@
   .opt-btn.wrong { opacity: .45; text-decoration: line-through; pointer-events: none; }
   .opt-btn.right { box-shadow: 0 0 0 3px var(--leaf), var(--shadow); }
   .answer-row { display: flex; gap: 10px; }
+  /* De Beste Zet: drie keuzes op een rij, de letter in de kleur van zijn pijl */
+  .options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .opt {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 56px; padding: 4px;
+    border: 2px solid rgba(23, 69, 111, .25); border-radius: var(--r-md); background: var(--surface); cursor: pointer;
+    color: var(--text); font: inherit;
+  }
+  .opt .o-letter { font-family: var(--font-display); font-weight: var(--fw-bold); font-size: var(--fs-lg); line-height: 1; }
+  .opt .o-move { font-size: 13px; line-height: 1.2; color: var(--text-quiet); text-align: center; }
+  .opt.a .o-letter { color: var(--accent-text); }
+  .opt.b .o-letter { color: var(--coral-deep); }
+  .opt.c .o-letter { color: var(--leaf-deep); }
+  .opt.picked { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); background: var(--sun-soft); }
+  .opt.wrong { opacity: .45; text-decoration: line-through; pointer-events: none; }
+  .opt.right { border-color: var(--leaf-deep); box-shadow: inset 0 0 0 1px var(--leaf-deep); }
   .answer-row .btn { flex: 1; }
 
 
@@ -560,16 +580,19 @@
   }
   .play-strip .mascot { flex: none; width: 28px; height: 28px; font-size: 18px; display: grid; place-items: center; }
   /* een hoogte in procenten houdt WebKit hier niet vast; de strook heeft een vaste hoogte, dus die telt */
-  .play-strip .s-txt { flex: 1; min-width: 0; max-height: calc(var(--strip-h) - 22px); overflow-y: auto; font-size: var(--fs-md); line-height: 1.35; }
+  /* de strook scrolt nooit: wat niet past, wordt korter */
+  .play-strip .s-txt { flex: 1; min-width: 0; max-height: calc(var(--strip-h) - 22px); overflow: hidden; font-size: var(--fs-md); line-height: 1.35; }
   @media (max-height: 659px) and (orientation: portrait) {
     .play-strip { padding: 4px 12px 12px; }
     .play-strip .s-txt { line-height: 1.3; max-height: calc(var(--strip-h) - 16px); }
   }
-  /* langere tekst scrolt in de strook; een zachte rand onderaan zegt dat er meer staat */
-  .play-strip::after { content: ''; position: absolute; left: 0; right: 0; bottom: 10px; height: 10px;
-    background: linear-gradient(rgba(255, 255, 255, 0), var(--strip-bg, #FFFFFF)); pointer-events: none; }
-  .play-strip.predict { --strip-bg: var(--violet-soft); }
-  .play-strip.cloud { --strip-bg: var(--cloud-soft); }
+  /* een spelzin die niet in twee regels past: een stap kleiner, drie regels; op een lage telefoon is de strook van een potje daarvoor 72 hoog */
+  .play-strip.klein .s-txt { font-size: var(--fs-sm); line-height: 1.25; }
+  @media (max-height: 719px) and (max-width: 559px) and (orientation: portrait) {
+    .play:not(.task) { --strip-h: 72px; }
+    .play:not(.task) .play-strip { padding: 4px 12px 10px; }
+    .play:not(.task) .play-strip .s-txt { max-height: calc(var(--strip-h) - 14px); }
+  }
   .play-strip.predict { background: var(--violet-soft); }
   .play-strip.cloud { background: var(--cloud-soft); border: 2px dashed var(--cloud); }
   .play-strip.cloud #bubble { display: none; }
@@ -600,7 +623,7 @@
   .eindkaart {
     grid-column: 2; grid-row: 1; z-index: 25; min-height: 0; overflow-y: auto;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-    padding: 16px; text-align: center; background: rgba(255, 255, 255, .95); border-radius: 16px;
+    padding: 16px; text-align: center; background: var(--surface); border-radius: 16px;
     box-shadow: var(--elev-2); animation: pop-in var(--dur-slow) var(--ease);
   }
   .eindkaart.hidden { display: none; }
@@ -620,6 +643,9 @@
   .play-bottom .action-row { margin-top: auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
   .play-bottom .action-row .btn { min-height: 48px; padding: 0 10px; white-space: nowrap; }
   .play-bottom #optionsBox { order: -1; }
+  /* de zin die de opdracht uitlegt, een hint of een poging: onder het bord, boven de knoppen */
+  .play-bottom #hulpZin { order: -2; font-size: var(--fs-sm); line-height: 1.33; }
+  .play-bottom #hulpZin.hidden, .play-bottom.uitleg #hulpZin { display: none; }
   /* na een antwoord: het oordeel en Volgende op de eerste rij, de redenen eronder */
   .play-bottom.uitleg {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr);
@@ -889,7 +915,7 @@
         <button id="backBtn" class="back-btn">‹ Pauze</button>
         <button id="materiaal" class="tegen" type="button">
           <span id="modeTitle" class="tegen-naam"></span>
-          <span class="tegen-sub"><span id="roundChip"></span><span id="bewaard" class="bewaard hidden">✔ bewaard</span><span id="drillStars" class="hidden"></span><span id="verschil"></span></span>
+          <span class="tegen-sub"><span id="roundChip"></span><span id="drillStars" class="hidden"></span><span id="bewaard" class="bewaard hidden">✔ bewaard</span><span id="verschil"></span></span>
         </button>
         <button id="meerBtn" class="meer-btn" aria-label="Meer: remise, opgeven, puntenwijzer">⋯</button>
       </div>
@@ -909,6 +935,7 @@
         <div id="eindkaart" class="eindkaart hidden"></div>
       </div>
       <div id="onder" class="play-bottom">
+        <div id="hulpZin" class="hidden"></div>
         <div id="actionRow" class="action-row"></div>
         <div id="taskBox" class="task hidden"></div>
         <div id="optionsBox" class="hidden"></div>
@@ -3494,9 +3521,8 @@ function mpOnZet(m) {
     updateTrays();
     const st = gameStatus(session.S);
     if (st.over) { endGame(st); return; }
-    if (inCheck(session.S)) { snd.check(); showToast('SCHAAK! 👑', true); }
     BD.mode = 'move';
-    say('Jij weer! Wat wordt je plan? 💭');
+    if (inCheck(session.S)) { snd.check(); say('Schaak! Red je koning. 👑'); } else say('Jij weer! Wat wordt je plan? 💭');
   });
 }
 
@@ -3552,7 +3578,7 @@ function mpRevanche() {
 function mpMaybeRevanche() {
   if (!MP) return;
   if (!(MP.revMine && MP.revTheirs)) {
-    if (MP.revTheirs && !MP.revMine) showToast(mpNaam() + ' wil revanche! 🔁', true);
+    if (MP.revTheirs && !MP.revMine) say(mpNaam() + ' wil revanche! 🔁');
     return;
   }
   closeModal();
@@ -4233,6 +4259,8 @@ function levelIdx(xp) {
 /* Level-up kan ook zonder XP-verandering (een meesterproef halen), dus we
    vergelijken met de laatst gevierde rang in plaats van voor/na addXP. */
 function checkLevelUp() {
+  /* op een speelscherm is het level een badge op de eindkaart; het venster komt thuis */
+  if (speelschermOpen()) return;
   const cur = levelIdx(P.xp);
   if (P.lastLevel == null || cur < P.lastLevel) { P.lastLevel = cur; saveP(); return; }
   if (cur === P.lastLevel) return;
@@ -4485,7 +4513,44 @@ function playMove(m, cb) {
 }
 
 /* ---------- panel helpers ---------- */
-function say(txt) { $('bubble').innerHTML = txt; }
+function say(txt) {
+  $('bubble').innerHTML = txt;
+  const s = $('strook'), t = s.querySelector('.s-txt');
+  s.classList.remove('klein');
+  /* past een zin niet in twee regels, dan een stap kleiner in drie; de strook scrolt nooit */
+  if (t && t.scrollHeight > t.clientHeight + 1) s.classList.add('klein');
+}
+/* in de strook alleen de vraag, die past altijd; de zin die de opdracht uitlegt staat onder het bord,
+   zodat geen uitleg halverwege een zin wordt afgeknipt */
+const OPDRACHTEN = {
+  'scan.attacked': ['Welke stukken van jou valt Turbo aan?', 'Tik ze allemaal aan. Een stuk is aangevallen als een groen stuk het kan slaan als Turbo aan zet is.'],
+  'scan.capture': ['Welke groene stukken kun jij nu slaan?', 'Tik ze allemaal aan. Kijk bij al je witte stukken wat ze kunnen pakken.'],
+  'scan.mobility': ['Waar kan je {stuk} op {veld} heen?', 'Tik alle velden aan, ook de verre. Het stuk dat glimt is het.'],
+  'scan.free': ['Welk groen stuk sla je met winst?', 'Gratis is het mooist. Een ruil telt ook, als jij meer pakt dan Turbo terugpakt. Soms zijn er meer.'],
+  'scan.threat': ['Wat kan Turbo nu met winst pakken?', 'Doe alsof jij past. Tik je stukken aan die Turbo dan wint: hij slaat, en jij pakt minder terug.'],
+  'best3.best3': ['Welke zet is de beste voor wit? Tik er een aan.', null],
+  'best3.safe': ['Is {zet} veilig?', 'De pijl laat de zet zien. Kijk wat Turbo daarna kan doen: pakt hij dan iets van je af?'],
+  'trucs.vork': ['Vind de vork! 🍴', 'Eén zet die twee stukken van Turbo tegelijk aanvalt, vanaf een veilig veld.'],
+  'trucs.penning': ['Zet een penning! 📌', 'Zet een stuk van Turbo vast: er staat iets belangrijkers achter, zoals de koning of de dame.'],
+  'trucs.spies': ['Zet een spies! 🍢', 'Val de koning of de dame aan. Die moet weg, en dan pak je wat erachter staat.'],
+  'trucs.aftrek': ['Vind de aftrekaanval! 🎭', 'Zet een stuk opzij, zodat jouw stuk erachter ineens aanvalt.'],
+  'trucs.mat1': ['Mat in één zet! 👑', 'Geef schaak zo dat Turbo\'s koning zich op geen enkele manier kan redden.'],
+  'trucs.mat2': ['Mat in twee zetten! 👑', 'Eerst een zet waarna Turbo de mat niet meer kan tegenhouden. Turbo antwoordt, en dan geef jij mat.'],
+  'koning.schaak': ['Je staat schaak! Red je koning.', 'Weglopen, ertussen zetten of de aanvaller slaan. {goed}'],
+  'koning.mat1': ['Turbo dreigt mat in één!', 'Doe je niets, dan sta je de volgende zet mat. Welke zet houdt dat tegen?'],
+  'koning.mat2': ['Turbo dreigt mat in twee!', 'Turbo heeft een plan van twee zetten. Zie wat hij wil, en houd het tegen.'],
+  'koning.stuk': ['Red je stuk! 🛡️', 'Een stuk van jou hangt. Zet het weg, dek het, zet er iets tussen, of val zelf iets aan.'],
+  'opening.coach': ['Jouw zet. Wat bouwt je stelling op?', 'Pak het midden, haal een stuk naar buiten, of breng je koning veilig. Kijk ook wat Turbo dreigt.'],
+  'opening.pad': ['Zet {k} van {m}: speel het pad na.', '{hint}']
+};
+function vul(t, w) { return t == null ? null : t.replace(/\{(\w+)\}/g, (x, k) => (w && k in w ? w[k] : x)); }
+function hulpZin(txt) {
+  const h = $('hulpZin');
+  h.innerHTML = txt || '';
+  h.classList.toggle('hidden', !txt);
+}
+function opdracht(vraag, hulp) { say(vraag); hulpZin(hulp); }
+function opdrachtVan(sleutel, w) { opdracht(vul(OPDRACHTEN[sleutel][0], w), vul(OPDRACHTEN[sleutel][1], w)); }
 /* de strook laat een ding tegelijk zien: de voorspelvraag, de denkwolk of Turbo's zin */
 function strookModus(m) {
   $('strook').classList.toggle('predict', m === 'predict');
@@ -4591,7 +4656,10 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && modalOpen && modalCancelable) closeModal();
 });
 let toastTimer = 0;
+function speelschermOpen() { return !$('scr-play').classList.contains('hidden'); }
 function showToast(txt, gold, ms) {
+  /* op een speelscherm is elke plek bezet: daar nooit een melding */
+  if (speelschermOpen()) return;
   const t = $('toast');
   const n = t.cloneNode(false);
   n.textContent = txt;
@@ -4678,7 +4746,7 @@ function patternCallout(S, m) {
   if (info.safe && info.fork.length >= 2) {
     const names = info.fork.map(t => patName(S, t));
     return { key: 'vork', info,
-      what: 'VORK! 🍴 Eén zet valt ' + names.join(' én ') + ' tegelijk aan!',
+      what: 'VORK! 🍴 Eén zet valt ' + (names.length > 1 ? names.slice(0, -1).join(', ') + ' en ' + names[names.length - 1] : names[0]) + ' tegelijk aan.',
       squares: info.fork.slice() };
   }
   if (info.safe && info.skewer) {
@@ -4687,7 +4755,7 @@ function patternCallout(S, m) {
     unmakeMove(S);
     if (ft === 'k' || ft === 'q') {
       return { key: 'spies', info,
-        what: 'SPIES! 🍢 De ' + NAME_NL[ft] + ' moet vluchten, en dan pak je wat erachter staat!',
+        what: 'SPIES! 🍢 De ' + NAME_NL[ft] + ' moet vluchten, en dan pak je wat erachter staat.',
         squares: [info.skewer.front, info.skewer.back] };
     }
   }
@@ -4729,6 +4797,8 @@ let session = null;
 
 function goHome(tab) {
   if (INV) inviteClear(); /* wie wegloopt laat geen briefje liggen */
+  /* een level dat op het speelscherm als badge kwam, krijgt thuis zijn venster met het nieuwe bord */
+  setTimeout(checkLevelUp, 0);
   if (MP) mpStop(); /* weglopen uit een online potje = netjes gedag zeggen */
   session = null;
   clearBD();
@@ -4946,9 +5016,8 @@ function startDrill(kind) {
 
 function updateDrillStars() {
   if (!session || session.kind === 'game') return;
-  const vorm = vormTxt(session.kind);
-  $('drillStars').innerHTML = '⭐ ' + session.earned + (P.streak >= 2 ? ' · 🔥 ' + P.streak + ' op een rij' : '') +
-    (vorm ? ' · ' + vorm : '');
+  /* tijdens het oefenen alleen de sterren: de vorm staat op Ik */
+  $('drillStars').innerHTML = '⭐ ' + session.earned;
 }
 
 function nextRound() {
@@ -4958,9 +5027,10 @@ function nextRound() {
   renderBoard();
   setOptions(null);
   setTask(null);
+  hulpZin(null);
   session.round++;
   if (session.round > 5) { drillSummary(); return; }
-  $('roundChip').textContent = 'Opdracht ' + session.round + ' van 5';
+  $('roundChip').textContent = session.round + ' van 5';
   setActions([]);
   spin(true, pick(SPIN_LINES));
   later(() => {
@@ -4995,14 +5065,6 @@ function sameMove(a, b) { return a.from === b.from && a.to === b.to && (a.promo 
 /* --- trucendrills: vind de vork/penning/spies/aftrek/matzet --- */
 const TRUC_TYPES = ['vork', 'vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat1', 'mat2'];
 const TRUC_DIFF = { vork: .4, penning: .6, spies: .6, aftrek: .7, mat1: .5, mat2: .9 };
-const TRUC_TEXTS = {
-  vork: ['Vind de VORK! 🍴', 'Speel een zet die twee stukken van Turbo tegelijk aanvalt. Kies wel een veilig veld!'],
-  penning: ['Zet een PENNING! 📌', 'Zet een stuk van Turbo vast: het mag niet meer weg, omdat er iets belangrijkers achter staat.'],
-  spies: ['Zet een SPIES! 🍢', 'Val de koning of dame aan zodat die moet vluchten, en pak daarna wat erachter staat.'],
-  aftrek: ['AFTREKAANVAL! 🎭', 'Verplaats een stuk zodat het stuk erachter ineens aanvalt.'],
-  mat1: ['SCHAAKMAT in één zet! 👑', 'Turbo’s koning kan nergens meer heen. Vind de winnende zet!'],
-  mat2: ['SCHAAKMAT in twéé zetten! 👑👑', 'Eerst een zet waar Turbo niks tegen kan doen, dan mat. Wat je ook probeert: Turbo mag antwoorden, en dan moet het mat zijn.']
-};
 
 function buildTrucs() {
   let type = pick(TRUC_TYPES);
@@ -5019,8 +5081,7 @@ function buildTrucs() {
   task.hintUsed = false;
   BD.mode = 'puzzle';
   renderBoard();
-  const tx = TRUC_TEXTS[task.type];
-  say('<b>' + tx[0] + '</b> ' + tx[1] + ' ' + PATTERNS[task.type].e + ' ' + PATTERNS[task.type].les);
+  opdrachtVan('trucs.' + task.type);
   setActions([{ label: '💡 Hint', cls: 'plain small', fn: trucHint, id: 'hint' }]);
   return true;
 }
@@ -5032,7 +5093,7 @@ function trucHint() {
   t.hintUsed = true;
   BD.glow.add(t.answers[0].m.from);
   renderBoard();
-  say('Psst… kijk eens goed naar dat glimmende stuk! (Je kunt nu nog maximaal 2 sterren halen.)');
+  hulpZin('Kijk naar het stuk dat nu oplicht. Met deze hint is de opdracht nog 2 sterren waard.');
   if (actionBtns.hint) actionBtns.hint.disabled = true;
 }
 
@@ -5052,14 +5113,13 @@ function puzzleAttempt(m) {
     playMove(m, () => {
       const S = session.S;
       const reply = rootScores(S, 2)[0];
-      say('Goed! Turbo probeert nog te ontsnappen met <b>' + moveNameNL(S, reply.m) + '</b>… 🐢');
+      hulpZin('Goed zo! Turbo antwoordt met <b>' + moveNameNL(S, reply.m) + '</b>. Nu jij: geef mat.');
       later(() => {
         playMove(reply.m, () => {
           session.mate2Answers = matingMoves(S, 1);
           session.phase = 'puzzle2';
           BD.mode = 'puzzle';
           renderBoard();
-          say('Nu jij: geef SCHAAKMAT! 👑');
         });
       }, 700);
     });
@@ -5075,8 +5135,8 @@ function puzzleAttempt(m) {
       renderBoard();
       countPattern(type);
       const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
-      awardRound(stars, (type === 'mat1' ? 'SCHAAKMAT! 👑 Turbo kan geen kant meer op!' :
-        (co ? co.what : 'Gevonden!')) + ' Zo herken je een ' + PATTERNS[type].n.toLowerCase() + '!');
+      awardRound(stars, type === 'mat1' ? 'Schaakmat! 👑' : 'Gevonden!',
+        type === 'mat1' || !co ? 'Turbo\'s koning kan zich niet meer redden.' : co.what);
     });
     return;
   }
@@ -5086,8 +5146,8 @@ function puzzleAttempt(m) {
   snd.bad();
   const near = (type !== 'mat1' && type !== 'mat2' && patternMatches(session.S, m, type,
     Object.assign({}, info, { safe: true })) && !info.safe) ?
-    'Bijna! Dat lijkt op een ' + PATTERNS[type].n.toLowerCase() +
-    ', maar Turbo kan je stuk daar zó pakken. Zoek een véilig veld!' : null;
+    'Bijna: dat lijkt op een ' + PATTERNS[type].n.toLowerCase() +
+    ', maar Turbo kan je stuk daar pakken. Zoek een veilig veld.' : null;
   if (session.tries >= 2) {
     session.phase = 'review';
     BD.mode = 'off';
@@ -5100,12 +5160,10 @@ function puzzleAttempt(m) {
       if (co) BD.spy = new Set(co.squares);
       BD.glow.clear();
       renderBoard();
-      awardRound(0, 'Kijk: <b>' + name + '</b>. ' + (co ? co.what : 'Dát is hem!') +
-        ' Volgende keer zie jij hem! 💪');
+      awardRound(0, 'Zo zit het', co ? 'De truc was <b>' + name + '</b>. ' + co.what : 'Dit was mat: <b>' + name + '</b>.');
     });
   } else {
-    say(near || pick(['Die doet iets anders. Probeer nog eens! Denk aan: ' + PATTERNS[type].les.toLowerCase(),
-      'Nog niet de truc! Kijk naar álle stukken van Turbo. Nog één poging!']));
+    hulpZin(near || 'Nog niet de ' + PATTERNS[type].n.toLowerCase() + '. Kijk naar alle stukken van Turbo, en probeer nog een zet.');
   }
 }
 
@@ -5118,7 +5176,7 @@ function mate2Second(m) {
     playMove(m, () => {
       countPattern('mat2');
       const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
-      awardRound(stars, 'SCHAAKMAT in twee! 👑👑 Eerst de dwingende zet, dan de genadeklap. Zo denkt een echte schaker!');
+      awardRound(stars, 'Mat in twee! 👑', 'Na je eerste zet kon Turbo de mat niet meer tegenhouden. Dat is een plan in twee stappen.');
     });
     return;
   }
@@ -5135,9 +5193,9 @@ function mate2Second(m) {
     playMove(ans, () => {
       BD.arrows = [];
       renderBoard();
-      awardRound(0, 'Dit was hem: <b>' + ansName + '</b> is mat. Je eerste zet was al goed, de tweede zie je de volgende keer! 💪');
+      awardRound(0, 'Zo zit het', 'Dit was mat: <b>' + ansName + '</b>. Je eerste zet was goed; de matzet zie je de volgende keer.');
     });
-  } else say('Nog geen mat: Turbo’s koning kan dan nog weg. Kijk welk veld je nog niet dekt! 👑');
+  } else hulpZin('Nog geen mat: Turbo kan zich dan nog redden. Probeer nog een zet.');
 }
 /* de hele matvoering voorspelen na twee missers */
 function revealMate2(first) {
@@ -5158,7 +5216,7 @@ function revealMate2(first) {
           if (!session || session.kind !== 'trucs' || !mate) return;
           BD.arrows = [{ from: mate.from, to: mate.to, cls: 'a-leaf' }];
           playMove(mate, () => {
-            awardRound(0, 'Kijk: eerst <b>' + firstName + '</b>, Turbo moet wel, en dan mat. Zo’n plan in twee stappen zie jij de volgende keer! 💪');
+            awardRound(0, 'Zo zit het', 'Eerst <b>' + firstName + '</b>: daarna kan Turbo de mat niet meer tegenhouden. Hij antwoordt, en dan is het mat.');
           });
         }, 600);
       });
@@ -5184,24 +5242,8 @@ function buildScan() {
   if (type === 'mobility') BD.glow.add(task.extra);
   renderBoard();
   let main, sub;
-  if (type === 'threat') {
-    main = 'Wat dreigt Turbo? Tik jóuw stukken aan die hij nu met winst kan pakken, als hij aan zet zou zijn!';
-    sub = 'Doe alsof jij past. Kijk bij elk stuk van Turbo: wat kan hij dan slaan, en pak jij dan iets terug?';
-  } else if (type === 'attacked') {
-    main = 'Tik al jóuw witte stukken aan die Turbo aanvalt!';
-    sub = 'Een stuk is aangevallen als een groen stuk het zou kunnen slaan. Kijk bij élk wit stuk!';
-  } else if (type === 'capture') {
-    main = 'Tik alle gróene stukken aan die jij nu kunt slaan!';
-    sub = 'Kijk bij al je witte stukken: wat kunnen ze pakken?';
-  } else if (type === 'mobility') {
-    main = 'Waar kan jouw ' + NAME_NL[task.S.board[task.extra].toLowerCase()] + ' op ' +
-      alg(task.extra) + ' allemaal naartoe? Tik álle velden aan!';
-    sub = 'Het glimmende stuk. Vergeet de verre velden niet!';
-  } else {
-    main = 'Welk groen stuk kun je met WINST slaan? Tik het aan!';
-    sub = 'Helemaal gratis is het mooiste! Maar een goede ruil telt ook: dan win jij méér punten dan Turbo terugpakt. Soms zijn er twee!';
-  }
-  say('<b>' + main + '</b> ' + sub);
+  opdrachtVan('scan.' + type, type === 'mobility' ?
+    { stuk: NAME_NL[task.S.board[task.extra].toLowerCase()], veld: alg(task.extra) } : null);
   setActions([{ label: 'Klaar! ✔', cls: 'leaf', fn: scanCheck }]);
   return true;
 }
@@ -5221,12 +5263,7 @@ function scanCheck() {
   const stars = errs === 0 ? 3 : (errs === 1 ? 2 : (good.size >= Math.ceil(T.size / 2) ? 1 : 0));
   if (stars === 3) { bump('c.perfectScans', 1); }
   const expl = scanExplanations(session.task, bad, missed).map(e => e.replace(/^[^A-Za-zÀ-ÿ<]+/, ''));
-  /* de eerste reden staat in de strook boven het bord, de rest in de uitleg eronder */
-  const rest = expl.slice(1);
-  setTask('<div class="e-head">' + (stars === 3 ? 'Perfect gespeurd!' : 'Zo zit het') + '</div><div class="e-body">' +
-    (rest.length ? '<p>Nog ' + rest.length + (rest.length === 1 ? ' ding:' : ' dingen:') + '</p><ul>' +
-      rest.map(e => '<li>' + e + '</li>').join('') + '</ul>' : '') + '</div>');
-  awardRound(stars, expl.length ? expl[0] : 'PERFECT gespeurd! Alles gevonden! 🎉');
+  awardRound(stars, stars === 3 ? 'Perfect gespeurd!' : 'Zo zit het', expl.length ? expl : 'Alles gevonden. 🎉');
 }
 
 /* Kid points from centipawns, consistent with the Puntenwijzer (queen 950 -> 9). */
@@ -5343,7 +5380,7 @@ function buildSafe() {
   BD.mode = 'off';
   BD.arrows = [{ from: task.move.from, to: task.move.to, cls: 'a-sun' }];
   renderBoard();
-  say('Jij (wit) wilt deze zet doen: <b>' + moveNameNL(task.S, task.move) + '</b>. Is dit veilig? Of pakt Turbo dan iets van je af? 🤔');
+  opdrachtVan('best3.safe', { zet: moveNameNL(task.S, task.move) });
   setOptions('<div class="answer-row">' +
     '<button id="ansSafe" class="btn leaf">✅ Veilig!</button>' +
     '<button id="ansTrap" class="btn coral">⚠️ Valstrik!</button></div>');
@@ -5369,18 +5406,17 @@ function safeAnswer(saidTrap) {
         renderBoard();
         later(() => {
           playMove(t.punish, () => {
-            awardRound(correct ? 3 : 0, correct ?
-              'Goed gezien, detective! 🕵️ Het wás een valstrik: <b>' + pn + '</b>.' :
-              'Oei, het was een valstrik! Kijk: <b>' + pn + '</b>. Denk eraan: eerst kijken wat Turbo terug kan doen!');
+            awardRound(correct ? 3 : 0, correct ? 'Goed gezien! 🕵️' : 'Het was een valstrik',
+              correct ? 'Het was een valstrik: Turbo speelt dan <b>' + pn + '</b>.' :
+                'Turbo speelt dan <b>' + pn + '</b>. Kijk eerst wat Turbo terug kan doen.');
           });
         }, 650);
       }, 500);
     });
   } else {
     playMove(t.move, () => {
-      awardRound(correct ? 3 : 0, correct ?
-        'Klopt! Deze zet is veilig. Turbo kan niks afpakken. 🎉' :
-        'Deze was juist véilig! Turbo kon niks pakken. Niet overal spoken zien 😉');
+      awardRound(correct ? 3 : 0, correct ? 'Klopt, veilig! 🎉' : 'Deze was veilig',
+        correct ? 'Turbo kan niks afpakken.' : 'Turbo kon niks pakken.');
     });
   }
 }
@@ -5406,14 +5442,14 @@ function buildBest3() {
   session.diff = Math.min(1, Math.max(.2, 1 - (gap - 180) / 1200));
   BD.mode = 'off';
   renderBoard();
-  say('<b>Welke zet is de BESTE voor wit?</b> Tik een zet aan om hem op het bord te zien. Denk bij élke zet: wat doet Turbo daarna?');
+  opdrachtVan('best3.best3');
   let h = '';
   task.options.forEach((o, i) => {
-    h += '<button class="opt-btn" data-i="' + i + '"><span class="opt-tag">' + 'ABC'[i] + '</span><span>' +
+    h += '<button class="opt ' + 'abc'[i] + '" data-i="' + i + '"><span class="o-letter">' + 'ABC'[i] + '</span><span class="o-move">' +
       moveNameNL(task.S, o.m) + '</span></button>';
   });
-  setOptions(h);
-  document.querySelectorAll('.opt-btn').forEach(b => {
+  setOptions('<div class="options">' + h + '</div>');
+  document.querySelectorAll('.opt[data-i]').forEach(b => {
     b.addEventListener('click', () => pickOption(+b.dataset.i));
   });
   setActions([{ label: 'Deze kies ik! 🎯', cls: 'sun', fn: best3Confirm, id: 'confirm', disabled: true }]);
@@ -5466,28 +5502,26 @@ function best3Explanations(task) {
   return lines;
 }
 
-function showBest3Explanation(lines) {
-  setTask('<div class="e-head">Zo zit het</div><div class="e-body"><ul>' + lines.map(e => '<li>' + e + '</li>').join('') + '</ul></div>');
-}
-
 function pickOption(i) {
   if (!session || session.phase !== 'choose') return;
-  const b = document.querySelector('.opt-btn[data-i="' + i + '"]');
+  const b = document.querySelector('.opt[data-i="' + i + '"]');
   if (!b || b.classList.contains('wrong')) return;
   snd.select();
   session.picked = i;
-  document.querySelectorAll('.opt-btn').forEach(x => x.classList.remove('picked'));
+  document.querySelectorAll('.opt[data-i]').forEach(x => x.classList.remove('picked'));
   b.classList.add('picked');
   const o = session.task.options[i];
-  BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-sun' }];
+  /* de pijl heeft de kleur van de letter op de knop */
+  BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-opt-' + 'abc'[i] }];
   renderBoard();
+  say('Wat doet Turbo daarna? Kijk ook naar de andere twee.');
   if (actionBtns.confirm) actionBtns.confirm.disabled = false;
 }
 
 function best3Confirm() {
   if (!session || session.phase !== 'choose' || session.picked == null) return;
   const t = session.task, i = session.picked, o = t.options[i];
-  const btn = document.querySelector('.opt-btn[data-i="' + i + '"]');
+  const btn = document.querySelector('.opt[data-i="' + i + '"]');
   session.tries++;
   if (actionBtns.confirm) actionBtns.confirm.disabled = true;
   if (o === t.best) {
@@ -5497,16 +5531,12 @@ function best3Confirm() {
     const lines = best3Explanations(t);
     BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-leaf' }];
     playMove(o.m, () => {
-      showBest3Explanation(lines);
-      awardRound(session.tries === 1 ? 3 : 1, session.tries === 1 ?
-        'GOUD! 🥇 Meteen de beste zet gevonden! Lees maar waarom die zo goed is. 👇' :
-        'Ja! Díe is het! Goed doorgedacht! Kijk hieronder waarom. 👇');
+      awardRound(session.tries === 1 ? 3 : 1, session.tries === 1 ? 'Goud! 🥇' : 'Ja, die is het!', lines);
     });
   } else {
     session.phase = 'busy';
     btn.classList.add('wrong');
     btn.classList.remove('picked');
-    say('Hmm… kijk wat er dán gebeurt! 👀');
     BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-coral' }];
     const S = session.S;
     playMove(o.m, () => {
@@ -5524,18 +5554,17 @@ function best3Confirm() {
               if (session.tries >= 2) {
                 session.phase = 'review';
                 const bi = t.options.indexOf(t.best);
-                const bb = document.querySelector('.opt-btn[data-i="' + bi + '"]');
+                const bb = document.querySelector('.opt[data-i="' + bi + '"]');
                 if (bb) bb.classList.add('right');
                 const lines = best3Explanations(t);
                 BD.arrows = [{ from: t.best.m.from, to: t.best.m.to, cls: 'a-leaf' }];
                 playMove(t.best.m, () => {
-                  showBest3Explanation(lines);
-                  awardRound(0, 'De beste was: <b>' + bb.textContent.slice(1) + '</b>. Hieronder zie je waarom. Volgende keer heb jij hem! 💪');
+                  awardRound(0, 'Zo zit het', lines);
                 });
               } else {
                 session.phase = 'choose';
                 session.picked = null;
-                say('Die was niet top: Turbo doet dan <b>' + pn + '</b>. Probeer een andere! 🤔');
+                say('Niet de beste: kijk wat Turbo doet. Kies een andere.');
               }
             }, 900);
           });
@@ -5547,12 +5576,6 @@ function best3Confirm() {
 
 /* --- koning ontsnapt: verdedigen --- */
 const KONING_DIFF = { schaak: .4, mat1: .6, mat2: .85, stuk: .5 };
-const KONING_TEXTS = {
-  schaak: ['Je staat SCHAAK! 👑', 'Red je koning: weglopen, ertussen zetten, of de aanvaller slaan. Er is maar één goede manier!'],
-  mat1: ['Turbo dreigt MAT in één! 😱', 'Als jij niets doet, is het volgende zet mat. Welke zet voorkomt dat?'],
-  mat2: ['Turbo dreigt MAT in twee! 😱😱', 'Turbo heeft een plan van twee zetten. Kijk wat hij wil, en zet er een stokje voor.'],
-  stuk: ['Red je stuk! 🛡️', 'Een stuk van jou hangt: Turbo pakt het zo af. Zet het weg, dek het, of val zelf iets aan.']
-};
 /* de koningspuzzels komen uit de vooraf geverifieerde voorraad (src/koning.js);
    binnen een sessie geen herhaling zolang de voorraad dat toelaat */
 function pickKoningTask() {
@@ -5583,8 +5606,9 @@ function buildKoning() {
   BD.mode = 'puzzle';
   if (task.type !== 'stuk') BD.check = task.S.kings.w;
   renderBoard();
-  const tx = KONING_TEXTS[task.type];
-  say('<b>' + tx[0] + '</b> ' + tx[1]);
+  const n = task.answers.length;
+  opdrachtVan('koning.' + task.type, { goed: n === 1 ? 'Er is één goede zet.' :
+    'Er zijn ' + (['', '', 'twee', 'drie', 'vier'][n] || n) + ' goede zetten.' });
   setActions([{ label: '💡 Hint', cls: 'plain small', fn: koningHint, id: 'hint' }]);
   return true;
 }
@@ -5595,18 +5619,19 @@ function koningHint() {
   t.hintUsed = true;
   BD.glow.add(t.type === 'stuk' ? t.hang.sq : t.answers[0].m.from);
   renderBoard();
-  say(t.type === 'stuk' ? 'Psst… dát stuk staat in gevaar. (Nu nog maximaal 2 sterren.)' :
-    'Psst… met dat glimmende stuk kun je je redden. (Nu nog maximaal 2 sterren.)');
+  const koning = t.type !== 'stuk' && t.answers[0].m.from === t.S.kings.w;
+  hulpZin((t.type === 'stuk' ? 'Het stuk dat nu oplicht, staat in gevaar.' : koning ? 'Je koning moet het zelf doen.' :
+    'Met het stuk dat nu oplicht, kun je je redden.') + ' Met deze hint is de opdracht nog 2 sterren waard.');
   if (actionBtns.hint) actionBtns.hint.disabled = true;
 }
-/* hoe redt de zet het stuk: weg, gedekt, of tegenaanval */
+/* hoe redt de zet het stuk; alleen wat de code kan waarmaken: "weggezet" zegt niet dat het nieuwe veld veilig is */
 function stukHow(S, m, hang) {
-  if (m.from === hang.sq) return 'Weggezet: buiten bereik. 🏃';
+  if (m.from === hang.sq) return 'Weggezet.';
   makeMove(S, m);
   const dekt = findAttacker(S, hang.sq, 'w') >= 0;
   unmakeMove(S);
-  if (dekt) return 'Gedekt: als Turbo slaat, pak jij terug en verliest hij punten. 🛡️';
-  return 'Tegenaanval: Turbo heeft nu zelf iets te redden. ⚔️';
+  if (dekt) return 'Gedekt: slaat Turbo, dan pak jij terug. Dat levert hem niets op.';
+  return 'Turbo wint nu niets meer.';
 }
 function koningAttempt(m) {
   if (!session || session.phase !== 'puzzle') return;
@@ -5624,8 +5649,7 @@ function koningAttempt(m) {
     const how = t.type === 'stuk' ? stukHow(S, m, t.hang) : null;
     playMove(m, () => {
       const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
-      awardRound(stars, t.type === 'stuk' ? ('Gered! ' + how) :
-        'Gered! 🛡️ Turbo’s plan is van tafel. Eerst kijken wat er dreigt, dán zetten: precies zo!');
+      awardRound(stars, 'Gered! 🛡️', t.type === 'stuk' ? how : 'Turbo\'s plan is van tafel. Eerst kijken wat er dreigt, dan zetten.');
     });
     return;
   }
@@ -5643,8 +5667,7 @@ function koningAttempt(m) {
     const how = t.type === 'stuk' ? stukHow(S, ans, t.hang) : null;
     const ansName = moveNameNL(S, ans);
     playMove(ans, () => {
-      awardRound(0, 'Dit was de redding: <b>' + ansName + '</b>. ' + (how || 'Daarna kan Turbo niet meer mat zetten.') +
-        ' Volgende keer zie jij hem! 💪');
+      awardRound(0, 'Zo zit het', 'De redding was <b>' + ansName + '</b>. ' + (how || 'Daarna kan Turbo niet meer mat zetten.'));
     });
     return;
   }
@@ -5661,16 +5684,19 @@ function koningAttempt(m) {
       playMove(reply.m, () => {
         const st2 = gameStatus(S);
         const cap = S.hist[S.hist.length - 1].cap;
-        const txt = st2.over && st2.reason === 'mat' ? 'Schaakmat! 😱 Dat was dus niet de redding.' :
-          (t.type === 'stuk' && cap ? 'Turbo pakt je ' + NAME_NL[cap.toLowerCase()] + ' gewoon af. 😬' :
-            'Turbo speelt <b>' + replyName + '</b> en het gevaar is er nog. 😬');
+        /* "toch" alleen als Turbo het stuk pakt dat al hing */
+        const hing = t.type === 'stuk' && reply.m.to === (m.from === t.hang.sq ? m.to : t.hang.sq);
+        const txt = st2.over && st2.reason === 'mat' ? 'Turbo speelt <b>' + replyName + '</b>: schaakmat. Dat was dus niet de redding.' :
+          t.type === 'stuk' && cap ? 'Turbo speelt <b>' + replyName + '</b> en pakt ' + (hing ? 'toch je ' + NAME_NL[cap.toLowerCase()] :
+            'je ' + NAME_NL[cap.toLowerCase()] + ' op ' + alg(reply.m.to)) + '.' :
+            'Turbo speelt <b>' + replyName + '</b>, en het gevaar is er nog.';
         later(() => {
           unmakeMove(S); unmakeMove(S);
           BD.arrows = []; BD.last = null;
           BD.check = t.type === 'stuk' ? null : S.kings.w;
           renderBoard();
           session.phase = 'puzzle'; BD.mode = 'puzzle';
-          say(txt + ' Nog één poging!');
+          hulpZin(txt + ' Probeer nog een zet.');
         }, 900);
       });
     }, 600);
@@ -5703,10 +5729,13 @@ function scoreTask(stars) {
   updateHud();
   bewaarRondje();
 }
-function awardRound(stars, msg) {
+function awardRound(stars, kop, redenen) {
   if (!session || session.kind === 'game') return;
+  const lijst = [].concat(redenen).filter(Boolean);
   scoreTask(stars);
-  say(msg);
+  hulpZin(null);
+  setTask('<div class="e-head">' + kop + '</div><div class="e-body">' + (lijst.length > 1 ?
+    '<ul>' + lijst.map(e => '<li>' + e + '</li>').join('') + '</ul>' : '<p>' + lijst[0] + '</p>') + '</div>');
   setActions([{ label: 'Volgende ▶', cls: 'sun', fn: nextRound }]);
 }
 
@@ -5718,7 +5747,7 @@ function drillSummary() {
   if (e >= 12) { snd.win(); celebrate(); } else snd.good();
   const kind = session.kind;
   showModal('<div class="m-emoji">' + emoji + '</div><h2>Rondje klaar!</h2>' +
-    '<p>Je verdiende <b>' + e + '</b> van de 15 sterren.<br>' + line + '</p>' +
+    '<p>Je verdiende <b>' + e + '</b> van de 15 sterren.<br>' + line + '</p>' + trofeeRij(voorKaart()) +
     '<div class="m-btns"><button class="btn sun" id="mAgain">Nog een rondje! 🔁</button>' +
     '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', () => {
       $('mAgain').addEventListener('click', () => { closeModal(); startDrill(kind); });
@@ -5827,17 +5856,18 @@ function startOpening(mode, pad) {
   renderBoard();
   updateDrillStars();
   setActions(mode === 'pad' ? [{ label: '💡 Hint', cls: 'plain small', fn: openingHint, id: 'hint' }] : []);
+  hulpZin(null);
   if (color === 'b') { BD.mode = 'off'; say('Jij speelt met zwart. Wit begint… ⏳'); later(openingTurbo, 500); }
   else kidOpeningTurn();
 }
 function renderMeters() {
   if (!session || session.kind !== 'opening' || session.mode !== 'coach') return;
   const pr = principles(session.S, session.color);
-  const row = (e, naam, val, max, txt) => '<div class="meter"><span class="m-l">' + e + ' ' + naam + '</span>' +
-    '<span class="m-t"><i style="width:' + Math.round(Math.min(1, val / max) * 100) + '%"></i></span><span class="m-v">' + txt + '</span></div>';
-  $('meters').innerHTML = row('🎯', 'Centrum', pr.centrum, 12, pr.centrum + '/12') +
-    row('🐎', 'Ontwikkeling', pr.dev, 4, pr.dev + '/4') +
-    row('🏰', 'Koning veilig', session.castled ? 1 : 0, 1, session.castled ? 'ja' : 'nog niet');
+  const row = (naam, val, max, txt) => '<div class="m"><span>' + naam + ' <span class="m-v">' + txt + '</span></span>' +
+    '<span class="bar"><i style="width:' + Math.round(Math.min(1, val / max) * 100) + '%"></i></span></div>';
+  $('meters').innerHTML = row('Centrum', pr.centrum, 12, pr.centrum + '/12') +
+    row('Stukken', pr.dev, 4, pr.dev + '/4') +
+    row('Koning', session.castled ? 1 : 0, 1, session.castled ? 'veilig' : 'nog niet');
 }
 function kidOpeningTurn() {
   if (!session || session.kind !== 'opening') return;
@@ -5851,13 +5881,12 @@ function kidOpeningTurn() {
   $('roundChip').textContent = 'Zet ' + (session.kidMoves + 1) + ' van ' + session.maxMoves;
   renderMeters();
   if (actionBtns.hint) actionBtns.hint.disabled = false;
-  /* na een zet blijft de uitleg van die zet staan; de volgende tip staat in het taakvak */
   if (session.mode === 'pad') {
-    setTask('<b>Zet ' + (session.kidMoves + 1) + '</b><div class="sub">' + session.pad.hint[session.kidMoves] + '</div>', false);
-    if (session.kidMoves === 0) say('Speel het pad na. Bij elke zet vertel ik waarom hij goed is. 📖');
+    opdrachtVan('opening.pad', { k: session.kidMoves + 1, m: session.maxMoves, hint: session.pad.hint[session.kidMoves] });
   } else {
-    setTask('<b>Jouw zet</b><div class="sub">Midden pakken, een stuk naar buiten, of je koning veilig. Kijk ook wat Turbo dreigt!</div>', false);
-    if (session.kidMoves === 0) say('Speel maar! Ik geef sterren voor elke zet die iets opbouwt. 🧭');
+    opdrachtVan('opening.coach');
+    /* het pad hield op: dat zegt de plek van de uitleg, één zet lang */
+    if (session.padOp) { hulpZin('Het pad is hier op. Nu spelen we door met de coach! 🧭'); session.padOp = false; }
   }
 }
 function openingHint() {
@@ -5868,7 +5897,7 @@ function openingHint() {
   session.hintUsed = true;
   BD.arrows = [{ from: m.from, to: m.to, cls: 'a-sun' }];
   renderBoard();
-  say('Kijk, deze pijl. (Met hint nog maximaal 2 sterren.)');
+  hulpZin('Kijk, deze pijl. Met deze hint is de zet nog 2 sterren waard.');
   if (actionBtns.hint) actionBtns.hint.disabled = true;
 }
 /* beoordeling van een coach-zet: engine-check eerst, dan de principes */
@@ -5892,23 +5921,24 @@ function coachEval(S, m) {
   unmakeMove(S);
   const dC = after.centrum - before.centrum, dD = after.dev - before.dev;
   let score = (book ? 3 : 0) + dC * .5 + dD * 2 + (castled ? 3 : 0) + (goodCap ? 2 : 0) - (again ? 2 : 0) - (queenEarly ? 2 : 0);
+  /* één lof en één opmerking, de belangrijkste eerst: materiaal winnen weegt het zwaarst */
   const plus = [], min = [];
-  if (book) plus.push('Een echte boekzet! 📖');
-  if (castled) plus.push('Rokade: koning veilig, toren doet mee. 🏰');
   if (goodCap) plus.push('Je wint materiaal. 🏅');
+  if (castled) plus.push('Rokade: koning veilig, toren doet mee. 🏰');
   if (dD > 0) plus.push('Een stuk naar buiten. 🐎');
   if (dC > 0) plus.push('Je pakt meer van het midden. 🎯');
-  if (again) min.push('Dit stuk zette je al: in de opening liever elk stuk één keer.');
+  if (book) plus.push('Een echte boekzet! 📖');
   if (queenEarly) min.push('Je dame zo vroeg? Turbo jaagt erop. Eerst je kleine stukken.');
+  if (again) min.push('Dit stuk zette je al: in de opening liever elk stuk één keer.');
   if (dC < 0) min.push('Je grip op het midden wordt minder.');
   let stars, msg;
   if (blunder) {
     stars = 0;
-    msg = 'Oei, een valstrik: Turbo speelt dan <b>' + (punish || 'iets sterks') + '</b> en dat kost je wat. Kijk vóór je zet wat Turbo terug kan doen!';
+    msg = punish ? 'Er was een sterkere zet. Kijk wat Turbo nu kan doen: <b>' + punish + '</b>.' : 'Er was een sterkere zet.';
   } else {
     stars = score >= 2.5 ? 3 : (score >= 1 ? 2 : (score >= 0 ? 1 : 0));
-    msg = (plus.length ? plus.join(' ') : 'Prima, maar het midden, een nieuw stuk of de rokade was nog sterker.') +
-      (min.length ? ' ' + min.join(' ') : '');
+    msg = plus.length ? plus[0] + (min.length ? ' ' + min[0] : '') :
+      min.length ? min[0] : 'Prima. Nog sterker was het midden, een nieuw stuk of de rokade.';
   }
   return { stars, msg, castled };
 }
@@ -5925,10 +5955,10 @@ function onOpeningMove(m) {
         const exp = legalMoves(S).find(x => moveKey(x) === k);
         BD.arrows = [{ from: exp.from, to: exp.to, cls: 'a-leaf' }];
         renderBoard();
-        say('Deze bedoel ik: <b>' + moveNameNL(S, exp) + '</b>. Speel hem maar!');
+        hulpZin('Deze bedoel ik: <b>' + moveNameNL(S, exp) + '</b>. Speel hem maar!');
       } else {
         renderBoard();
-        say('Niet die. ' + session.pad.hint[session.kidMoves] + ' Probeer nog eens!');
+        hulpZin('Niet die. ' + session.pad.hint[session.kidMoves] + ' Probeer nog eens!');
       }
       return;
     }
@@ -5949,7 +5979,7 @@ function finishOpeningMove(m, stars, msg, castled) {
     if (!session || session.kind !== 'opening') return;
     session.kidMoves++;
     scoreTask(stars);
-    say(msg + (stars === 3 ? ' ⭐⭐⭐' : ''));
+    hulpZin(msg + (stars === 3 ? ' ⭐⭐⭐' : ''));
     renderMeters();
     const st = gameStatus(session.S);
     if (st.over) { openingEnd(); return; }
@@ -5971,7 +6001,7 @@ function openingTurbo() {
       session.maxMoves = Math.max(session.maxMoves, session.kidMoves + 3);
       $('meters').classList.remove('hidden');
       setActions([]);
-      say('Het pad is hier op. Nu spelen we door met de coach! 🧭');
+      session.padOp = true;
     }
   }
   if (!m) m = bookMove(S) || pickMove(S, 2);
@@ -6096,13 +6126,14 @@ function gameActions() {
 const MIN_PLIES_TELT = 20;
 function resignAsk() {
   if (!session || session.kind !== 'game' || session.over) return;
+  const wacht = sluitVoorspelvraag();
   const naam = session.online ? escHtml(mpNaam()) : 'Turbo';
   showModal('<div class="m-emoji">🏳️</div><h2>Opgeven?</h2>' +
     '<p>Dan heeft ' + naam + ' dit potje gewonnen.' +
     (session.online ? '<br>Jullie kunnen daarna wel revanche spelen.' : '<br>Vechten tot het eind is vaak slimmer: Turbo maakt ook fouten!') + '</p>' +
     '<div class="m-btns"><button class="btn sun" id="rsNee">↩️ Nee, doorspelen</button>' +
     '<button class="btn plain" id="rsJa">🏳️ Ja, ik geef op</button></div>', () => {
-      $('rsNee').addEventListener('click', closeModal);
+      $('rsNee').addEventListener('click', () => { closeModal(); if (wacht) doTurboMove(wacht); });
       $('rsJa').addEventListener('click', () => { closeModal(); resignNow(); });
     }, true);
 }
@@ -6120,8 +6151,11 @@ function turboAcceptsDraw(S) {
   return Math.abs(evalWhite(S)) <= 120;
 }
 function offerDraw() {
-  if (!session || session.kind !== 'game' || session.over || BD.mode !== 'move') return;
+  const wacht = sluitVoorspelvraag();
+  if (!session || session.kind !== 'game' || session.over || (BD.mode !== 'move' && !wacht)) return;
   const S = session.S;
+  /* Turbo antwoordt eerst; zegt hij nee, dan doet hij daarna de zet waar de vraag over ging */
+  const daarna = () => { if (wacht && session && !session.over) later(() => doTurboMove(wacht, true), 900); };
   if (session.online) {
     if (session.drawAsked != null && S.hist.length - session.drawAsked < 10) {
       say('Je hebt net al remise aangeboden. Speel eerst nog even door. 🐢');
@@ -6139,12 +6173,14 @@ function offerDraw() {
   }
   if (session.drawAsked != null && S.hist.length - session.drawAsked < 10) {
     say('Je vroeg het net al. Speel eerst nog tien zetten, dan mag je het weer vragen. 🐢');
+    daarna();
     return;
   }
   session.drawAsked = S.hist.length;
   bewaarPotje();
   say(S.hist.length < MIN_PLIES_TELT ? 'Remise? Nu al? Nee hoor, we zijn net begonnen! Speel maar door. 🐢' :
     (evalWhite(S) > 0 ? 'Remise? Nee, jij staat beter! Probeer maar te winnen. 🐢' : 'Remise? Nee hoor, ik sta goed. Speel maar door! 🐢'));
+  daarna();
 }
 /* online: het maatje biedt remise aan */
 function mpOnRemiseVraag(m) {
@@ -6168,7 +6204,7 @@ function mpOnRemise(m) {
   if (!session || !session.online || session.over || !MP || +m.gameNo !== MP.gameNo) return;
   if (session.drawAsked == null) return; /* alleen een antwoord op ons eigen aanbod telt */
   if (m.ok === true) endGame({ over: true, result: 'd', reason: 'remise' });
-  else { say(mpNaam() + ' wil doorspelen. Oké, dan gaan we door! 💪'); showToast(mpNaam() + ' wil doorspelen 💪'); }
+  else say(mpNaam() + ' wil doorspelen. Oké, dan gaan we door! 💪');
 }
 function mpOnOpgave(m) {
   if (!session || !session.online || session.over || !MP || +m.gameNo !== MP.gameNo) return;
@@ -6182,6 +6218,7 @@ function enterCloud() {
   session.cloud = { realS: session.S, realLast: BD.last, over: false, counted: false };
   session.S = parseFEN(toFEN(session.S));
   clearSel();
+  BD.spy.clear();
   BD.last = null;
   BD.mode = 'cloud';
   const frame = document.querySelector('.board-frame');
@@ -6191,7 +6228,7 @@ function enterCloud() {
   renderBoard();
   cloudActions();
   snd.select();
-  say('Welkom in mijn denkwolk! ☁️ Probeer je plan: schuif je eigen stukken én die van mij. Kijk wat er gebeurt!');
+  say('Welkom in mijn denkwolk! ☁️ Probeer je plan: schuif jouw stukken en die van mij.');
 }
 
 function updateCloudBar() {
@@ -6271,7 +6308,6 @@ function kidTurn(quiet) {
   startPatience();
   if (inCheck(session.S)) {
     snd.check();
-    showToast('SCHAAK! 😱');
     say('Je staat schaak! Red je koning! 👑');
   } else if (!quiet) say(coachSay());
 }
@@ -6452,7 +6488,7 @@ function commitKid(m) {
     }
     const st = gameStatus(S);
     if (st.over) { endGame(st); return; }
-    if (inCheck(S)) { snd.check(); showToast('SCHAAK! 👑', true); }
+    if (inCheck(S)) snd.check();
     if (session.online) {
       BD.mode = 'off';
       say('Nu ' + mpNaam() + '… 💭');
@@ -6465,7 +6501,7 @@ function commitKid(m) {
         bewaarPotje();
         addXP(10, 'Truc: ' + PATTERNS[co.key].n + '! ' + PATTERNS[co.key].e);
       }
-      say('Dat is een ' + co.what + ' Goed gezien van jou! 🌟');
+      say('Dat is een ' + co.what + ' Goed gezien!');
       BD.spy = new Set(co.squares);
       renderBoard();
       later(() => {
@@ -6497,7 +6533,21 @@ function askPredict(m) {
   session.pending = m;
   BD.mode = 'predict';
   strookModus('predict');
-  say('Wat is Turbo van plan? Tik zijn stuk aan. 🔮');
+  say('Welk stuk zet Turbo? Tik het aan.');
+  hulpjesAan(false);
+}
+/* zolang de voorspelvraag open staat, doen Denkwolk, Speurbril en Zet terug niets: ze staan dan ook uit */
+function hulpjesAan(aan) {
+  for (const id of ['cloudBtn', 'tip', 'undo']) if (actionBtns[id]) actionBtns[id].disabled = !aan || (id === 'tip' && session.tips <= 0);
+}
+/* Remise aanbieden en Opgeven sluiten een open voorspelvraag; Turbo's zet wacht dan */
+function sluitVoorspelvraag() {
+  if (!session || !session.pending || BD.mode !== 'predict') return null;
+  const m = session.pending;
+  session.pending = null;
+  strookModus(null);
+  hulpjesAan(true);
+  return m;
 }
 
 function resolvePredict(sq) {
@@ -6506,19 +6556,23 @@ function resolvePredict(sq) {
   session.pending = null;
   BD.mode = 'off';
   strookModus(null);
+  hulpjesAan(true);
+  let stil = false;
   if (sq != null) {
-    if (sq === m.from) {
+    const rokadeToren = m.flags === 'K' ? m.from + 3 : m.flags === 'Q' ? m.from - 4 : -1;
+    if (sq === m.from || sq === rokadeToren) {
       addXP(15, 'Goed voorspeld! 🔮');
       bump('c.predictHits', 1);
       checkBadges();
       snd.star();
-      showToast('🔮 Goed voorspeld!', true);
+      say('Goed voorspeld! +15 XP 🔮');
+      stil = true;
     } else say('Goede gok! Maar kijk wat ik écht doe… 🐢');
   }
-  doTurboMove(m);
+  doTurboMove(m, stil);
 }
 
-function doTurboMove(m) {
+function doTurboMove(m, stil) {
   if (!session || session.kind !== 'game' || !m) return;
   const S = session.S;
   const co = patternCallout(S, m);
@@ -6536,7 +6590,7 @@ function doTurboMove(m) {
         if (session && session.kind === 'game') { BD.spy.clear(); renderBoard(); }
       }, 3500);
       kidTurn(true);
-    } else kidTurn();
+    } else kidTurn(stil);
   });
 }
 
@@ -6567,6 +6621,7 @@ function undoMove() {
   unmakeMove(S); unmakeMove(S);
   bewaarPotje();
   clearSel();
+  BD.spy.clear();
   BD.last = null;
   BD.check = inCheck(S) ? S.kings[S.turn] : null;
   renderBoard();
@@ -6580,7 +6635,7 @@ function useTip() {
   const S = session.S;
   const spy = new Set([...attackedPieces(S, 'w'), ...attackedPieces(S, 'b')]);
   if (spy.size === 0) {
-    say('De speurbril laat alle stukken oplichten die aangevallen worden. Maar nu wordt er nog níks aangevallen, alles staat veilig! Je bril blijft op zak. 👓');
+    say('De speurbril laat aangevallen stukken zien. Nu wordt er niks aangevallen, dus hij blijft op zak. 👓');
     return;
   }
   session.tips--;
@@ -6625,8 +6680,8 @@ function openMateriaal() {
   if (!session || session.kind !== 'game') return;
   updateTrays();
   const d = session.verschil, wie = escHtml(tegenNaam()), g = session.geslagen;
-  showModal('<h2>' + (d > 0 ? 'Jij pakte ' + punten(d) + ' meer dan ' + wie + '.' :
-    d < 0 ? wie + ' pakte ' + punten(-d) + ' meer dan jij.' : 'Jullie hebben evenveel punten.') + '</h2>' +
+  showModal('<h2>' + (d > 0 ? 'Jij staat ' + punten(d) + ' voor.' :
+    d < 0 ? wie + ' staat ' + punten(-d) + ' voor.' : 'Jullie staan gelijk in punten.') + '</h2>' +
     '<p>Pion 1, paard 3, loper 3, toren 5, dame 9.</p>' +
     '<div class="tray">Jij pakte:<div class="tray-pcs">' + (g.kid || 'nog niks') + '</div></div>' +
     '<div class="tray">' + wie + ' pakte:<div class="tray-pcs">' + (g.tur || 'nog niks') + '</div></div>' +
@@ -6650,14 +6705,30 @@ function openMeer() {
   const potje = session.kind === 'game' && !session.over;
   const knoppen = (potje ? [['meerRemise', '🤝 Remise aanbieden'], ['meerOpgeven', '🏳️ Opgeven']] : [])
     .concat([['meerPunten', '🏅 Puntenwijzer']])
-    .concat(potje && !session.online ? [['meerHulp', '⚙️ Hulp aan of uit']] : []);
+    .concat(potje && !session.online ? [['meerHulp', '⚙️ Hulp aan of uit']] : [])
+    .concat([['meerGeluid', '🔊 Geluid: ' + (P.sound ? 'aan' : 'uit')]]);
   showModal('<h2>' + (potje ? 'Potje' : 'Meer') + '</h2><div class="m-btns">' + knoppen.map(k => '<button class="btn plain" id="' + k[0] + '">' + k[1] + '</button>').join('') + '</div>', () => {
     const doe = (id, fn) => { if ($(id)) $(id).addEventListener('click', () => { closeModal(); fn(); }); };
     doe('meerRemise', offerDraw);
     doe('meerOpgeven', resignAsk);
     doe('meerPunten', puntenwijzer);
-    doe('meerHulp', openSettings);
+    doe('meerHulp', openHulp);
+    doe('meerGeluid', () => { setPref('sound', !P.sound); openMeer(); });
   }, true);
+}
+/* in een potje: alleen de twee schakelaars, met hun stand in woorden; Alles wissen hoort niet één tik van een lopend potje */
+function openHulp() {
+  const tekst = () => '<button class="btn plain" id="hulpGuard">🛡️ Blunder-alarm: ' + (P.guard ? 'aan' : 'uit') + '</button>' +
+    '<button class="btn plain" id="hulpPredict">🔮 Voorspellen: ' + (P.predict ? 'aan' : 'uit') + '</button>';
+  showModal('<h2>Hulp aan of uit</h2><div class="m-btns" id="hulpRij">' + tekst() + '</div>' +
+    '<div class="m-btns"><button class="btn sun" id="hulpKlaar">Klaar</button></div>', () => {
+      const bind = () => {
+        $('hulpGuard').addEventListener('click', () => { setPref('guard', !P.guard); $('hulpRij').innerHTML = tekst(); bind(); });
+        $('hulpPredict').addEventListener('click', () => { setPref('predict', !P.predict); $('hulpRij').innerHTML = tekst(); bind(); });
+      };
+      bind();
+      $('hulpKlaar').addEventListener('click', closeModal);
+    }, true);
 }
 
 /* einde van een online potje: neutrale taal (geen Turbo), geen XP (dat
@@ -6761,7 +6832,7 @@ function endGame(st, stil) {
   later(() => {
     say(h);
     toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p>' +
-      '<p class="ek-xp">' + (xp ? '+' + xp + ' XP' : 'Dit potje telt niet mee.') + '</p><!--trofeeen-->' +
+      '<p class="ek-xp">' + (xp ? '+' + xp + ' XP' : 'Dit potje telt niet mee: het was korter dan tien zetten.') + '</p><!--trofeeen-->' +
       '<div class="ek-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
       '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', nieuw, () => {
         $('mAgain').addEventListener('click', () => startGame(lvl));
@@ -6835,6 +6906,15 @@ const BADGES = [
 ];
 
 /* aan het einde van een potje staan nieuwe trofeeën in de eindkaart, niet in een melding */
+/* op een speelscherm wacht een trofee, een level of een gehaald weekdoel op de eindkaart */
+function bewaarVoorKaart(b) { if (session) (session.voorKaart = session.voorKaart || []).push(b); }
+function voorKaart() {
+  const l = (session && session.voorKaart) || [];
+  if (session) session.voorKaart = [];
+  const cur = levelIdx(P.xp);
+  if (P.lastLevel != null && cur > P.lastLevel) l.push({ e: LEVELS[cur].g, n: 'Level ' + LEVELS[cur].n });
+  return l;
+}
 function checkBadges(inKaart) {
   checkLevelUp();
   const nieuw = [];
@@ -6843,6 +6923,7 @@ function checkBadges(inKaart) {
       addBadge(b.id);
       nieuw.push(b);
       if (inKaart) continue;
+      if (speelschermOpen()) { bewaarVoorKaart(b); continue; }
       snd.win();
       burstCenter();
       showToast('🏆 Trofee verdiend: ' + b.e + ' ' + b.n + '!', true);
@@ -6851,10 +6932,13 @@ function checkBadges(inKaart) {
   return nieuw;
 }
 /* het einde van een potje is een kaart over het bord, geen venster */
+function trofeeRij(lijst) {
+  return lijst.length ? '<div class="ek-trofee">' +
+    lijst.map(b => '<span class="ek-badge"><span class="ek-be">' + b.e + '</span>' + b.n + '</span>').join('') + '</div>' : '';
+}
 function toonEindkaart(html, nieuw, setup) {
   const k = $('eindkaart');
-  k.innerHTML = html.replace('<!--trofeeen-->', nieuw.length ? '<div class="ek-trofee">' +
-    nieuw.map(b => '<span class="ek-badge"><span class="ek-be">' + b.e + '</span>' + b.n + '</span>').join('') + '</div>' : '');
+  k.innerHTML = html.replace('<!--trofeeen-->', trofeeRij(voorKaart().concat(nieuw)));
   k.classList.remove('hidden');
   if (setup) setup();
 }
@@ -6926,6 +7010,7 @@ function checkGoal() {
     saveP();
     syncSoon();
     celebrate();
+    if (speelschermOpen()) bewaarVoorKaart({ e: '🎯', n: 'Weekdoel gehaald!' });
     showToast('🎯 Weekdoel gehaald!', true);
     floatXP('+' + GOAL_XP + ' ⭐ Weekdoel gehaald! 🎯');
     updateHud();

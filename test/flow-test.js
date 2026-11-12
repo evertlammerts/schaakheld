@@ -59,7 +59,7 @@ BD.marks.add(sqFromAlg('f4'));   /* found the free pawn */
 BD.marks.add(sqFromAlg('g4'));   /* wrong: knight nobody can capture */
 /* c6 (good trade) is missed */
 scanCheck();
-/* [2.4] de eerste reden staat in de strook, de rest in de uitleg onder het bord */
+/* [2.4] de redenen staan onder het bord */
 var explHtml = __els.bubble.innerHTML + __els.taskBox.innerHTML;
 ok('expl: missed c6 explained as trade', explHtml.indexOf('goede ruil') >= 0);
 ok('expl: mentions capturing pawn d5', explHtml.indexOf('pion op d5') >= 0);
@@ -91,12 +91,12 @@ puzzleAttempt(m2Kb6);
 drainTimers();
 ok('mat2: na de dwingende zet antwoordt Turbo en is het jouw matzet', session.phase === 'puzzle2' &&
   session.S.hist.length === 2 && session.mate2Answers.length >= 1 &&
-  __els.bubble.innerHTML.indexOf('SCHAAKMAT') >= 0);
+  __els.hulpZin.innerHTML.indexOf('Nu jij: geef mat') >= 0);
 var m2Wrong = legalMoves(session.S).find(function (m) { return !session.mate2Answers.some(function (a) { return sameMove(a, m); }); });
 puzzleAttempt(m2Wrong);
 drainTimers();
 ok('mat2: geen mat = uitleg en nog een kans', session.phase === 'puzzle2' && session.tries === 1 &&
-  __els.bubble.innerHTML.indexOf('Nog geen mat') >= 0);
+  __els.hulpZin.innerHTML.indexOf('Nog geen mat') >= 0);
 puzzleAttempt(session.mate2Answers[0]);
 drainTimers();
 ok('mat2: matzet na één misser = 1 ster, boekje telt', session.phase === 'review' &&
@@ -115,7 +115,7 @@ puzzleAttempt(legalMoves(m2S2).find(function (m) { return alg(m.to) === 'h7'; })
 drainTimers();
 ok('mat2: tweede misser = voorgespeeld tot mat, 0 sterren', session.phase === 'review' &&
   session.earned === m2Earned && gameStatus(session.S).reason === 'mat' &&
-  __els.bubble.innerHTML.indexOf('plan in twee stappen') >= 0);
+  __els.taskBox.innerHTML.indexOf('daarna kan Turbo de mat niet meer tegenhouden') >= 0);
 
 /* ---------- koning ontsnapt ---------- */
 startDrill('koning');
@@ -135,13 +135,13 @@ puzzleAttempt(kKf1);
 ok('koning: fout = Turbo laat het mat zien', session.phase === 'busy');
 drainTimers();
 ok('koning: bord hersteld, nog een poging', session.phase === 'puzzle' && session.S.hist.length === 0 &&
-  session.tries === 1 && __els.bubble.innerHTML.indexOf('Nog één poging') >= 0);
+  session.tries === 1 && __els.hulpZin.innerHTML.indexOf('Probeer nog een zet') >= 0);
 koningHint();
 ok('koning: hint laat het reddende stuk glimmen', session.task.hintUsed && BD.glow.has(kH3.from));
 puzzleAttempt(kH4);
 drainTimers();
 ok('koning: redding na een misser = 1 ster', session.phase === 'review' && session.earned - kEarned === 1 &&
-  __els.bubble.innerHTML.indexOf('Gered') >= 0);
+  __els.taskBox.innerHTML.indexOf('Gered') >= 0);
 /* twee missers: de redding wordt voorgedaan */
 nextRound();
 drainTimers();
@@ -155,7 +155,7 @@ drainTimers();
 puzzleAttempt(legalMoves(kS2).find(function (m) { return alg(m.to) === 'h1'; }));
 drainTimers();
 ok('koning: tweede misser = redding voorgedaan, 0 sterren', session.phase === 'review' &&
-  session.earned === kEarned && __els.bubble.innerHTML.indexOf('Dit was de redding') >= 0);
+  session.earned === kEarned && __els.taskBox.innerHTML.indexOf('De redding was') >= 0);
 /* een zet die het potje meteen uitmaakt is altijd een ontsnapping, ook als
    de voorraad hem niet als antwoord noemt */
 nextRound();
@@ -181,7 +181,7 @@ kEarned = session.earned;
 puzzleAttempt(pRa2);
 drainTimers();
 ok('stuk: weggezet = 3 sterren met uitleg', session.phase === 'review' && session.earned - kEarned === 3 &&
-  __els.bubble.innerHTML.indexOf('Weggezet') >= 0);
+  __els.taskBox.innerHTML.indexOf('Weggezet') >= 0);
 ok('stuk: dekken wordt herkend', stukHow(parseFEN('6k1/8/8/8/8/2b5/8/R4RK1 w - - 0 1'),
   legalMoves(parseFEN('6k1/8/8/8/8/2b5/8/R4RK1 w - - 0 1')).find(function (m) { return alg(m.from) === 'f1' && alg(m.to) === 'b1'; }),
   { sq: sqFromAlg('a1') }).indexOf('Gedekt') >= 0);
@@ -215,12 +215,17 @@ ok('pad: gestart als wit, zet 1 van 6', session.kind === 'opening' && session.mo
 var opM = function (k) { return legalMoves(session.S).find(function (m) { return moveKey(m) === k; }); };
 onOpeningMove(opM('a2a3'));
 ok('pad: verkeerde zet = tip en nog een kans', session.tries === 1 && session.S.hist.length === 0 &&
-  __els.bubble.innerHTML.indexOf('Niet die') >= 0);
+  __els.hulpZin.innerHTML.indexOf('Niet die') >= 0);
+/* het waarom van de zet staat onder het bord tot Turbo gezet heeft; daarna de hint van de volgende zet */
+var onderBord = [], echteHulpZin = hulpZin;
+hulpZin = function (t) { onderBord.push(t || ''); echteHulpZin(t); };
 onOpeningMove(opM('e2e4'));
 drainTimers();
+hulpZin = echteHulpZin;
 ok('pad: goede zet na een misser = 2 sterren, uitleg, Turbo antwoordt uit het pad', session.kidMoves === 1 &&
   session.earned === 2 && session.S.hist.length === 2 && moveKey(session.S.hist[1].m) === 'e7e5' &&
-  __els.bubble.innerHTML.indexOf('midden') >= 0 && BD.mode === 'opening');
+  onderBord.some(function (t) { return t.indexOf('midden') >= 0; }) && BD.mode === 'opening' &&
+  __els.hulpZin.innerHTML.indexOf(PADEN[0].hint[1]) >= 0);
 openingHint();
 ok('pad: hint toont een pijl', BD.arrows.length === 1 && session.hintUsed === true);
 onOpeningMove(opM('g1f3'));
@@ -228,7 +233,7 @@ drainTimers();
 ok('pad: met hint 2 sterren', session.earned === 4 && session.kidMoves === 2);
 onOpeningMove(opM('a2a3'));
 onOpeningMove(opM('a2a3'));
-ok('pad: twee missers = de zet wordt aangewezen', BD.arrows.length === 1 && __els.bubble.innerHTML.indexOf('Deze bedoel ik') >= 0);
+ok('pad: twee missers = de zet wordt aangewezen', BD.arrows.length === 1 && __els.hulpZin.innerHTML.indexOf('Deze bedoel ik') >= 0);
 onOpeningMove(opM('f1c4'));
 drainTimers();
 ok('pad: aangewezen zet = 1 ster', session.earned === 5 && session.kidMoves === 3);
@@ -254,7 +259,8 @@ goHome();
 startOpening('coach', null);
 ok('coach: meters zichtbaar', !__els.meters.classList.contains('hidden') && __els.meters.innerHTML.indexOf('Centrum') >= 0);
 var cS = session.S;
-ok('coach: boekzet e4 = 3 sterren', coachEval(cS, opM('e2e4')).stars === 3 && coachEval(cS, opM('e2e4')).msg.indexOf('boekzet') >= 0);
+/* één lof, in de volgorde van tekst.md: het midden gaat voor de boekzet */
+ok('coach: boekzet e4 = 3 sterren', coachEval(cS, opM('e2e4')).stars === 3 && coachEval(cS, opM('e2e4')).msg.indexOf('midden') >= 0);
 ok('coach: a3 = 1 ster met tip', coachEval(cS, opM('a2a3')).stars === 1 && coachEval(cS, opM('a2a3')).msg.indexOf('sterker') >= 0);
 ok('coach: bord onaangeraakt door de beoordeling', cS.hist.length === 0);
 onOpeningMove(opM('e2e4'));
@@ -265,7 +271,7 @@ ok('coach: dame te vroeg = 0 sterren met uitleg', coachEval(session.S, opM('d1h5
 /* valstrik: na 1.e4 e5 2.Pf3 Pc6 is Pxe5 een stuk weggeven */
 var bS = parseFEN('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3');
 var bEv = coachEval(bS, legalMoves(bS).find(function (m) { return moveKey(m) === 'f3e5'; }));
-ok('coach: Pxe5 is een valstrik, 0 sterren', bEv.stars === 0 && bEv.msg.indexOf('valstrik') >= 0);
+ok('coach: Pxe5 kost een stuk, 0 sterren', bEv.stars === 0 && bEv.msg.indexOf('Er was een sterkere zet') >= 0);
 ok('coach: rokade = 3 sterren', (function () {
   var rS = parseFEN('r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 4');
   var ev = coachEval(rS, legalMoves(rS).find(function (m) { return m.flags === 'K'; }));
@@ -345,7 +351,7 @@ pickOption(bi);
 best3Confirm();
 drainTimers();
 ok('best3: correct on 2nd try = 1 star', session.earned === 1 && session.phase === 'review');
-ok('best3: explanation shown on correct', __els.taskBox.innerHTML.indexOf('Zo zit het') >= 0 &&
+ok('best3: explanation shown on correct', /Goud|Ja, die is het/.test(__els.taskBox.innerHTML) &&
   __els.taskBox.innerHTML.indexOf('🥇') >= 0);
 /* wrong-wrong -> auto reveal (ronde 2 is de valstrik-vraag, die eerst beantwoorden) */
 nextRound();
@@ -695,7 +701,7 @@ session.task.targets.forEach(function (sq) { BD.marks.add(sq); });
 scanCheck();
 ok('vorm: opdracht gelogd na awardRound', Object.keys(DOC.log.scan || {}).length === 1 &&
   Object.values(DOC.log.scan)[0][3] === 3 && !!vormInfo('scan'));
-ok('vorm: zichtbaar in de sterrenbalk', __els.drillStars.innerHTML.indexOf('Vorm') >= 0);
+ok('[3.7] vorm: niet in de sterrenbalk', __els.drillStars.innerHTML.indexOf('Vorm') < 0);
 goHome();
 renderVorm();
 ok('vorm: kaart op Ik toont Speurogen met score', __els.vormList.innerHTML.indexOf('Speurogen') >= 0 &&

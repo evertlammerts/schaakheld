@@ -294,7 +294,8 @@ async function alles() {
     oscar.el('mpChips').textContent === codeE.split('-').join(' - '));
   evert.tik('mpKoppel');
   oscar.tik('mpKoppel');
-  await tik(10000);
+  /* elk pollt om de 2,5 s; de nepklok springt naar de eerstvolgende timer, dus wacht op de koppeling zelf */
+  for (let i = 0; i < 8 && !(evert.get('!!MP') && oscar.get('!!MP')); i++) await tik(5000);
   ok('woorden: dezelfde kamer, één host, en beiden verbonden',
     evert.get('!!MP') && oscar.get('!!MP') && evert.get('MP.room') === oscar.get('MP.room') &&
     evert.get('MP.host') !== oscar.get('MP.host'));
@@ -481,6 +482,23 @@ async function alles() {
   evert.tik('meldOk');
   await tik();
   ok('wachtkamer: en Evert is gewoon thuis', !evert.open() && evert.get('MP') === null && evert.get('session') === null);
+
+  /* ---------- 18. het materiaal en de letters, elk vanaf de eigen kant ---------- */
+  {
+    const lotte = maakApparaat('Lotte'), sem = maakApparaat('Sem');
+    await samenSpelen(lotte, sem);
+    for (const key of ['e2e4', 'd7d5', 'e4d5']) await speel(lotte, sem, key);
+    const wit = lotte.get('MP.myColor') === 'w' ? lotte : sem, zwart = wit === lotte ? sem : lotte;
+    const witNaam = wit === lotte ? 'Lotte' : 'Sem';
+    const tekst = function (app, id) { return app.doc.__tekst(app.el(id)); };
+    ok('[2.3] samen: wit leest dat hij een pion voor staat', /Jij \+1/.test(tekst(wit, 'materiaal')));
+    ok('[2.3] samen: zwart leest dat ' + witNaam + ' een pion voor staat', new RegExp(witNaam + ' \\+1').test(tekst(zwart, 'materiaal')));
+    ok('[2.3] samen: de letters onder het bord vanaf de eigen kant', /^\s*a/.test(tekst(wit, 'coordsF')) && /^\s*h/.test(tekst(zwart, 'coordsF')));
+    ok('[2.3] samen: de cijfers naast het bord vanaf de eigen kant', /^\s*8/.test(tekst(wit, 'coordsR')) && /^\s*1/.test(tekst(zwart, 'coordsR')));
+    lotte.ev('mpVerlaat()');
+    sem.ev('mpVerlaat()');
+    await tik();
+  }
 
   await orakelTwee();
   print('');

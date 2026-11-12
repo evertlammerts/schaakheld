@@ -256,18 +256,19 @@ function maakDocument(vast) {
   }
   /* de keten van ouders, binnenste eerst, of null als het element nergens meer hangt */
   function pad(el) {
-    const keten = [];
+    const keten = [], tags = [];
     let verborgen = verborgenZelf(el), nu = el;
     for (let i = 0; i < 60 && nu !== body; i++) {
       const o = ouderVan(nu);
       if (!o || o.los) return null;
       if (o.omhullend.some(tagVerborgen)) verborgen = true;
+      for (const t of o.omhullend) tags.push(t.tag);
       for (let j = o.omhullend.length - 1; j >= 0; j--) if (o.omhullend[j].k) keten.push(o.omhullend[j].k);
       nu = o.ouder;
       keten.push(nu);
       if (nu !== body && verborgenZelf(nu)) verborgen = true;
     }
-    return nu === body ? { keten, verborgen } : null;
+    return nu === body ? { keten, verborgen, tags } : null;
   }
   /* de tekst die een kind ziet: zonder tags, zonder verborgen delen, en met de
      huidige inhoud van elk element met een id (de app kan die later hebben
