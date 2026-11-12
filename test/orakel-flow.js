@@ -1662,6 +1662,28 @@ async function orakelFlow() {
     check('de groet', tekstVan(a, 'groet') === 'Hoi Daan! 👋');
   });
 
+  /* twee apparaten: lastSeen is van dit apparaat, de dagtellers komen ook van het andere; de laatste dag telt */
+  for (const g of [['lastSeen vijf dagen oud, een dagteller van gisteren', dagenTerug(5), { 'wk.2026-W46.d2': 1 }],
+    ['lastSeen van gisteren, een dagteller van vijf dagen geleden', dagenTerug(1), { 'wk.2026-W45.d5': 1 }]]) {
+    await regel('[3.9] ' + g[0] + ': geen welkom terug', async function (check) {
+      const a = await kindUitDoc(docVan('Daan', Object.assign({ xp: 2710, stars: 70 }, g[2]),
+        { loc: { streak: 0, lastLevel: null, weekSeen: '2026-W46', lastSeen: g[1] } }));
+      check('testopzet: lastSeen uit het document', a.get('P.lastSeen') === g[1]);
+      const r = await stap(a);
+      check('geen R3 (' + r.rule + ')', r.rule !== 'R3');
+      check('de groet', tekstVan(a, 'groet') === 'Hoi Daan! 👋');
+    });
+  }
+
+  /* twee getelde dagen in een week: de laatste telt, niet de eerste (maandag was drie dagen geleden) */
+  await regel('[3.9] compat: zonder lastSeen, maandag en gisteren geteld in dezelfde week: geen welkom terug', async function (check) {
+    const a = await kindUitDoc(docVan('Daan', { xp: 2710, stars: 70, 'wk.2026-W46.d0': 2, 'wk.2026-W46.d2': 1 }));
+    check('testopzet: geen lastSeen', a.get('P.lastSeen') === null);
+    const r = await stap(a);
+    check('geen R3 (' + r.rule + ')', r.rule !== 'R3');
+    check('de groet', tekstVan(a, 'groet') === 'Hoi Daan! 👋');
+  });
+
   await regel('[3.9] de groet: "Hoi Mees! 👋", zonder naam "Hoi! 👋", en welkom terug zonder naam zonder komma', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();

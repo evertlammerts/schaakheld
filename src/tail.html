@@ -2529,7 +2529,8 @@ function nextStep(P, ctx) {
   if (bezig.length) return Object.assign({}, bezig[0], { ook: bezig.slice(1).map(b => b.ook), bezig });
   const st = stadium(P), ls = turboVoorstel(P, st), li = levelIdx(P.xp, P), lvl = LEVELS[li];
   const uit = (rule, title, text, button, action) => ({ rule, title, text, button, action, ook: [], bezig });
-  const gezienOp = P.lastSeen || laatsteDag(P);
+  /* lastSeen is per apparaat, de dagtellers komen ook van het andere apparaat: de laatste dag van de twee telt */
+  const gezienOp = [P.lastSeen, laatsteDag(P)].filter(Boolean).sort().pop() || null;
   if (gezienOp && dagenSinds(gezienOp, ctx.now) >= 3) {
     return uit('R3', 'Speel een potje', 'Je bent nog steeds ' + lvl.n + ' ' + lvl.g + '. Zin in een potje tegen ' +
       turboNaam(ls) + '?', 'Speel een potje', { go: 'game', level: ls });

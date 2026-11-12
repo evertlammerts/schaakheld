@@ -281,6 +281,32 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
       }` });
 }
 
+/* visual.md G1: een lange naam in de groet breekt af in plaats van "…", en de rij blijft 40 tot 41 hoog */
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[3.11] ' + W + 'x' + H + ': de groet met een naam van veertien W\'s is heel, de rij is hoogstens 41 hoog en de spelknoppen staan boven de tabbalk';
+  const doc = (loc) => JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'WWWWWWWWWWWWWW', t: 1 } },
+    max: { best: 0, goal: {} }, friends: {}, loc });
+  const docs = [['Hoi', doc({ weekSeen: '2026-W46' })], ['Welkom terug', doc({ weekSeen: '2026-W46', lastSeen: '2026-10-01' })]];
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      for (const [soort, d] of ${JSON.stringify(docs)}) {
+        await vers(${W}, ${H}, { schaakheld1: d });
+        const g = await page.evaluate(() => {
+          const e = document.getElementById('groet'), rij = e.closest('.groet') || e.parentElement, s = getComputedStyle(e);
+          return { tekst: e.textContent, over: e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1,
+            puntjes: s.textOverflow === 'ellipsis' && s.overflow === 'hidden' && s.whiteSpace === 'nowrap', h: rij.getBoundingClientRect().height };
+        });
+        check(n, soort + ': de groet met de hele naam (' + g.tekst + ')', g.tekst.indexOf(soort) === 0 && g.tekst.indexOf('WWWWWWWWWWWWWW') >= 0);
+        check(n, soort + ': niet afgeknipt', !g.over && !g.puntjes);
+        check(n, soort + ': de rij is hoogstens 41 hoog (' + g.h + ')', g.h <= 41.5);
+        const tab = await rect('.tabbar');
+        for (const s of ['#spelTurbo', '#spelVriend']) {
+          const r = await rect(s);
+          check(n, soort + ': ' + s + ' boven de tabbalk', !!r && !!tab && r.bottom <= tab.top + 0.5);
+        }
+      }` });
+}
+
 /* visual.md 11.6: een tegel breekt een woord alleen bij een zacht afbreekstreepje, en niets loopt over */
 {
   const n = '[3.11] 360x640: de trofeetegels, met alle namen en met alle opdrachten: niets loopt over en "meteen" blijft heel';

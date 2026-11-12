@@ -91,8 +91,8 @@
 
   /* ---------- home ---------- */
   .groet { display: flex; align-items: center; gap: 8px; min-height: 40px; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); }
-  /* één regel, ook met een lange naam: anders schuiven de spelknoppen onder de tabbalk */
-  #groet { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #groet { min-width: 0; line-height: 1.2; overflow-wrap: break-word; }
+  @media (max-width: 399px) { #groet { font-size: var(--fs-md); } }
   .groet-turtle { width: 28px; height: 28px; display: grid; place-items: center; font-size: 18px; background: var(--leaf-soft); border-radius: 50%; }
   @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
   .bubble {
