@@ -63,15 +63,15 @@ const bijzonder = m => m.flags === 'K' || m.flags === 'Q' || m.flags === 'e';
 /* Het veld waarop wit slaat na de truc en zwarts beste antwoord: met wits
    tweede zet, of anders met zijn derde (een penning betaalt vaak een zet
    later uit); -1 als wit dan niet slaat. En het veld waarop zwart onderweg
-   het stuk slaat dat de truc deed, of -1. */
+   het stuk slaat dat de truc deed (of -1), en vanwaar. */
 function winstVeld(S, m) {
   const gezet = [m];
   E.makeMove(S, m);
-  let veld = -1, stuk = m.to, geslagenOp = -1;
+  let veld = -1, stuk = m.to, geslagenOp = -1, geslagenVan = -1;
   for (let ronde = 0; ronde < 2 && veld < 0 && !E.gameStatus(S).over; ronde++) {
     const zwart = E.think(S, 60000, 8, { nodes: LIJN_KNOPEN }).m;
     if (!zwart) break;
-    if (zwart.to === stuk && geslagenOp < 0) geslagenOp = stuk;
+    if (zwart.to === stuk && geslagenOp < 0) { geslagenOp = stuk; geslagenVan = zwart.from; }
     E.makeMove(S, zwart); gezet.push(zwart);
     if (E.gameStatus(S).over) break;
     const wit = E.think(S, 60000, 8, { nodes: LIJN_KNOPEN }).m;
@@ -80,7 +80,7 @@ function winstVeld(S, m) {
     else { if (wit.from === stuk) stuk = wit.to; E.makeMove(S, wit); gezet.push(wit); }
   }
   for (let i = 0; i < gezet.length; i++) E.unmakeMove(S);
-  return { veld, geslagenOp };
+  return { veld, geslagenOp, geslagenVan };
 }
 
 /* Een zet die een penning, een spies of een aftrekaanval kan zijn; zonder
@@ -102,12 +102,13 @@ function vorm(S, m) {
 function typeVan(S, m) { return typeUitLijn(S, m, winstVeld(S, m)); }
 function typeUitLijn(S, m, lijn) {
   const info = vorm(S, m);
-  const { veld, geslagenOp } = lijn;
+  const { veld, geslagenOp, geslagenVan } = lijn;
+  const teruggewonnen = geslagenOp >= 0 && veld === geslagenOp;
   if (veld < 0) return null;
   const met = type => ({ type, veld });
   if (geslagenOp < 0 || veld === geslagenOp) {
     if (info.fork.length >= 2 && info.fork.indexOf(veld) >= 0) return met('vork');
-    if (info.pins.some(p => p.front === veld || p.back === veld)) return met('penning');
+    if (info.pins.some(p => p.front === veld || p.back === veld || (teruggewonnen && p.front === geslagenVan))) return met('penning');
     if (info.skewers.some(p => p.back === veld)) return met('spies');
   }
   if (info.discovered.some(x => x.target === veld)) return met('aftrek');
@@ -303,8 +304,9 @@ function merge(bestanden) {
   process.stderr.write('samengevoegd: ' + JSON.stringify(telling) + (weg.length ? '; te weinig, weggelaten: ' + weg.join(', ') : '') + '\n');
 }
 
-const [opdracht, ...rest] = process.argv.slice(2);
-if (opdracht === 'zoek') zoek(+rest[0], +rest[1], rest[2], (rest[3] || 'vork,penning,spies,aftrek').split(','));
+const [opdracht, ...rest] = require.main === module ? process.argv.slice(2) : ['module'];
+if (opdracht === 'module') module.exports = { typeVan, typeUitLijn, winstVeld };
+else if (opdracht === 'zoek') zoek(+rest[0], +rest[1], rest[2], (rest[3] || 'vork,penning,spies,aftrek').split(','));
 else if (opdracht === 'merge') merge(rest);
 else if (opdracht === 'herzie') herzie(rest[0], rest.slice(1));
 else if (opdracht === 'hertype') hertype(rest[0], rest.slice(1));

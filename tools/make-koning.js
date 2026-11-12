@@ -8,7 +8,7 @@
    Een puzzel heeft minstens een zet die fout is (de schaakcoach): goed is een
    antwoord of een zet die het potje meteen beëindigt, zoals de app oordeelt.
    Zonder foute zet krijgt een kind drie sterren voor de enige zet die er is.
-   Ook weg (de schaakcoach, na een diepere controle): een antwoord dat remise
+   Ook weg (de schaakcoach, na een diepere controle): een zet die remise
    maakt terwijl wit een stuk of meer voor staat, want dan gooit "Gered!" een
    gewonnen stelling weg; en een foute zet die minder dan 1,5 punt slechter
    scoort dan het slechtste antwoord, want dan hoort een kind dat een even
@@ -42,7 +42,7 @@ while (pool.length < want) {
   const fen = E.toFEN(k.S);
   if (seen.has(fen)) continue;
   const keys = k.answers.map(a => E.moveKey(a.m));
-  if (!heeftFouteZet(fen, keys) || remiseTerwijlVoor(fen, keys) || fouteZetBijna(fen, keys)) continue;
+  if (!heeftFouteZet(fen, keys) || remiseTerwijlVoor(fen) || fouteZetBijna(fen, keys)) continue;
   let leak = false;
   for (const a of k.answers) {
     E.makeMove(k.S, a.m);
@@ -76,11 +76,12 @@ function heeftFouteZet(fen, answers) {
     return !eindigt;
   });
 }
-function remiseTerwijlVoor(fen, answers) {
+/* elke zet die remise maakt telt, ook een die geen antwoord is: de app rekent
+   een zet die het potje beëindigt goed */
+function remiseTerwijlVoor(fen) {
   const S = E.parseFEN(fen);
   if (E.material(S) < 300) return false;
   return E.legalMoves(S).some(m => {
-    if (answers.indexOf(E.moveKey(m)) < 0) return false;
     E.makeMove(S, m);
     const st = E.gameStatus(S);
     E.unmakeMove(S);
@@ -116,7 +117,7 @@ function mergeOnly() {
       if (seen.has(p.fen)) continue;
       seen.add(p.fen);
       if (!heeftFouteZet(p.fen, p.answers)) zonder++;
-      else if (remiseTerwijlVoor(p.fen, p.answers)) remise++;
+      else if (remiseTerwijlVoor(p.fen)) remise++;
       else all.push(p);
     }
   }

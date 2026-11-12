@@ -258,14 +258,15 @@
     check('geen puzzel zonder foute zet (' + zonder.length + ' van ' + KONING_POOL.length + (zonder.length ? ', zoals ' + zonder[0].fen : '') + ')', zonder.length === 0);
   });
 
-  /* de coach (schaak.md, "The fix list stock", K2): remise als redding gooit een gewonnen stelling weg */
-  regel('[5.5] Koning ontsnapt: geen antwoord is remise terwijl wit een stuk of meer voor staat', function (check) {
+  /* de coach (schaak.md, "The fix list stock", K2): remise als redding gooit een gewonnen stelling weg; ook een zet die
+     geen antwoord is, want de app rekent een zet die het potje beëindigt goed */
+  regel('[5.5] Koning ontsnapt: geen zet is remise terwijl wit een stuk of meer voor staat', function (check) {
     if (!check('er is een voorraad KONING_POOL', typeof KONING_POOL !== 'undefined' && KONING_POOL.length > 0)) return;
     const fout = KONING_POOL.filter(function (p) {
       const S = E.parseFEN(p.fen);
       if (E.material(S) < 300) return false;
-      return p.answers.some(function (k) {
-        E.makeMove(S, zet(S, k));
+      return E.legalMoves(S).some(function (m) {
+        E.makeMove(S, m);
         const st = E.gameStatus(S);
         E.unmakeMove(S);
         return st.over && st.reason !== 'mat';
@@ -437,6 +438,16 @@
      hoe druk de machine is. Onder de 6x vertraging zoekt Chromium ongeveer
      40.000 knopen per seconde (snelheid.md: 50.000 knopen in 1,2 s), dus
      120.000 knopen is zo'n drie seconden. */
+  /* fix list item 27: de negen zaden die bij 200 per soort meer dan 160.000 posities zochten (snelheid.md); onder de 6x vertraging is 160.000 zo'n vier seconden */
+  regel('[5.9] Veilig of valstrik zoekt per opdracht hoogstens 160.000 posities, ook bij de zwaarste zaden', function (check) {
+    for (const [trap, zaad] of [[false, 182137], [false, 665196], [true, 1227446], [true, 182138], [false, 1393744], [true, 997795],
+      [false, 871090], [false, 688953], [true, 237571]]) {
+      const n0 = E.nodesSearched(), t = E.genSafeTask(trap, vast(zaad)), n = E.nodesSearched() - n0;
+      check((trap ? 'valstrik' : 'veilig') + ' zaad ' + zaad + ': ' + n + ' posities', n <= 160000);
+      check((trap ? 'valstrik' : 'veilig') + ' zaad ' + zaad + ': niets, of een opdracht van de gevraagde soort', t === null || t.trap === trap);
+    }
+  });
+
   const LIVE_MAX = 120000;
   regel('[5.9] de generatoren die live blijven en het lezen van een voorraadregel zoeken niet te veel', function (check) {
     const meeste = {};

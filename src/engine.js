@@ -1003,9 +1003,15 @@ function between(a, b, c) {
    by force, confirmed by checkSafeTask. After three candidates that the check
    rejects it gives up, so the child never waits long. A trap's punishment is
    a capture, so the explanation can say what is taken. */
+/* About four seconds under the 6x slowdown (plan rule 5.9); when it is spent
+   the generator gives nothing and the app gives another kind of task. */
+const SAFE_NODES = 160000;
 function genSafeTask(wantTrap, rng) {
   rng = rng || Math.random;
   let rejected = 0;
+  const n0 = NODES;
+  /* a check is three searches of CHECK_NODES plus its captures: start one only while it still fits */
+  const ruimte = () => NODES - n0 <= SAFE_NODES - 3 * CHECK_NODES - 5000;
   const confirm = t => {
     const c = checkSafeTask(t);
     if (c && (!t.trap || isCaptureAfter(t.S, t.move, c.punish))) return c;
@@ -1013,6 +1019,7 @@ function genSafeTask(wantTrap, rng) {
     return null;
   };
   for (let tries = 0; tries < 90 && rejected < 3; tries++) {
+    if (!ruimte()) return null;
     const S = randomPosition({ noise: 150, minPlies: 8, maxPlies: 22 }, rng);
     if (inCheck(S)) continue;
     const base = forcedMaterial(S);
@@ -1030,6 +1037,7 @@ function genSafeTask(wantTrap, rng) {
         unmakeMove(S);
         const punish = reply.length ? reply[0].m : null;
         if (punish && isCaptureAfter(S, m, punish)) {
+          if (!ruimte()) return null;
           const c = confirm({ S, move: m, trap: true, punish, loss });
           if (c) return c;
           break;
@@ -1038,6 +1046,7 @@ function genSafeTask(wantTrap, rng) {
       }
       unmakeMove(S);
       if (!wantTrap && loss <= 60 && loss >= -60) {
+        if (!ruimte()) return null;
         const c = confirm({ S, move: m, trap: false, loss });
         if (c) return c;
         break;
@@ -1629,6 +1638,6 @@ if (typeof module !== 'undefined') {
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
     winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
-    repetitions, positionKey, SUPER_NODES, CHECK_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
+    repetitions, positionKey, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
     POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };
 }
