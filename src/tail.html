@@ -625,9 +625,9 @@ async function linkShareFlow() {
 /* Eén woordinvoer voor koppelen (vier woorden) en voor vrienden (twee): elk scheidingsteken en
    plakken werkt, er is geen lengtegrens, elk woord wordt een genummerd blokje, en het laatste
    woord telt zonder tik als het precies een woord van de lijst is. ids: {chips, inp, sugg, knop} */
-function woordVeld(id) {
+function woordVeld(id, wat) {
   return '<input id="' + id + '" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" ' +
-    'enterkeyhint="done" placeholder="typ de woorden…">';
+    'enterkeyhint="done" placeholder="' + wat + '">';
 }
 function woordInvoer(n, ids, onbekend) {
   const gekozen = [];
@@ -642,8 +642,10 @@ function woordInvoer(n, ids, onbekend) {
     return past.length === 1 ? past[0] : null;
   };
   const teken = () => {
-    $(ids.chips).innerHTML = gekozen.map((w, i) => '<button class="w-chip" data-i="' + i + '"><b>' + (i + 1) + '</b> ' + w + '</button>').join('') +
-      (fout ? '<div class="w-fout">' + fout + '</div>' : '');
+    $(ids.chips).classList.toggle('vier', n === 4);
+    $(ids.chips).innerHTML = gekozen.map((w, i) => '<button class="w-chip" data-i="' + i + '"><b>' + (i + 1) + '</b> ' + w + '</button>').join('');
+    /* alles erin: het toetsenbord mag weg, zodat de knop in beeld komt */
+    if (gekozen.length === n && document.activeElement === $(ids.inp)) $(ids.inp).blur();
     /* een exact woord dat nog in het veld staat, neemt de knop zelf mee */
     const inVeld = gekozen.length === n - 1 && WOORDEN.includes(norm($(ids.inp).value.trim()));
     $(ids.knop).disabled = wacht || !(gekozen.length === n || inVeld);
@@ -651,7 +653,9 @@ function woordInvoer(n, ids, onbekend) {
   const suggest = rest => {
     const x = norm(rest);
     const sugg = x && gekozen.length < n ? WOORDEN.filter(w => w.startsWith(x)).slice(0, 6) : [];
-    $(ids.sugg).innerHTML = sugg.map(w => '<button class="w-sugg" data-w="' + w + '">' + w + '</button>').join('');
+    /* een woord dat niet klopt, staat op de plek van de suggesties */
+    $(ids.sugg).innerHTML = fout ? '<div class="w-fout">' + fout + '</div>' :
+      sugg.map(w => '<button class="w-sugg" data-w="' + w + '">' + w + '</button>').join('');
   };
   /* klaar: Enter of de knop, dan telt ook het woord dat nog in het veld staat */
   const verwerk = klaar => {
@@ -682,6 +686,8 @@ function woordInvoer(n, ids, onbekend) {
     teken();
   };
   $(ids.inp).addEventListener('input', () => verwerk(false));
+  $(ids.inp).addEventListener('focus', () => $('modalBox').classList.add('typt'));
+  $(ids.inp).addEventListener('blur', () => $('modalBox').classList.remove('typt'));
   $(ids.inp).addEventListener('keydown', e => {
     if (e.key === 'Enter') verwerk(true);
     else if (e.key === 'Backspace' && !$(ids.inp).value && gekozen.length) { gekozen.pop(); teken(); }
@@ -787,9 +793,8 @@ function checkLinkFragment() {
    geen entropie en voorkomt typefouten */
 function linkEntryFlow() {
   showModal('<div class="m-emoji">🔑</div><h2>Profiel ophalen</h2>' +
-    '<p>Vraag op het andere apparaat een koppelcode: tik daar op ⚙️ bovenaan, dan op Speel op een ander apparaat.</p>' +
-    '<p>Typ hier de vier woorden:</p>' + woordVeld('wordInp') +
-    '<div id="wordChips" class="w-chips"></div><div id="wordSugg" class="w-suggs"></div>' +
+    '<p class="bij-typen-weg">Vraag op het andere apparaat een koppelcode: tik daar op ⚙️ bovenaan, dan op Speel op een ander apparaat.</p>' +
+    '<div id="wordChips" class="w-chips"></div>' + woordVeld('wordInp', 'typ de vier woorden') + '<div id="wordSugg" class="w-suggs"></div>' +
     '<div class="m-btns"><button class="btn sun" id="linkGo" disabled>Koppel! 🔑</button>' +
     '<button class="btn plain" id="linkScan">📷 Of scan de QR</button>' +
     '<button class="btn plain" id="linkTerug">Terug</button></div>', () => {
@@ -1007,7 +1012,7 @@ function toonKamerWeg() {
     });
 }
 
-/* een vriendenpotje dat niet te lezen is, haalt een nieuw potje weg: dat hoort het kind eerst (regel 1.5) */
+/* een vriendenpotje dat niet te lezen is, haalt een nieuw potje weg:, dat hoort het kind eerst, zoals bij Turbo */
 function samenKapotZin() {
   const b = leesSamen();
   return b && b.kapot ? '<p>Je oude vriendenpotje kan ik niet meer openen. Een nieuw potje haalt het weg.</p>' : '';
@@ -1064,7 +1069,7 @@ function mpConnect() {
     /* stilletjes opnieuw verbinden; na het welkom sturen beide kanten de stand.
        Buiten een potje niet eindeloos: dan geven we na een budget op en zeggen
        het eerlijk. Een potje eindigt nooit door geen netwerk: de app blijft
-       het rustig proberen (D35). */
+       het rustig proberen. */
     MP.pogingen = (MP.pogingen || 0) + 1;
     if (MP.S) thuisVerversen();
     if (samenInBeeld() && samenLoopt() && MP.pogingen === 2 && !MP.zetZonderNet) say(GEEN_NET_SPEL);
@@ -1330,7 +1335,7 @@ const GEEN_NET_SPEL = 'Er is nu geen verbinding. Ik blijf het proberen. Jullie p
 /* De stand van de ander, na een verbinding of zodra die terug is. We spelen de zettenlijst vanaf de
    startstand na en controleren elke zet, zodat de ander ons nooit in een onmogelijke stand zet. De
    langere lijst die de andere verlengt wint; een uitslag of een beantwoord remise-aanbod geldt aan
-   beide kanten. Wie iets heeft wat de ander mist, stuurt zijn stand terug (D35). */
+   beide kanten. Wie iets heeft wat de ander mist, stuurt zijn stand terug. */
 function mpOnSync(m) {
   if (!MP) return;
   if (!Array.isArray(m.moves) || m.moves.length > 600 || (m.jij !== 'w' && m.jij !== 'b')) return;
@@ -1727,10 +1732,12 @@ function mpOnVriendVraag(m) {
     vak.innerHTML = '<p><b>' + naam + ' wil vrienden worden!</b> Dan kunnen jullie elkaar voortaan met één tik uitnodigen.</p>' +
       '<div class="ek-btns"><button class="btn sun" id="ekVrJa">Ja, vrienden! 🤝</button>' +
       '<button class="btn plain" id="ekVrNee">Nu niet</button></div>';
-    if ($('mpVriend')) $('mpVriend').classList.add('hidden');
-    $('ekVrJa').addEventListener('click', () => { vak.innerHTML = ''; vriendJa(); });
+    /* zolang de vraag openstaat: één hoofdknop, en geen tweede knop voor hetzelfde */
+    for (const id of ['mpVriend', 'mpRev']) if ($(id)) $(id).classList.add('hidden');
+    $('ekVrJa').addEventListener('click', () => { vak.innerHTML = ''; if ($('mpRev')) $('mpRev').classList.remove('hidden'); vriendJa(); });
     $('ekVrNee').addEventListener('click', () => {
       vak.innerHTML = '';
+      for (const id of ['mpVriend', 'mpRev']) if ($(id)) $(id).classList.remove('hidden');
       if (MP) MP.hunVraag = null;
       mpSend({ t: 'vriend', nee: true });
     });
@@ -1763,6 +1770,7 @@ async function mpOnVriend(m) {
 /* na een nee of een fout kan het kind het opnieuw vragen; op het speelscherm staat geen melding, dus de zin staat in de strook */
 function vriendKnopTerug() {
   const b = $('mpVriend');
+  if ($('ekWacht')) $('ekWacht').textContent = '';
   if (!b) return;
   b.classList.remove('hidden');
   b.disabled = false;
@@ -2078,8 +2086,8 @@ function mpWordFlow() {
   let bezig = false, gestopt = false;
   showModal('<div class="m-emoji">🎈</div><h2>Samen spelen op afstand</h2>' + samenKapotZin() +
     '<p>Jouw woorden: <b>' + mijn.map((w, i) => (i + 1) + ' ' + w).join(' &nbsp; ') + '</b>. Zeg ze tegen je maatje.</p>' +
-    '<p>Typ hier de woorden van je maatje:</p>' + woordVeld('mpInp') +
-    '<div id="mpChips" class="w-chips"></div><div id="mpSugg" class="w-suggs"></div>' +
+    '<div id="mpChips" class="w-chips"></div>' + woordVeld('mpInp', 'typ de woorden van je maatje') + '<div id="mpSugg" class="w-suggs"></div>' +
+    '<p id="mpWachtRegel" class="hidden">Wacht tot je maatje ook op Verbind! tikt…</p>' +
     '<div class="m-btns"><button class="btn sun" id="mpKoppel" disabled>🤝 Verbind!</button>' +
     '<button class="btn plain" id="mpStopW">Terug</button></div>', () => {
       const invoer = woordInvoer(2, { chips: 'mpChips', inp: 'mpInp', sugg: 'mpSugg', knop: 'mpKoppel' }, 'Vraag het je maatje nog eens.');
@@ -2089,7 +2097,7 @@ function mpWordFlow() {
         if (!hun || bezig) return;
         bezig = true;
         invoer.wacht(true);
-        $('mpKoppel').textContent = 'Wacht tot je maatje ook op Verbind! tikt…';
+        $('mpWachtRegel').classList.remove('hidden');
         const mine = await lookupCode('SHPLAY1-zoek:', mijnCode);
         const theirs = await lookupCode('SHPLAY1-zoek:', hun.join('-'));
         /* pollen tot de ander ons ook aangewezen heeft (of 5 min om zijn) */
@@ -2115,7 +2123,7 @@ function mpWordFlow() {
         }
         if (!gestopt) showToast('Nog niemand gevonden… kloppen de woorden? 🎈');
         bezig = false;
-        $('mpKoppel').textContent = '🤝 Verbind!';
+        $('mpWachtRegel').classList.add('hidden');
         invoer.wacht(false);
       });
     });
@@ -3380,7 +3388,7 @@ function buildBest3() {
     b.addEventListener('click', () => pickOption(+b.dataset.i));
   });
   setActions([{ label: 'Deze kies ik! 🎯', cls: 'sun', fn: best3Confirm, id: 'confirm', disabled: true }]);
-  /* na veilig of valstrik staan de keuzes waar Volgende stond: een tweede tik op Volgende kiest zo niets (D34) */
+  /* na veilig of valstrik staan de keuzes waar Volgende stond: een tweede tik op Volgende kiest zo niets */
   session.keuzeOpen = false;
   later(() => { if (session.task === task) session.keuzeOpen = true; }, 350);
   return true;
@@ -4471,7 +4479,7 @@ function commitKid(m) {
     if (inCheck(S)) snd.check();
     if (session.online) {
       BD.mode = 'off';
-      /* zonder verbinding geen belofte dat de ander de zet al ziet (regel 4.3) */
+      /* zonder verbinding geen belofte dat de ander de zet al ziet */
       say(!session.samenBewaard ? SAMEN_NIET_BEWAARD :
         MP && MP.zetZonderNet ? 'Je zet is bewaard. Er is nu geen verbinding, dus ' + mpNaam() + ' ziet hem nog niet.' :
         'Nu ' + mpNaam() + '… 💭');
@@ -4750,7 +4758,7 @@ function endGameOnline(st, drawTxt, telt) {
   const week = telt && P.weekGoal && P.weekGoal.kind === 'vriend' ? '<p>Telt mee voor je weekdoel. 🎯</p>' : '';
   say(h);
   toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p>' + week + '<!--trofeeen-->' +
-    '<div id="ekVraag"></div>' +
+    '<div id="ekVraag"></div><p id="ekWacht"></p>' +
     '<div class="ek-btns"><button class="btn sun" id="mpRev">🔁 Revanche!</button>' + vriendKnop +
     '<button class="btn plain" id="mpEind">🏠 Naar huis</button></div>', () => {
       $('mpRev').addEventListener('click', () => {
@@ -4759,8 +4767,9 @@ function endGameOnline(st, drawTxt, telt) {
         mpRevanche();
       });
       if (vriendKnop) $('mpVriend').addEventListener('click', () => {
-        $('mpVriend').disabled = true;
-        $('mpVriend').textContent = '🤝 Gevraagd…';
+        /* wachten is een regel tekst, geen knop die uit staat */
+        $('mpVriend').classList.add('hidden');
+        $('ekWacht').textContent = 'Gevraagd. Nu wachten op ' + mpNaam() + '.';
         vriendVragen();
       });
       $('mpEind').addEventListener('click', () => { sluitEindkaart(); mpVerlaat(); });
@@ -4908,7 +4917,7 @@ const BADGES = [
 
 /* Een trofee, een level of een gehaald weekdoel wacht op de eindkaart van het potje of rondje. Wat dit
    apparaat aan trofeeën liet zien, staat per apparaat in P.shownBadges, zodat een trofee die nog wachtte als
-   het kind pauzeerde of herlaadde thuis komt, en nooit twee keer (D34). */
+   het kind pauzeerde of herlaadde thuis komt, en nooit twee keer. */
 let levelOpKaart = null;
 function bewaarVoorKaart(b) { if (session) (session.voorKaart = session.voorKaart || []).push(b); }
 function nogTeTonen() { return BADGES.filter(b => P.badges[b.id] && !P.shownBadges.includes(b.id)); }
@@ -5338,7 +5347,7 @@ $('backBtn').addEventListener('click', () => {
 $('setBtn').addEventListener('click', openSettings);
 for (const t in HOME_TABS) $(HOME_TABS[t]).addEventListener('click', () => showHomeTab(t));
 function confirmReset() {
-  /* wissen tijdens een vriendenpotje is dat potje opgeven (D35): de vraag zegt het */
+  /* wissen tijdens een vriendenpotje is dat potje opgeven: de vraag zegt het */
   const sp = leesSamen(), vriend = sp && !sp.kapot && !sp.r.result ? sp.r.peerName || 'je maatje' : null;
   showModal('<div class="m-emoji">🗑️</div><h2>Alles wissen?</h2>' +
     '<p>Je naam, je XP, je sterren, je level, je trofeeën en een potje dat bezig is gaan weg van dit apparaat.' +

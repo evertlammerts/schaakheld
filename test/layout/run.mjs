@@ -27,7 +27,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '4.7', '4.8']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -522,6 +522,52 @@ for (const [W, H] of KLEIN) {
       });
       check(n, 'testopzet: een uitleg van drie regels gemeten', uit.drie);
       for (const f of uit.fout) check(n, f, false);` });
+}
+
+/* visual.md K2: een vriendschapsvraag in de eindkaart past, met één hoofdknop en zonder dubbele knop */
+for (const [W, H] of KLEIN) {
+  const n = '[4.7] ' + W + 'x' + H + ': een vriendschapsvraag in de eindkaart: alles past, één hoofdknop, en Vrienden worden staat er niet nog eens';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      const k = await page.evaluate(async () => {
+        MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false, revTheirs: false,
+          peerName: 'Fien', open: false, weg: false, gameId: 'potje-test-1', peerOn: true };
+        mpBeginGame();
+        endGame({ over: true, result: 'b', reason: 'opgave' });
+        await new Promise(r => setTimeout(r, 300));
+        mpOnVriendVraag({ t: 'vriend?', pub: 'A'.repeat(88) });
+        await new Promise(r => setTimeout(r, 300));
+        const e = document.getElementById('eindkaart');
+        const zichtbaar = [...e.querySelectorAll('button')].filter(b => b.getClientRects().length);
+        return { sh: e.scrollHeight, ch: e.clientHeight, vraag: /wil vrienden worden/.test(e.innerText),
+          hoofd: zichtbaar.filter(b => b.classList.contains('sun')).length,
+          dubbel: zichtbaar.some(b => /Vrienden worden/.test(b.textContent)) };
+      });
+      check(n, 'testopzet: de vraag staat in de kaart', k.vraag);
+      check(n, 'alles past in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
+      check(n, 'één hoofdknop (' + k.hoofd + ')', k.hoofd === 1);
+      check(n, 'Vrienden worden staat er niet naast Ja', !k.dubbel);` });
+}
+
+/* visual.md K1: met het toetsenbord open blijven de woordsuggesties in beeld, en de knop springt niet */
+for (const [W, H, grens] of [[375, 553, 330], [375, 647, 380]]) {
+  const n = '[4.8] ' + W + 'x' + H + ': het woordveld met focus: de suggesties staan boven het toetsenbord en de knop blijft staan';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      for (const [open, inp, sugg, knop] of [['linkEntryFlow()', '#wordInp', '#wordSugg', '#linkGo'], ['mpWordFlow()', '#mpInp', '#mpSugg', '#mpKoppel']]) {
+        await vers(${W}, ${H});
+        await page.evaluate(o => { eval(o); }, open);
+        await page.waitForTimeout(300);
+        await page.focus(inp);
+        const knopVoor = await rect(knop);
+        await page.type(inp, 'la');
+        await page.waitForTimeout(200);
+        const s = await rect(sugg), knopNa = await rect(knop);
+        check(n, open + ': testopzet, er zijn suggesties', await page.evaluate(s => document.querySelectorAll(s + ' .w-sugg').length > 0, sugg));
+        check(n, open + ': de suggesties eindigen boven ${grens} (' + (s ? Math.round(s.bottom) : '-') + ')', !!s && s.bottom <= ${grens} + 0.5);
+        check(n, open + ': de knop sprong niet', !!knopVoor && !!knopNa && Math.abs(knopVoor.top - knopNa.top) < 0.5);
+      }` });
 }
 
 /* naast "Speel maar" is de strook smaller; de zin bij een tik op een eigen stuk past daar ook, op de lage telefoons */

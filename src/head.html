@@ -607,11 +607,18 @@
   .coords-r span, .coords-f span { flex: 1; display: grid; place-items: center; line-height: 1; }
   .eindkaart {
     grid-column: 2; grid-row: 1; z-index: 25; min-height: 0; overflow-y: auto;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
     padding: 16px; text-align: center; background: var(--surface); border-radius: 16px;
     box-shadow: var(--elev-2); animation: pop-in var(--dur-slow) var(--ease);
   }
+  /* midden in de kaart met marges: een kaart die te hoog is, scrolt dan vanaf de titel in plaats van boven af te knippen */
+  .eindkaart > :first-child { margin-top: auto; }
+  .eindkaart > :last-child { margin-bottom: auto; }
+  .eindkaart.klein > .ek-turbo + * { margin-top: auto; }
   .eindkaart.hidden { display: none; }
+  #ekVraag { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  #ekVraag:empty { display: none; }
+  #ekVraag p { margin: 0; }
   .eindkaart .ek-turbo { width: 88px; height: 88px; display: grid; place-items: center; font-size: 56px; line-height: 1;
     background: var(--leaf-soft); border-radius: 50%; }
   .eindkaart h2 { margin: 0; font-size: var(--fs-xl); }
@@ -720,14 +727,24 @@
   }
   .modal input:focus { outline: none; border-color: var(--sun); }
   /* de woordinvoer: genummerde woorden als blokjes, een tik haalt er een weg */
-  .w-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 44px; margin: 0 0 8px; }
+  /* vaste hoogtes: wat onder het veld staat springt niet als er een woord bijkomt */
+  .w-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; height: 44px; margin: 0 0 8px; overflow: hidden; }
+  .w-chips.vier { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 44px; align-content: start; height: 94px; }
   .w-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px;
     border: 1.5px solid rgba(23, 69, 111, .25); background: var(--surface); font: inherit; font-weight: 700; color: var(--text); }
   .w-chip b { color: var(--text-quiet); pointer-events: none; }
-  .modal .btn.hidden { display: none; }
-  .w-fout { flex-basis: 100%; color: var(--danger); font-weight: 700; font-size: var(--fs-sm); }
-  .w-suggs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 44px; }
-  .w-sugg { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--sky); background: var(--surface);
+  .btn.hidden { display: none; }
+  .w-fout { align-self: center; color: var(--text); font-size: var(--fs-sm); line-height: 1.3; }
+  .w-suggs { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; height: 44px; margin: 8px 0; }
+  .w-sugg { flex: none; }
+  /* met het toetsenbord open is er op een laag scherm geen plek voor het plaatje */
+  @media (max-height: 659px) {
+    .modal.typt .m-emoji, .modal.typt .bij-typen-weg { display: none; }
+    .modal.typt { margin-top: 0; }
+  }
+  #mpWachtRegel.hidden, #ekWacht:empty { display: none; }
+  #ekWacht, #mpWachtRegel { margin: 0; font-size: var(--fs-sm); color: var(--text); }
+  .w-sugg { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1.5px solid rgba(23, 69, 111, .25); background: var(--surface);
     font: inherit; color: var(--text); }
   .lvl-btn { display: flex; align-items: center; gap: 12px; text-align: left; }
   .lvl-btn .l-emoji { font-size: 30px; }
