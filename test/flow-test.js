@@ -59,7 +59,8 @@ BD.marks.add(sqFromAlg('f4'));   /* found the free pawn */
 BD.marks.add(sqFromAlg('g4'));   /* wrong: knight nobody can capture */
 /* c6 (good trade) is missed */
 scanCheck();
-var explHtml = __els.taskBox.innerHTML;
+/* [2.4] de eerste reden staat in de strook, de rest in de uitleg onder het bord */
+var explHtml = __els.bubble.innerHTML + __els.taskBox.innerHTML;
 ok('expl: missed c6 explained as trade', explHtml.indexOf('goede ruil') >= 0);
 ok('expl: mentions capturing pawn d5', explHtml.indexOf('pion op d5') >= 0);
 ok('expl: wrong g4 explained (not capturable)', explHtml.indexOf('geen enkel wit stuk') >= 0);
@@ -73,7 +74,7 @@ session.task = { S: aS, type: 'attacked', targets: attackedPieces(aS, 'w'), extr
 session.phase = 'marking';
 BD.marks.clear(); /* miss everything */
 scanCheck();
-explHtml = __els.taskBox.innerHTML;
+explHtml = __els.bubble.innerHTML + __els.taskBox.innerHTML;
 ok('expl: attacked names attacker', explHtml.indexOf('loper op c3') >= 0);
 
 /* ---------- trucendoos: mat in twee is een plan van twee stappen ---------- */
@@ -297,8 +298,9 @@ session.phase = 'marking';
 BD.marks.clear();
 BD.marks.add(sqFromAlg('g1')); /* fout: de koning telt niet */
 scanCheck();
-ok('dreiging: gemiste toren uitgelegd met de aanvaller', __els.taskBox.innerHTML.indexOf('loper op c3') >= 0 &&
-  __els.taskBox.innerHTML.indexOf('toren op a1') >= 0);
+explHtml = __els.bubble.innerHTML + __els.taskBox.innerHTML;
+ok('dreiging: gemiste toren uitgelegd met de aanvaller', explHtml.indexOf('loper op c3') >= 0 &&
+  explHtml.indexOf('toren op a1') >= 0);
 /* een gedekt stuk is geen dreiging */
 var thS2 = parseFEN('6k1/8/5b2/8/3P4/2P5/8/6K1 w - - 0 1'); /* Bxd4 cxd4: slechte ruil voor Turbo */
 ok('dreiging: gedekte pion is geen winst voor Turbo', threatDetails(thS2).length === 0);

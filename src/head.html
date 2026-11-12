@@ -605,9 +605,21 @@
   .play-bottom .action-row { margin-top: auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
   .play-bottom .action-row .btn { min-height: 48px; padding: 0 10px; white-space: nowrap; }
   .play-bottom #optionsBox { order: -1; }
-  .play-bottom.uitleg .action-row { margin-top: 0; }
-  .play-bottom.uitleg #optionsBox { display: none; }
-  .play-bottom.uitleg #taskBox { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  /* na een antwoord: het oordeel en Volgende op de eerste rij, de redenen eronder */
+  .play-bottom.uitleg {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr);
+    gap: 4px 8px; margin: 0 var(--g) 8px; padding: 8px 8px 0 12px;
+    background: var(--surface); border: var(--border); border-radius: 16px; overflow: hidden;
+  }
+  .play-bottom.uitleg #optionsBox, .play-bottom.uitleg #meters { display: none; }
+  .play-bottom.uitleg #taskBox { display: contents; }
+  .play-bottom.uitleg .e-head { grid-column: 1; grid-row: 1; align-self: center; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); }
+  .play-bottom.uitleg .action-row { grid-column: 2; grid-row: 1; margin: 0; display: block; }
+  .play-bottom.uitleg .action-row .btn { min-height: 44px; padding: 0 16px; }
+  .play-bottom.uitleg .e-body { grid-column: 1 / -1; grid-row: 2; min-height: 0; overflow-y: auto; padding-bottom: 8px; font-size: var(--fs-sm); line-height: 1.33; }
+  .e-body p { margin: 0 0 4px; }
+  .e-body ul { margin: 0; padding-left: 1.1em; }
+  .e-body li { margin: 0 0 4px; }
   .helper { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; }
   @media (orientation: landscape) and (min-width: 560px) {
     .play {
@@ -628,9 +640,7 @@
     .play-bar { flex-wrap: wrap; }
     .tegen { order: 3; flex-basis: 100%; }
     .meer-btn { margin-left: auto; }
-    .play-bottom .action-row { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
-    .play-bottom .action-row .btn { white-space: normal; }
-    .play-bottom .action-row .btn.sun, .play-bottom .action-row .btn.leaf { grid-column: 1 / -1; }
+    .play-bottom .action-row .btn { white-space: normal; font-size: var(--fs-cap); min-height: 52px; padding: 0 6px; }
     .play-strip { margin: 0; height: auto; min-height: 88px; max-height: 180px; }
   }
   @media (orientation: landscape) and (min-width: 1100px) { .play { --side: 340px; } }

@@ -618,9 +618,21 @@
   .play-bottom .action-row { margin-top: auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
   .play-bottom .action-row .btn { min-height: 48px; padding: 0 10px; white-space: nowrap; }
   .play-bottom #optionsBox { order: -1; }
-  .play-bottom.uitleg .action-row { margin-top: 0; }
-  .play-bottom.uitleg #optionsBox { display: none; }
-  .play-bottom.uitleg #taskBox { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  /* na een antwoord: het oordeel en Volgende op de eerste rij, de redenen eronder */
+  .play-bottom.uitleg {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr);
+    gap: 4px 8px; margin: 0 var(--g) 8px; padding: 8px 8px 0 12px;
+    background: var(--surface); border: var(--border); border-radius: 16px; overflow: hidden;
+  }
+  .play-bottom.uitleg #optionsBox, .play-bottom.uitleg #meters { display: none; }
+  .play-bottom.uitleg #taskBox { display: contents; }
+  .play-bottom.uitleg .e-head { grid-column: 1; grid-row: 1; align-self: center; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); }
+  .play-bottom.uitleg .action-row { grid-column: 2; grid-row: 1; margin: 0; display: block; }
+  .play-bottom.uitleg .action-row .btn { min-height: 44px; padding: 0 16px; }
+  .play-bottom.uitleg .e-body { grid-column: 1 / -1; grid-row: 2; min-height: 0; overflow-y: auto; padding-bottom: 8px; font-size: var(--fs-sm); line-height: 1.33; }
+  .e-body p { margin: 0 0 4px; }
+  .e-body ul { margin: 0; padding-left: 1.1em; }
+  .e-body li { margin: 0 0 4px; }
   .helper { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; }
   @media (orientation: landscape) and (min-width: 560px) {
     .play {
@@ -641,9 +653,7 @@
     .play-bar { flex-wrap: wrap; }
     .tegen { order: 3; flex-basis: 100%; }
     .meer-btn { margin-left: auto; }
-    .play-bottom .action-row { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
-    .play-bottom .action-row .btn { white-space: normal; }
-    .play-bottom .action-row .btn.sun, .play-bottom .action-row .btn.leaf { grid-column: 1 / -1; }
+    .play-bottom .action-row .btn { white-space: normal; font-size: var(--fs-cap); min-height: 52px; padding: 0 6px; }
     .play-strip { margin: 0; height: auto; min-height: 88px; max-height: 180px; }
   }
   @media (orientation: landscape) and (min-width: 1100px) { .play { --side: 340px; } }
@@ -5203,13 +5213,13 @@ function scanCheck() {
     1: 'Goed geprobeerd! Turbo legt uit wat je miste. 👇',
     0: 'Geen zorgen, zo leer je het! Turbo legt alles uit. 👇'
   };
-  const expl = scanExplanations(session.task, bad, missed);
-  if (expl.length) {
-    setTask('<b>Zo zit het:</b><div class="sub">' +
-      expl.map(e => '<div class="expl-line">' + e + '</div>').join('') + '</div>');
-  }
-  /* de eerste reden staat ook boven het bord, ook als de uitleg eronder nog moet scrollen */
-  awardRound(stars, msgs[stars] + (expl.length ? ' ' + expl[0].replace(/^[^A-Za-zÀ-ÿ<]+/, '') : ''));
+  const expl = scanExplanations(session.task, bad, missed).map(e => e.replace(/^[^A-Za-zÀ-ÿ<]+/, ''));
+  /* de eerste reden staat in de strook boven het bord, de rest in de uitleg eronder */
+  const rest = expl.slice(1);
+  setTask('<div class="e-head">' + (stars === 3 ? 'Perfect gespeurd!' : 'Zo zit het') + '</div><div class="e-body">' +
+    (rest.length ? '<p>Nog ' + rest.length + (rest.length === 1 ? ' ding:' : ' dingen:') + '</p><ul>' +
+      rest.map(e => '<li>' + e + '</li>').join('') + '</ul>' : '') + '</div>');
+  awardRound(stars, msgs[stars] + (expl.length ? ' ' + expl[0] : ''));
 }
 
 /* Kid points from centipawns, consistent with the Puntenwijzer (queen 950 -> 9). */
@@ -5249,7 +5259,7 @@ function scanExplanations(task, bad, missed) {
     }
   } else if (task.type === 'mobility') {
     const hn = NAME_NL[S.board[task.extra].toLowerCase()];
-    if (missed.size) out.push('🔴 De rode velden: daar kon je ' + hn + ' óók naartoe. Tel ze eens na!');
+    if (missed.size) out.push('De omrande velden: daar kon je ' + hn + ' óók naartoe. Tel ze eens na!');
     for (const sq of bad) {
       const p = S.board[sq];
       if (sq === task.extra)
@@ -5450,8 +5460,7 @@ function best3Explanations(task) {
 }
 
 function showBest3Explanation(lines) {
-  setTask('<b>Zo zit het:</b><div class="sub">' +
-    lines.map(e => '<div class="expl-line">' + e + '</div>').join('') + '</div>');
+  setTask('<div class="e-head">Zo zit het</div><div class="e-body"><ul>' + lines.map(e => '<li>' + e + '</li>').join('') + '</ul></div>');
 }
 
 function pickOption(i) {
@@ -6038,7 +6047,8 @@ function startGame(level, bewaard) {
     pending: null, drawAsked: bewaard ? bewaard.r.drawAsked : null, started: bewaard ? bewaard.r.started : Date.now(),
     patXP: bewaard ? bewaard.r.patXP || 0 : 0 };
   showScreen('play');
-  $('modeTitle').textContent = TURBO_NAMES[level];
+  /* in de balk de naam zonder het plaatje van de niveaukeuze: zo past de naam */
+  $('modeTitle').textContent = TURBO_NAMES[level].replace(/^\S+\s/, '');
   $('roundChip').textContent = '';
   clearBD();
   renderBoard();
