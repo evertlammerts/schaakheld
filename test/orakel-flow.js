@@ -886,6 +886,33 @@ async function orakelFlow() {
     check('R7 op niveau 2', r.rule === 'R7' && r.action.go === 'game' && r.action.level === 2);
   });
 
+  /* de kaart zelf: zij toont wat nextStep zegt, en haar knop doet het */
+  async function kaartMetSuggestie(check, start) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('setPref("start", ' + JSON.stringify(start) + ')');
+    const b = herlaad(a);
+    await wacht();
+    const r = await stap(b);
+    const kaart = tekstVan(b, 'verder');
+    check('de kaart toont de titel en de zin van de suggestie', zichtbaar(b, 'verder') && !!r.title && !!r.text &&
+      kaart.indexOf(r.title) >= 0 && kaart.indexOf(r.text) >= 0);
+    check('en haar knop', zichtbaar(b, 'verderKaart') && !!r.button && tekstVan(b, 'verderKaart').indexOf(r.button) >= 0);
+    b.tik('verderKaart');
+    await wacht();
+    return b;
+  }
+
+  await nogNiet('[3.1] de Verder-kaart met een potje als suggestie: één tik start het potje', async function (check) {
+    const b = await kaartMetSuggestie(check, 'sterk');
+    check('een potje tegen Turbo op niveau 2', opSpeelscherm(b) && b.get('session.kind') === 'game' && b.get('session.level') === 2);
+  });
+
+  await nogNiet('[3.1] de Verder-kaart met een oefening als suggestie: één tik start Speurogen', async function (check) {
+    const b = await kaartMetSuggestie(check, 'nieuw');
+    check('Speurogen begint', opSpeelscherm(b) && b.get('session.kind') === 'scan' && /opdracht 1 van 5/i.test(tekstVan(b, 'roundChip')));
+  });
+
   await nogNiet('[3.2] alle vijf oefeningen en beide spelknoppen staan op Spelen, wat de kaart ook zegt', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5']) });
     const ids = ['spelTurbo', 'spelVriend', 'oefen-scan', 'oefen-best3', 'oefen-trucs', 'oefen-koning', 'oefen-opening'];
@@ -1063,6 +1090,21 @@ async function orakelFlow() {
       check('de knop staat aan', heeftKlik(a, 'linkGo') && !a.el('linkGo').disabled && !tikbaar(a, a.el('linkGo')));
     });
   }
+
+  /* typen zoals een kind: een woord, Enter, het volgende woord achter wat er al staat */
+  await nogNiet('[4.8] koppelwoorden met Enter na elk woord: vier genummerde woorden, en Koppel! werkt', async function (check) {
+    const a = nieuwKind();
+    a.ev('linkEntryFlow()');
+    await wacht();
+    for (const w of ['lang', 'beloven', 'kaal', 'neer']) {
+      const veld = a.el('wordInp');
+      vulIn(a, veld, veld.value + w);
+      fire(veld, 'keydown', { key: 'Enter', target: veld });
+      await wacht();
+    }
+    check('vier woorden in genummerde vakjes', /1\s*lang[^]*2\s*beloven[^]*3\s*kaal[^]*4\s*neer/.test(tekstVan(a, 'wordChips')));
+    check('de knop staat aan', heeftKlik(a, 'linkGo') && !a.el('linkGo').disabled && !tikbaar(a, a.el('linkGo')));
+  });
 
   await nogNiet('[4.8] een woord dat niet in de lijst staat, wordt genoemd', async function (check) {
     const a = nieuwKind();
