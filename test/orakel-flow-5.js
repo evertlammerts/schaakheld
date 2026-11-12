@@ -147,7 +147,7 @@ async function orakelFlow5() {
 
   /* ---------- 5.1: de Trucendoos uit de voorraad ---------- */
 
-  await nogNiet('[5.1] de Trucendoos haalt elke truc uit de voorraad, met de antwoorden van die regel', async function (check) {
+  await regel('[5.1] de Trucendoos haalt elke truc uit de voorraad, met de antwoorden van die regel', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
     for (let i = 0; i < 3; i++) {
@@ -161,7 +161,7 @@ async function orakelFlow5() {
     }
   });
 
-  await nogNiet('[5.1] elke truc van een type komt eenmaal voor er een terugkomt, ook na herladen, en de plek staat buiten het profiel', async function (check) {
+  await regel('[5.1] elke truc van een type komt eenmaal voor er een terugkomt, ook na herladen, en de plek staat buiten het profiel', async function (check) {
     const vork = vanType5('vork', 15);
     await metVoorraad5(TRUC_POOL, vork, async function () {
       let a = nieuwKind();
@@ -195,7 +195,7 @@ async function orakelFlow5() {
     });
   });
 
-  await nogNiet('[5.1] na een opgeloste truc antwoordt Turbo op het bord, zodat het kind ziet wat het won', async function (check) {
+  await regel('[5.1] na een opgeloste truc antwoordt Turbo op het bord, zodat het kind ziet wat het won', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
     zetOpdracht(a, VORK5[0], 'vork', [VORK5[1]]);
@@ -206,7 +206,7 @@ async function orakelFlow5() {
     check('de opdracht is goed', a.get('session.phase') === 'review' && /Vork/.test(tekstVan(a, 'taskBox')));
   });
 
-  await nogNiet('[5.1] een type met minder dan 15 trucs komt niet in de Trucendoos', async function (check) {
+  await regel('[5.1] een type met minder dan 15 trucs komt niet in de Trucendoos', async function (check) {
     await metVoorraad5(TRUC_POOL, vanType5('vork', 15).concat(vanType5('spies', 14)), async function () {
       const a = nieuwKind();
       await startOefening(a, 'trucs');
@@ -229,7 +229,7 @@ async function orakelFlow5() {
   for (const r of ['1rb1k2r/1pp1bpp1/p2pn2p/3n1q2/3PN3/3BPN2/PPP1QPPP/3RR1K1 w|aftrek|e4d6',
     '1k1r3r/ppp2ppp/3bpqbn/1Bnp4/3N4/N1BPP3/PPP1QPPP/R3R1K1 w|aftrek|d4c6']) {
     const d = r.split('|');
-    await nogNiet('[5.1] Trucendoos, ' + d[1] + ': het antwoord uit de voorraad is goed (' + d[2] + ')', async function (check) {
+    await regel('[5.1] Trucendoos, ' + d[1] + ': het antwoord uit de voorraad is goed (' + d[2] + ')', async function (check) {
       const a = nieuwKind();
       await startOefening(a, 'trucs');
       zetOpdracht(a, d[0] + ' - - 0 1', d[1], d[2].split(','));
@@ -542,7 +542,7 @@ async function orakelFlow5() {
 
   /* ---------- 5.5: de Trucendoos zegt wat de truc doet ---------- */
 
-  await nogNiet('[5.5] Trucendoos, een vork gevonden: "Vork! Je pion valt de dame en het paard tegelijk aan."', async function (check) {
+  await regel('[5.5] Trucendoos, een vork gevonden: "Vork! Je pion valt de dame en het paard tegelijk aan."', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
     zetOpdracht(a, VORK5[0], 'vork', [VORK5[1]]);
@@ -560,7 +560,7 @@ async function orakelFlow5() {
     ['aftrek', '1k1r3r/ppp2ppp/3bpqbn/1Bnp4/3N4/N1BPP3/PPP1QPPP/R3R1K1 w - - 0 1', 'd4c6', ['Aftrekaanval! Nu valt je loper op c3 de dame aan.', 'Je paard valt zelf ook iets aan.']]
   ];
   for (const g of TRUC5) {
-    await nogNiet('[5.5] Trucendoos, ' + g[0] + ' gevonden: "' + g[3].join(' ') + '"', async function (check) {
+    await regel('[5.5] Trucendoos, ' + g[0] + ' gevonden: "' + g[3].join(' ') + '"', async function (check) {
       const a = nieuwKind();
       await startOefening(a, 'trucs');
       zetOpdracht(a, g[1], g[0], [g[2]]);
@@ -582,7 +582,7 @@ async function orakelFlow5() {
     check('de reden (' + redenen5(a).join(' / ') + ')', redenen5(a).indexOf('Turbo\'s koning kan zich niet meer redden.') >= 0);
   });
 
-  await nogNiet('[5.5] Trucendoos, mat in één: een zet zonder schaak zegt "Dat is geen schaak. Zoek een zet die schaak geeft.", en na twee missers "Dit was mat: {zet}."', async function (check) {
+  await regel('[5.5] Trucendoos, mat in één: een zet zonder schaak zegt "Dat is geen schaak. Zoek een zet die schaak geeft.", en na twee missers "Dit was mat: {zet}."', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
     zetOpdracht(a, MAT1T5[0], 'mat1', [MAT1T5[1]]);
@@ -593,6 +593,54 @@ async function orakelFlow5() {
     check('de eerste poging (' + onder5(a) + ')', onder5(a).indexOf('Dat is geen schaak. Zoek een zet die schaak geeft.') === 0);
     if (isPuzzel5(a)) { zet(a, 'g1h1'); await wacht(6000); }
     check('na twee missers de matzet (' + redenen5(a).join(' / ') + ')', redenen5(a).indexOf(mat) >= 0);
+  });
+
+  /* ---------- 5.5: een foute poging in de Trucendoos ---------- */
+
+  /* D21: elke foute poging krijgt Turbo's antwoord op het bord, ook de laatste voor het antwoord */
+  await regel('[5.5] Trucendoos: elke foute poging krijgt Turbo\'s antwoord op het bord, ook de tweede, en dan het antwoord', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'trucs');
+    zetOpdracht(a, VORK5[0], 'vork', [VORK5[1]]);
+    const h0 = a.get('session.S.hist.length');
+    for (const [i, k] of [[1, 'a3a4'], [2, 'h2h3']]) {
+      zet(a, k);
+      const gezien = await zagOoit(function () {
+        return a.get('session.S.hist.length') === h0 + 2 && a.get('moveKey(session.S.hist[' + h0 + '].m)') === k;
+      }, 6000);
+      check('poging ' + i + ': Turbo antwoordt op het bord', gezien);
+      await wacht(6000);
+      if (i === 1) check('daarna weer de opdracht', isPuzzel5(a) && a.get('session.S.hist.length') === h0);
+    }
+    check('na de tweede poging het antwoord', a.get('session.phase') === 'review' && redenen5(a).some(function (r) { return /^De truc was /.test(r); }));
+  });
+
+  await regel('[5.5] Trucendoos, mat in één: een schaak waarop Turbo zich redt, zegt hoe: "Na Dame g5 → d8 kan Turbo je dame slaan."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'trucs');
+    zetOpdracht(a, MAT1T5[0], 'mat1', [MAT1T5[1]]);
+    zet(a, 'g5d8');
+    await wacht(6000);
+    check('de zin (' + onder5(a) + ')', onder5(a) === 'Na Dame g5 → d8 kan Turbo je dame slaan. Probeer nog een zet.');
+  });
+
+  /* Pc3-d5 valt dame en toren aan, maar de pion op e6 slaat het paard; h2-h4 valt alleen het paard op g5 aan */
+  await regel('[5.5] Trucendoos, vork: een vork op een veld waar Turbo slaat, zegt "Dan pakt Turbo je paard op d5. Zoek een veilig veld."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'trucs');
+    zetOpdracht(a, '6k1/2q1rppp/4p3/8/8/2N5/5PPP/6K1 w - - 0 1', 'vork', ['c3b5']);
+    zet(a, 'c3d5');
+    await wacht(6000);
+    check('de zin (' + onder5(a) + ')', onder5(a) === 'Dan pakt Turbo je paard op d5. Zoek een veilig veld.');
+  });
+
+  await regel('[5.5] Trucendoos, vork: een zet die één stuk aanvalt, zegt "Je pion valt maar één stuk aan. Zoek een zet die twee stukken aanvalt."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'trucs');
+    zetOpdracht(a, VORK5[0], 'vork', [VORK5[1]]);
+    zet(a, 'h2h4');
+    await wacht(6000);
+    check('de zin (' + onder5(a) + ')', onder5(a) === 'Je pion valt maar één stuk aan. Zoek een zet die twee stukken aanvalt.');
   });
 
   /* ---------- 5.4: de openingscoach waarschuwt alleen voor een zet die iets kost ---------- */
@@ -756,7 +804,7 @@ async function orakelFlow5() {
     check('de redding en hoe (' + redenen5(a).join(' / ') + ')', redenen5(a).indexOf(zin) >= 0 && redenen5(a).indexOf('Je koning loopt weg.') >= 0);
   });
 
-  await nogNiet('[5.5] Trucendoos, na twee missers: "De truc was {zet}." en wat de vork doet', async function (check) {
+  await regel('[5.5] Trucendoos, na twee missers: "De truc was {zet}." en wat de vork doet', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
     zetOpdracht(a, VORK5[0], 'vork', [VORK5[1]]);

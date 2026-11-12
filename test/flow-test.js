@@ -114,6 +114,8 @@ session.task = { S: m2S2, type: 'mat2', answers: [{ m: legalMoves(m2S2).find(fun
 session.phase = 'puzzle'; session.tries = 0; BD.mode = 'puzzle';
 m2Earned = session.earned;
 puzzleAttempt(legalMoves(m2S2).find(function (m) { return alg(m.to) === 'h7'; }));
+/* Turbo's antwoord op een foute poging staat eerst op het bord (decision D21) */
+drainTimers();
 ok('mat2: eerste misser = nog een poging', session.phase === 'puzzle' && session.tries === 1);
 puzzleAttempt(legalMoves(m2S2).find(function (m) { return alg(m.to) === 'h7'; }));
 drainTimers();
@@ -414,6 +416,7 @@ session.tries = 0;
 BD.mode = 'puzzle';
 earnedB = session.earned;
 puzzleAttempt(badM);
+drainTimers();
 ok('trucs: fout telt poging, bord intact', session.tries === 1 && fS2.hist.length === 0);
 puzzleAttempt(badM);
 drainTimers();

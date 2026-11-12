@@ -2291,6 +2291,10 @@ const PATTERNS = {
 };
 
 function patName(S, sq) { return NAME_NL[S.board[sq].toLowerCase()]; }
+/* het paard, de loper; een paard pak je "het", de andere stukken "hem" (de schaakcoach) */
+function hetStuk(p) { const t = p.toLowerCase(); return (t === 'n' ? 'het ' : 'de ') + NAME_NL[t]; }
+function hemVan(p) { return p.toLowerCase() === 'n' ? 'het' : 'hem'; }
+function hoofd(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 /* Welk patroon maakt zet m (op positie S, vóór de zet)? Voor de duiding. */
 /* een zet kan meer trucs tegelijk zijn; met een voorkeur (de truc van de opdracht) wint die, anders de eerste */
@@ -2746,12 +2750,33 @@ function sameMove(a, b) { return a.from === b.from && a.to === b.to && (a.promo 
 /* --- trucendrills: vind de vork/penning/spies/aftrek/matzet --- */
 const TRUC_TYPES = ['vork', 'vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat1', 'mat2'];
 const TRUC_DIFF = { vork: .4, penning: .6, spies: .6, aftrek: .7, mat1: .5, mat2: .9 };
+/* waar dit apparaat per type in de voorraad is: elke truc eenmaal voor er een
+   terugkomt (plan rule 5.1); een eigen sleutel, buiten het profiel (rule 5.10) */
+const TRUC_PLEK_KEY = 'schaakheld-trucplek';
+
+function trucUitVoorraad() {
+  const pool = typeof TRUC_POOL !== 'undefined' ? TRUC_POOL : [];
+  const types = trucTypes(pool);
+  const kans = TRUC_TYPES.filter(t => types.includes(t));
+  if (!kans.length) return null;
+  const anders = kans.filter(t => t !== session.lastType);
+  const type = pick(anders.length ? anders : kans);
+  const regels = pool.filter(r => r.split('|')[1] === type);
+  let plek = {};
+  try { plek = JSON.parse(opslag(TRUC_PLEK_KEY)) || {}; } catch (e) {}
+  const i = (+plek[type] || 0) % regels.length;
+  plek[type] = i + 1;
+  opslag(TRUC_PLEK_KEY, JSON.stringify(plek));
+  return trucTask(regels[i]);
+}
 
 function buildTrucs() {
-  let type = pick(TRUC_TYPES);
-  if (type === session.lastType) type = pick(TRUC_TYPES);
-  let task = genPatternTask(type);
-  if (!task) task = genPatternTask('vork') || genPatternTask('mat1');
+  let task = trucUitVoorraad();
+  if (!task) {
+    let type = pick(TRUC_TYPES);
+    if (type === session.lastType) type = pick(TRUC_TYPES);
+    task = genPatternTask(type) || genPatternTask('vork') || genPatternTask('mat1');
+  }
   if (!task) return false;
   session.lastType = task.type;
   session.task = task;
@@ -2778,6 +2803,101 @@ function trucHint() {
   if (actionBtns.hint) actionBtns.hint.disabled = true;
 }
 
+/* De zinnen bij een truc: de naam komt van het type van de opdracht, de stukken
+   van de vorm van dat type, nooit van wat de herkenning nog meer ziet (de
+   schaakcoach); geen vorm gevonden, dan alleen de naam. Met de velden om aan te wijzen. */
+function trucZinnen(S, m, type) {
+  makeMove(S, m);
+  const op = sq => S.board[sq], stuk = NAME_NL[op(m.to).toLowerCase()];
+  const waarde = sq => VAL[op(sq).toLowerCase()];
+  let zinnen = null, velden = [];
+  if (type === 'vork') {
+    const d = forkTargets(S, m.to).sort((a, b) => waarde(b) - waarde(a));
+    if (d.length >= 2) {
+      zinnen = ['Vork! Je ' + stuk + ' valt ' + hetStuk(op(d[0])) + ' en ' + hetStuk(op(d[1])) + ' tegelijk aan.'];
+      velden = [m.to, d[0], d[1]];
+    }
+  } else if (type === 'penning' || type === 'spies') {
+    const ps = raysPinSkewer(S, m.to);
+    if (type === 'penning' && ps.pins.length) {
+      const p = ps.pins.slice().sort((a, b) => waarde(b.back) - waarde(a.back))[0];
+      zinnen = ['Penning! ' + hoofd(hetStuk(op(p.front))) + ' op ' + alg(p.front) + ' staat vast: erachter staat ' + hetStuk(op(p.back)) + '.'];
+      velden = [m.to, p.front, p.back];
+    } else if (type === 'spies' && ps.skewers.length) {
+      const p = ps.skewers.slice().sort((a, b) => waarde(b.front) - waarde(a.front))[0];
+      zinnen = ['Spies! ' + hoofd(hetStuk(op(p.front))) + ' moet weg, en dan pak je ' + hetStuk(op(p.back)) + ' op ' + alg(p.back) + '.'];
+      velden = [m.to, p.front, p.back];
+    }
+  } else if (type === 'aftrek') {
+    const d = discoveredFrom(S, m.from, 'w', m.to).sort((a, b) => b.val - a.val);
+    if (d.length) {
+      const x = d[0], achter = NAME_NL[op(x.from).toLowerCase()];
+      zinnen = [x.isKing ? 'Aftrekschaak! Nu geeft je ' + achter + ' op ' + alg(x.from) + ' schaak.' :
+        'Aftrekaanval! Nu valt je ' + achter + ' op ' + alg(x.from) + ' ' + hetStuk(op(x.target)) + ' aan.'];
+      if (!x.isKing && (inCheck(S) || forkTargets(S, m.to).length)) zinnen.push('Je ' + stuk + ' valt zelf ook iets aan.');
+      velden = [x.from, x.target];
+    }
+  }
+  unmakeMove(S);
+  return { zinnen: zinnen || [PATTERNS[type].n + '! Goed gevonden.'], velden };
+}
+
+/* Mat in één, de reden na de matzet: twee lege velden naast de koning die ook gedekt zijn */
+function matVelden(S, m) {
+  makeMove(S, m);
+  const k = S.kings.b, uit = [];
+  for (const d of [-17, -16, -15, -1, 1, 15, 16, 17]) {
+    const sq = k + d;
+    if (!(sq & 0x88) && !S.board[sq] && attacked(S, sq, 'w')) uit.push(alg(sq));
+  }
+  unmakeMove(S);
+  return uit.length >= 2 ? uit[0] + ' en ' + uit[1] + ' zijn ook gedekt.' : null;
+}
+
+/* Waarom een zet in de Trucendoos nog niet goed is (rijen W4 tot W7 van de schaakcoach). */
+function trucPogingZin(S, m, type, info) {
+  if (type === 'mat1') {
+    const naam = moveNameNL(S, m);
+    makeMove(S, m);
+    let zin = 'Dat is geen schaak. Zoek een zet die schaak geeft.';
+    if (inCheck(S)) {
+      const aanvaller = findAttacker(S, S.kings.b, 'w'), red = legalMoves(S);
+      const slaat = red.find(x => x.to === aanvaller), koning = red.find(x => x.from === S.kings.b);
+      zin = 'Na ' + naam + ' kan ' + (slaat ? 'Turbo je ' + NAME_NL[S.board[aanvaller].toLowerCase()] + ' slaan.' :
+        koning ? 'de koning naar ' + alg(koning.to) + '.' : 'Turbo er een stuk tussen zetten.') + ' Probeer nog een zet.';
+    }
+    unmakeMove(S);
+    return zin;
+  }
+  if (type !== 'mat2' && !info.safe && patternMatches(S, m, type, Object.assign({}, info, { safe: true })))
+    return 'Dan pakt Turbo je ' + NAME_NL[S.board[m.from].toLowerCase()] + ' op ' + alg(m.to) + '. Zoek een veilig veld.';
+  if (type === 'vork' && info.fork.length === 1)
+    return 'Je ' + NAME_NL[S.board[m.from].toLowerCase()] + ' valt maar één stuk aan. Zoek een zet die twee stukken aanvalt.';
+  return (type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + PATTERNS[type].n.toLowerCase() + '.') +
+    ' Kijk naar alle stukken van Turbo, en probeer nog een zet.';
+}
+
+/* Een foute poging: de zet en Turbo's antwoord op het bord, dan terug (decision D21) */
+function laatAntwoordZien(m, klaar) {
+  const S = session.S;
+  playMove(m, () => {
+    if (gameStatus(S).over) { later(() => { unmakeMove(S); klaar(); }, 900); return; }
+    const reply = rootScores(S, 2)[0];
+    BD.arrows = [{ from: reply.m.from, to: reply.m.to, cls: 'a-coral' }];
+    renderBoard();
+    later(() => {
+      playMove(reply.m, () => {
+        later(() => {
+          unmakeMove(S); unmakeMove(S);
+          BD.arrows = []; BD.last = null;
+          renderBoard();
+          klaar();
+        }, 900);
+      });
+    }, 600);
+  });
+}
+
 function puzzleAttempt(m) {
   if (!session) return;
   if (session.kind === 'koning') { koningAttempt(m); return; }
@@ -2786,7 +2906,9 @@ function puzzleAttempt(m) {
   const t = session.task;
   const type = t.type;
   const info = patternsAfterMove(session.S, m);
-  if (type === 'mat2' && patternMatches(session.S, m, type, info)) {
+  /* de antwoorden van de opdracht zijn geverifieerd; de herkenning keurt er soms een af (fix list item 23) */
+  const raak = t.answers.some(a => sameMove(a.m, m));
+  if (type === 'mat2' && raak) {
     /* stap 1 goed: Turbo verdedigt zich zo goed mogelijk, dan moet jij mat geven */
     session.phase = 'busy';
     BD.mode = 'off';
@@ -2806,47 +2928,56 @@ function puzzleAttempt(m) {
     });
     return;
   }
-  if (patternMatches(session.S, m, type, info)) {
+  if (raak) {
     session.phase = 'review';
     BD.mode = 'off';
-    const co = type === 'mat1' ? null : patternCallout(session.S, m, type);
-    playMove(m, () => {
-      if (co) BD.spy = new Set(co.squares);
+    const uitleg = type === 'mat1' ? null : trucZinnen(session.S, m, type);
+    const klaar = () => {
+      if (uitleg) BD.spy = new Set(uitleg.velden);
       BD.glow.clear();
       renderBoard();
       countPattern(type);
       const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
       awardRound(stars, type === 'mat1' ? 'Schaakmat! 👑' : 'Gevonden!',
-        type === 'mat1' || !co ? 'Turbo\'s koning kan zich niet meer redden.' : co.what);
+        type === 'mat1' ? 'Turbo\'s koning kan zich niet meer redden.' : uitleg.zinnen);
+    };
+    /* na de truc antwoordt Turbo, zodat het kind ziet wat het won (plan rule 5.1) */
+    playMove(m, () => {
+      const S = session.S;
+      if (type === 'mat1' || gameStatus(S).over) { klaar(); return; }
+      const reply = rootScores(S, 2)[0];
+      later(() => playMove(reply.m, klaar), 500);
     });
     return;
   }
   session.tries++;
   clearSel();
-  renderBoard();
   snd.bad();
-  const near = (type !== 'mat1' && type !== 'mat2' && patternMatches(session.S, m, type,
-    Object.assign({}, info, { safe: true })) && !info.safe) ?
-    'Bijna: dat lijkt op een ' + PATTERNS[type].n.toLowerCase() +
-    ', maar Turbo kan je stuk daar pakken. Zoek een veilig veld.' : null;
-  if (session.tries >= 2) {
+  const zin = trucPogingZin(session.S, m, type, info);
+  session.phase = 'busy';
+  BD.mode = 'off';
+  laatAntwoordZien(m, () => {
+    if (session.tries < 2) {
+      session.phase = 'puzzle';
+      BD.mode = 'puzzle';
+      hulpZin(zin);
+      return;
+    }
     session.phase = 'review';
-    BD.mode = 'off';
     const ans = t.answers[0];
     const name = moveNameNL(session.S, ans.m);
     if (type === 'mat2') { revealMate2(ans.m); return; }
-    const co = type === 'mat1' ? null : patternCallout(session.S, ans.m, type);
+    const uitleg = type === 'mat1' ? null : trucZinnen(session.S, ans.m, type);
+    const velden = type === 'mat1' ? matVelden(session.S, ans.m) : null;
     BD.arrows = [{ from: ans.m.from, to: ans.m.to, cls: 'a-leaf' }];
     playMove(ans.m, () => {
-      if (co) BD.spy = new Set(co.squares);
+      if (uitleg) BD.spy = new Set(uitleg.velden);
       BD.glow.clear();
       renderBoard();
-      awardRound(0, 'Zo zit het', co ? '<b>' + name + '</b>: ' + co.what : 'Dit was mat: <b>' + name + '</b>.');
+      awardRound(0, 'Zo zit het', uitleg ? ['De truc was <b>' + name + '</b>.'].concat(uitleg.zinnen) :
+        ['Dit was mat: <b>' + name + '</b>.'].concat(velden ? [velden] : []));
     });
-  } else {
-    hulpZin(near || (type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + PATTERNS[type].n.toLowerCase() + '.') +
-      ' Kijk naar alle stukken van Turbo, en probeer nog een zet.');
-  }
+  });
 }
 
 /* mat in 2, stap 2: de matzet zelf. Eén misser mag (dan nog 1 ster). */

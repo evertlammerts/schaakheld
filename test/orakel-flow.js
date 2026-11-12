@@ -79,6 +79,28 @@ async function rondjeGoed(app, n) {
   }
 }
 
+/* D14 (a): de zin bij een foute poging in de Trucendoos die bij de zet past (rijen W4, W5 en W7
+   van de schaakcoach), of null als de algemene zin "Nog niet de {truc}." hoort */
+function wRij(fen, k, type) {
+  const S = parseFEN(fen), m = legalMoves(S).find(function (x) { return moveKey(x) === k; });
+  if (type === 'mat1') {
+    const naam = moveNameNL(S, m);
+    makeMove(S, m);
+    let zin = 'Dat is geen schaak. Zoek een zet die schaak geeft.';
+    if (inCheck(S)) {
+      const a = findAttacker(S, S.kings.b, 'w'), red = legalMoves(S);
+      const koning = red.find(function (x) { return x.from === S.kings.b; });
+      zin = 'Na ' + naam + ' kan ' + (red.some(function (x) { return x.to === a; }) ? 'Turbo je ' + NAME_NL[S.board[a].toLowerCase()] + ' slaan.' :
+        koning ? 'de koning naar ' + alg(koning.to) + '.' : 'Turbo er een stuk tussen zetten.') + ' Probeer nog een zet.';
+    }
+    unmakeMove(S);
+    return zin;
+  }
+  if (type === 'vork' && patternsAfterMove(S, m).fork.length === 1)
+    return 'Je ' + NAME_NL[S.board[m.from].toLowerCase()] + ' valt maar één stuk aan. Zoek een zet die twee stukken aanvalt.';
+  return null;
+}
+
 async function orakelFlow() {
   /* ================= increment 1 ================= */
 
@@ -1108,7 +1130,7 @@ async function orakelFlow() {
     check('de strook houdt de vraag', strook(a) === vraag);
     zet(a, 'g1f1');
     await wacht(3000);
-    check('de poging onder het bord, met een uitnodiging', /[Pp]robeer nog een zet\.$/.test(onderZin(a)));
+    check('de poging onder het bord, met een uitnodiging', /Zoek een zet die schaak geeft\.$/.test(onderZin(a)));
     check('de strook houdt nog steeds de vraag', strook(a) === vraag);
     zet(a, 'g1f2');
     await wacht(5000);
@@ -1273,7 +1295,7 @@ async function orakelFlow() {
   }
 
   /* F2: bij elke truc van de Trucendoos horen de poging en de uitleg bij die truc, niet bij een andere */
-  const TRUC_WOORD = { vork: /VORK/, penning: /PENNING/, spies: /SPIES/, aftrek: /AFTREK/, mat1: /^Dit was mat: .+\.$/, mat2: /dan kan Turbo de mat niet meer tegenhouden/ };
+  const TRUC_WOORD = { vork: /vork/i, penning: /penning/i, spies: /spies/i, aftrek: /aftrek/i, mat1: /^Dit was mat: .+\.$/, mat2: /dan kan Turbo de mat niet meer tegenhouden/ };
   for (const type of Object.keys(TRUC_WOORD)) {
     await regel('[2.4] Trucendoos, ' + type + ': de foute poging en de uitleg na twee missers horen bij deze truc', async function (check) {
       const a = nieuwKind();
@@ -1287,10 +1309,12 @@ async function orakelFlow() {
       check('testopzet: een opdracht van deze soort met twee foute zetten', !!fout && fout.length === 2 && a.get('session.task.type') === type);
       if (!fout || fout.length < 2) return;
       const naam = a.get('PATTERNS[' + JSON.stringify(type) + '].n.toLowerCase()');
+      const rij = wRij(a.fen(), fout[0], type);
       zet(a, fout[0]);
       await wacht(3000);
       /* "mat" is een het-woord: nog geen mat in twee */
-      check('de poging noemt deze truc', tekstVan(a, 'hulpZin').indexOf(type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + naam + '.') === 0);
+      check('de poging noemt deze truc', rij ? tekstVan(a, 'hulpZin').trim() === rij :
+        tekstVan(a, 'hulpZin').indexOf(type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + naam + '.') === 0);
       zet(a, fout[1]);
       await wacht(8000);
       const reden = a.doc.__tekst(a.el('taskBox').querySelectorAll('.e-body')[0] || a.el('taskBox')).trim();
@@ -1734,9 +1758,9 @@ async function orakelFlow() {
   /* F2: met een voorkeur voor de truc van de opdracht; een zet die twee trucs tegelijk is, toont die van de opdracht */
   const TWEE_TRUCS = [
     /* het paard naar e6: aftrekschaak van de loper op h8 en een vork op de torens; de opdracht is een vork */
-    ['vork', '3r1r1k/8/8/8/3N4/8/8/B5K1 w - - 0 1', /VORK/],
+    ['vork', '3r1r1k/8/8/8/3N4/8/8/B5K1 w - - 0 1', /vork/i],
     /* het paard naar e6: een vork en de loper valt de dame op g7 aan; de opdracht is een aftrekaanval */
-    ['aftrek', '3r1r2/6q1/k7/8/3N4/8/8/B6K w - - 0 1', /AFTREKAANVAL/]
+    ['aftrek', '3r1r2/6q1/k7/8/3N4/8/8/B6K w - - 0 1', /aftrekaanval/i]
   ];
   for (const [type, fen, woord] of TWEE_TRUCS) {
     await regel('[2.4] Trucendoos, ' + type + ' die ook een andere truc is: de poging en de uitleg noemen de truc van de opdracht', async function (check) {
@@ -1749,9 +1773,11 @@ async function orakelFlow() {
         '.map(function (m) { return moveKey(m); }).slice(0, 2)');
       check('testopzet: d4e6 is twee trucs', a.get('patternCallouts(session.S, session.task.answers[0].m).length') === 2);
       check('testopzet: twee foute zetten', fout.length === 2);
+      const rij = wRij(fen, fout[0], type);
       zet(a, fout[0]);
       await wacht(3000);
-      check('de poging noemt deze truc', tekstVan(a, 'hulpZin').indexOf('Nog niet de ' + a.get('PATTERNS.' + type + '.n.toLowerCase()') + '.') === 0);
+      check('de poging noemt deze truc', rij ? tekstVan(a, 'hulpZin').trim() === rij :
+        tekstVan(a, 'hulpZin').indexOf('Nog niet de ' + a.get('PATTERNS.' + type + '.n.toLowerCase()') + '.') === 0);
       zet(a, fout[1]);
       await wacht(8000);
       const reden = a.doc.__tekst(a.el('taskBox').querySelectorAll('.e-body')[0] || a.el('taskBox')).trim();

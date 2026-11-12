@@ -597,9 +597,10 @@ for (const [W, H] of KLEIN) {
         const ans = ['c6b6'].map(k => ({ m: legalMoves(S).find(x => moveKey(x) === k), info: null }));
         session.S = S; session.task = { S, type: 'mat2', answers: ans, hintUsed: false }; session.phase = 'puzzle'; session.tries = 0;
         BD.mode = 'puzzle'; renderBoard(); });
+      /* na elke foute zet speelt Turbo eerst zijn antwoord (decision D21), na de tweede volgt het voorspelen */
       for (const k of ['h1h2', 'h1h3']) {
         await page.evaluate(k => { const m = legalMoves(session.S).find(x => moveKey(x) === k); onCell(m.from); onCell(m.to); }, k);
-        await page.waitForTimeout(3500);
+        await page.waitForTimeout(7000);
       }
       const reden = await rect('#taskBox .e-body > :first-child'), onder = await rect('#onder');
       check(n, 'testopzet: de uitleg staat er', !!reden);
