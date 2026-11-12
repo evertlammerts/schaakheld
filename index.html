@@ -49,7 +49,7 @@
   button:focus-visible { outline: 3px dashed var(--ink); outline-offset: 2px; }
 
   .float-pc {
-    position: fixed; z-index: 0; pointer-events: none; user-select: none;
+    position: fixed; z-index: 0; pointer-events: none; -webkit-user-select: none; user-select: none;
     color: var(--ink); opacity: .05; font-size: 90px;
   }
 
@@ -127,7 +127,7 @@
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
     display: flex; gap: 10px; justify-content: center;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
-    background: rgba(255, 249, 236, .94); backdrop-filter: blur(10px);
+    background: rgba(255, 249, 236, .94); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     border-top: 2px solid rgba(23, 69, 111, .07);
   }
   .tab {
@@ -373,7 +373,7 @@
   .cell.dark .coord { color: rgba(255, 255, 255, .8); }
   .coord.file { right: 4px; bottom: 3px; }
   .coord.rank { left: 4px; top: 3px; }
-  .pc { pointer-events: none; user-select: none; position: relative; z-index: 1; }
+  .pc { pointer-events: none; -webkit-user-select: none; user-select: none; position: relative; z-index: 1; }
   .pc.w {
     color: #FFFFFF;
     text-shadow: .035em 0 0 var(--ink), -.035em 0 0 var(--ink), 0 .035em 0 var(--ink), 0 -.035em 0 var(--ink),
