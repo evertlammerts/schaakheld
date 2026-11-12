@@ -38,6 +38,28 @@ async function nodigUit(van) {
 async function orakelTwee() {
   /* ================= increment 4 ================= */
 
+  /* regel 1.4: niets anders haalt het bewaarde potje tegen Turbo weg, ook niet
+     een potje met een vriend dat ertussen gespeeld wordt en afloopt */
+  await regel('[1.4] een vriendenpotje ertussen laat het bewaarde potje tegen Turbo staan, ook als het afloopt', async function (check) {
+    const o = maakOpslag(), zetten = ['e2e4', 'e7e5', 'g1f3', 'b8c6'];
+    const ruw = JSON.stringify({ v: 1, level: 2, moves: zetten, tips: 3, drawAsked: null, started: 1794700000000, updated: 1794700000000 });
+    o.setItem('schaakheld-potje', ruw);
+    const a = maakApparaat('Fien', { opslag: o }), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    check('testopzet: samen in een potje', a.get('!!(session && session.online)') && b.get('!!(session && session.online)'));
+    await speel(a, b, 'd2d4');
+    await speel(a, b, 'd7d5');
+    check('tijdens het vriendenpotje onveranderd', a.opslag.getItem('schaakheld-potje') === ruw);
+    await geefOp(aanZet(a, b));
+    check('testopzet: het vriendenpotje is uit', a.get('!!(session && session.over)') && b.get('!!(session && session.over)'));
+    check('na het einde onveranderd', a.opslag.getItem('schaakheld-potje') === ruw);
+    const a2 = herlaad(a);
+    await wacht();
+    a2.tik('verderKaart');
+    await wacht();
+    check('Verder speelt het potje tegen Turbo', opSpeelscherm(a2) && a2.get('session.level') === 2 && a2.get('session.S.hist.length') === 4);
+  });
+
   await nogNiet('[4.1] een vriendenpotje staat na elke halve zet op beide apparaten', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
@@ -280,7 +302,7 @@ async function orakelTwee() {
     check('bij Fien', /Daan start het potje\. Even wachten\./.test(fien.scherm()));
   });
 
-  await regel('[4.7] een vriendschapsvraag na een potje staat in de eindkaart van de ander, niet erachter', async function (check) {
+  await nogNiet('[4.7] een vriendschapsvraag na een potje staat in de eindkaart van de ander, niet erachter', async function (check) {
     const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
     await samenSpelen(daan, fien);
     await geefOp(aanZet(daan, fien));
@@ -288,7 +310,8 @@ async function orakelTwee() {
     check('testopzet: nog geen vraag bij Fien', !/wil vrienden worden/.test(zegt(fien)));
     tikTekst(daan, 'Vrienden worden');
     await wacht();
-    check('Fien ziet de vraag van Daan in haar eindkaart', /Daan wil vrienden worden/.test(zegt(fien)));
+    check('Fien ziet de vraag van Daan in haar eindkaart, zonder venster erover', !fien.open() && zichtbaar(fien, 'eindkaart') &&
+      /Daan wil vrienden worden/.test(tekstVan(fien, 'eindkaart')));
     /* "Ja" in de kaart maakt ze vrienden: de vraag staat er niet alleen, hij werkt ook */
     tikTekst(fien, 'Ja');
     await wacht();
