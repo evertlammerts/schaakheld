@@ -722,7 +722,7 @@
   /* Zichtbare knop, niet alleen een zwevend kruisje: een gevulde cirkel met
      een rand die ook op wit opvalt (3:1), zoals de andere knoppen. */
   .m-close {
-    position: absolute; top: 10px; right: 10px; width: 42px; height: 42px;
+    position: absolute; top: 10px; right: 10px; width: 44px; height: 44px;
     border: 2px solid var(--sky-deep); border-radius: 50%; background: var(--sky);
     color: var(--ink); font-size: 19px; line-height: 1;
     display: grid; place-items: center; cursor: pointer;
@@ -742,7 +742,9 @@
   /* de woordinvoer: genummerde woorden als blokjes, een tik haalt er een weg */
   /* vaste hoogtes: wat onder het veld staat springt niet als er een woord bijkomt */
   .w-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; height: 44px; margin: 0 0 8px; overflow: hidden; }
-  .w-chips.vier { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 44px; align-content: start; height: 94px; }
+  .w-chips.vier { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 44px; align-content: flex-start; height: 94px; }
+  #linkQR { width: 170px; max-width: 50vw; margin: 8px auto; }
+  @media (max-height: 659px) { #linkQR { width: 120px; } }
   .w-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px;
     border: 1.5px solid rgba(23, 69, 111, .25); background: var(--surface); font: inherit; font-weight: 700; color: var(--text); }
   .w-chip b { color: var(--text-quiet); pointer-events: none; }
@@ -3105,10 +3107,10 @@ async function linkShareFlow() {
   showModal('<div class="m-emoji">🔑</div><h2>Nieuw apparaat koppelen</h2>' +
     (serverOk
       ? '<p>Tik op het nieuwe apparaat op Ik heb al een profiel. Typ daar deze vier woorden, of scan de code.</p>' +
-        '<div class="w-chips">' + w.map((x, i) => '<span class="w-chip"><b>' + (i + 1) + '</b> ' + x + '</span>').join('') + '</div>' +
+        '<div class="w-chips vier" id="linkWoorden">' + w.map((x, i) => '<span class="w-chip"><b>' + (i + 1) + '</b> ' + x + '</span>').join('') + '</div>' +
         '<p id="linkTijd"></p>'
       : '<p><small>Geen verbinding met de server: alleen de QR-route werkt nu.</small></p>') +
-    '<div style="width:170px;max-width:50vw;margin:8px auto">' + QR.qrSvg(linkURL()) + '</div>' +
+    '<div id="linkQR">' + QR.qrSvg(linkURL()) + '</div>' +
     '<div class="m-btns"><button class="btn sun hidden" id="linkNieuw">Nieuwe code</button>' +
     '<button class="btn plain" id="linkDone">Klaar</button></div>', () => {
       $('linkDone').addEventListener('click', () => { clearTimeout(linkKlok); closeModal(); });
@@ -3120,6 +3122,8 @@ async function linkShareFlow() {
         const over = tot - Date.now();
         if (over <= 0) {
           $('linkTijd').textContent = 'Deze code werkt niet meer.';
+          /* de oude woorden en de QR weg: anders probeert het kind ze toch */
+          for (const id of ['linkWoorden', 'linkQR']) if ($(id)) $(id).style.display = 'none';
           $('linkNieuw').classList.remove('hidden');
           return;
         }
@@ -3461,7 +3465,8 @@ function openSamen() {
     if (!b || b.kapot) { renderVerder(); return; }
     samenHervat(b);
   } else if (!MP.open) {
-    MP.pogingen = 0;
+    /* opnieuw proberen, maar het kind hoort dat er nu geen verbinding is */
+    MP.pogingen = 1;
     MP.backoff = 1000;
     clearTimeout(MP.reTimer);
     mpConnect();
@@ -3670,7 +3675,7 @@ function mpMsg(m) {
       /* midden in of na een potje (weer) verbonden: de hele stand naar de ander */
       stuurStand();
       if (MP.S) thuisVerversen();
-      if (samenInBeeld() && samenLoopt() && (MP.pogingen > 1 || MP.zetZonderNet)) zegBeurt();
+      if (samenInBeeld() && samenLoopt() && (MP.pogingen > 0 || MP.zetZonderNet)) zegBeurt();
       MP.zetZonderNet = false;
       break;
     case 'peer':
@@ -4303,7 +4308,7 @@ function vriendKlaar(k) {
     '<p>Staan bij ' + naam + ' dezelfde drie plaatjes? Dan klopt het.<br>' +
     'Je vindt ' + naam + ' straks onder 🤝 Vrienden.</p>' +
     '<div class="m-btns"><button class="btn sun" id="vrOk">🔁 Revanche!</button>' +
-    '<button class="btn plain" id="vrEind">🏠 Stoppen</button></div>', () => {
+    '<button class="btn plain" id="vrEind">🏠 Naar huis</button></div>', () => {
       $('vrOk').addEventListener('click', () => {
         $('vrOk').disabled = true;
         $('vrOk').textContent = '🔁 Wachten op ' + mpNaam() + '…';
@@ -5425,7 +5430,7 @@ function renderVerder() {
     '<span class="vk-zin">Je XP, sterren en trofeeën zijn niet kwijt.</span>' +
     '<button class="btn plain small" id="verderWeg">Weghalen</button></div>' :
     '<button class="verder-kaart" id="verderKaart"><span class="vk-titel">' + eerste.titel + '</span>' +
-    '<span class="vk-zin">' + eerste.zin + '</span><span class="vk-knop">▶ ' + eerste.knop + '</span></button>';
+    '<span class="vk-zin">' + eerste.zin + '</span><span class="vk-knop">' + (eerste.knop === 'Bekijk' ? '' : '▶ ') + eerste.knop + '</span></button>';
   items.slice(1).forEach((it, i) => {
     h += '<button class="verder-ook" data-ook="' + (i + 1) + '"><span>Ook nog: ' + it.ook + '</span><span class="vo-pijl">›</span></button>';
   });
