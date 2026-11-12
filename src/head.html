@@ -364,7 +364,7 @@
       0 .09em .06em rgba(23, 69, 111, .35);
   }
   .pc.t {
-    color: #3E9B60;
+    color: var(--pc-green);
     text-shadow: .035em 0 0 #FFFDF4, -.035em 0 0 #FFFDF4, 0 .035em 0 #FFFDF4, 0 -.035em 0 #FFFDF4,
       .025em .025em 0 #FFFDF4, -.025em .025em 0 #FFFDF4, .025em -.025em 0 #FFFDF4, -.025em -.025em 0 #FFFDF4,
       0 .09em .06em rgba(23, 69, 111, .35);
@@ -387,47 +387,51 @@
      staat hieronder en is even specifiek, dus die kleurt er overheen. */
   .cell.last.light { background: #FFBE20; }
   .cell.last.dark { background: #6B3F00; }
-  .cell.sel { box-shadow: inset 0 0 0 4px var(--sun); }
-  .cell.sel.light, .cell.sel.dark { background: #FFE08A; }
+  /* tekens in twee tinten: inkt en wit, zodat er op elk vak van elk thema een deel 3:1 haalt */
+  .cell.sel { box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 5px #FFFFFF; }
+  .cell.sel.light, .cell.sel.dark { background: var(--sun-soft); }
   .cell.dot::after {
-    content: ''; position: absolute; inset: 0; margin: auto; width: 26%; height: 26%;
-    border-radius: 50%; background: rgba(23, 69, 111, .3);
+    content: ''; position: absolute; inset: 0; margin: auto; width: 28%; height: 28%;
+    border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px #FFFFFF;
   }
   .cell.ring::after {
-    content: ''; position: absolute; inset: 6%; border-radius: 50%;
-    border: calc(var(--bw) / 8 * .07) solid rgba(255, 111, 89, .8);
+    content: ''; position: absolute; inset: 5%; border-radius: 50%;
+    border: calc(var(--bw) / 8 * .08) solid var(--ink); box-shadow: 0 0 0 2px #FFFFFF, inset 0 0 0 2px #FFFFFF;
   }
   .cell.mark { box-shadow: inset 0 0 0 4px var(--sun); }
   .cell.mark::before {
     content: '⭐'; position: absolute; right: 2%; top: 2%; z-index: 2;
     font-size: calc(var(--bw) / 8 * .3);
   }
-  .cell.good { box-shadow: inset 0 0 0 4px var(--leaf); }
+  .cell.good { box-shadow: inset 0 0 0 4px var(--leaf-deep); }
   .cell.good::before {
     content: '✔'; position: absolute; right: 4%; top: 0; z-index: 2; color: #fff;
-    background: var(--leaf); border-radius: 50%; width: 30%; height: 30%;
+    background: var(--success); border-radius: 50%; width: 30%; height: 30%;
     font-size: calc(var(--bw) / 8 * .2); display: grid; place-items: center;
   }
-  .cell.bad { box-shadow: inset 0 0 0 4px var(--coral); animation: shake .4s ease; }
+  .cell.bad { box-shadow: inset 0 0 0 4px var(--mark-bad); animation: shake .4s ease; }
   .cell.bad::before {
     content: '✖'; position: absolute; right: 4%; top: 0; z-index: 2; color: #fff;
-    background: var(--coral); border-radius: 50%; width: 30%; height: 30%;
+    background: var(--danger); border-radius: 50%; width: 30%; height: 30%;
     font-size: calc(var(--bw) / 8 * .2); display: grid; place-items: center;
   }
-  .cell.missed { box-shadow: inset 0 0 0 4px var(--coral); animation: pulse-miss 1s ease infinite; }
+  /* gemist is geen fout om te straffen: een gestippelde rand, geen rood */
+  .cell.missed { background-image: linear-gradient(rgba(255, 237, 184, .75), rgba(255, 237, 184, .75)); }
+  .cell.missed::after { content: ''; position: absolute; inset: 4%; border: 3px dashed var(--ink); border-radius: 6px; animation: pulse 1s ease 2; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
   @keyframes shake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-5%) } 75% { transform: translateX(5%) } }
   @keyframes pulse-miss { 0%,100% { box-shadow: inset 0 0 0 4px rgba(255,111,89,1) } 50% { box-shadow: inset 0 0 0 7px rgba(255,111,89,.5) } }
   .cell.hero-pc { animation: hero-glow 1.4s ease infinite; }
   @keyframes hero-glow { 0%,100% { box-shadow: inset 0 0 0 4px var(--sun) } 50% { box-shadow: inset 0 0 0 8px rgba(255,197,61,.55) } }
-  .cell.check { background: radial-gradient(circle, #FF8A76 20%, #FF6F59 100%) !important; animation: pulse-miss 1s ease infinite; }
+  .cell.check { background: radial-gradient(circle, #FF8A76 20%, #FF6F59 100%) !important; animation: pulse-miss 1s ease 3; }
   .cell.spy { box-shadow: inset 0 0 0 4px #9B6FE8; }
 
   #arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
   .a-sun { stroke: var(--sun-deep); fill: var(--sun-deep); }
-  .a-coral { stroke: #E8402A; fill: #E8402A; }
+  .a-coral { stroke: var(--coral-deep); fill: var(--coral-deep); }
   .a-leaf { stroke: var(--leaf-deep); fill: var(--leaf-deep); }
-  #arrows line { stroke-width: 13; stroke-linecap: round; opacity: .85; }
-  #arrows polygon { opacity: .85; }
+  #arrows line { stroke-width: 13; stroke-linecap: round; opacity: .9; }
+  #arrows polygon { opacity: .9; }
 
   .board-frame.cloud {
     box-shadow: 0 0 0 4px #9DB4E8, 0 12px 34px rgba(90, 120, 200, .35);
