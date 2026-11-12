@@ -148,10 +148,19 @@ for (const type of ['attacked', 'capture', 'mobility', 'free']) {
   check('scan gen ' + type, ok, 5);
 }
 for (const wantTrap of [true, false]) {
+  /* the check behind the generator gives up after a few rejected candidates,
+     so without a seed a run now and then finds nothing */
+  let seed = wantTrap ? 1001 : 1002;
+  const rng = () => {
+    seed = (seed + 0x6D2B79F5) >>> 0;
+    let x = Math.imul(seed ^ (seed >>> 15), seed | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
   const t = Date.now();
   let ok = 0;
   for (let i = 0; i < 5; i++) {
-    const task = E.genSafeTask(wantTrap);
+    const task = E.genSafeTask(wantTrap, rng);
     if (task && task.trap === wantTrap) ok++;
   }
   console.log('safe trap=' + wantTrap + '  ' + ok + '/5 ok, avg ' + Math.round((Date.now() - t) / 5) + 'ms');

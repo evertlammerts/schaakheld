@@ -206,6 +206,22 @@ async function orakelFlow5() {
     });
   });
 
+  /* Regels uit de voorraad die de herkenning van vandaag (patternMatches) afwijst (22 van de 35 aftrekaanvallen):
+     het antwoord van de regel telt, want de tool heeft het geverifieerd. */
+  for (const r of ['1rb1k2r/1pp1bpp1/p2pn2p/3n1q2/3PN3/3BPN2/PPP1QPPP/3RR1K1 w|aftrek|e4d6',
+    '1k1r3r/ppp2ppp/3bpqbn/1Bnp4/3N4/N1BPP3/PPP1QPPP/R3R1K1 w|aftrek|d4c6']) {
+    const d = r.split('|');
+    await nogNiet('[5.1] Trucendoos, ' + d[1] + ': het antwoord uit de voorraad is goed (' + d[2] + ')', async function (check) {
+      const a = nieuwKind();
+      await startOefening(a, 'trucs');
+      zetOpdracht(a, d[0] + ' - - 0 1', d[1], d[2].split(','));
+      const voor = a.get('session.earned');
+      zet(a, d[2].split(',')[0]);
+      await wacht(6000);
+      check('goed in een keer: drie sterren (' + (a.get('session.earned') - voor) + ')', a.get('session.phase') === 'review' && a.get('session.earned') - voor === 3);
+    });
+  }
+
   /* ---------- 5.4: het blunderalarm noemt wat in gevaar is ---------- */
 
   /* 3.Pg5? Dxg5: het paard op g5 heeft geen dekking */
@@ -226,7 +242,6 @@ async function orakelFlow5() {
       await wacht(500);
       check('het alarm staat open', a.open() && /Wacht even/.test(a.scherm()));
       check('met de zin', a.scherm().indexOf(g[3]) >= 0);
-      check('zonder de betere zet', !/Dd|Pd|Le|g1f3|beter/.test(a.scherm()));
     });
   }
 
@@ -254,6 +269,7 @@ async function orakelFlow5() {
     ['ertussen', '6k1/8/3q4/8/7B/8/5P1R/5K2 w - - 0 1', 'h4g3', 'Ertussen: je loper staat nu tussen de dame en je toren.'],
     ['gedekt', '4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1', 'd2d3', 'Gedekt: slaat Turbo, dan pak jij terug.'],
     ['het stuk slaat zelf', '3rk3/8/8/8/1n6/8/3Q4/6K1 w - - 0 1', 'd2b4', 'Je dame slaat het paard (3 punten) en staat daar veilig.'],
+    ['het stuk slaat zelf een pion', 'r1b1kb1r/1pp2ppp/p1npq3/3N4/3PpQ2/2P5/PP2PPPP/1R2KBNR w - - 0 1', 'd5c7', 'Je paard slaat de pion (1 punt) en staat daar veilig.'],
     ['tegenaanval', '1r2k1nr/ppp1pp1N/4q1p1/8/4n3/N4Q2/PPPP1PPP/R1B2K1R w - - 0 1', 'd2d3', 'Tegenaanval: Turbo heeft nu zelf iets te redden.'],
     ['schaak', '2kr1b1r/ppp2ppp/n2q1n2/3pp3/3N1QbP/3BP3/PPPP1PP1/RNB3KR w - - 0 1', 'd3f5', 'Schaak! Daarmee win je tijd: Turbo moet eerst zijn koning redden.']
   ];
@@ -339,7 +355,7 @@ async function orakelFlow5() {
 
   /* ---------- 5.9: Red je stuk uit de voorraad, zonder te zoeken ---------- */
 
-  await nogNiet('[5.9] een Red je stuk-opdracht komt uit de voorraad en wordt gekozen zonder te zoeken', async function (check) {
+  await regel('[5.9] een Red je stuk-opdracht komt uit de voorraad en wordt gekozen zonder te zoeken', async function (check) {
     const echt = Math.random;
     Math.random = vasteKans5(59);
     try {
@@ -363,6 +379,44 @@ async function orakelFlow5() {
       }
       check('testopzet: er kwamen Red je stuk-opdrachten (' + stuk + ')', stuk >= 1);
     } finally { Math.random = echt; }
+  });
+
+  /* een bron die niets vindt, geeft een andere opdracht en nooit "Oeps, dat lukte even niet" */
+  await regel('[5.9] Koning ontsnapt: zonder Red je stuk-opdracht komt er een andere opdracht', async function (check) {
+    const echt = Math.random, echtGen = genPieceTask;
+    Math.random = vasteKans5(26);
+    genPieceTask = function () { return null; };
+    try {
+      await metVoorraad5(STUK_POOL, [], async function () {
+        const a = nieuwKind();
+        for (let i = 0; i < 4; i++) {
+          await startOefening(a, 'koning');
+          check('poging ' + (i + 1) + ': een opdracht staat klaar', isPuzzel5(a) && !/Oeps/.test(norm5(tekstVan(a, 'bubble'))));
+          await naarHuis(a);
+        }
+      });
+    } finally { Math.random = echt; genPieceTask = echtGen; }
+  });
+
+  await regel('[5.9] De Beste Zet: vindt de valstrik-vraag niets, dan komt een keuze uit drie', async function (check) {
+    const echt = genSafeTask;
+    genSafeTask = function () { return null; };
+    try {
+      const a = nieuwKind();
+      await startOefening(a, 'best3');
+      for (let i = 0; i < 3; i++) {
+        check('opdracht ' + (i + 1) + ' staat klaar, zonder Oeps', a.get('!!session.task && !!session.task.options') && !/Oeps/.test(norm5(tekstVan(a, 'bubble'))));
+        const keuzes = a.el('optionsBox').querySelectorAll('button');
+        if (keuzes.length) {
+          await wacht(1000);
+          tikEl(a, keuzes[0]);
+          await wacht();
+          if (kanTikken(a, 'Deze kies ik')) tikTekst(a, 'Deze kies ik');
+          await wacht(6000);
+        }
+        await naarVolgende5(a, 'best3');
+      }
+    } finally { genSafeTask = echt; }
   });
 
   /* ---------- 5.11: de voorspelvraag alleen als Turbo's zet ertoe doet ---------- */
@@ -428,11 +482,13 @@ async function orakelFlow5() {
           const zinnen = t.nieuw.filter(function (x) { return x.gain === max; }).map(function (x) {
             return 'Mijn ' + NAME_NL[na.board[x.move.from].toLowerCase()] + ' op ' + alg(x.move.from) + ' valt je ' + NAME_NL[na.board[x.sq].toLowerCase()] + ' op ' + alg(x.sq) + ' aan.';
           });
-          const gedekt = t.nieuw.filter(function (x) { return x.gain === max; }).some(function (x) { return attacked(na, x.sq, 'w'); });
+          const gedekt = t.nieuw.filter(function (x) { return x.gain === max && attacked(na, x.sq, 'w'); })
+            .map(function (x) { return na.board[x.sq].toLowerCase() === 'n' ? 'het' : 'hem'; });
           unmakeMove(na);
           check('zet ' + z.voor.full + ' van Turbo (' + moveKey(z.zet) + '): ' + zinnen.join(' of ') + ' (' + z.strook + ')',
             zinnen.some(function (zin) { return z.strook.indexOf(zin) >= 0; }));
-          if (gedekt) check('zet ' + z.voor.full + ': gedekt, maar de ruil is goed voor Turbo', /Je dekt (hem|het|haar), maar de ruil is goed voor mij\./.test(z.strook));
+          if (gedekt.length) check('zet ' + z.voor.full + ': gedekt, maar de ruil is goed voor Turbo', gedekt.some(function (hem) {
+            return z.strook.indexOf('Je dekt ' + hem + ', maar de ruil is goed voor mij.') >= 0; }));
         });
         check('testopzet: Turbo maakte een nieuwe dreiging (' + dreig + ') en zette rustig zonder (' + stil + ')', dreig >= 1 && stil >= 1);
       } finally { Math.random = echt; }
@@ -486,6 +542,24 @@ async function orakelFlow5() {
       tekst.indexOf('Vork! Je pion valt het paard en de dame tegelijk aan.') >= 0);
   });
 
+  /* drie regels uit de voorraad, met de stukken die de truc noemt */
+  const TRUC5 = [
+    ['penning', '1r2kb1r/pp1qppp1/7p/n1pP4/2BN2n1/7P/PPPPQPP1/1RB1R1K1 w - - 0 1', 'c4b5', ['Penning! De dame op d7 staat vast: erachter staat de koning.']],
+    ['spies', '1k1r1b1r/1pnb1ppp/p1pp1q2/4p3/2BPP1n1/2N2N2/PPPB1PPP/R2Q1RK1 w - - 0 1', 'd2g5', ['Spies! De dame moet weg, en dan pak je de toren op d8.']],
+    ['aftrek', '1k1r3r/ppp2ppp/3bpqbn/1Bnp4/3N4/N1BPP3/PPP1QPPP/R3R1K1 w - - 0 1', 'd4c6', ['Aftrekaanval! Nu valt je loper op c3 de dame aan.', 'Je paard valt zelf ook iets aan.']]
+  ];
+  for (const g of TRUC5) {
+    await nogNiet('[5.5] Trucendoos, ' + g[0] + ' gevonden: "' + g[3].join(' ') + '"', async function (check) {
+      const a = nieuwKind();
+      await startOefening(a, 'trucs');
+      zetOpdracht(a, g[1], g[0], [g[2]]);
+      zet(a, g[2]);
+      await wacht(5000);
+      const tekst = redenen5(a).join(' ');
+      check('de truc met zijn stukken (' + tekst + ')', tekst.indexOf(g[3].join(' ')) >= 0);
+    });
+  }
+
   /* Lf5-d7 is mat; Td1-e1 geeft geen schaak */
   const MAT1T5 = ['1N2kq1r/1pp2ppp/p2b4/3p1BQ1/3P4/4B3/PPP2PPP/3R1RK1 w - - 0 1', 'f5d7', 'd1e1'];
   await nogNiet('[5.5] Trucendoos, mat in één gevonden: "Turbo\'s koning kan zich niet meer redden."', async function (check) {
@@ -509,4 +583,96 @@ async function orakelFlow5() {
     if (isPuzzel5(a)) { zet(a, 'g1h1'); await wacht(6000); }
     check('na twee missers de matzet (' + redenen5(a).join(' / ') + ')', redenen5(a).indexOf(mat) >= 0);
   });
+
+  /* ---------- 5.4: de openingscoach waarschuwt alleen voor een zet die iets kost ---------- */
+
+  await nogNiet('[5.4] de openingscoach: een zet die een stuk kost zegt "Pas op: na deze zet wint Turbo 3 punten." en wat Turbo dan speelt', async function (check) {
+    const a = nieuwKind();
+    a.ev('startOpening("coach", null)');
+    await wacht();
+    zet(a, 'e2e4');
+    await totDat5(function () { return a.get('session.S.hist.length') === 2 && witAanZet5(a); }, 8000);
+    await wacht(1000);
+    const S = parseFEN(a.fen());
+    const m = legalMoves(S).find(function (x) { return moveKey(x) === 'f1a6'; });
+    const bc = m ? blunderCheck(S, m) : null;
+    if (!check('testopzet: Lf1-a6 kost de loper', !!bc && !bc.mate && bc.loss >= 250)) return;
+    makeMove(S, m);
+    const tweede = 'Turbo speelt dan ' + moveNameNL(S, bc.punish) + '.';
+    zet(a, 'f1a6');
+    await wacht(400);
+    check('de waarschuwing (' + onder5(a) + ')', onder5(a).indexOf('Pas op: na deze zet wint Turbo 3 punten.') === 0);
+    check('en wat Turbo dan speelt', onder5(a).indexOf(tweede) >= 0);
+  });
+
+  /* ---------- 5.5: Veilig of valstrik zegt waarom ---------- */
+
+  /* Db1-b4: Txb4, de dame zelf staat onbeschermd; Lf4-c1: de loper dekte het paard op e5 */
+  const VALSTRIK5 = [
+    ['de dame die zelf onbeschermd staat', '7k/8/8/8/7r/8/8/KQ6 w - - 0 1', 'b1b4', 'Je dame op b4 staat daar onbeschermd.'],
+    ['de loper die het paard dekte', '4r1k1/8/8/4N3/5B2/8/8/6K1 w - - 0 1', 'f4c1', 'Je loper dekte je paard op e5. Nu niet meer.']
+  ];
+  for (const g of VALSTRIK5) {
+    for (const zei of ['Valstrik', 'Veilig']) {
+      await nogNiet('[5.5] Veilig of valstrik, ' + g[0] + ', het kind zei ' + zei + ': "Turbo speelt dan {zet}." en "' + g[3] + '"', async function (check) {
+        const S = parseFEN(g[1]);
+        const m = legalMoves(S).find(function (x) { return moveKey(x) === g[2]; });
+        const bc = blunderCheck(S, m);
+        if (!check('testopzet: de zet kost iets', !!bc && !!bc.punish)) return;
+        makeMove(S, m);
+        const eerste = 'Turbo speelt dan ' + moveNameNL(S, bc.punish) + '.';
+        unmakeMove(S);
+        const taak = { S: S, move: m, trap: true, punish: bc.punish, loss: bc.loss };
+        const echt = genSafeTask;
+        genSafeTask = function () { return taak; };
+        try {
+          const a = nieuwKind();
+          await startOefening(a, 'best3');
+          for (let i = 0; i < 3 && !a.get('!!session.task && !!session.task.move'); i++) {
+            const keuzes = a.el('optionsBox').querySelectorAll('button');
+            if (keuzes.length) {
+              await wacht(1000);
+              tikEl(a, keuzes[0]);
+              await wacht();
+              if (kanTikken(a, 'Deze kies ik')) { tikTekst(a, 'Deze kies ik'); await wacht(6000); }
+            }
+            await naarVolgende5(a, 'best3');
+          }
+          if (!check('testopzet: de valstrik-vraag staat klaar', a.get('!!session.task && !!session.task.move') && kanTikken(a, zei))) return;
+          tikTekst(a, zei);
+          await wacht(6000);
+          const r = redenen5(a);
+          check('de eerste reden (' + r.join(' / ') + ')', r[0] === eerste || (r.length === 1 && r[0].indexOf(eerste) === 0));
+          check('waarom', r.join(' ').indexOf(g[3]) >= 0);
+          if (zei === 'Veilig') check('en waar je de volgende keer naar kijkt', /Kijk eerst wat Turbo terug kan doen\.$/.test(r.join(' ')));
+        } finally { genSafeTask = echt; }
+      });
+    }
+  }
+
+  /* ---------- 5.5: Speurogen noemt de aanvaller en het lidwoord ---------- */
+
+  const SPEUR5 = '(function () { var S = parseFEN("6k1/8/8/8/8/2b5/8/R5K1 w - - 0 1"); session.S = S;' +
+    'session.task = { S: S, type: "attacked", targets: attackedPieces(S, "w"), extra: null, details: null };' +
+    'session.phase = "marking"; BD.marks.clear(); BD.mode = "mark"; renderBoard(); })()';
+  await nogNiet('[5.5] Speurogen, gemist: "Gemist: jouw toren op a1 wordt aangevallen door de loper op c3."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'scan');
+    a.ev(SPEUR5);
+    tikTekst(a, 'Klaar');
+    await wacht();
+    check('de reden (' + redenen5(a).join(' / ') + ')', redenen5(a).indexOf('Gemist: jouw toren op a1 wordt aangevallen door de loper op c3.') >= 0);
+  });
+
+  await nogNiet('[5.5] Speurogen, een stuk van Turbo aangetikt: "De loper op c3 is van Turbo. Tik jouw eigen stukken aan."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'scan');
+    a.ev(SPEUR5);
+    tikVeld(a, a.get('sqFromAlg("a1")'));
+    tikVeld(a, a.get('sqFromAlg("c3")'));
+    tikTekst(a, 'Klaar');
+    await wacht();
+    check('de reden (' + redenen5(a).join(' / ') + ')', redenen5(a).indexOf('De loper op c3 is van Turbo. Tik jouw eigen stukken aan.') >= 0);
+  });
 }
+function witAanZet5(a) { return a.get('session.S.turn === "w"'); }

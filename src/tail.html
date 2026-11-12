@@ -2512,7 +2512,7 @@ function buildRound() {
   if (kind === 'scan') return buildScan();
   /* De Beste Zet wisselt kiezen-uit-drie af met de valstrik-vraag: allebei
      "denk eerst wat Turbo daarna doet" */
-  if (kind === 'best3') return session.round % 2 === 0 ? buildSafe() : buildBest3();
+  if (kind === 'best3') return session.round % 2 === 0 ? buildSafe() || buildBest3() : buildBest3();
   if (kind === 'trucs') return buildTrucs();
   if (kind === 'koning') return buildKoning();
   return false;
@@ -3113,9 +3113,22 @@ function pickKoningTask() {
   if (!answers.length) return null;
   return { S, type: p.type, answers };
 }
+/* Red je stuk uit de geverifieerde voorraad (src/trucs.js, decision D25):
+   kiezen kost geen zoektocht; alleen zonder voorraad zoekt de live generator */
+function pickStukTask() {
+  const pool = typeof STUK_POOL !== 'undefined' ? STUK_POOL : [];
+  if (!pool.length) return genPieceTask();
+  session.usedStuk = session.usedStuk || new Set();
+  let cands = pool.map((p, i) => i).filter(i => !session.usedStuk.has(i));
+  if (!cands.length) { session.usedStuk.clear(); cands = pool.map((p, i) => i); }
+  const i = cands[Math.floor(Math.random() * cands.length)];
+  session.usedStuk.add(i);
+  return trucTask(pool[i]);
+}
 function buildKoning() {
   const wantPiece = session.lastType !== 'stuk' && Math.random() < 0.4;
-  const task = wantPiece ? genPieceTask() : (pickKoningTask() || genPieceTask());
+  /* vindt de ene bron niets, dan geeft de andere de opdracht */
+  const task = wantPiece ? (pickStukTask() || pickKoningTask()) : (pickKoningTask() || pickStukTask());
   if (!task) return false;
   session.lastType = task.type;
   session.task = task;
