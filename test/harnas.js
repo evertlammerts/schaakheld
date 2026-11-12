@@ -241,7 +241,7 @@ function opgeslagen(app, sleutel) {
   try { return JSON.parse(v); } catch (e) { return v; }
 }
 
-/* het ene bewaarde vriendenpotje: schaakheld-samen is een kaart van potjes per potje-id (D28) */
+/* het ene bewaarde vriendenpotje: schaakheld-samen is een kaart van potjes per potje-id */
 function samenPotje(app) {
   const r = opgeslagen(app, 'schaakheld-samen');
   const ids = r && r.games && typeof r.games === 'object' ? Object.keys(r.games) : [];

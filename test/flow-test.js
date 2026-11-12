@@ -1575,7 +1575,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('[4.2] mp: Verder brengt hetzelfde potje terug', !!session && session.online === true && session.S === MP.S);
   resignNow();
   await tikje();
-  /* D35: de uitslag blijft bewaard tot de ander hem kent; hier is er geen ander die antwoordt */
+  /* de uitslag blijft bewaard tot de ander hem kent; hier is er geen ander die antwoordt */
   var naOpgave = leesSamen();
   ok('mp: na opgeven is het potje over, en de uitslag staat bewaard tot de ander hem kent', session.over === true &&
     !!naOpgave && !naOpgave.kapot && naOpgave.r.result.kind === 'opgave' && naOpgave.r.shown === true);

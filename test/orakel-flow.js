@@ -937,7 +937,7 @@ async function orakelFlow() {
     check('weg zodra het venster open is', a.open() && toastTekst(a) === '');
   });
 
-  /* D34: thuis eerst het level en dan de trofeeën; de melding van Pauze wacht tot het laatste venster dicht is */
+  /* thuis eerst het level en dan de trofeeën; de melding van Pauze wacht tot het laatste venster dicht is */
   await regel('[1.14] na Pauze komt de melding pas als de vensters voor een level en trofeeën dicht zijn', async function (check) {
     const a = nieuwKind();
     a.ev('bump("xp", 140); bump("stars", 99); bump("c.perfectScans", 9)');
@@ -1464,7 +1464,7 @@ async function orakelFlow() {
     check('geen reeks en geen vorm', !/op een rij|Vorm/.test(tekstVan(a, 'drillStars')));
   });
 
-  /* D34: Opgeven openen verandert niets; alleen een bevestigde opgave beëindigt het potje */
+  /* Opgeven openen verandert niets; alleen een bevestigde opgave beëindigt het potje */
   for (const uitweg of ['het kruisje', 'een tik naast de kaart', 'Escape', 'Nee, doorspelen']) {
     await regel('[2.3] Opgeven tijdens de voorspelvraag, dan ' + uitweg + ': de vraag staat er nog zoals hij was', async function (check) {
       const a = nieuwKind();
@@ -1500,7 +1500,7 @@ async function orakelFlow() {
     check('geen vraag meer in de strook', !zichtbaar(a, 'predictBar') && a.get('BD.mode') !== 'predict' && !/Welk stuk zet Turbo/.test(tekstVan(a, 'bubble')));
   });
 
-  /* D22 en D34: de hulpjes komen terug zodra de vraag dicht is, behalve een Speurbril die op is */
+  /* de hulpjes komen terug zodra de vraag dicht is, behalve een Speurbril die op is */
   await regel('[2.3] na het antwoord op de voorspelvraag staan Denkwolk, Speurbril en Zet terug weer aan', async function (check) {
     const a = nieuwKind();
     check('testopzet: de vraag staat open', await metVoorspelvraag(a));
@@ -1534,7 +1534,7 @@ async function orakelFlow() {
     check('de andere twee staan aan', a.get('actionBtns.cloudBtn.disabled') === false && a.get('actionBtns.undo.disabled') === false);
   });
 
-  /* D34: een profiel kent zijn level vanaf het begin, dus ook een nieuw kind hoort zijn eerste level */
+  /* een profiel kent zijn level vanaf het begin, dus ook een nieuw kind hoort zijn eerste level */
   async function eersteRondjeFoutloos(a, check) {
     await startOefening(a, 'scan');
     let venster = false;
@@ -1569,7 +1569,7 @@ async function orakelFlow() {
     await eersteRondjeFoutloos(nieuwKind({ opslag: o }), check);
   });
 
-  /* D34: wat dit apparaat liet zien, staat per apparaat bewaard; een trofee die nog niet te zien was, komt thuis */
+  /* wat dit apparaat liet zien, staat per apparaat bewaard; een trofee die nog niet te zien was, komt thuis */
   async function potjeMetDromer(a) {
     await startPotje(a, 1);
     await zetEnWacht(a, 'e2e4');
@@ -1707,7 +1707,7 @@ async function orakelFlow() {
     check('zes seconden later staan ze er nog', a.get('BD.spy.size') === randjes);
   });
 
-  /* D34: de keuzes staan waar Volgende stond (na veilig of valstrik); een tik in de eerste 350 ms telt niet */
+  /* de keuzes staan waar Volgende stond (na veilig of valstrik); een tik in de eerste 350 ms telt niet */
   await regel('[2.4] De Beste Zet: een tik op een keuze in de eerste 350 ms van een nieuwe opdracht telt niet, daarna wel', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'best3');
@@ -2377,7 +2377,7 @@ async function orakelFlow() {
     check('de naam één keer', (tekstVan(b, 'view-spelen').match(/Mees/g) || []).length === 1);
   });
 
-  /* decision D32: een document van voor lastSeen neemt de laatste dag met iets erop uit de dagtellers */
+  /* een document van voor lastSeen neemt de laatste dag met iets erop uit de dagtellers */
   await regel('[3.9] compat: een document van nu zonder lastSeen, laatst geteld vijf dagen geleden: welkom terug', async function (check) {
     const a = await kindUitDoc(docVan('Daan', { xp: 2710, stars: 70, 'wk.2026-W45.d5': 1, 'wk.2026-W45.opdr': 4, 'wk.2026-W44.d1': 2 }));
     check('testopzet: geen lastSeen', a.get('P.lastSeen') === null);
@@ -2636,7 +2636,7 @@ async function orakelFlow() {
     check('niet aan elkaar geplakt', !/belofenkaal/.test(a.el('wordInp').value) && !/belofenkaal/.test(a.scherm()));
   });
 
-  /* D35: 87 van de 1024 woorden beginnen met een ander lijstwoord, zoals adem en ademen */
+  /* 87 van de 1024 woorden beginnen met een ander lijstwoord, zoals adem en ademen */
   for (const laatste of ['ademen', 'adem']) {
     await regel('[4.8] letter voor letter, met als laatste woord "' + laatste + '": de code is wat het kind typte', async function (check) {
       const a = nieuwKind();
@@ -2659,6 +2659,23 @@ async function orakelFlow() {
     vulIn(a, a.el('mpInp'), 'tafle vuur');
     await wacht();
     check('de zin voor vrienden', /'tafle' ken ik niet\. Vraag het je maatje nog eens\./.test(a.scherm()));
+  });
+
+  await regel('[4.8] terwijl de app zoekt, gaat Verbind! niet weer aan, ook niet als het kind een woord vervangt', async function (check) {
+    const a = nieuwKind();
+    a.ev('mpWordFlow()');
+    await wacht(200);
+    const w = a.get('WOORDEN.slice(100, 103)');
+    vulIn(a, a.el('mpInp'), w[0] + ' ' + w[1]);
+    check('testopzet: met twee woorden mag het', a.el('mpKoppel').disabled === false);
+    a.tik('mpKoppel');
+    await wacht(6000);
+    check('testopzet: de app zoekt', a.el('mpKoppel').disabled === true && zichtbaar(a, 'mpWachtRegel'));
+    tikEl(a, a.el('mpChips').querySelectorAll('.w-chip')[1], 'woord 2');
+    vulIn(a, a.el('mpInp'), w[2] + ' ');
+    await wacht(200);
+    check('testopzet: weer twee woorden', a.el('mpChips').querySelectorAll('.w-chip').length === 2);
+    check('de knop blijft uit', a.el('mpKoppel').disabled === true);
   });
 
   /* rondjes achter elkaar zonder thuis: het level is een badge op één eindkaart */

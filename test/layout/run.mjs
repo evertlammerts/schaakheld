@@ -549,7 +549,7 @@ for (const [W, H] of KLEIN) {
         if (hint) check(n, 'Hint houdt zijn eigen breedte, links', hint.w < hint.ow * 0.6 && hint.left < 24);
         if (soorten[i] !== 'best3') continue;
         /* van opdracht 2 (veilig of valstrik) naar 3: de drie keuzes vullen het vak en kunnen niet opzij, dus daar
-           mag een keuze op de plek van Volgende staan; een tik in de eerste 350 ms telt dan niet (D34) */
+           mag een keuze op de plek van Volgende staan; een tik in de eerste 350 ms telt dan niet */
         await page.evaluate(() => { session.phase = 'review'; BD.mode = 'off'; awardRound(0, 'Zo zit het', 'Een reden.'); });
         await page.waitForTimeout(300);
         const vroeg = await page.evaluate(async () => {
