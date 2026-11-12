@@ -937,6 +937,24 @@ async function orakelFlow() {
     check('weg zodra het venster open is', a.open() && toastTekst(a) === '');
   });
 
+  /* D34: thuis eerst het level en dan de trofeeën; de melding van Pauze wacht tot het laatste venster dicht is */
+  await regel('[1.14] na Pauze komt de melding pas als de vensters voor een level en trofeeën dicht zijn', async function (check) {
+    const a = nieuwKind();
+    a.ev('bump("xp", 140); bump("stars", 99); bump("c.perfectScans", 9)');
+    await startOefening(a, 'scan');
+    await scanGoed(a);
+    check('testopzet: level Paard, Sterrenregen en Superspeurneus wachten', a.get('levelIdx(P.xp)') === 1 &&
+      a.get('!!P.badges.sterren && !!P.badges.speurneus'));
+    a.tik('backBtn');
+    await wacht();
+    check('eerst het level, zonder melding', a.ziet('LEVEL OMHOOG') && toastTekst(a) === '');
+    a.tik('lvlOk');
+    check('dan de trofeeën samen, zonder melding', a.ziet('Trofeeën verdiend!') && /Sterrenregen/.test(a.scherm()) &&
+      /Superspeurneus/.test(a.scherm()) && /Je verdiende ze tijdens het spelen\./.test(a.scherm()) && toastTekst(a) === '');
+    tikTekst(a, 'Super');
+    check('daarna de melding van Pauze', !a.open() && /Bewaard/.test(toastTekst(a)));
+  });
+
   /* ================= increment 2 ================= */
 
   await regel('[2.3] ⋯ houdt Remise aanbieden, Opgeven en de Puntenwijzer; de hulpjes staan onder het bord', async function (check) {
@@ -1570,7 +1588,8 @@ async function orakelFlow() {
     check('op het speelscherm geen venster en geen melding', !a.open() && !zichtbaar(a, 'toast'));
     a.tik('backBtn');
     await wacht();
-    check('thuis de trofee', opThuis(a) && a.ziet('Trofee verdiend') && /Dromer/.test(a.scherm()));
+    check('thuis de trofee', opThuis(a) && a.ziet('Trofee verdiend!') && /Dromer/.test(a.scherm()) &&
+      /Je verdiende hem tijdens het spelen\./.test(a.scherm()));
     tikTekst(a, 'Super');
     check('daarna de melding van Pauze', /Bewaard/.test(toastTekst(a)));
     await wacht();
