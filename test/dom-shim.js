@@ -233,7 +233,7 @@ function maakDocument(vast) {
     if (t.k) return verborgenZelf(t.k) || !!t.k._los;
     return verborgenAttrs(t.attrs);
   }
-  /* de keten van ouders, of null als het element nergens meer hangt */
+  /* de keten van ouders, binnenste eerst, of null als het element nergens meer hangt */
   function pad(el) {
     const keten = [];
     let verborgen = verborgenZelf(el), nu = el;
@@ -241,6 +241,7 @@ function maakDocument(vast) {
       const o = ouderVan(nu);
       if (!o || o.los) return null;
       if (o.omhullend.some(tagVerborgen)) verborgen = true;
+      for (let j = o.omhullend.length - 1; j >= 0; j--) if (o.omhullend[j].k) keten.push(o.omhullend[j].k);
       nu = o.ouder;
       keten.push(nu);
       if (nu !== body && verborgenZelf(nu)) verborgen = true;

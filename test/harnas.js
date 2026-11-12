@@ -210,6 +210,13 @@ function zichtbaar(app, id) {
   return !!p && !p.verborgen;
 }
 
+/* het binnenste element dat beide bevat, zoals de balk om de terugknop en ⋯ */
+function gedeeldeOuder(app, idA, idB) {
+  const a = app.els[idA] && app.doc.__pad(app.els[idA]), b = app.els[idB] && app.doc.__pad(app.els[idB]);
+  if (!a || !b) return null;
+  return a.keten.find(function (x) { return b.keten.indexOf(x) >= 0; }) || null;
+}
+
 /* de tekst in het element die een kind ziet (verborgen delen tellen niet) */
 function tekstVan(app, id) {
   const e = app.els[id];
@@ -376,4 +383,6 @@ function harnasZelftest() {
   tikTekst(app, 'Nog eens');
   ok('harnas: twee keer dezelfde HTML geeft nieuwe knoppen, dus een tik telt een keer', keer === 1);
   ok('harnas: de tekst naast een element', doc.__ouderTekst(app.els.num) === '5 XP');
+  const balk = gedeeldeOuder(app, 'skip', 'zie');
+  ok('harnas: het binnenste element om twee elementen heen', !!balk && doc.__tekst(balk) === 'Speel maar Zie mij');
 }

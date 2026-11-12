@@ -660,6 +660,8 @@ async function orakelFlow() {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5']) });
     a.tik('verderKaart');
     await wacht();
+    const balk = gedeeldeOuder(a, 'backBtn', 'meerBtn');
+    check('de balk met Pauze en ⋯ noemt tegen wie je speelt', !!balk && /Turbo/.test(a.doc.__tekst(balk)));
     const zicht = knopTeksten(a).join(' | ');
     check('Denkwolk, Speurbril en Zet terug in de rij', /Denkwolk/.test(zicht) && /Speurbril/.test(zicht) && /Zet terug/.test(zicht));
     check('Opgeven en Remise niet in de rij', !/Opgeven/.test(zicht) && !/Remise/.test(zicht));
@@ -727,6 +729,7 @@ async function orakelFlow() {
     const kaart = tekstVan(a, 'eindkaart');
     check('een kaart, geen venster', zichtbaar(a, 'eindkaart') && !a.open());
     check('Revanche! en Naar huis', /Revanche!/.test(kaart) && /Naar huis/.test(kaart));
+    check('het resultaat (learning.md 3: "Gewonnen!")', /Gewonnen!/.test(kaart));
     check('wat er verdiend is', /XP/.test(kaart));
     check('nieuwe trofeeën in de kaart, niet als melding', namen.length > 0 && namen.every(function (n) {
       return kaart.indexOf(n) >= 0 && toastTekst(a).indexOf(n) < 0;
@@ -756,6 +759,22 @@ async function orakelFlow() {
       tikTekst(a, 'Speel maar');
       await wacht();
       check('na "Speel maar" zet Turbo', a.get('session.S.hist.length') === 2);
+    } finally { Math.random = echt; }
+  });
+
+  await nogNiet('[2.8] de voorspelvraag: een tik op een stuk van Turbo is het antwoord, en dan zet Turbo', async function (check) {
+    const echt = Math.random;
+    Math.random = function () { return 0.1; };
+    try {
+      const a = maakApparaat('Mees');
+      a.ev('setPref("guard", false); setPref("predict", true)');
+      await startPotje(a, 1);
+      zet(a, 'e2e4');
+      await wacht(20000);
+      check('Turbo vraagt en wacht', a.get('session.S.hist.length') === 1);
+      tikVeld(a, a.get('sqFromAlg("g8")'));
+      await wacht();
+      check('na een tik op zijn paard zet Turbo', a.get('session.S.hist.length') === 2);
     } finally { Math.random = echt; }
   });
 
@@ -912,6 +931,21 @@ async function orakelFlow() {
   await nogNiet('[3.1] de Verder-kaart met een oefening als suggestie: één tik start Speurogen', async function (check) {
     const b = await kaartMetSuggestie(check, 'nieuw');
     check('Speurogen begint', opSpeelscherm(b) && b.get('session.kind') === 'scan' && /opdracht 1 van 5/i.test(tekstVan(b, 'roundChip')));
+  });
+
+  /* learning.md 1.4: lastKind wordt gezet als een rondje af is, of het kind de kaart volgde of niet */
+  await nogNiet('[3.2] na een rondje Speurogen stelt de kaart een potje voor, niet weer Speurogen', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5)');
+    await startOefening(a, 'scan');
+    await rondjeGoed(a, 5);
+    await volgende(a);
+    await naarHuis(a);
+    check('het rondje is onthouden als het laatste', a.get('P.lastKind') === 'scan');
+    const r = await stap(a);
+    check('de suggestie is een potje', r.rule === 'R7' && r.action.go === 'game');
+    check('en de kaart zegt het', opThuis(a) && tekstVan(a, 'verder').indexOf(r.title) >= 0 && !/Speurogen/.test(tekstVan(a, 'verder')));
   });
 
   await nogNiet('[3.2] alle vijf oefeningen en beide spelknoppen staan op Spelen, wat de kaart ook zegt', async function (check) {
