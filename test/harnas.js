@@ -107,11 +107,16 @@ function knoppen(app) {
   return uit;
 }
 
-/* een knop aantikken op wat erop staat */
+/* een knop aantikken op wat erop staat; heeft hij zelf geen luisteraar, dan
+   krijgt de lijst eromheen de tik, zoals een klik in de browser omhoog bubbelt */
 function tikTekst(app, tekst) {
   const k = knoppen(app).find(function (b) { return !b.disabled && (b.textContent || '').indexOf(tekst) >= 0; });
   if (!k) return false;
-  fire(k, 'click', { target: k });
+  if (k._ev.click && k._ev.click.length) { fire(k, 'click', { target: k }); return true; }
+  for (const id in app.els) {
+    const host = app.els[id];
+    if (host._qsa && host._qsa.knopen.indexOf(k) >= 0) fire(host, 'click', { target: k });
+  }
   return true;
 }
 
@@ -169,6 +174,25 @@ async function scanGoed(app) {
   const doelen = app.get('session.task.targets.slice()');
   for (const sq of doelen) app.ev('onCell(' + sq + ')');
   tikTekst(app, 'Klaar');
+  await wacht();
+}
+
+async function zetEnWacht(app, key) {
+  const gelukt = zet(app, key);
+  await wacht();
+  return gelukt;
+}
+
+/* opgeven zoals een kind: de knop Opgeven (in de rij of achter ⋯), dan ja */
+async function geefOp(app) {
+  if (!tikTekst(app, 'Opgeven')) { app.tik('meerBtn'); await wacht(); tikTekst(app, 'Opgeven'); }
+  await wacht();
+  tikTekst(app, 'Ja');
+  await wacht();
+}
+
+async function biedRemise(app) {
+  if (!tikTekst(app, 'Remise')) { app.tik('meerBtn'); await wacht(); tikTekst(app, 'Remise'); }
   await wacht();
 }
 
