@@ -42,11 +42,11 @@
     font-family: var(--font);
     color: var(--ink);
     background: linear-gradient(180deg, var(--sky-hi) 0%, var(--sky) 62%, var(--grass) 100%);
-    background-attachment: fixed;
+    background-attachment: fixed; /* compat-allow background-attachment: op iOS en in Safari 15 scrolt de lucht met de pagina mee */
     min-height: 100vh;
   }
   button { font-family: var(--font); color: var(--ink); }
-  button:focus-visible { outline: 3px dashed var(--ink); outline-offset: 2px; }
+  button:focus-visible { outline: 3px dashed var(--ink); outline-offset: 2px; } /* compat-allow css-focus-visible: Safari 15.0 tot 15.3 toont de gewone focusrand */
 
   .float-pc {
     position: fixed; z-index: 0; pointer-events: none; -webkit-user-select: none; user-select: none;
@@ -102,7 +102,7 @@
   }
   @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
   .hero-txt { flex: 1 1 260px; }
-  .hero-txt h1 { margin: 0 0 6px; font-size: clamp(22px, 4vw, 30px); text-wrap: balance; }
+  .hero-txt h1 { margin: 0 0 6px; font-size: clamp(22px, 4vw, 30px); text-wrap: balance; } /* compat-allow css.properties.text-wrap: voor Safari 17.4 breekt de kop gewoon af */
   .bubble {
     position: relative; background: var(--cream); border-radius: 16px;
     padding: 10px 14px; font-size: 15.5px; line-height: 1.45; color: var(--ink);
@@ -586,7 +586,7 @@
   .m-close:active { transform: translateY(1px); }
   @keyframes pop-in { from { transform: scale(.85); opacity: 0 } to { transform: scale(1); opacity: 1 } }
   .modal .m-emoji { font-size: 54px; line-height: 1.1; }
-  .modal h2 { margin: 10px 0 8px; font-size: 23px; text-wrap: balance; }
+  .modal h2 { margin: 10px 0 8px; font-size: 23px; text-wrap: balance; } /* compat-allow css.properties.text-wrap: voor Safari 17.4 breekt de kop gewoon af */
   .modal p { margin: 0 0 16px; font-size: 15.5px; color: var(--ink-soft); line-height: 1.45; }
   .modal .m-btns { display: flex; flex-direction: column; gap: 10px; }
   .modal input {
@@ -2444,7 +2444,7 @@ const GOAL_KINDS = {
 };
 
 function newDevId() {
-  try { return crypto.randomUUID(); } catch (e) {
+  try { return crypto.randomUUID(); } catch (e) { // compat-allow Crypto.randomUUID: try/catch met geteste terugval
     let s = '';
     for (let i = 0; i < 32; i++) s += Math.floor(Math.random() * 16).toString(16);
     return s;

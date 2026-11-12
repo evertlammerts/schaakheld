@@ -3,6 +3,7 @@
 .tmp-sw-shim.js
 .tmp-sw.js
 tools/.wordlist-cache/
+tools/compat/node_modules/
 server/data/
 .dev/
 .playwright/out/
