@@ -479,18 +479,50 @@ var crypto = {
    profielblobs met bearer secret, kamers en wederzijdse paren), zodat de
    flows end-to-end testbaar zijn. */
 var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, klok: 0, teller: 0 };
-/* grenzen en TTL uit bus.go; __server.klok schuift de nep-klok vooruit zodat
-   een flowtest een bus kan laten verlopen */
+/* grenzen en TTL uit bus.go, room.go en server.go; __server.klok schuift de
+   klok van de nep-server vooruit zodat een test een bus, een kamer of een
+   koppelcode kan laten verlopen */
 var BUS_TTL = 10 * 60000, MAX_BUSES = 512, MAX_BUS_BLOB = 4 << 10, MAX_BUS_CHECK = 64;
+var LINK_TTL = 10 * 60000, MAX_LINKS = 8192;
+var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000, MAX_KAMERS = 64, KAMER_RUST = 3000;
 function __busNu() { return Date.now() + __server.klok; }
 function __veegBussen() {
   for (var id in __server.buses) if (__server.buses[id].tot <= __busNu()) delete __server.buses[id];
 }
+/* zoals room.go: een kamer heeft een potje zodra beide stoeltjes ooit
+   verbonden waren; stil is pas stil als er niemand verbonden is */
+function __heeftPotje(rm) { return rm.order.every(tok => rm.joined[tok]); }
+function __kamerBezet(rm) { return rm.order.some(tok => rm.seats[tok] && rm.seats[tok].readyState === 1); }
+function __veegKamers() {
+  const nu = __busNu();
+  for (const id in __server.wsrooms) {
+    const rm = __server.wsrooms[id];
+    const potje = __heeftPotje(rm);
+    if (nu - rm.created >= (potje ? POTJE_MAX : KAMER_MAX)) { delete __server.wsrooms[id]; continue; }
+    if (nu - rm.touched < (potje ? POTJE_STIL : KAMER_STIL)) continue;
+    if (!__kamerBezet(rm)) delete __server.wsrooms[id];
+  }
+}
+/* zoals evictRoomLocked: alleen een kamer zonder iemand erin en ouder dan
+   KAMER_RUST wijkt, eerst een zonder potje, dan de langst stille */
+function __maakPlaats() {
+  const nu = __busNu();
+  let weg = null;
+  for (const id in __server.wsrooms) {
+    const rm = __server.wsrooms[id], w = weg && __server.wsrooms[weg];
+    if (__kamerBezet(rm) || nu - rm.created < KAMER_RUST) continue;
+    if (!w || (__heeftPotje(rm) !== __heeftPotje(w) ? !__heeftPotje(rm) : rm.touched < w.touched)) weg = id;
+  }
+  if (weg) delete __server.wsrooms[weg];
+  return !!weg;
+}
 function __nieuwToken() { return 'tok' + (++__server.teller) + 'x'.repeat(16); }
 function __nieuweKamer() {
+  __veegKamers();
+  if (Object.keys(__server.wsrooms).length >= MAX_KAMERS && !__maakPlaats()) return null;
   const id = 'kamer' + (++__server.teller) + 'k'.repeat(12);
-  const host = __nieuwToken(), gast = __nieuwToken();
-  __server.wsrooms[id] = { seats: {}, order: [host, gast] };
+  const host = __nieuwToken(), gast = __nieuwToken(), nu = __busNu();
+  __server.wsrooms[id] = { seats: {}, order: [host, gast], joined: {}, created: nu, touched: nu };
   __server.wsrooms[id].seats[host] = null;
   __server.wsrooms[id].seats[gast] = null;
   return { id, host, gast };
@@ -509,7 +541,13 @@ var fetch = function (url, opts) {
       json: () => Promise.resolve(data),
       arrayBuffer: () => Promise.resolve(data instanceof Uint8Array ? data.buffer.slice(0) : new ArrayBuffer(0))
     });
-    if (m === 'POST' && path === '/v1/link') { __server.links[body.code] = body.payload; res(204); }
+    if (m === 'POST' && path === '/v1/link') {
+      /* zoals server.go: vol is vol, ook voor een code die er al staat */
+      for (const c in __server.links) if (__server.links[c].tot <= __busNu()) delete __server.links[c];
+      if (Object.keys(__server.links).length >= MAX_LINKS) { res(429); return; }
+      __server.links[body.code] = { payload: body.payload, tot: __busNu() + LINK_TTL };
+      res(204);
+    }
     else if (m === 'POST' && path === '/v1/bus') {
       /* zelfde regels als bus.go: bus = sha256(bewijs), leeg blob wist, een
          bus houdt het briefje BUS_TTL lang, en vol is vol (een bestaande bus
@@ -539,12 +577,14 @@ var fetch = function (url, opts) {
     }
     else if (m === 'POST' && path === '/v1/room') {
       const k = __nieuweKamer();
+      if (!k) { res(429); return; }
       res(200, { room: k.id, seat: k.host, guest: k.gast });
     }
     else if (m === 'POST' && path === '/v1/pair') {
       /* zelfde validatie als room.go: zelfde-code of rare tekens is 400 */
       if (body.mine === body.theirs || !/^[A-Za-z0-9_-]{8,64}$/.test(body.mine) ||
         !/^[A-Za-z0-9_-]{8,64}$/.test(body.theirs)) { res(400); return; }
+      __veegKamers();
       const lo = body.mine < body.theirs ? body.mine : body.theirs;
       const hi = body.mine < body.theirs ? body.theirs : body.mine;
       const key = lo + '|' + hi;
@@ -558,6 +598,7 @@ var fetch = function (url, opts) {
       else if (p.dirA === body.mine) res(204);
       else {
         const k = __nieuweKamer();
+        if (!k) { res(429); return; }
         p.room = k.id;
         p.seatA = k.host;
         p.seatB = k.gast;
@@ -567,7 +608,7 @@ var fetch = function (url, opts) {
     else if (m === 'POST' && path === '/v1/link/redeem') {
       const p = __server.links[body.code];
       delete __server.links[body.code];
-      p === undefined ? res(404) : res(200, { payload: p });
+      (p === undefined || p.tot <= __busNu()) ? res(404) : res(200, { payload: p.payload });
     } else if (path.indexOf('/v1/profile/') === 0) {
       const id = path.slice('/v1/profile/'.length);
       const prof = __server.profiles[id];
@@ -605,6 +646,10 @@ function WebSocket(url) {
   this.readyState = 0;
   this._room = null;
   this._seat = null;
+  /* de kamer zelf, niet het id: zoals room.go gaan berichten tussen twee
+     verbonden stoeltjes door, ook als de kamer om zijn leeftijd uit de tabel
+     ging */
+  this._rm = null;
   this.onopen = null; this.onmessage = null; this.onclose = null;
   setTimeout(() => {
     if (self.readyState !== 0) return;
@@ -615,7 +660,7 @@ function WebSocket(url) {
     if (sock.readyState === 1 && sock.onmessage) sock.onmessage({ data });
   }, 0);
   const peer = () => {
-    const rm = __server.wsrooms[self._room];
+    const rm = self._rm;
     if (!rm) return null;
     for (const tok in rm.seats) {
       const so = rm.seats[tok];
@@ -629,13 +674,16 @@ function WebSocket(url) {
       let join = null;
       try { join = JSON.parse(data); } catch (e) {}
       if (!join || typeof join !== 'object') { self._sluit(1008, 'eerst joinen', true); return; }
+      __veegKamers();
       const rm = __server.wsrooms[join.room];
       /* room.go: een onbekende kamer en een fout token zijn hetzelfde antwoord */
       if (!rm || !(join.seat in rm.seats)) { self._sluit(1008, 'onbekend', true); return; }
       const oud = rm.seats[join.seat];
       self._room = join.room;
+      self._rm = rm;
       self._seat = join.seat;
       rm.seats[join.seat] = self;
+      rm.joined[join.seat] = true;
       /* zoals room.go: eerst zeggen dat het stoeltje is overgenomen, dan de
          lijn dicht zonder sluitbericht, zodat de oude kant weet dat
          herverbinden zinloos is */
@@ -660,10 +708,11 @@ function WebSocket(url) {
   this._sluit = function (code, reden, schoon) {
     if (self.readyState === 3) return;
     self.readyState = 3;
-    if (self._room) {
-      const rm = __server.wsrooms[self._room];
-      if (rm && rm.seats[self._seat] === self) {
+    if (self._rm) {
+      const rm = self._rm;
+      if (rm.seats[self._seat] === self) {
         rm.seats[self._seat] = null;
+        rm.touched = __busNu();
         for (const tok in rm.seats) {
           const so = rm.seats[tok];
           if (so && so.readyState === 1) lever(so, '{"t":"peer","aan":false}');

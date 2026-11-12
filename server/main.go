@@ -14,11 +14,19 @@ func main() {
 	addr := flag.String("addr", ":8484", "listen-adres")
 	data := flag.String("data", "./data", "map voor profielblobs")
 	origin := flag.String("origin", "https://evert.lammerts.online", "toegestane CORS-origin (de PWA)")
-	delay := flag.Duration("delay", 200*time.Millisecond, "vaste vertraging op inwissel-antwoorden")
-	slots := flag.Int("redeem-slots", 2, "max gelijktijdige inwisselpogingen")
-	maxLinks := flag.Int("max-links", 4096, "max openstaande koppelcodes")
+	delay := flag.Duration("delay", defaultDelay, "vaste vertraging op inwissel-antwoorden")
+	slots := flag.Int("redeem-slots", defaultSlots, "max gelijktijdige inwisselpogingen")
+	maxLinks := flag.Int("max-links", defaultMaxLinks, "max openstaande koppelcodes")
 	maxAccounts := flag.Int("max-accounts", 64, "max profielen op schijf")
 	flag.Parse()
+	if linkTabelTeKlein(*delay, *slots, *maxLinks) {
+		log.Printf("waarschuwing: met -delay %v en -redeem-slots %d houdt een spuiter -max-links %d vol; een echt kind krijgt dan 429 op zijn koppelcode",
+			*delay, *slots, *maxLinks)
+	}
+	if kamerTabelTeKlein(*delay, *slots) {
+		log.Printf("waarschuwing: met -delay %v en -redeem-slots %d kunnen er in %v meer dan %d kamers bijkomen; een vloed van nieuwe kamers geeft dan iedereen 429",
+			*delay, *slots, evictMinAge, maxRooms)
+	}
 
 	srv, err := newServer(config{
 		dataDir:     *data,

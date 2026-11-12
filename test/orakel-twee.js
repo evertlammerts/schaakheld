@@ -184,6 +184,50 @@ async function orakelTwee() {
     check('met netwerk weer verder in hetzelfde potje', !!zette && x.fen() === ander.fen() && x.get('session.S.hist.length') === 3);
   }
 
+  /* hetzelfde einde als een verdwenen kamer, maar nu moest de kamer
+     plaatsmaken op een volle server; de server geeft hetzelfde antwoord */
+  await nogNiet('[4.4] moest de kamer plaatsmaken op een volle server, dan zien beiden hetzelfde einde', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    await speel(a, b, 'e2e4');
+    await speel(a, b, 'e7e5');
+    const kamer = a.get('MP.room');
+    const ta = tellersVan(a), tb = tellersVan(b);
+    stopApparaat(a);
+    stopApparaat(b);
+    await wacht();
+    const klok = __server.klok, vuller = [], lijnen = [];
+    try {
+      /* een minuut later: de kamer is ouder dan de drie seconden waarin een
+         kamer van net nooit plaatsmaakt. Andere kinderen maken kamers en
+         zitten erin, tot de server vol is. */
+      __server.klok += 60000;
+      for (let i = 0; i < 2 * MAX_KAMERS && (kamer in __server.wsrooms); i++) {
+        const r = await fetch('https://test.local/v1/room', { method: 'POST' });
+        if (r.status !== 200) break;
+        const k = await r.json();
+        vuller.push(k.room);
+        const ws = new WebSocket('wss://test.local/v1/room/ws');
+        ws.onopen = function () { ws.send(JSON.stringify({ room: k.room, seat: k.seat })); };
+        lijnen.push(ws);
+        await wacht(0);
+      }
+      check('testopzet: de kamer moest plaatsmaken', !(kamer in __server.wsrooms));
+      const a2 = herlaad(a), b2 = herlaad(b);
+      await wacht();
+      a2.tik('verderKaart');
+      b2.tik('verderKaart');
+      await wacht(30000);
+      check('allebei: het potje is gestopt', /gestopt/.test(zegt(a2)) && /gestopt/.test(zegt(b2)));
+      check('allebei: het telt niet mee', /telt niet mee/.test(zegt(a2)) && /telt niet mee/.test(zegt(b2)));
+      check('aan geen kant een teller veranderd', tellersVan(a2) === ta && tellersVan(b2) === tb);
+    } finally {
+      lijnen.forEach(function (ws) { ws.close(); });
+      vuller.forEach(function (id) { delete __server.wsrooms[id]; });
+      __server.klok = klok;
+    }
+  });
+
   await nogNiet('[4.4] valt het netwerk weg tijdens het potje, dan blijft het potje staan en gaat het daarna verder', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
@@ -340,7 +384,7 @@ async function orakelTwee() {
     check('het profiel van Mees is gevonden', /Mees/.test(ipad.scherm()));
   });
 
-  await nogNiet('[4.9] de nep-server: een kamer met een potje leeft 12 uur stil, een lege kamer een kwartier', async function (check) {
+  await regel('[4.9] de nep-server: een kamer met een potje leeft 12 uur stil, een lege kamer een kwartier', async function (check) {
     const klok = __server.klok;
     try {
       const a = maakApparaat('Fien'), b = maakApparaat('Daan');
@@ -363,7 +407,7 @@ async function orakelTwee() {
   });
 
   /* zelfde grenzen als de Go-test van 4.10: na 9,5 minuten nog wel, na 10,5 niet meer */
-  await nogNiet('[4.10] de nep-server: een koppelcode werkt tien minuten, daarna niet meer', async function (check) {
+  await regel('[4.10] de nep-server: een koppelcode werkt tien minuten, daarna niet meer', async function (check) {
     const klok = __server.klok;
     const post = function (pad, body) { return fetch('https://test.local' + pad, { method: 'POST', body: JSON.stringify(body) }); };
     try {
