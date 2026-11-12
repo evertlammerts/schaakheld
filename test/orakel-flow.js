@@ -49,12 +49,20 @@ function wekelijks(app) {
   return tekstVan(app, 'weekCard');
 }
 
+/* een level of trofee die tijdens het spelen kwam, krijgt thuis een venster; een kind tikt dat weg */
+function thuisVenstersWeg(app) {
+  for (let i = 0; i < 8 && app.open(); i++) {
+    if (app.ziet('LEVEL OMHOOG')) app.tik('lvlOk');
+    else if (app.ziet('id="trofOk"')) app.tik('trofOk');
+    else break;
+  }
+}
+
 /* naar huis zoals een kind: "Naar huis" als dat er staat, anders de terugknop */
 async function naarHuis(app) {
   if (kanTikken(app, 'Naar huis')) { tikTekst(app, 'Naar huis'); await wacht(); }
   if (!app.open() && opSpeelscherm(app)) { app.tik('backBtn'); await wacht(); }
-  /* een level dat tijdens het spelen kwam, krijgt thuis zijn venster; een kind tikt dat weg */
-  for (let i = 0; i < 8 && app.ziet('LEVEL OMHOOG'); i++) app.tik('lvlOk');
+  thuisVenstersWeg(app);
 }
 
 /* een level omhoog legt een venster over Volgende; een kind tikt dat eerst weg */
@@ -407,6 +415,7 @@ async function orakelFlow() {
     await zetEnWacht(a, 'd2d4');
     a.tik('backBtn');
     await wacht(500);
+    thuisVenstersWeg(a);
     check('na Pauze op Spelen', opThuis(a));
     a.tik('verderKaart');
     await wacht();
@@ -678,9 +687,9 @@ async function orakelFlow() {
     a.ev('setPref("weekGoal", { kind: "top", n: 2, game: "scan" })');
     await startOefening(a, 'scan');
     await rondjeGoed(a, 5);
-    for (let i = 0; i < 8 && a.ziet('LEVEL OMHOOG'); i++) a.tik('lvlOk');
     a.tik('backBtn');
     await wacht();
+    thuisVenstersWeg(a);
     check('Pauze zegt dat het rondje klaar is', /Rondje klaar/.test(toastTekst(a)));
     check('er blijft geen rondje staan', opgeslagen(a, RONDJES) === null && tekstVan(a, 'verder') === '');
     check('de topronde telt meteen', /1\s*(\/|van)\s*2/.test(wekelijks(a)));
@@ -1262,7 +1271,8 @@ async function orakelFlow() {
       const naam = a.get('PATTERNS[' + JSON.stringify(type) + '].n.toLowerCase()');
       zet(a, fout[0]);
       await wacht(3000);
-      check('de poging noemt deze truc', tekstVan(a, 'hulpZin').indexOf('Nog niet de ' + naam + '.') === 0);
+      /* "mat" is een het-woord: nog geen mat in twee */
+      check('de poging noemt deze truc', tekstVan(a, 'hulpZin').indexOf(type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + naam + '.') === 0);
       zet(a, fout[1]);
       await wacht(8000);
       const reden = a.doc.__tekst(a.el('taskBox').querySelectorAll('.e-body')[0] || a.el('taskBox')).trim();
@@ -1276,7 +1286,7 @@ async function orakelFlow() {
     tikVeld(a, a.get('sqFromAlg("e4")'));
     await wacht(200);
     check('de vraag staat nog open', a.get('BD.mode') === 'predict');
-    check('de strook zegt het', tekstVan(a, 'bubble').trim() === 'Welk stuk zet Turbo? Tik het aan. Dat is jouw stuk: kies er een van Turbo.');
+    check('de strook zegt het', tekstVan(a, 'bubble').trim() === 'Dat is jouw stuk. Welk stuk zet Turbo? Tik het aan.');
   });
 
   await regel('[2.3] de voorspelvraag past: "Welk stuk zet Turbo? Tik het aan."', async function (check) {
@@ -1301,7 +1311,8 @@ async function orakelFlow() {
 
   await regel('[2.3] de voorspelvraag en een rokade: een tik op de toren telt ook', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5', 'g1f3', 'g8f6', 'f1c4', 'f8c5', 'd2d3']) });
-    a.ev('setPref("predict", true)');
+    /* met 0.1 stelt Turbo de vraag en wacht hij */
+    a.ev('setPref("predict", true); Math.random = function () { return 0.1; }');
     a.tik('verderKaart');
     await wacht();
     /* Turbo is aan zet en gaat rokeren: de vraag staat open met die zet */
@@ -1433,6 +1444,348 @@ async function orakelFlow() {
     check('in de pagina ook in deze volgorde', html.indexOf('id="roundChip"') < html.indexOf('id="drillStars"') &&
       html.indexOf('id="drillStars"') < html.indexOf('id="bewaard"'));
     check('geen reeks en geen vorm', !/op een rij|Vorm/.test(tekstVan(a, 'drillStars')));
+  });
+
+  /* D34: Opgeven openen verandert niets; alleen een bevestigde opgave beëindigt het potje */
+  for (const uitweg of ['het kruisje', 'een tik naast de kaart', 'Escape', 'Nee, doorspelen']) {
+    await regel('[2.3] Opgeven tijdens de voorspelvraag, dan ' + uitweg + ': de vraag staat er nog zoals hij was', async function (check) {
+      const a = nieuwKind();
+      check('testopzet: de vraag staat open', await metVoorspelvraag(a));
+      const zetten = a.get('session.S.hist.length'), turbo = a.get('session.pending.from');
+      a.tik('meerBtn');
+      await wacht(200);
+      tikTekst(a, 'Opgeven');
+      await wacht(200);
+      check('testopzet: Opgeven? staat open', a.ziet('Opgeven?'));
+      if (uitweg === 'het kruisje') a.tik('mClose');
+      else if (uitweg === 'een tik naast de kaart') fire(a.el('overlay'), 'click', { target: a.el('overlay') });
+      else if (uitweg === 'Escape') fire(a.doc, 'keydown', { key: 'Escape' });
+      else tikTekst(a, 'Nee, doorspelen');
+      await wacht(20000);
+      check('het venster is dicht en het potje loopt', !a.open() && a.get('session.over') !== true);
+      check('Turbo wacht nog: er kwam geen zet bij', a.get('session.S.hist.length') === zetten);
+      check('de vraag staat er nog', a.get('BD.mode') === 'predict' && tekstVan(a, 'bubble').trim() === 'Welk stuk zet Turbo? Tik het aan.' &&
+        kanTikken(a, 'Speel maar'));
+      check('de hulpjes staan nog uit', ['cloudBtn', 'tip', 'undo'].every(function (id) { return a.get('actionBtns.' + id + '.disabled') === true; }));
+      tikVeld(a, turbo);
+      await wacht();
+      check('een tik op het stuk van Turbo is het antwoord, en dan zet hij', a.get('session.S.hist.length') === zetten + 1 && a.get('BD.mode') !== 'predict');
+    });
+  }
+
+  await regel('[2.3] Opgeven tijdens de voorspelvraag, dan "Ja, ik geef op": het potje is uit en de vraag is weg', async function (check) {
+    const a = nieuwKind();
+    check('testopzet: de vraag staat open', await metVoorspelvraag(a));
+    await geefOp(a);
+    await wacht(2000);
+    check('de eindkaart', zichtbaar(a, 'eindkaart') && a.get('session.over') === true);
+    check('geen vraag meer in de strook', !zichtbaar(a, 'predictBar') && a.get('BD.mode') !== 'predict' && !/Welk stuk zet Turbo/.test(tekstVan(a, 'bubble')));
+  });
+
+  /* D22 en D34: de hulpjes komen terug zodra de vraag dicht is, behalve een Speurbril die op is */
+  await regel('[2.3] na het antwoord op de voorspelvraag staan Denkwolk, Speurbril en Zet terug weer aan', async function (check) {
+    const a = nieuwKind();
+    check('testopzet: de vraag staat open', await metVoorspelvraag(a));
+    tikVeld(a, a.get('session.pending.from'));
+    await wacht();
+    check('testopzet: het kind is aan zet', a.get('BD.mode') === 'move');
+    check('de hulpjes staan aan', ['cloudBtn', 'tip', 'undo'].every(function (id) { return a.get('actionBtns.' + id + '.disabled') === false; }));
+  });
+
+  await regel('[2.3] nadat Remise aanbieden de voorspelvraag sloot, staan de hulpjes weer aan', async function (check) {
+    const a = nieuwKind();
+    check('testopzet: de vraag staat open', await metVoorspelvraag(a));
+    await biedRemise(a);
+    await wacht(5000);
+    check('testopzet: het kind is aan zet', a.get('BD.mode') === 'move' && a.get('session.over') !== true);
+    check('de hulpjes staan aan', ['cloudBtn', 'tip', 'undo'].every(function (id) { return a.get('actionBtns.' + id + '.disabled') === false; }));
+  });
+
+  await regel('[2.3] zonder Speurbril over blijft de Speurbril uit, ook nadat de voorspelvraag dicht ging', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5'], { tips: 0 }) });
+    a.ev('setPref("predict", true); Math.random = function () { return 0.1; }');
+    a.tik('verderKaart');
+    await wacht();
+    check('testopzet: de Speurbril is op', a.get('session.tips') === 0 && a.get('actionBtns.tip.disabled') === true);
+    await zetEnWacht(a, 'g1f3');
+    check('testopzet: de vraag staat open', await zagOoit(function () { return a.get('BD.mode') === 'predict'; }, 3000));
+    tikVeld(a, a.get('session.pending.from'));
+    await wacht();
+    check('testopzet: het kind is aan zet', a.get('BD.mode') === 'move');
+    check('de Speurbril blijft uit', a.get('actionBtns.tip.disabled') === true && !kanTikken(a, 'Speurbril'));
+    check('de andere twee staan aan', a.get('actionBtns.cloudBtn.disabled') === false && a.get('actionBtns.undo.disabled') === false);
+  });
+
+  /* D34: een profiel kent zijn level vanaf het begin, dus ook een nieuw kind hoort zijn eerste level */
+  async function eersteRondjeFoutloos(a, check) {
+    await startOefening(a, 'scan');
+    let venster = false;
+    for (let i = 0; i < 5; i++) {
+      await scanGoed(a);
+      venster = venster || a.open();
+      tikTekst(a, 'Volgende');
+      await wacht();
+    }
+    check('geen venster tijdens het rondje', !venster);
+    check('testopzet: genoeg XP voor Paard', a.get('levelIdx(P.xp)') === 1);
+    check('de kaart van het rondje toont het level', /Rondje klaar/.test(a.scherm()) && /Level Paard/.test(a.scherm()));
+    tikTekst(a, 'Naar huis');
+    await wacht();
+    check('thuis het venster met het level en het nieuwe bord', opThuis(a) && a.ziet('LEVEL OMHOOG') && /Paard/.test(a.scherm()) && /Oceaan/.test(a.scherm()));
+    a.tik('lvlOk');
+    await startOefening(a, 'scan');
+    a.tik('backBtn');
+    await wacht();
+    check('het venster komt geen tweede keer', opThuis(a) && !a.ziet('LEVEL OMHOOG'));
+  }
+
+  await regel('[2.5] een nieuw kind en zijn eerste level: een badge op de kaart van het rondje en thuis eenmaal het venster', async function (check) {
+    await eersteRondjeFoutloos(nieuwKind(), check);
+  });
+
+  await regel('[2.5] een profiel van nu dat nog nooit een level bewaarde en nog geen naam heeft: het eerste level komt ook', async function (check) {
+    /* zonder naam vraagt de app eerst de naam, en komt hij bij het openen niet langs het thuisvenster */
+    const o = maakOpslag();
+    o.setItem('schaakheld1', JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: {},
+      max: { best: 0, goal: {} }, loc: { streak: 0, lastLevel: null, day: null, weekSeen: null } }));
+    await eersteRondjeFoutloos(nieuwKind({ opslag: o }), check);
+  });
+
+  /* D34: wat dit apparaat liet zien, staat per apparaat bewaard; een trofee die nog niet te zien was, komt thuis */
+  async function potjeMetDromer(a) {
+    await startPotje(a, 1);
+    await zetEnWacht(a, 'e2e4');
+    tikTekst(a, 'Denkwolk');
+    await wacht(300);
+    zet(a, 'g1f3');
+    await wacht(3000);
+    tikTekst(a, 'Terug naar echt');
+    await wacht(300);
+    return a.get('!!P.badges.wolk') && a.get('!session.cloud');
+  }
+
+  await regel('[2.5] een trofee in een potje en dan Pauze: thuis komt de trofee, daarna nergens nog een keer', async function (check) {
+    const a = nieuwKind();
+    check('testopzet: de trofee Dromer', await potjeMetDromer(a));
+    check('op het speelscherm geen venster en geen melding', !a.open() && !zichtbaar(a, 'toast'));
+    a.tik('backBtn');
+    await wacht();
+    check('thuis de trofee', opThuis(a) && a.ziet('Trofee verdiend') && /Dromer/.test(a.scherm()));
+    tikTekst(a, 'Super');
+    check('daarna de melding van Pauze', /Bewaard/.test(toastTekst(a)));
+    await wacht();
+    a.tik('verderKaart');
+    await wacht();
+    await geefOp(a);
+    await wacht(2000);
+    check('testopzet: de eindkaart', zichtbaar(a, 'eindkaart'));
+    check('de eindkaart toont hem niet nog een keer', !/Dromer/.test(tekstVan(a, 'eindkaart')));
+    tikTekst(a, 'Naar huis');
+    await wacht();
+    check('thuis ook niet', opThuis(a) && !a.ziet('Dromer'));
+  });
+
+  await regel('[2.5] een trofee in een potje en dan herladen: thuis komt de trofee, eenmaal', async function (check) {
+    let a = nieuwKind();
+    check('testopzet: de trofee Dromer', await potjeMetDromer(a));
+    a = herlaad(a);
+    await wacht();
+    check('thuis de trofee', opThuis(a) && a.ziet('Trofee verdiend') && /Dromer/.test(a.scherm()));
+    tikTekst(a, 'Super');
+    a = herlaad(a);
+    await wacht();
+    check('na nog een keer herladen niet opnieuw', !a.ziet('Dromer'));
+  });
+
+  await regel('[2.5] een trofee in een potje dat uitgespeeld wordt: de eindkaart toont hem en thuis komt hij niet nog eens', async function (check) {
+    const a = nieuwKind();
+    check('testopzet: de trofee Dromer', await potjeMetDromer(a));
+    await geefOp(a);
+    await wacht(2000);
+    check('de eindkaart toont de trofee', /Dromer/.test(tekstVan(a, 'eindkaart')));
+    tikTekst(a, 'Naar huis');
+    await wacht();
+    check('thuis niet nog een keer', opThuis(a) && !a.ziet('Dromer'));
+  });
+
+  await regel('[2.5] een trofee in een rondje en dan Pauze: thuis komt de trofee, de kaart van het rondje later niet', async function (check) {
+    const a = nieuwKind();
+    a.ev('bump("stars", 99)');
+    await startOefening(a, 'scan');
+    await scanGoed(a);
+    check('testopzet: Sterrenregen', a.get('!!P.badges.sterren'));
+    a.tik('backBtn');
+    await wacht();
+    check('thuis de trofee', opThuis(a) && a.ziet('Trofee verdiend') && /Sterrenregen/.test(a.scherm()));
+    tikTekst(a, 'Super');
+    a.tik('verderKaart');
+    await wacht();
+    for (let i = 0; i < 4; i++) { await scanGoed(a); await volgende(a); }
+    check('testopzet: de kaart van het rondje', /Rondje klaar/.test(a.scherm()));
+    check('die toont hem niet nog eens', !/Sterrenregen/.test(a.scherm()));
+  });
+
+  await regel('[2.5] een profiel van nu met trofeeën: na de update telt elke trofee als getoond en komt alleen een nieuwe', async function (check) {
+    const o = maakOpslag();
+    o.setItem('schaakheld1', JSON.stringify({ v: 2, epoch: 0, cnt: { xp: { d1: 200 }, wins: { d1: 1 }, 'c.gamesPlayed': { d1: 3 } },
+      set: { badges: { potje: true, winst: true } }, lww: { name: { v: 'Mees', t: 1 } }, max: { best: 2, goal: {} },
+      loc: { streak: 0, lastLevel: 1, day: null, weekSeen: null } }));
+    /* als herstart: zo sluit de testopzet geen venster dat de app bij het openen toont */
+    const a = maakApparaat('Mees', { opslag: o, herstart: true });
+    a.ev('setPref("predict", false); setPref("guard", false)');
+    await wacht();
+    check('bij het openen geen venster met oude trofeeën', !a.open());
+    check('ze staan bewaard als getoond', JSON.stringify(opgeslagen(a, 'schaakheld1').loc.shownBadges.slice().sort()) === '["potje","winst"]');
+    check('testopzet: de trofee Dromer', await potjeMetDromer(a));
+    a.tik('backBtn');
+    await wacht();
+    check('thuis alleen de nieuwe', a.ziet('Trofee verdiend') && /Dromer/.test(a.scherm()) && !/Winnaar|Eerste potje/.test(a.scherm()));
+  });
+
+  await regel('[2.5] een sync tijdens een rondje: wat hier wacht, blijft wachten; wat het andere apparaat verdiende, komt hier niet', async function (check) {
+    const a = nieuwKind();
+    a.ev('bump("xp", 140); bump("stars", 99)');
+    await startOefening(a, 'scan');
+    await scanGoed(a);
+    check('testopzet: hier Sterrenregen en level Paard', a.get('!!P.badges.sterren') && a.get('levelIdx(P.xp)') === 1);
+    a.ev('applyRemoteDoc((function () { var d = JSON.parse(JSON.stringify(DOC)); d.cnt.xp.anderApparaat = 10;' +
+      'd.set.badges.orakel = true; return d; })()); refreshAfterSync()');
+    check('testopzet: de trofee van het andere apparaat is er', a.get('!!P.badges.orakel'));
+    for (let i = 0; i < 4; i++) { tikTekst(a, 'Volgende'); await wacht(); await scanGoed(a); }
+    tikTekst(a, 'Volgende');
+    await wacht();
+    const kaart = a.scherm();
+    check('de kaart van het rondje toont wat hier verdiend is', /Sterrenregen/.test(kaart) && /Level Paard/.test(kaart));
+    check('en niet de trofee van het andere apparaat', !/Orakel/.test(kaart));
+    tikTekst(a, 'Naar huis');
+    await wacht();
+    check('thuis het level', a.ziet('LEVEL OMHOOG'));
+    a.tik('lvlOk');
+    await wacht();
+    check('thuis geen trofee van het andere apparaat', !a.ziet('Orakel'));
+  });
+
+  /* de randjes van een truc gaan vanzelf weg, die van de Speurbril pas als het bord verandert */
+  await regel('[2.8] de Speurbril vlak na een truc van Turbo: de randjes blijven tot het bord verandert', async function (check) {
+    const a = nieuwKind();
+    await startPotje(a, 1);
+    const vork = async function () {
+      /* Turbo aan zet; het paard naar c2 valt koning en toren tegelijk aan */
+      a.ev('(function () { session.S = parseFEN("4k3/8/8/8/3n4/8/8/R3K3 b - - 0 1"); BD.mode = "off"; BD.spy.clear(); renderBoard();' +
+        'doTurboMove(legalMoves(session.S).find(function (m) { return moveKey(m) === "d4c2"; })); })()');
+      await wacht(1500);
+      return a.get('BD.mode') === 'move' && a.get('BD.spy.size') > 0;
+    };
+    check('testopzet: Turbo speelt de vork en zet zijn randjes', await vork());
+    await wacht(4000);
+    check('zonder Speurbril gaan de randjes van de truc vanzelf weg', a.get('BD.spy.size') === 0);
+    check('testopzet: nog een vork', await vork());
+    tikTekst(a, 'Speurbril');
+    await wacht(300);
+    const randjes = a.get('BD.spy.size');
+    check('testopzet: de Speurbril zet randjes', randjes > 0 && a.get('session.tips') === 2);
+    await wacht(6000);
+    check('zes seconden later staan ze er nog', a.get('BD.spy.size') === randjes);
+  });
+
+  /* D34: de keuzes staan waar Volgende stond (na veilig of valstrik); een tik in de eerste 350 ms telt niet */
+  await regel('[2.4] De Beste Zet: een tik op een keuze in de eerste 350 ms van een nieuwe opdracht telt niet, daarna wel', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'best3');
+    a.ev('(function () { session.round = 2; $("roundChip").textContent = "2 van 5"; setTask(null); setOptions(null); BD.arrows = []; buildSafe(); })()');
+    await wacht(500);
+    check('testopzet: opdracht 2 is veilig of valstrik', kanTikken(a, 'Veilig'));
+    tikTekst(a, 'Veilig');
+    await wacht(8000);
+    check('testopzet: Volgende staat er', kanTikken(a, 'Volgende'));
+    tikTekst(a, 'Volgende');
+    await wacht(150);
+    const keuzes = a.el('optionsBox').querySelectorAll('.opt');
+    check('testopzet: opdracht 3 heeft drie keuzes', a.get('session.round') === 3 && keuzes.length === 3);
+    if (keuzes.length !== 3) return;
+    tikEl(a, keuzes[1], 'keuze B');
+    await wacht(10);
+    check('een tik vlak na het verschijnen telt niet', a.get('session.picked') === null && a.get('actionBtns.confirm.disabled') === true);
+    await wacht(400);
+    tikEl(a, keuzes[1], 'keuze B');
+    await wacht(10);
+    check('daarna telt een tik wel', a.get('session.picked') === 1 && a.get('actionBtns.confirm.disabled') === false);
+  });
+
+  /* F2: met een voorkeur voor de truc van de opdracht; een zet die twee trucs tegelijk is, toont die van de opdracht */
+  const TWEE_TRUCS = [
+    /* het paard naar e6: aftrekschaak van de loper op h8 en een vork op de torens; de opdracht is een vork */
+    ['vork', '3r1r1k/8/8/8/3N4/8/8/B5K1 w - - 0 1', /VORK/],
+    /* het paard naar e6: een vork en de loper valt de dame op g7 aan; de opdracht is een aftrekaanval */
+    ['aftrek', '3r1r2/6q1/k7/8/3N4/8/8/B6K w - - 0 1', /AFTREKAANVAL/]
+  ];
+  for (const [type, fen, woord] of TWEE_TRUCS) {
+    await regel('[2.4] Trucendoos, ' + type + ' die ook een andere truc is: de poging en de uitleg noemen de truc van de opdracht', async function (check) {
+      const a = nieuwKind();
+      await startOefening(a, 'trucs');
+      zetOpdracht(a, fen, type, ['d4e6']);
+      a.ev('opdrachtVan("trucs." + session.task.type)');
+      const fout = a.get('legalMoves(session.S).filter(function (m) { var i = patternsAfterMove(session.S, m);' +
+        'return !patternMatches(session.S, m, session.task.type, i) && !patternMatches(session.S, m, session.task.type, Object.assign({}, i, { safe: true })); })' +
+        '.map(function (m) { return moveKey(m); }).slice(0, 2)');
+      check('testopzet: d4e6 is twee trucs', a.get('patternCallouts(session.S, session.task.answers[0].m).length') === 2);
+      check('testopzet: twee foute zetten', fout.length === 2);
+      zet(a, fout[0]);
+      await wacht(3000);
+      check('de poging noemt deze truc', tekstVan(a, 'hulpZin').indexOf('Nog niet de ' + a.get('PATTERNS.' + type + '.n.toLowerCase()') + '.') === 0);
+      zet(a, fout[1]);
+      await wacht(8000);
+      const reden = a.doc.__tekst(a.el('taskBox').querySelectorAll('.e-body')[0] || a.el('taskBox')).trim();
+      check('de uitleg noemt deze truc: ' + reden.slice(0, 50), a.get('session.phase') === 'review' && woord.test(reden));
+    });
+  }
+
+  /* de Trucendoos zegt bij mat in twee "Nog geen mat in twee", niet "de mat" */
+  await regel('[2.4] Trucendoos, mat in twee: een foute eerste zet zegt "Nog geen mat in twee."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'trucs');
+    zetOpdracht(a, 'k7/8/2K5/8/8/8/8/7R w - - 0 1', 'mat2', ['c6b6']);
+    zet(a, 'h1h2');
+    await wacht(3000);
+    check('de zin', onderZin(a) === 'Nog geen mat in twee. Kijk naar alle stukken van Turbo, en probeer nog een zet.');
+  });
+
+  /* Koning ontsnapt: "toch" alleen als Turbo het stuk pakt dat al hing */
+  await regel('[2.4] Koning ontsnapt: pakt Turbo na een poging een ander stuk, dan zegt de zin welk stuk en waar, zonder "toch"', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    /* de toren op d4 hangt (de pion op e5) en dekt het paard op d6 tegen de toren op d8 */
+    zetOpdracht(a, '3r2k1/5ppp/3N4/4p3/3R4/8/PP4PP/6K1 w - - 0 1', 'stuk', ['d4d5', 'd4d3', 'd4d2', 'd4d1'], '{ hang: threatDetails(S)[0] }');
+    zet(a, 'd4a4');
+    await wacht(4000);
+    check('de zin', /^Turbo speelt .+ en pakt je paard op d6\. Probeer nog een zet\.$/.test(onderZin(a)) && !/toch/.test(onderZin(a)));
+  });
+
+  await regel('[2.4] Koning ontsnapt: de hint zegt of de koning het zelf moet doen', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    zetOpdracht(a, '6k1/8/8/8/8/8/6PP/r5K1 w - - 0 1', 'schaak', ['g1f2']);
+    tikTekst(a, 'Hint');
+    await wacht();
+    check('alleen de koning kan weg', onderZin(a).indexOf('Je koning moet het zelf doen.') === 0);
+    zetOpdracht(a, '6k1/8/8/8/8/8/3R1PPP/r5K1 w - - 0 1', 'schaak', ['d2d1']);
+    a.ev('setActions([{ label: "💡 Hint", cls: "plain small hint", fn: koningHint, id: "hint" }])');
+    tikTekst(a, 'Hint');
+    await wacht();
+    check('een ander stuk redt de koning', onderZin(a).indexOf('Met het stuk dat nu oplicht, kun je je redden.') === 0);
+  });
+
+  await regel('[2.4] Koning ontsnapt: de uitleg zegt hoeveel goede zetten er zijn', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    const opdracht = function (fen) {
+      a.ev('(function () { session.lastType = "stuk"; pickKoningTask = function () { var S = parseFEN(' + JSON.stringify(fen) + ');' +
+        'return { S: S, type: "schaak", answers: legalMoves(S).map(function (m) { return { m: m, info: null }; }) }; };' +
+        'setTask(null); buildKoning(); })()');
+      return onderZin(a);
+    };
+    check('één', /Er is één goede zet\.$/.test(opdracht('6k1/8/8/8/8/8/3R1PPP/r5K1 w - - 0 1')));
+    check('twee', /Er zijn twee goede zetten\.$/.test(opdracht('6k1/8/8/8/8/8/3R2PP/r5K1 w - - 0 1')));
   });
 
   /* ================= increment 3 ================= */

@@ -541,7 +541,7 @@
     row-gap: var(--gap);
     padding-top: var(--safe-t); padding-bottom: var(--safe-b);
   }
-  .play.task { --bottom-min: var(--bottom-min-task); }
+  .play.oefening { --bottom-min: var(--bottom-min-task); }
   .play-bar { grid-area: bar; display: flex; align-items: center; gap: 8px; padding: 0 var(--g); min-width: 0; }
   .tegen {
     flex: 1; min-width: 0; min-height: 44px; display: flex; flex-direction: column; justify-content: center;
@@ -574,9 +574,9 @@
   /* een spelzin die niet in twee regels past: een stap kleiner, drie regels; op een lage telefoon is de strook van een potje daarvoor 72 hoog */
   .play-strip.klein .s-txt { font-size: var(--fs-sm); line-height: 1.2; }
   @media (max-height: 719px) and (max-width: 559px) and (orientation: portrait) {
-    .play:not(.task) { --strip-h: 72px; }
-    .play:not(.task) .play-strip { padding: 4px 12px 10px; }
-    .play:not(.task) .play-strip .s-txt { max-height: calc(var(--strip-h) - 14px); }
+    .play:not(.oefening) { --strip-h: 72px; }
+    .play:not(.oefening) .play-strip { padding: 4px 12px 10px; }
+    .play:not(.oefening) .play-strip .s-txt { max-height: calc(var(--strip-h) - 14px); }
   }
   .play-strip.predict { background: var(--violet-soft); }
   .play-strip.cloud { background: var(--cloud-soft); border: 2px dashed var(--cloud); }
@@ -631,6 +631,8 @@
     grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
     padding: 0 var(--g) 8px;
   }
+  /* kort scherm: ook hier wijken de tussenruimtes van 8 naar 6, zodat drie regels uitleg en de knoppen in 120 passen */
+  @media (max-height: 659px) and (orientation: portrait) { .play-bottom { gap: 6px; padding-bottom: 6px; } }
   .play-bottom .action-row { margin-top: auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
   .play-bottom .action-row .btn { min-height: 48px; padding: 0 10px; white-space: nowrap; }
   .play-bottom #optionsBox { order: -1; }
