@@ -680,9 +680,10 @@ async function orakelFlow() {
     check('de opgeslagen waarden blijven', b.get('P.predict') === false && b.get('P.guard') === true);
   });
 
+  /* de regel in het blad met geslagen stukken komt uit outline.md en interaction.md */
   const materiaal = [
-    ['jij staat een pion voor', ['e2e4', 'd7d5', 'e4d5', 'g8f6'], /Jij \+1/],
-    ['Turbo staat een pion voor', ['e2e4', 'd7d5', 'd2d3', 'd5e4'], /Turbo \+1/]
+    ['jij staat een pion voor', ['e2e4', 'd7d5', 'e4d5', 'g8f6'], /Jij \+1/, /Jij pakte 1 punt meer dan Turbo\./],
+    ['Turbo staat een pion voor', ['e2e4', 'd7d5', 'd2d3', 'd5e4'], /Turbo \+1/, /Turbo pakte 1 punt meer dan jij\./]
   ];
   for (const geval of materiaal) {
     await nogNiet('[2.3] het materiaalverschil in de balk: ' + geval[0], async function (check) {
@@ -692,7 +693,7 @@ async function orakelFlow() {
       check('de balk zegt het', zichtbaar(a, 'materiaal') && geval[2].test(tekstVan(a, 'materiaal')));
       a.tik('materiaal');
       await wacht();
-      check('tikken laat de geslagen stukken zien', a.open() && /pion/i.test(a.scherm()));
+      check('tikken laat de geslagen stukken zien, met wat het verschil betekent', a.open() && geval[3].test(a.scherm()));
     });
   }
 
