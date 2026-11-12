@@ -1463,19 +1463,34 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   closeModal();
   mpStop();
 
-  /* ← Home midden in een potje is ook opgeven en vraagt dus ook */
-  MP = { room: 'r', seat: 's', host: true, myColor: 'w', gameNo: 1, revMine: false,
-    revTheirs: false, peerName: 'Fien', open: false, weg: false };
+  /* ← Home midden in een potje gaat naar huis en houdt potje en verbinding (regel 4.2) */
+  MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false,
+    revTheirs: false, peerName: 'Fien', open: false, weg: false, gameId: 'potje-test-1' };
   mpBeginGame();
   fire(__els.backBtn, 'click');
-  ok('mp: ← Home vraagt ook eerst',
-    __els.modalBox.innerHTML.indexOf('Opgeven?') >= 0 && !!MP && session.over !== true);
-  fire(__els.rsJa, 'click');
+  var bewaardSamen = leesSamen();
+  ok('[4.2] mp: ← Home gaat naar huis zonder vraag; potje en verbinding blijven',
+    __els.overlay.classList.contains('hidden') && !!MP && session === null && !!bewaardSamen && !bewaardSamen.kapot);
+  MP.open = true; /* zonder echte lijn: Verder vraagt dan alleen de stand op */
+  openSamen();
+  ok('[4.2] mp: Verder brengt hetzelfde potje terug', !!session && session.online === true && session.S === MP.S);
+  resignNow();
   await tikje();
-  ok('mp: ← Home geeft na ja op', session.over === true);
+  ok('mp: na opgeven is het potje over en niet meer bewaard', session.over === true && leesSamen() === null);
   closeModal();
   fire(__els.backBtn, 'click');
   ok('mp: na afloop gaat ← Home gewoon naar huis', MP === null && session === null);
+  /* een tweede vriendenpotje zou het bewaarde overschrijven: dat kan pas als het eerste klaar is */
+  MP = { room: 'kamer-test-2', seat: 'stoel-test-2', host: true, myColor: 'w', gameNo: 1, revMine: false,
+    revTheirs: false, peerName: 'Fien', open: false, weg: false, gameId: 'potje-test-2' };
+  mpBeginGame();
+  fire(__els.backBtn, 'click');
+  var mpVoor = MP;
+  await mpHostQR();
+  ok('[4.1] mp: met een bewaard vriendenpotje geen nieuw potje erover heen', MP === mpVoor &&
+    !!leesSamen() && leesSamen().r.gameId === 'potje-test-2' && /nog een potje met Fien/.test(__els.toast.textContent));
+  mpStop(true);
+  opslag(SAMEN_KEY, null);
 
   /* het maatje geeft op: wij winnen, zonder XP en zonder gedeelde wins */
   MP = { room: 'r', seat: 's', host: true, myColor: 'w', gameNo: 1, revMine: false,

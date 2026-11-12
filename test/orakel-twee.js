@@ -60,21 +60,24 @@ async function orakelTwee() {
     check('Verder speelt het potje tegen Turbo', opSpeelscherm(a2) && a2.get('session.level') === 2 && a2.get('session.S.hist.length') === 4);
   });
 
-  await nogNiet('[4.1] een vriendenpotje staat na elke halve zet op beide apparaten', async function (check) {
+  await regel('[4.1] een vriendenpotje staat na elke halve zet op beide apparaten', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     await speel(a, b, 'e2e4');
+    const ids = [];
     for (const x of [a, b]) {
-      const r = opgeslagen(x, SAMEN);
-      check('bewaard bij ' + x.naam, !!r && typeof r === 'object');
-      check('vorm bij ' + x.naam, !!r && r.room === x.get('MP.room') && typeof r.seat === 'string' &&
-        typeof r.host === 'boolean' && (r.myColor === 'w' || r.myColor === 'b') && typeof r.gameNo === 'number' &&
+      const alles = opgeslagen(x, SAMEN), r = samenPotje(x);
+      check('bewaard bij ' + x.naam + ', als kaart van potjes', !!alles && alles.v === 1 && !!r && typeof r === 'object');
+      check('vorm bij ' + x.naam, !!r && typeof r.gameId === 'string' && !!alles.games[r.gameId] && r.room === x.get('MP.room') &&
+        typeof r.seat === 'string' && typeof r.host === 'boolean' && (r.myColor === 'w' || r.myColor === 'b') && typeof r.gameNo === 'number' &&
         Array.isArray(r.moves) && r.moves.length === 1 && r.moves[0] === 'e2e4' &&
-        typeof r.peerName === 'string' && 'viaFriend' in r && r.updated > 0);
+        typeof r.peerName === 'string' && r.fid === null && r.result === null && r.updated > 0);
+      if (r) ids.push(r.gameId);
     }
+    check('hetzelfde potje-id op beide apparaten', ids.length === 2 && ids[0] === ids[1]);
   });
 
-  await nogNiet('[4.1] wie op zijn eigen beurt herlaadt, speelt verder in dezelfde stand', async function (check) {
+  await regel('[4.1] wie op zijn eigen beurt herlaadt, speelt verder in dezelfde stand', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     await speel(a, b, 'e2e4');
@@ -89,7 +92,7 @@ async function orakelTwee() {
     check('de volgende zet komt aan', zette === terug && terug.fen() === wit.fen());
   });
 
-  await nogNiet('[4.1] wie herlaadt terwijl de ander aan zet is, ziet daarna de zet van de ander', async function (check) {
+  await regel('[4.1] wie herlaadt terwijl de ander aan zet is, ziet daarna de zet van de ander', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     await speel(a, b, 'e2e4');
@@ -104,7 +107,7 @@ async function orakelTwee() {
     check('en jij bent aan zet', terug.get('!!(session && MP && session.S.turn === MP.myColor)'));
   });
 
-  await nogNiet('[4.1] allebei herladen: allebei weer in hetzelfde potje', async function (check) {
+  await regel('[4.1] allebei herladen: allebei weer in hetzelfde potje', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     await speel(a, b, 'e2e4');
@@ -120,7 +123,7 @@ async function orakelTwee() {
       b2.get('!!(session && MP && session.S.turn === MP.myColor)'));
   });
 
-  await nogNiet('[4.2] ← in een vriendenpotje gaat naar huis en houdt potje en verbinding; de ander merkt niets', async function (check) {
+  await regel('[4.2] ← in een vriendenpotje gaat naar huis en houdt potje en verbinding; de ander merkt niets', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     await speel(a, b, 'e2e4');
@@ -128,7 +131,7 @@ async function orakelTwee() {
     wit.tik('backBtn');
     await wacht();
     check('thuis, zonder vraag', opThuis(wit) && !wit.open());
-    check('het potje is bewaard en de verbinding blijft', !!opgeslagen(wit, SAMEN) && wit.get('!!MP'));
+    check('het potje is bewaard en de verbinding blijft', !!samenPotje(wit) && wit.get('!!MP'));
     check('de ander merkt niets', !zwart.open() && zwart.get('!!(session && !session.over)'));
     await speel(zwart, wit, 'e7e5');
     wit.tik('verderKaart');
@@ -136,7 +139,7 @@ async function orakelTwee() {
     check('terug in het potje met de zet van de ander', opSpeelscherm(wit) && wit.fen() === zwart.fen());
   });
 
-  await nogNiet('[4.3] wie blijft, hoort de waarheid: even weg, het potje blijft staan, het staat bij Verder', async function (check) {
+  await regel('[4.3] wie blijft, hoort de waarheid: even weg, het potje blijft staan, het staat bij Verder', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     await speel(a, b, 'e2e4');
@@ -147,10 +150,10 @@ async function orakelTwee() {
     check('geen belofte dat zetten vanzelf komen', !/komen straks|vanzelf goed/.test(zegt(b)));
     await wacht(10 * 60000);
     check('ook na tien minuten eerlijk', /even weg/.test(zegt(b)) && !/komen straks|vanzelf goed/.test(zegt(b)));
-    check('en het potje staat er nog', !!opgeslagen(b, SAMEN));
+    check('en het potje staat er nog', !!samenPotje(b));
   });
 
-  await nogNiet('[4.4] is de kamer weg, dan zien beiden hetzelfde einde en telt het voor niemand', async function (check) {
+  await regel('[4.4] is de kamer weg, dan zien beiden hetzelfde einde en telt het voor niemand', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     await speel(a, b, 'e2e4');
@@ -186,7 +189,7 @@ async function orakelTwee() {
 
   /* hetzelfde einde als een verdwenen kamer, maar nu moest de kamer
      plaatsmaken op een volle server; de server geeft hetzelfde antwoord */
-  await nogNiet('[4.4] moest de kamer plaatsmaken op een volle server, dan zien beiden hetzelfde einde', async function (check) {
+  await regel('[4.4] moest de kamer plaatsmaken op een volle server, dan zien beiden hetzelfde einde', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     await speel(a, b, 'e2e4');
@@ -224,7 +227,7 @@ async function orakelTwee() {
     }
   });
 
-  await nogNiet('[4.4] valt het netwerk weg tijdens het potje, dan blijft het potje staan en gaat het daarna verder', async function (check) {
+  await regel('[4.4] valt het netwerk weg tijdens het potje, dan blijft het potje staan en gaat het daarna verder', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     await speel(a, b, 'e2e4');
@@ -232,14 +235,14 @@ async function orakelTwee() {
     const ta = tellersVan(a), tb = tellersVan(b);
     geenNetwerk(a);
     await wacht(5 * 60000);
-    const r = opgeslagen(a, SAMEN);
+    const r = samenPotje(a);
     check('het potje staat nog bewaard, met beide zetten', !!r && Array.isArray(r.moves) && r.moves.length === 2);
     check('het potje is niet afgelopen', !a.get('!!(session && session.over)') && !/telt niet mee|gestopt/.test(zegt(a)));
     check('geen teller veranderd', tellersVan(a) === ta && tellersVan(b) === tb);
     await terugInHetPotje(check, a, b, 'g1f3');
   });
 
-  await nogNiet('[4.4] wie de app opent zonder netwerk, houdt het vriendenpotje; de kaart zegt dat er nu geen verbinding is', async function (check) {
+  await regel('[4.4] wie de app opent zonder netwerk, houdt het vriendenpotje; de kaart zegt dat er nu geen verbinding is', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     await speel(a, b, 'e2e4');
@@ -249,7 +252,7 @@ async function orakelTwee() {
     a.netwerk.uit = true;
     const a2 = herlaad(a);
     await wacht(5 * 60000);
-    const r = opgeslagen(a2, SAMEN);
+    const r = samenPotje(a2);
     check('het potje staat nog bewaard, met beide zetten', !!r && Array.isArray(r.moves) && r.moves.length === 2);
     check('de kaart noemt het potje en zegt dat er nu geen verbinding is', zichtbaar(a2, 'verder') &&
       /Daan/.test(tekstVan(a2, 'verder')) && /geen verbinding/i.test(tekstVan(a2, 'verder')));
@@ -259,10 +262,12 @@ async function orakelTwee() {
 
   const kapotSamen = [
     ['kapotte tekst', 'kapot{'],
-    ['zonder stoel', JSON.stringify({ room: 'kamer1', host: true, myColor: 'w', gameNo: 1, moves: ['e2e4'], peerName: 'Daan', updated: 1 })]
+    ['zonder stoel', JSON.stringify({ room: 'kamer1', host: true, myColor: 'w', gameNo: 1, moves: ['e2e4'], peerName: 'Daan', updated: 1 })],
+    ['een potje in de kaart zonder stoel', JSON.stringify({ v: 1, games: { abcdefghijkl: { gameId: 'abcdefghijkl', fid: null, room: 'kamer1abc',
+      host: true, myColor: 'w', gameNo: 1, moves: ['e2e4'], peerName: 'Daan', result: null, updated: 1 } } })]
   ];
   for (const geval of kapotSamen) {
-    await nogNiet('[4.1] een vriendenpotje dat niet te lezen is (' + geval[0] + ') wordt getoond, en pas het kind haalt het weg', async function (check) {
+    await regel('[4.1] een vriendenpotje dat niet te lezen is (' + geval[0] + ') wordt getoond, en pas het kind haalt het weg', async function (check) {
       const o = maakOpslag();
       o.setItem(SAMEN, geval[1]);
       const a = maakApparaat('Fien', { opslag: o });

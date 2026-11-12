@@ -160,11 +160,12 @@ async function alles() {
   await tik();
 
   /* ---------- 4. al vrienden: geen tweede vriendschap ---------- */
+  /* het bord van een vriendenpotje hoort bij de verbinding (MP.S); het speelscherm kijkt ernaar */
   await samenSpelen(evert, oscar);
   ok('herkennen: allebei herkennen ze elkaar aan het bewijs in het hallo',
     evert.get('MP.viaFriend') === fid && oscar.get('MP.viaFriend') === fid);
-  evert.ev('session.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
-  oscar.ev('session.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
+  evert.ev('session.S = MP.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
+  oscar.ev('session.S = MP.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
   const witNu = evert.get('MP.myColor') === 'w' ? evert : oscar;
   witNu.ev('BD.mode = "move"');
   await speel(evert, oscar, 'a1a8');
@@ -429,8 +430,8 @@ async function alles() {
   await samenSpelen(evert, oscar);
   ok('weghalen: niemand herkent nog een vriendschap',
     evert.get('MP.viaFriend') == null && oscar.get('MP.viaFriend') == null);
-  evert.ev('session.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
-  oscar.ev('session.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
+  evert.ev('session.S = MP.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
+  oscar.ev('session.S = MP.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
   (evert.get('MP.myColor') === 'w' ? evert : oscar).ev('BD.mode = "move"');
   await speel(evert, oscar, 'a1a8');
   ok('weghalen: en het eindscherm biedt vrienden worden weer aan',
@@ -482,6 +483,26 @@ async function alles() {
   evert.tik('meldOk');
   await tik();
   ok('wachtkamer: en Evert is gewoon thuis', !evert.open() && evert.get('MP') === null && evert.get('session') === null);
+
+  /* ---------- 19. de ander geeft op terwijl jij thuis bent: het einde wacht bij Verder ---------- */
+  {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    fien.tik('backBtn');
+    await tik();
+    daan.ev('resignAsk()');
+    daan.tik('rsJa');
+    await tik();
+    ok('[4.2] thuis: Fien hoort het nog niet midden in iets anders', !fien.open() && fien.get('session') === null);
+    fien.tik('verderKaart');
+    await tik();
+    ok('[4.2] bij Verder: Fien wint, en het potje is niet meer bewaard', eindziet(fien, 'JIJ WINT') &&
+      fien.opslag.getItem('schaakheld-samen') === null);
+    fien.ev('mpVerlaat()');
+    daan.ev('mpVerlaat()');
+    await tik();
+  }
 
   /* ---------- 18. het materiaal en de letters, elk vanaf de eigen kant ---------- */
   {
