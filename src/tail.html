@@ -2795,7 +2795,7 @@ function buildScan() {
   let main, sub;
   opdrachtVan('scan.' + type, type === 'mobility' ?
     { stuk: NAME_NL[task.S.board[task.extra].toLowerCase()], veld: alg(task.extra) } : null);
-  setActions([{ label: 'Klaar! ✔', cls: 'leaf', fn: scanCheck }]);
+  setActions([{ label: 'Klaar! ✔', cls: 'sun', fn: scanCheck }]);
   return true;
 }
 
@@ -4490,7 +4490,9 @@ function thuisVieren() {
   alsGetoond(lijst);
   snd.win();
   burstCenter();
-  showModal('<div class="m-emoji">🏆</div><h2>' + (lijst.length > 1 ? 'Trofeeën verdiend!' : 'Trofee verdiend!') + '</h2>' +
+  const meer = lijst.length > 1;
+  showModal('<div class="m-emoji">🏆</div><h2>' + (meer ? 'Trofeeën verdiend!' : 'Trofee verdiend!') + '</h2>' +
+    '<p>Je verdiende ' + (meer ? 'ze' : 'hem') + ' tijdens het spelen.</p>' +
     trofeeRij(lijst) + '<div class="m-btns"><button class="btn sun" id="trofOk">Super! 🎉</button></div>',
     () => $('trofOk').addEventListener('click', closeModal));
 }

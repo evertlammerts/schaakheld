@@ -468,8 +468,8 @@
   .btn:active { transform: translateY(2px); }
   .btn:disabled { opacity: .45; cursor: default; }
   .btn.sun { background: var(--sun); box-shadow: 0 4px 0 var(--sun-deep); }
-  .btn.leaf { background: var(--leaf); color: #fff; box-shadow: 0 4px 0 var(--leaf-deep); }
-  .btn.coral { background: var(--coral); color: #fff; box-shadow: 0 4px 0 #D14A36; }
+  .btn.leaf { background: var(--success); color: var(--on-success); box-shadow: 0 4px 0 #1A5A2E; }
+  .btn.coral { background: var(--danger); color: var(--on-danger); box-shadow: 0 4px 0 #8A2B1E; }
   .btn.plain { background: var(--card); box-shadow: 0 4px 0 #D9E5EE; }
   .btn.small { padding: 9px 16px; font-size: 14.5px; }
 
@@ -5277,7 +5277,7 @@ function buildScan() {
   let main, sub;
   opdrachtVan('scan.' + type, type === 'mobility' ?
     { stuk: NAME_NL[task.S.board[task.extra].toLowerCase()], veld: alg(task.extra) } : null);
-  setActions([{ label: 'Klaar! ✔', cls: 'leaf', fn: scanCheck }]);
+  setActions([{ label: 'Klaar! ✔', cls: 'sun', fn: scanCheck }]);
   return true;
 }
 
@@ -6972,7 +6972,9 @@ function thuisVieren() {
   alsGetoond(lijst);
   snd.win();
   burstCenter();
-  showModal('<div class="m-emoji">🏆</div><h2>' + (lijst.length > 1 ? 'Trofeeën verdiend!' : 'Trofee verdiend!') + '</h2>' +
+  const meer = lijst.length > 1;
+  showModal('<div class="m-emoji">🏆</div><h2>' + (meer ? 'Trofeeën verdiend!' : 'Trofee verdiend!') + '</h2>' +
+    '<p>Je verdiende ' + (meer ? 'ze' : 'hem') + ' tijdens het spelen.</p>' +
     trofeeRij(lijst) + '<div class="m-btns"><button class="btn sun" id="trofOk">Super! 🎉</button></div>',
     () => $('trofOk').addEventListener('click', closeModal));
 }
