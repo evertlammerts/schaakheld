@@ -236,7 +236,7 @@
 
   /* ---------- 5.8: het sleutelmoment van een potje ---------- */
 
-  nogNiet('[5.8] sleutelmoment: wie een paard laat hangen, krijgt "hang" bij die zet', function (check) {
+  regel('[5.8] sleutelmoment: wie een paard laat hangen, krijgt "hang" bij die zet', function (check) {
     /* 1.Pf3 e6 2.Pg5? Dxg5: het paard op g5 heeft geen dekking */
     const S = speel(E.newGame(), ['g1f3', 'e7e6', 'f3g5', 'd8g5', 'd2d4']);
     const k = E.keyMoment(S);
@@ -244,10 +244,27 @@
     check('van de soort hang, bij zet 2 (' + JSON.stringify(k) + ')', !!k && k.kind === 'hang' && k.moveNo === 2);
   });
 
-  nogNiet('[5.8] sleutelmoment: wie mat in één toelaat, krijgt "mat" bij die zet', function (check) {
+  regel('[5.8] sleutelmoment: wie mat in één toelaat, krijgt "mat" bij die zet', function (check) {
     const S = speel(E.newGame(), ['f2f3', 'e7e5', 'g2g4', 'd8h4']);
     const k = E.keyMoment(S);
     check('van de soort mat, bij zet 2 (' + JSON.stringify(k) + ')', !!k && k.kind === 'mat' && k.moveNo === 2);
+  });
+
+  regel('[5.8] sleutelmoment: een verloren ruil, een gemiste dame, een gewonnen dame, en een rustig potje zonder moment', function (check) {
+    const soort = function (fen, zetten) {
+      const S = speel(E.parseFEN(fen), zetten), voor = E.toFEN(S), k = E.keyMoment(S);
+      check('het bord blijft zoals het was', E.toFEN(S) === voor);
+      return k;
+    };
+    /* Dxd4 slaat een paard dat de pion e5 dekt; de dame is zelf gedekt, dus geen hangend stuk */
+    let k = soort('4k3/8/8/4p3/3n4/5N2/8/3QK3 w - - 0 1', ['d1d4', 'e5d4', 'f3d4']);
+    check('een ruil die ruim 2 punten kost (' + JSON.stringify(k) + ')', !!k && k.kind === 'ruil' && k.moveNo === 1 && k.loss >= 200);
+    k = soort(E.START_FEN, ['e2e4', 'e7e5', 'g1f3', 'd8g5', 'd2d3', 'g5g6']);
+    check('de dame op g5 stond gratis en d3 liet haar staan (' + JSON.stringify(k) + ')', !!k && k.kind === 'gemist' && k.moveNo === 3 && k.sq === 'g5');
+    k = soort(E.START_FEN, ['e2e4', 'e7e5', 'g1f3', 'd8g5', 'f3g5']);
+    check('Pxg5 wint de dame (' + JSON.stringify(k) + ')', !!k && k.kind === 'goed' && k.moveNo === 3);
+    k = soort(E.START_FEN, ['e2e4', 'e7e5', 'g1f3', 'b8c6']);
+    check('een rustig begin heeft geen moment', k === null);
   });
 
   console.log('\nengine-orakel: ' + nogNietN + ' nog niet gebouwd, ' + gebouwdN + ' gebouwd');

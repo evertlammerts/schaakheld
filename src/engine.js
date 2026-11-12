@@ -1338,6 +1338,80 @@ function genPieceTask(rng) {
   return null;
 }
 
+/* --- the key moment of a game against Turbo (the child plays White) --- */
+
+const POINTS = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+function capturedSq(S, m) { return m.flags === 'e' ? m.to + (S.turn === 'w' ? -16 : 16) : m.to; }
+function isPattern(info) { return info.fork.length >= 2 || !!info.pin || !!info.skewer || info.discovered.length > 0; }
+
+/* What one move m of White meant, from the position before it: at most one
+   moment, the first kind that applies, or null. A loss is in centipawns; 250
+   is a minor piece minus a little, so a pawn lost in a trade never counts. */
+function moveMoment(S, m) {
+  const base = { moveNo: S.full, move: moveKey(m) };
+  const bc = blunderCheck(S, m);
+  if (bc && bc.mate) return Object.assign(base, { kind: 'mat', loss: MATE, punish: moveKey(bc.punish) });
+  if (bc && bc.punish) {
+    makeMove(S, m);
+    const t = capturedSq(S, bc.punish), victim = isCapture(S, bc.punish) ? (S.board[t] || 'p') : null;
+    const undefended = !!victim && findAttacker(S, t, 'w') < 0;
+    const info = patternsAfterMove(S, bc.punish);
+    unmakeMove(S);
+    const taken = victim ? { sq: alg(t), piece: NAME_NL[victim.toLowerCase()], points: POINTS[victim.toLowerCase()] } : {};
+    if (undefended) {
+      const d = findAttacker(S, t, 'w');
+      return Object.assign(base, { kind: 'hang', loss: bc.loss, punish: moveKey(bc.punish),
+        defender: d >= 0 && d !== m.from ? NAME_NL[S.board[d].toLowerCase()] : null }, taken);
+    }
+    if (isPattern(info)) return Object.assign(base, { kind: 'truc', loss: bc.loss, punish: moveKey(bc.punish) }, taken);
+  }
+  if (isCapture(S, m)) {
+    const victim = S.board[capturedSq(S, m)] || 'p';
+    makeMove(S, m);
+    const back = seeSquare(S, m.to);
+    unmakeMove(S);
+    const net = VAL[victim.toLowerCase()] - back;
+    if (net <= -200) return Object.assign(base, { kind: 'ruil', loss: -net, sq: alg(m.to) });
+    if (net >= 250) return Object.assign(base, { kind: 'goed', gain: net, sq: alg(m.to) });
+  }
+  const mates = matingMoves(S, 1);
+  const wins = winnableCaptures(S).filter(x => x.gain >= 300);
+  const took = mates.some(x => x.from === m.from && x.to === m.to) || wins.some(x => capturedSq(S, m) === x.sq && isCapture(S, m));
+  if (!took && (mates.length || wins.length)) {
+    if (mates.length) return Object.assign(base, { kind: 'gemist', loss: 1000, mateWith: moveKey(mates[0]) });
+    const w = wins.reduce((a, b) => b.gain > a.gain ? b : a);
+    return Object.assign(base, { kind: 'gemist', loss: w.gain, sq: alg(w.sq), piece: NAME_NL[S.board[w.sq].toLowerCase()],
+      points: POINTS[S.board[w.sq].toLowerCase()], with: moveKey(w.move) });
+  }
+  const info = patternsAfterMove(S, m);
+  if (info.safe && isPattern(info)) return Object.assign(base, { kind: 'goed', gain: 250 });
+  return null;
+}
+/* The one moment for the end card: a mate first, otherwise the largest loss,
+   otherwise the best good move; on a tie the earliest, since the first big
+   mistake usually decided the game. */
+function chooseMoment(moments) {
+  const ms = moments.filter(Boolean);
+  const mate = ms.find(x => x.kind === 'mat');
+  if (mate) return mate;
+  const lost = ms.filter(x => x.kind !== 'goed');
+  if (lost.length) return lost.reduce((a, b) => b.loss > a.loss ? b : a);
+  const good = ms.filter(x => x.kind === 'goed');
+  return good.length ? good.reduce((a, b) => b.gain > a.gain ? b : a) : null;
+}
+/* The key moment of the game so far, from its first move. The app can call
+   moveMoment after each move instead, so nothing waits at the end. */
+function keyMoment(S) {
+  const moves = S.hist.map(u => u.m);
+  for (let i = 0; i < moves.length; i++) unmakeMove(S);
+  const moments = [];
+  for (const m of moves) {
+    if (S.turn === 'w') moments.push(moveMoment(S, m));
+    makeMove(S, m);
+  }
+  return chooseMoment(moments);
+}
+
 /* --- Dutch names --- */
 
 const NAME_NL = { p: 'pion', n: 'paard', b: 'loper', r: 'toren', q: 'dame', k: 'koning' };
@@ -1365,5 +1439,6 @@ if (typeof module !== 'undefined') {
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
     winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
-    repetitions, positionKey, SUPER_NODES, CHECK_NODES, checkSafeTask, checkPieceTask };
+    repetitions, positionKey, SUPER_NODES, CHECK_NODES, checkSafeTask, checkPieceTask,
+    POINTS, moveMoment, chooseMoment, keyMoment };
 }
