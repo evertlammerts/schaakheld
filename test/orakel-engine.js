@@ -74,7 +74,7 @@
 
   /* ---------- 5.2: geen aftrekaanval van het stuk dat zelf zet ---------- */
 
-  nogNiet('[5.2] een stuk dat langs zijn eigen lijn gaat, maakt geen aftrekaanval; d4xe5 wel', function (check) {
+  regel('[5.2] een stuk dat langs zijn eigen lijn gaat, maakt geen aftrekaanval; d4xe5 wel', function (check) {
     const S = E.parseFEN('r1bq1rk1/pppp1ppp/2Bb3n/4p3/3PP3/4BN2/PPP2PPP/RN1QK2R w KQ - 1 7');
     for (const k of ['e3d2', 'e3c1']) {
       const info = E.patternsAfterMove(S, zet(S, k));
@@ -188,7 +188,7 @@
 
   /* ---------- 5.6: drie keer dezelfde stelling ---------- */
 
-  nogNiet('[5.6] de engine telt hoe vaak de stelling al eerder op het bord stond', function (check) {
+  regel('[5.6] de engine telt hoe vaak de stelling al eerder op het bord stond', function (check) {
     const S = E.newGame();
     check('aan het begin nog nooit', E.repetitions(S) === 0);
     speel(S, ['g1f3', 'g8f6', 'f3g1', 'f6g8']);
@@ -205,7 +205,7 @@
 
   /* ---------- 5.7: het knoopbudget, matzetten en niet herhalen ---------- */
 
-  nogNiet('[5.7] think met een knoopbudget stopt binnen het budget plus 256 en geeft met een lege tabel twee keer dezelfde zet', function (check) {
+  regel('[5.7] think met een knoopbudget stopt binnen het budget plus 256 en geeft met een lege tabel twee keer dezelfde zet', function (check) {
     if (!knoopbudget(check)) return;
     const S = E.parseFEN('r2qkb1r/pppb1ppp/4pn2/3p4/1n1P1B2/3QP3/PPPKNPPP/RN3B1R w kq - 2 7');
     E.clearTT();
@@ -219,7 +219,7 @@
   /* de drie beginstellingen van de coach (learning.md 6.5), zwart aan zet */
   const EINDSPEL = [['dame', '8/8/8/4k3/8/8/8/3QK3 b - - 0 1'], ['toren', '8/8/8/4k3/8/8/8/R3K3 b - - 0 1'],
     ['toren', '8/8/3k4/8/8/2K5/8/7R b - - 0 1']];
-  nogNiet('[5.7] de sterkste Turbo zet mat met dame of toren tegen een kale koning, binnen 50 zetten en zonder herhaling', function (check) {
+  regel('[5.7] de sterkste Turbo zet mat met dame of toren tegen een kale koning, binnen 50 zetten en zonder herhaling', function (check) {
     if (!knoopbudget(check)) return;
     for (const [stuk, fen] of EINDSPEL) {
       const S = E.parseFEN(fen);

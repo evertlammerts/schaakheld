@@ -1170,15 +1170,28 @@ function material(S) {
 }
 
 function evalWhite(S) {
-  let s = 0;
+  let s = 0, wMat = 0, bMat = 0;
   for (let sq = 0; sq < 128; sq++) {
     if (sq & 0x88) continue;
     const p = S.board[sq];
     if (!p) continue;
     const t = p.toLowerCase();
     const rank = sq >> 4, file = sq & 15;
-    if (isWhitePiece(p)) s += VAL[t] + PST[t][(7 - rank) * 8 + file];
-    else s -= VAL[t] + PST[t][rank * 8 + file];
+    if (isWhitePiece(p)) { s += VAL[t] + PST[t][(7 - rank) * 8 + file]; if (t !== 'k') wMat += VAL[t]; }
+    else { s -= VAL[t] + PST[t][rank * 8 + file]; if (t !== 'k') bMat += VAL[t]; }
+  }
+  /* Against a bare king, material alone shows no progress: without a push of
+     the lone king to the edge and the kings together, the search shuffles
+     until the fifty-move rule. */
+  if ((bMat === 0 && wMat >= 400) || (wMat === 0 && bMat >= 400)) {
+    const strong = wMat > 0 ? 'w' : 'b', lone = S.kings[other(strong)], own = S.kings[strong];
+    if (lone >= 0 && own >= 0) {
+      const lf = lone & 15, lr = lone >> 4;
+      const fromCentre = Math.max(3 - lf, lf - 4) + Math.max(3 - lr, lr - 4);
+      const between = Math.abs(lf - (own & 15)) + Math.abs(lr - (own >> 4));
+      const bonus = 30 * fromCentre + 12 * (14 - between);
+      s += strong === 'w' ? bonus : -bonus;
+    }
   }
   return s;
 }
@@ -1342,20 +1355,50 @@ function hashOf(S) {
 }
 const TT = new Map();
 const TT_MAX = 150000;
+function clearTT() { TT.clear(); }
 
-/* Iterative deepening alpha-beta with a time budget: transposition table,
-   killer and history ordering, check extension, quiescence at the leaves.
-   Returns the best move of the deepest fully searched iteration. */
-function think(S, budgetMs, maxDepth) {
+/* The positions of the game before the current one that can still come back:
+   only those after the last capture or pawn move, since those cannot be undone. */
+function earlierPositions(S, keyOf) {
+  const out = [], back = [];
+  const n = Math.min(S.half, S.hist.length);
+  for (let i = 0; i < n; i++) {
+    back.push(S.hist[S.hist.length - 1].m);
+    unmakeMove(S);
+    out.push(keyOf(S));
+  }
+  for (let i = back.length - 1; i >= 0; i--) makeMove(S, back[i]);
+  return out;
+}
+/* board, side to move, castling and en passant: the first four FEN fields */
+function positionKey(S) { return toFEN(S).split(' ').slice(0, 4).join(' '); }
+/* How often the current position stood on the board before in this game;
+   2 means this is the third time, a draw by repetition. */
+function repetitions(S) {
+  const now = positionKey(S);
+  return earlierPositions(S, positionKey).filter(k => k === now).length;
+}
+
+/* Iterative deepening alpha-beta with a time budget, and optionally a node
+   budget (opts.nodes), which makes the result the same on every device:
+   transposition table, killer and history ordering, check extension,
+   quiescence at the leaves. A position from earlier in the game, or earlier
+   on the line being searched, scores as a draw, so Turbo does not repeat
+   when he is ahead. Returns the best move of the deepest fully searched
+   iteration. */
+function think(S, budgetMs, maxDepth, opts) {
   const t0 = Date.now(), deadline = t0 + (budgetMs || 1000);
   maxDepth = maxDepth || 8;
+  const maxNodes = opts && opts.nodes ? opts.nodes : Infinity;
   let nodes = 0, aborted = false;
   const killers = [], hist = new Map();
   if (TT.size > TT_MAX) TT.clear();
   const tick = () => {
-    if ((++nodes & 255) === 0 && Date.now() > deadline) aborted = true;
+    if (aborted) return true;
+    if ((++nodes & 255) === 0 && (nodes >= maxNodes || Date.now() > deadline)) aborted = true;
     return aborted;
   };
+  const earlier = new Set(earlierPositions(S, hashOf)), path = new Set();
   /* mate scores are stored relative to the node, not the root, so a
      transposition reached at another ply reads back the right distance */
   const toTT = (s, ply) => s > MATE - 1000 ? s + ply : (s < -MATE + 1000 ? s - ply : s);
@@ -1374,11 +1417,17 @@ function think(S, budgetMs, maxDepth) {
   };
   function ab(depth, alpha, beta, ply) {
     if (tick()) return 0;
+    let key = -1, low = 0;
+    /* a position can only come back after at least four reversible plies */
+    if (S.half >= 4) {
+      key = hashOf(S); low = hashLow;
+      if (earlier.has(key) || path.has(key)) return 0;
+    }
     const chk = inCheck(S);
     if (chk) depth++;
     if (depth <= 0) return quiesce(S, alpha, beta, 6, evalSTM, tick);
     if (S.half >= 100) return 0;
-    const key = hashOf(S), low = hashLow;
+    if (key < 0) { key = hashOf(S); low = hashLow; }
     const e = TT.get(key);
     let ttMove = null;
     if (e && e.v === low) {
@@ -1394,11 +1443,12 @@ function think(S, budgetMs, maxDepth) {
     if (!moves.length) return chk ? -MATE + ply : 0;
     const alpha0 = alpha;
     let best = -Infinity, bestM = null;
+    path.add(key);
     for (const m of order(moves, ttMove, ply)) {
       makeMove(S, m);
       const sc = -ab(depth - 1, -beta, -alpha, ply + 1);
       unmakeMove(S);
-      if (aborted) return 0;
+      if (aborted) { path.delete(key); return 0; }
       if (sc > best) { best = sc; bestM = m; }
       if (sc > alpha) {
         alpha = sc;
@@ -1412,11 +1462,13 @@ function think(S, budgetMs, maxDepth) {
         }
       }
     }
+    path.delete(key);
     TT.set(key, { d: depth, s: toTT(best, ply), f: best <= alpha0 ? 2 : (best >= beta ? 1 : 0), m: bestM, v: low });
     return best;
   }
   const rootMoves = legalMoves(S);
   if (!rootMoves.length) return { m: null, score: 0, depth: 0, nodes: 0 };
+  path.add(hashOf(S));
   let bestMove = null, bestScore = 0, done = 0;
   for (let d = 1; d <= maxDepth; d++) {
     if (Math.abs(bestScore) >= MATE - 100) break;
@@ -1432,7 +1484,7 @@ function think(S, budgetMs, maxDepth) {
     if (aborted) break;
     bestMove = rootBest; bestScore = rootScore; done = d;
     if (Math.abs(rootScore) >= MATE - 100) break;
-    if (Date.now() - t0 > budgetMs / 2) break;
+    if (Date.now() - t0 > budgetMs / 2 || nodes >= maxNodes / 2) break;
   }
   if (!bestMove) bestMove = rootScores(S, 1)[0].m;
   return { m: bestMove, score: bestScore, depth: done, nodes };
@@ -1440,9 +1492,14 @@ function think(S, budgetMs, maxDepth) {
 
 /* --- AI opponent --- */
 
+/* Super Turbo's search counts nodes, not time, so he is equally strong on a
+   slow phone and on a laptop and plays the same move in the same position.
+   About 2 s on the slowest phone; the time cap is only a safety net. */
+const SUPER_NODES = 100000, SUPER_CAP_MS = 4000;
+
 /* Level 1 (Baby): mostly random. Level 2 (Turbo): book, then depth 2 with a
-   margin, so it stays beatable. Level 3 (Super Turbo): book, then the timed
-   search. budgetMs only matters for level 3 (tests pass a small one). */
+   margin, so it stays beatable. Level 3 (Super Turbo): book, then the search
+   with its node budget. budgetMs only caps level 3 (tests pass a small one). */
 function pickMove(S, level, rng, budgetMs) {
   rng = rng || Math.random;
   const legal = legalMoves(S);
@@ -1457,7 +1514,7 @@ function pickMove(S, level, rng, budgetMs) {
     const bm = bookMove(S, rng);
     if (bm) return bm;
   }
-  if (level === 3) return think(S, budgetMs || 1200, 8).m;
+  if (level === 3) return think(S, budgetMs || SUPER_CAP_MS, 8, { nodes: SUPER_NODES }).m;
   const depth = level === 1 ? 1 : 2;
   const margin = level === 1 ? 250 : 80;
   const scored = rootScores(S, depth);
@@ -1799,10 +1856,12 @@ function raysPinSkewer(S, sq) {
 }
 
 /* Attacks by friendly sliders that got unveiled because fromSq was vacated.
-   Call on the position AFTER the move. */
-function discoveredFrom(S, fromSq, by) {
+   Call on the position AFTER the move. The piece that moved (now on movedTo)
+   unveils nothing: sliding along its own line it attacks what it attacked. */
+function discoveredFrom(S, fromSq, by, movedTo) {
   const out = [];
   for (const sq of piecesOf(S, by)) {
+    if (sq === movedTo) continue;
     const pt = S.board[sq].toLowerCase();
     if (!'brq'.includes(pt)) continue;
     for (const d of SLIDER_DIRS[pt]) {
@@ -1830,7 +1889,7 @@ function patternsAfterMove(S, m) {
     safe: seeSquare(S, m.to) <= 0,
     fork: forkTargets(S, m.to),
     pin: null, skewer: null,
-    discovered: discoveredFrom(S, m.from, other(S.turn)).filter(x => x.isKing || x.val >= 300),
+    discovered: discoveredFrom(S, m.from, other(S.turn), m.to).filter(x => x.isKing || x.val >= 300),
     mate: false
   };
   const ps = raysPinSkewer(S, m.to);
@@ -2135,7 +2194,8 @@ if (typeof module !== 'undefined') {
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
     winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
-    genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think };
+    genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
+    repetitions, positionKey, SUPER_NODES };
 }
 'use strict';
 /* Gegenereerd door tools/make-koning.js; niet met de hand bewerken. 160 geverifieerde puzzels. */
