@@ -126,7 +126,7 @@ async function orakelFlow() {
     check('de stand na slag en rokades, wit aan zet', b.fen() === toFEN(naSpelen(zetten)));
   });
 
-  await nogNiet('[1.1] een potje zonder zet wordt niet bewaard: Pauze vraagt niets en zegt dat het nog niet begonnen was', async function (check) {
+  await regel('[1.1] een potje zonder zet wordt niet bewaard: Pauze vraagt niets en zegt dat het nog niet begonnen was', async function (check) {
     const a = nieuwKind();
     await startPotje(a, 1);
     check('testopzet: in een potje', opSpeelscherm(a));
@@ -163,7 +163,7 @@ async function orakelFlow() {
     check('melding "Bewaard ... zet 2"', /Bewaard/.test(toastTekst(a)) && /zet 2\b/.test(toastTekst(a)));
   });
 
-  await nogNiet('[1.2] ✔ bewaard staat in beeld na elke bewaarde zet en elk antwoord', async function (check) {
+  await regel('[1.2] ✔ bewaard staat in beeld na elke bewaarde zet en elk antwoord', async function (check) {
     const bewaardInBeeld = function (x) { return zichtbaar(x, 'bewaard') && tekstVan(x, 'bewaard').indexOf('✔ bewaard') >= 0; };
     const a = nieuwKind();
     await startPotje(a, 1);
@@ -336,7 +336,7 @@ async function orakelFlow() {
   }
 
   /* een rondje is een telling: de sterren staan al in het profiel, dus weghalen kost niets */
-  await nogNiet('[1.5] rondjes die niet te lezen zijn (kapotte tekst) worden stil weggehaald, en het rondje begint opnieuw', async function (check) {
+  await regel('[1.5] rondjes die niet te lezen zijn (kapotte tekst) worden stil weggehaald, en het rondje begint opnieuw', async function (check) {
     const o = maakOpslag();
     o.setItem(RONDJES, 'kapot{');
     const a = nieuwKind({ opslag: o });
@@ -348,7 +348,7 @@ async function orakelFlow() {
     check('de kapotte tekst is weg', a.opslag.getItem(RONDJES) !== 'kapot{');
   });
 
-  await nogNiet('[1.5] een rondje dat niet te lezen is, wordt weggehaald; het rondje ernaast blijft', async function (check) {
+  await regel('[1.5] een rondje dat niet te lezen is, wordt weggehaald; het rondje ernaast blijft', async function (check) {
     const o = maakOpslag();
     o.setItem(RONDJES, JSON.stringify({ scan: { round: 'drie', earned: null }, best3: { round: 2, earned: 6 } }));
     const a = nieuwKind({ opslag: o });

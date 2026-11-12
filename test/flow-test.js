@@ -499,16 +499,22 @@ exitCloud();
 ok('wolk: terug naar echt, bord intact', session.S === realS && toFEN(session.S) === realFen &&
   BD.mode === 'move' && !session.cloud && realS.hist.length === 0);
 /* Pauze in de wolk: eerst het echte bord terug, dan naar huis zonder vraag; het droombord blijft niet bewaard */
+startGame(1);
+drainTimers();
+onCell(sqFromAlg('e2')); onCell(sqFromAlg('e4'));
+drainTimers();
+var echteZetten = session.S.hist.length;
 enterCloud();
-onCell(sqFromAlg('e4')); onCell(sqFromAlg('d5'));
+onCell(sqFromAlg('d2')); onCell(sqFromAlg('d4'));
 drainTimers();
 var droomZetten = session.S.hist.length;
 fire(__els.backBtn, 'click');
-ok('[1.2] wolk: Pauze vraagt niets, gaat naar huis en bewaart het echte bord, niet het droombord', droomZetten === 1 &&
-  session === null && __els.overlay.classList.contains('hidden') && !!leesPotje() && leesPotje().r.moves.length === 0);
+ok('[1.2] wolk: Pauze vraagt niets, gaat naar huis en bewaart het echte bord, niet het droombord',
+  echteZetten === 2 && droomZetten === 1 && session === null && __els.overlay.classList.contains('hidden') &&
+  !!leesPotje() && leesPotje().r.moves.length === echteZetten);
 fire(document.getElementById('verderKaart'), 'click');
 ok('[1.2] wolk: verder spelen geeft het echte bord terug en het potje loopt door', !!session &&
-  session.kind === 'game' && !session.cloud && !session.over && BD.mode === 'move' && session.S.hist.length === 0);
+  session.kind === 'game' && !session.cloud && !session.over && BD.mode === 'move' && session.S.hist.length === echteZetten);
 /* patroon-duiding in de partij: kid speelt een vork, Turbo benoemt hem */
 P.guard = false; P.predict = false;
 session.S = parseFEN('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1');
@@ -1981,10 +1987,13 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('turbo: remise meteen aan het begin wordt afgewimpeld', session.over !== true &&
     __els.bubble.innerHTML.indexOf('net begonnen') >= 0);
   fire(__els.backBtn, 'click');
-  ok('[1.2] turbo: Pauze midden in een potje vraagt niets en bewaart het potje',
-    session === null && __els.overlay.classList.contains('hidden') && !!leesPotje() && !leesPotje().kapot);
-  fire(document.getElementById('verderKaart'), 'click');
-  ok('[1.2] turbo: verder spelen = doorspelen', session !== null && session.over !== true && __els.overlay.classList.contains('hidden'));
+  ok('[1.1] turbo: Pauze voor de eerste zet vraagt niets, bewaart niets en zegt dat het potje nog niet begonnen was',
+    session === null && __els.overlay.classList.contains('hidden') && leesPotje() === null &&
+    document.getElementById('toast').textContent.indexOf('nog niet begonnen') >= 0);
+  startGame(2);
+  drainTimers();
+  ok('[1.1] turbo: daarna begint een nieuw potje zonder vraag', session !== null && session.over !== true &&
+    __els.overlay.classList.contains('hidden'));
   var gpT = P.c.gamesPlayed, xpT = P.xp;
   fire(actionBtns.resignBtn, 'click');
   fire(__els.rsJa, 'click');

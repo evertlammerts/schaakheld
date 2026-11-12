@@ -2309,16 +2309,31 @@ function leesPotje() {
     return gameStatus(S).over ? { kapot: true } : { r, S };
   } catch (e) { return { kapot: true }; }
 }
+/* een potje zonder zet is er nog niet: dan staat er ook niets */
 function bewaarPotje() {
   if (!session || session.kind !== 'game' || session.online || session.over) return;
   const S = session.cloud ? session.cloud.realS : session.S;
+  if (!S.hist.length) { opslag(POTJE_KEY, null); return; }
   opslag(POTJE_KEY, JSON.stringify({ v: 1, level: session.level, moves: S.hist.map(h => moveKey(h.m)),
     tips: session.tips, drawAsked: session.drawAsked == null ? null : session.drawAsked,
     started: session.started, updated: Date.now() }));
   $('bewaard').classList.remove('hidden');
 }
+/* De sterren van een rondje staan al in het profiel; een rondje dat niet te
+   lezen is, gaat dus weg en de oefening begint opnieuw. */
 function leesRondjes() {
-  try { return JSON.parse(opslag(RONDJES_KEY)) || {}; } catch (e) { return {}; }
+  let r = null;
+  try { r = JSON.parse(opslag(RONDJES_KEY)); } catch (e) { r = undefined; }
+  if (r === null) return {};
+  if (!r || typeof r !== 'object' || Array.isArray(r)) { opslag(RONDJES_KEY, null); return {}; }
+  const goed = e => !!e && Number.isInteger(e.round) && e.round >= 1 && e.round <= 4 &&
+    Number.isInteger(e.earned) && e.earned >= 0 && e.earned <= 3 * e.round;
+  const kapot = DRILL_KINDS.filter(k => k in r && !goed(r[k]));
+  if (kapot.length) {
+    kapot.forEach(k => { delete r[k]; });
+    opslag(RONDJES_KEY, Object.keys(r).length ? JSON.stringify(r) : null);
+  }
+  return r;
 }
 /* een rondje is af bij het vijfde antwoord, ook als het kind daarna meteen weggaat */
 function bewaarRondje() {
@@ -2357,7 +2372,7 @@ function pauze() {
   let melding = null;
   if (session && session.kind === 'game' && !session.over) {
     bewaarPotje();
-    melding = 'Bewaard. Je kunt later verder bij zet ' + zetNummer(session.S) + '.';
+    melding = session.S.hist.length ? 'Bewaard. Je kunt later verder bij zet ' + zetNummer(session.S) + '.' : 'Dit potje was nog niet begonnen.';
   } else if (session && session.kind === 'opening') {
     melding = 'Je sterren zijn bewaard. De les begint de volgende keer opnieuw.';
   } else if (session && session.kind !== 'game') {
@@ -3164,9 +3179,9 @@ function koningAttempt(m) {
       playMove(reply.m, () => {
         const st2 = gameStatus(S);
         const cap = S.hist[S.hist.length - 1].cap;
-        const txt = 'Turbo speelt <b>' + replyName + '</b>. ' + (st2.over && st2.reason === 'mat' ? 'Schaakmat! 😱 Dat was dus niet de redding.' :
-          (t.type === 'stuk' && cap ? 'Zo pakt hij je ' + NAME_NL[cap.toLowerCase()] + ' gewoon af. 😬' :
-            'Het gevaar is er nog. 😬'));
+        const txt = st2.over && st2.reason === 'mat' ? 'Schaakmat! 😱 Dat was dus niet de redding.' :
+          (t.type === 'stuk' && cap ? 'Turbo pakt je ' + NAME_NL[cap.toLowerCase()] + ' gewoon af. 😬' :
+            'Turbo speelt <b>' + replyName + '</b> en het gevaar is er nog. 😬');
         later(() => {
           unmakeMove(S); unmakeMove(S);
           BD.arrows = []; BD.last = null;
@@ -3642,6 +3657,7 @@ function offerDraw() {
     return;
   }
   session.drawAsked = S.hist.length;
+  bewaarPotje();
   say(S.hist.length < MIN_PLIES_TELT ? 'Remise? Nu al? Nee hoor, we zijn net begonnen! Speel maar door. 🐢' :
     (evalWhite(S) > 0 ? 'Remise? Nee, jij staat beter! Probeer maar te winnen. 🐢' : 'Remise? Nee hoor, ik sta goed. Speel maar door! 🐢'));
 }
@@ -4071,6 +4087,7 @@ function undoMove() {
   const S = session.S;
   if (S.hist.length < 2) return;
   unmakeMove(S); unmakeMove(S);
+  bewaarPotje();
   clearSel();
   BD.last = null;
   BD.check = inCheck(S) ? S.kings[S.turn] : null;
@@ -4089,6 +4106,7 @@ function useTip() {
     return;
   }
   session.tips--;
+  bewaarPotje();
   if (actionBtns.tip) {
     actionBtns.tip.textContent = '👀 Speurbril (' + session.tips + ')';
     if (session.tips === 0) actionBtns.tip.disabled = true;
