@@ -1813,11 +1813,11 @@ function updateHud() {
   const li = levelIdx(P.xp), L = LEVELS[li], next = LEVELS[li + 1];
   $('lvlGlyph').textContent = L.g;
   $('lvlName').textContent = L.n;
-  $('xpFill').style.width = (next ? (P.xp - L.xp) / (next.xp - L.xp) * 100 : 100) + '%';
+  /* een balk staat nooit vol zolang er nog iets te doen is (de meesterproef) */
+  $('xpFill').style.width = (next ? Math.min(next.gate && !next.gate.done() ? 95 : 100, (P.xp - L.xp) / (next.xp - L.xp) * 100) : 100) + '%';
   $('statStars').textContent = P.stars;
   $('statWins').textContent = P.wins;
   $('heyName').textContent = P.name || 'kampioen';
-  $('sndBtn').textContent = P.sound ? '🔊' : '🔇';
 }
 
 function floatXP(txt) {
@@ -2186,13 +2186,6 @@ function showScreen(name) {
 }
 
 /* ---------- copy ---------- */
-const HOME_LINES = [
-  'Ik ben Turbo. Ik ben langzaam… en daarom win ik bijna altijd! Eerst kijken, dan denken, dan doen! 🐢',
-  'Wist je dat? Grootmeesters kijken éérst naar het hele bord. Net als schildpadden. 🐢',
-  'Snelle zetten zijn vaak foute zetten. Doe maar lekker rustig aan!',
-  'Vandaag weer wat sterren verdienen? Kies maar een spel!',
-  'Mijn geheim: bij elke zet denk ik "wat kan mijn tegenstander hierna doen?" 🤫'
-];
 const THINK_LINES = [
   'Neem je tijd… kijk éérst het hele bord rond! 👀',
   'Stop – kijk – denk – doe! 🐢',
@@ -2302,7 +2295,6 @@ function goHome(tab) {
   stopPatience();
   showScreen('home');
   showHomeTab(typeof tab === 'string' ? tab : 'spelen');
-  $('homeBubble').textContent = pick(HOME_LINES);
   renderHome();
   friendPollSoon(800); /* thuis: snel kijken of er een uitnodiging ligt */
 }
@@ -4920,7 +4912,7 @@ function confirmReset() {
       });
     });
 }
-$('sndBtn').addEventListener('click', () => { setPref('sound', !P.sound); updateHud(); if (P.sound) snd.select(); });
+$('lvlChip').addEventListener('click', () => showHomeTab('ik'));
 $('predictSkip').addEventListener('click', () => resolvePredict(null));
 $('meerBtn').addEventListener('click', openMeer);
 $('materiaal').addEventListener('click', openMateriaal);
@@ -4944,7 +4936,6 @@ function askName() {
 
 applyTheme();
 renderHome();
-$('homeBubble').textContent = pick(HOME_LINES);
 showScreen('home');
 if (!checkPlayFragment() && !checkLinkFragment()) {
   if (!P.name && !ACC) askWelcome();

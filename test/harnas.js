@@ -239,8 +239,13 @@ function opSpeelscherm(app) { return zichtbaar(app, 'scr-play') && !zichtbaar(ap
 /* naar een potje tegen Turbo, zoals een kind: de knop op Spelen, dan het
    niveau. Zolang Spelen nog de oude kaarten heeft (vaste opmaak, die de shim
    niet kent) opent de test het keuzevenster dat die kaart opent. */
+/* de spelknoppen staan op Spelen: een kind dat op een andere tab staat, tikt eerst Spelen */
+function naarSpelen(app) {
+  if (zichtbaar(app, 'scr-home') && !zichtbaar(app, 'view-spelen')) app.tik('tabSpelen');
+}
+
 async function startPotje(app, niveau) {
-  if (heeftKlik(app, 'spelTurbo')) app.tik('spelTurbo'); else app.ev('startGameFlow()');
+  if (heeftKlik(app, 'spelTurbo')) { naarSpelen(app); app.tik('spelTurbo'); } else app.ev('startGameFlow()');
   await wacht();
   const knop = app.el('modalBox').querySelectorAll('[data-lvl="' + niveau + '"]')[0];
   if (!knop) return false;
@@ -250,7 +255,7 @@ async function startPotje(app, niveau) {
 }
 
 async function startOefening(app, soort) {
-  if (heeftKlik(app, 'oefen-' + soort)) app.tik('oefen-' + soort); else app.ev('startDrill(' + JSON.stringify(soort) + ')');
+  if (heeftKlik(app, 'oefen-' + soort)) { naarSpelen(app); app.tik('oefen-' + soort); } else app.ev('startDrill(' + JSON.stringify(soort) + ')');
   await wacht();
 }
 

@@ -1235,7 +1235,7 @@ async function orakelFlow() {
     check('en de kaart zegt het', opThuis(a) && tekstVan(a, 'verder').indexOf(r.title) >= 0 && !/Speurogen/.test(tekstVan(a, 'verder')));
   });
 
-  await nogNiet('[3.2] alle vijf oefeningen en beide spelknoppen staan op Spelen, wat de kaart ook zegt', async function (check) {
+  await regel('[3.2] alle vijf oefeningen en beide spelknoppen staan op Spelen, wat de kaart ook zegt', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5']) });
     const ids = ['spelTurbo', 'spelVriend', 'oefen-scan', 'oefen-best3', 'oefen-trucs', 'oefen-koning', 'oefen-opening'];
     check('elk een knop die werkt', ids.every(function (id) { return heeftKlik(a, id) && zichtbaar(a, id); }));
@@ -1244,7 +1244,7 @@ async function orakelFlow() {
     check('Speurogen begint', opSpeelscherm(a) && /opdracht 1 van 5/i.test(tekstVan(a, 'roundChip')));
   });
 
-  await nogNiet('[3.4] de levelchip in de kop opent Ik', async function (check) {
+  await regel('[3.4] de levelchip in de kop opent Ik', async function (check) {
     const a = nieuwKind();
     a.tik('lvlChip');
     check('Ik staat open', zichtbaar(a, 'view-ik') && !zichtbaar(a, 'view-spelen'));

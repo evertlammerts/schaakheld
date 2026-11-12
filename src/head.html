@@ -51,32 +51,32 @@
   }
 
   /* ---------- header ---------- */
+  /* een rij van 56, vast bovenin en dicht, zodat er niets doorheen schijnt */
   header.top {
-    position: relative; z-index: 2;
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 4px;
-    max-width: 1020px; margin: 0 auto;
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    height: calc(56px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px));
+    background: var(--sky-hi);
   }
   .logo { display: flex; align-items: center; gap: 10px; }
   .logo-turtle {
-    display: grid; place-items: center; width: 46px; height: 46px; font-size: 27px;
+    display: grid; place-items: center; width: 32px; height: 32px; font-size: 20px;
     background: var(--sun); border-radius: 50%;
     box-shadow: 0 3px 0 var(--sun-deep);
   }
-  .logo-txt { font-size: 25px; font-weight: bold; letter-spacing: .3px; }
+  .logo-txt { font-family: var(--font-display); font-size: 20px; font-weight: 700; }
+  @media (max-width: 399px) { .logo-txt { display: none; } }
   .logo-txt em { font-style: normal; color: var(--sun-deep); }
-  .hud { display: flex; align-items: center; gap: 10px; }
-  .icon-btn {
-    width: 42px; height: 42px; border-radius: 50%; border: none; cursor: pointer;
-    background: var(--card); box-shadow: var(--shadow); font-size: 19px;
+  .hud { display: flex; align-items: center; gap: 8px; }
+  .icon-btn, .xp-chip {
+    min-height: 44px; border-radius: 999px; cursor: pointer; font: inherit; color: var(--text);
+    background: var(--surface); border: 1.5px solid rgba(23, 69, 111, .25); box-shadow: var(--elev-1);
   }
-  .xp-chip {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--card); border-radius: 999px; padding: 6px 14px 6px 8px;
-    box-shadow: var(--shadow);
-  }
+  .icon-btn { width: 44px; font-size: 19px; }
+  .xp-chip { display: flex; align-items: center; gap: 8px; padding: 2px 12px 2px 8px; text-align: left; }
   .xp-glyph { font-size: 24px; line-height: 1; }
-  .xp-mid { min-width: 76px; }
+  .xp-mid { min-width: 64px; }
   .xp-mid b { font-size: 13px; display: block; line-height: 1.1; }
   .xp-bar { height: 7px; background: #E4EEF6; border-radius: 99px; overflow: hidden; margin-top: 3px; }
   .xp-bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--sun), var(--sun-deep)); border-radius: 99px; transition: width .6s ease; }
@@ -87,20 +87,9 @@
   .screen.hidden { display: none; }
 
   /* ---------- home ---------- */
-  .hero {
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    background: var(--card); border-radius: 26px; padding: 18px 22px;
-    box-shadow: var(--shadow); margin: 10px 0 18px;
-  }
-  .hero-turtle {
-    flex: 0 0 auto; width: 88px; height: 88px; font-size: 54px;
-    display: grid; place-items: center;
-    background: var(--leaf-soft); border-radius: 50%;
-    animation: bob 3s ease-in-out infinite;
-  }
+  .groet { display: flex; align-items: center; gap: 8px; min-height: 40px; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); }
+  .groet-turtle { width: 28px; height: 28px; display: grid; place-items: center; font-size: 18px; background: var(--leaf-soft); border-radius: 50%; }
   @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
-  .hero-txt { flex: 1 1 260px; }
-  .hero-txt h1 { margin: 0 0 6px; font-size: clamp(22px, 4vw, 30px); text-wrap: balance; } /* compat-allow css.properties.text-wrap: voor Safari 17.4 breekt de kop gewoon af */
   .bubble {
     position: relative; background: var(--cream); border-radius: 16px;
     padding: 10px 14px; font-size: 15.5px; line-height: 1.45; color: var(--ink);
@@ -113,11 +102,18 @@
   .mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
   /* de twee potjes zijn de hoofdactie: iets groter en altijd twee-op-een-rij
      tot het echt smal wordt */
-  .mode-grid.games { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-  .mode-grid.games .mode-card { padding: 22px; }
-  .mode-grid.games .mode-card .mc-emoji { font-size: 46px; }
-  .grid-label { font-size: 14px; font-weight: bold; color: var(--ink-soft);
-    letter-spacing: .3px; margin: 20px 2px 10px; }
+  /* de twee spelknoppen naast elkaar; de oefeningen als rijen in een kaart */
+  .mode-grid.games { grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .mode-grid.games .mode-card { flex-direction: row; align-items: center; gap: 8px; min-height: 64px; padding: 8px 12px;
+    border: 1.5px solid rgba(23, 69, 111, .25); box-shadow: var(--elev-1); }
+  .mode-grid.games .mode-card .mc-emoji { font-size: 28px; }
+  .mode-grid.games .mode-card .mc-title { font-size: var(--fs-md); }
+  .mode-grid.drills { grid-template-columns: 1fr; gap: 0; background: var(--surface); border: var(--border); border-radius: 16px; overflow: hidden; }
+  .mode-grid.drills .mode-card { border-radius: 0; box-shadow: none; background: var(--surface); min-height: 56px; }
+  .mode-grid.drills .mode-card + .mode-card { border-top: var(--border); }
+  .mode-grid.drills .mode-card::after { content: '›'; font-size: 22px; color: var(--text-quiet); }
+  @media (min-width: 900px) { .mode-grid.drills { grid-template-columns: 1fr 1fr; } }
+  .grid-label { font-size: var(--fs-sm); font-weight: 700; color: var(--text-quiet); margin: 16px 2px 8px; }
   #view-spelen .grid-label:first-of-type { margin-top: 8px; }
   /* onderbalk met de twee tabs (Spelen / Ik), duim-bereikbaar op de telefoon */
   #scr-home { padding-bottom: 96px; }
@@ -133,7 +129,7 @@
     border-radius: 18px; font: inherit; font-weight: 800; font-size: 17px;
     background: transparent; color: var(--ink-soft); transition: transform .1s ease, background .15s ease;
   }
-  .tab.on { background: var(--sun); color: var(--ink); box-shadow: 0 4px 14px rgba(232, 147, 12, .3); }
+  .tab.on { background: var(--selected-soft); color: var(--text); }
   .tab:active { transform: translateY(1px); }
   .home-view { animation: fadeUp .18s ease; }
   .home-view.hidden { display: none; }
@@ -145,7 +141,6 @@
     box-shadow: var(--shadow);
     transition: transform .12s ease, box-shadow .12s ease;
   }
-  .mode-card:hover { transform: translateY(-3px) scale(1.01); }
   .mode-card:active { transform: translateY(1px); }
   .mode-card .mc-emoji { font-size: 38px; line-height: 1; }
   .mode-card .mc-title { font-size: 19px; font-weight: bold; }
@@ -202,7 +197,7 @@
   .lp-node:first-child::before { display: none; }
   .lp-node.done .lp-g { background: var(--leaf-soft); }
   .lp-node.done::before, .lp-node.current::before { background: var(--leaf); }
-  .lp-node.current .lp-g { background: var(--sun); box-shadow: 0 3px 0 var(--sun-deep); animation: bob 2s ease-in-out infinite; }
+  .lp-node.current .lp-g { background: var(--sun); box-shadow: 0 3px 0 var(--sun-deep); animation: bob 2s ease-in-out 3; }
   .lp-node.locked { opacity: .55; }
   .lp-node .lp-xp { font-size: 10px; font-variant-numeric: tabular-nums; }
   .lp-next {
@@ -239,11 +234,11 @@
   .reset-btn:hover { color: var(--coral); }
 
   /* compacte rij-kaarten voor de vijf oefenspellen: emoji links, tekst rechts */
-  .mode-card.row { flex-direction: row; align-items: center; gap: 14px; padding: 14px 16px; }
-  .mode-card.row .mc-emoji { font-size: 34px; width: 44px; text-align: center; }
+  .mode-card.row { flex-direction: row; align-items: center; gap: 12px; padding: 8px 14px; }
+  .mode-card.row .mc-emoji { font-size: 28px; width: 32px; text-align: center; }
   .mode-card.row .mc-txt { display: flex; flex-direction: column; gap: 3px; flex: 1; }
   .mode-card.row .mc-title { font-size: 17px; }
-  .mode-card.row .mc-sub { font-size: 13px; }
+  .mode-card.row .mc-sub { font-size: var(--fs-cap); }
   .mc-king { background: var(--coral-soft); }
   .mc-open { background: #E7F6EE; }
   .note { font-size: 12.5px; color: var(--ink-soft); line-height: 1.4; margin-top: 8px; }
@@ -254,7 +249,7 @@
   .weekstrip {
     width: 100%; border: none; cursor: pointer; text-align: left; font: inherit; color: var(--ink);
     display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 18px;
-    padding: 10px 14px; box-shadow: var(--shadow); margin: -6px 0 4px; font-size: 14px;
+    padding: 6px 14px; min-height: 44px; border: var(--border); box-shadow: none; margin: 0; font-size: var(--fs-sm);
   }
   .weekstrip .dots { display: flex; gap: 4px; }
   .weekstrip .dots i { width: 12px; height: 12px; border-radius: 50%; background: #E4EEF6; display: block; }
@@ -721,7 +716,6 @@
   #fx { position: fixed; inset: 0; z-index: 99; pointer-events: none; }
 
   @media (max-width: 760px) {
-    header.top { flex-wrap: wrap; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -741,16 +735,12 @@
     <span class="logo-txt">Schaak<em>Held</em></span>
   </div>
   <div class="hud">
-    <button id="setBtn" class="icon-btn" title="Instellingen">⚙️</button>
-    <button id="sndBtn" class="icon-btn" title="Geluid aan/uit">🔊</button>
-    <div class="xp-chip">
+    <button id="lvlChip" class="xp-chip" aria-label="Jouw level en XP">
       <span class="xp-glyph" id="lvlGlyph">♟︎</span>
-      <div class="xp-mid">
-        <b id="lvlName">Pion</b>
-        <div class="xp-bar"><i id="xpFill"></i></div>
-      </div>
-      <span class="xp-num"><b id="xpNum">0</b> ⭐</span>
-    </div>
+      <span class="xp-mid"><b id="lvlName">Pion</b><span class="xp-bar"><i id="xpFill"></i></span></span>
+      <span class="xp-num"><b id="xpNum">0</b> XP</span>
+    </button>
+    <button id="setBtn" class="icon-btn" title="Instellingen">⚙️</button>
   </div>
 </header>
 
@@ -758,51 +748,36 @@
   <section id="scr-home" class="screen">
     <!-- Tab 1: Spelen — alleen kiezen wat je gaat doen -->
     <div id="view-spelen" class="home-view">
+      <div class="groet"><span class="groet-turtle">🐢</span><span>Hoi <span id="heyName">kampioen</span>! 👋</span></div>
       <div id="verder" class="verder hidden"></div>
-      <div class="hero">
-        <div class="hero-turtle">🐢</div>
-        <div class="hero-txt">
-          <h1>Hoi <span id="heyName">kampioen</span>! 👋</h1>
-          <div class="bubble" id="homeBubble">Ik ben Turbo. Ik ben langzaam… en daarom win ik bijna altijd! 🐢 Eerst kijken, dan denken, dan pas doen!</div>
-        </div>
-      </div>
       <button id="weekStrip" class="weekstrip" title="Jouw week"></button>
-      <div class="grid-label">🏆 Een potje spelen</div>
       <div class="mode-grid games">
-        <button class="mode-card mc-game" data-mode="game">
-          <span class="mc-emoji">🏆</span>
-          <span class="mc-title">Potje tegen Turbo</span>
-          <span class="mc-sub">Een echte partij! Met denk-meter en voorspel-bonus.</span>
-        </button>
-        <button class="mode-card mc-online" data-mode="online">
-          <span class="mc-emoji">🤝</span>
-          <span class="mc-title">Potje met een vriend</span>
-          <span class="mc-sub">Nodig een vriend uit, of maak een nieuwe vriend.</span>
-        </button>
+        <button id="spelTurbo" class="mode-card mc-game" data-mode="game"><span class="mc-emoji">🐢</span><span class="mc-title">Tegen Turbo</span></button>
+        <button id="spelVriend" class="mode-card mc-online" data-mode="online"><span class="mc-emoji">🤝</span><span class="mc-title">Met een vriend</span></button>
       </div>
-      <div class="grid-label">🎯 Oefenen</div>
+      <div class="grid-label">Oefenen</div>
       <div class="mode-grid drills">
-        <button class="mode-card mc-scan row" data-mode="scan">
+        <button id="oefen-scan" class="mode-card mc-scan row" data-mode="scan">
           <span class="mc-emoji">🔍</span>
           <span class="mc-txt"><span class="mc-title">Speurogen</span>
           <span class="mc-sub">Zie jij álles? Vind wat aangevallen wordt en wat er dreigt.</span></span>
         </button>
-        <button class="mode-card mc-best row" data-mode="best3">
+        <button id="oefen-best3" class="mode-card mc-best row" data-mode="best3">
           <span class="mc-emoji">🥇</span>
           <span class="mc-txt"><span class="mc-title">De Beste Zet</span>
           <span class="mc-sub">Kies uit drie zetten, of ontmasker de valstrik.</span></span>
         </button>
-        <button class="mode-card mc-trucs row" data-mode="trucs">
+        <button id="oefen-trucs" class="mode-card mc-trucs row" data-mode="trucs">
           <span class="mc-emoji">🎒</span>
           <span class="mc-txt"><span class="mc-title">Turbo’s Trucendoos</span>
           <span class="mc-sub">Vork, penning, spies, aftrekaanval, mat in 1 én in 2.</span></span>
         </button>
-        <button class="mode-card mc-king row" data-mode="koning">
+        <button id="oefen-koning" class="mode-card mc-king row" data-mode="koning">
           <span class="mc-emoji">🛡️</span>
           <span class="mc-txt"><span class="mc-title">Koning ontsnapt</span>
           <span class="mc-sub">Turbo dreigt mat of pakt je stuk. Vind de reddende zet!</span></span>
         </button>
-        <button class="mode-card mc-open row" data-mode="opening">
+        <button id="oefen-opening" class="mode-card mc-open row" data-mode="opening">
           <span class="mc-emoji">📖</span>
           <span class="mc-txt"><span class="mc-title">Openingsschool</span>
           <span class="mc-sub">Leer hoe een partij goed begint: centrum, stukken, koning.</span></span>
