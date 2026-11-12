@@ -3200,6 +3200,36 @@ function buildSafe() {
   return true;
 }
 
+/* Waarom een valstrik er een is (rijen V5 tot V7 van de schaakcoach, de eerste die past):
+   het stuk dat zette staat onbeschermd, het dekte iets en ging weg, of Turbo zet een truc */
+function valstrikWaarom(S, m, straf, mat) {
+  const stuk = NAME_NL[S.board[m.from].toLowerCase()];
+  const dekte = pieceAttacksSq(S, m.from, straf.to);
+  /* bij de matzet: dekte het stuk het matveld (V6 met een veld, de schaakcoach) */
+  if (mat) return dekte ? 'Je ' + stuk + ' dekte ' + alg(straf.to) + '. Nu niet meer.' : null;
+  makeMove(S, m);
+  const t = straf.flags === 'e' ? straf.to + 16 : straf.to, x = S.board[t];
+  let zin = null;
+  if (t === m.to) zin = 'Je ' + stuk + ' op ' + alg(m.to) + ' staat daar onbeschermd.';
+  else if (x && dekte && findAttacker(S, t, 'w') < 0) zin = 'Je ' + stuk + ' dekte je ' + NAME_NL[x.toLowerCase()] + ' op ' + alg(t) + '. Nu niet meer.';
+  else {
+    const info = patternsAfterMove(S, straf);
+    const truc = info.fork.length >= 2 ? 'vork' : info.pin ? 'penning' : info.skewer ? 'spies' : info.discovered.length ? 'aftrekaanval' : null;
+    if (truc) zin = 'Dan zet Turbo een ' + truc + '.';
+  }
+  unmakeMove(S);
+  return zin;
+}
+/* Waarom een veilige zet veilig is, naar de stelling en niet naar het antwoord van het kind (V3, V4, V10) */
+function veiligWaarom(S, m) {
+  makeMove(S, m);
+  const slagen = legalMoves(S).filter(x => isCapture(S, x));
+  const zin = !slagen.length ? 'Veilig: Turbo kan niets van je slaan.' :
+    slagen.every(x => seeSquare(S, x.to) <= 0) ? 'Veilig: elk stuk dat Turbo pakt, pak jij terug.' :
+      'Veilig: daarna kan Turbo niets winnen.';
+  unmakeMove(S);
+  return zin;
+}
 function safeAnswer(saidTrap) {
   if (!session || session.phase !== 'answer') return;
   session.phase = 'review';
@@ -3210,24 +3240,24 @@ function safeAnswer(saidTrap) {
   if (correct) { bump('c.safeCorrect', 1); }
   BD.arrows = [];
   if (t.trap) {
-    const pn = moveNameNL2After(t);
+    const pn = moveNameNL2After(t), waarom = valstrikWaarom(t.S, t.move, t.punish, t.mate);
     playMove(t.move, () => {
       later(() => {
         BD.arrows = [{ from: t.punish.from, to: t.punish.to, cls: 'a-coral' }];
         renderBoard();
         later(() => {
           playMove(t.punish, () => {
+            const tweede = [waarom, correct ? null : 'Kijk eerst wat Turbo terug kan doen.'].filter(Boolean).join(' ');
             awardRound(correct ? 3 : 0, correct ? 'Goed gezien! 🕵️' : 'Het was een valstrik',
-              correct ? 'Het was een valstrik: Turbo speelt dan <b>' + pn + '</b>.' :
-                'Turbo speelt dan <b>' + pn + '</b>. Kijk eerst wat Turbo terug kan doen.');
+              ['Turbo speelt dan <b>' + pn + '</b>' + (t.mate ? ': schaakmat.' : '.')].concat(tweede ? [tweede] : []));
           });
         }, 650);
       }, 500);
     });
   } else {
+    const waarom = veiligWaarom(t.S, t.move);
     playMove(t.move, () => {
-      awardRound(correct ? 3 : 0, correct ? 'Klopt, veilig! 🎉' : 'Deze was veilig',
-        correct ? 'Turbo kan niks afpakken.' : 'Turbo kon niks pakken.');
+      awardRound(correct ? 3 : 0, correct ? 'Klopt, veilig! 🎉' : 'Deze was veilig', waarom);
     });
   }
 }

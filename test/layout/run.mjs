@@ -27,7 +27,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '5.5']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -333,6 +333,58 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
           .map(e => e.textContent.trim().slice(0, 30)));
         check(n, 'geen tekst afgeknipt' + (geknipt.length ? ': ' + geknipt.join(' | ') : ''), geknipt.length === 0);
       }` });
+}
+
+/* plan.md 5.5: de langste eerste reden na een antwoord van de Trucendoos, Red je stuk en Veilig of valstrik past helemaal onder het bord */
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n = '[5.5] ' + W + 'x' + H + ': de langste eerste reden van de Trucendoos, Red je stuk en Veilig of valstrik staat helemaal in beeld';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const zet1 = async (k) => { await veld(k.slice(0, 2)); await veld(k.slice(2, 4)); };
+      const eersteReden = async () => page.evaluate(() => {
+        const e = document.querySelector('#taskBox .e-body p, #taskBox .e-body li'), o = document.getElementById('onder');
+        if (!e || !o) return null;
+        const r = e.getBoundingClientRect(), ro = o.getBoundingClientRect();
+        return { tekst: e.textContent, top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height,
+          over: e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1, onderTop: ro.top, onderBottom: ro.bottom };
+      });
+      const opdracht = (fen, type, ans, metHang) => page.evaluate(([fen, type, ans, metHang]) => {
+        const S = parseFEN(fen), answers = ans.map(k => ({ m: legalMoves(S).find(x => moveKey(x) === k), info: null }));
+        session.S = S;
+        session.task = { S, type, answers, hintUsed: false };
+        if (metHang) session.task.hang = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250)[0];
+        session.phase = 'puzzle'; session.tries = 0; BD.mode = 'puzzle'; renderBoard();
+      }, [fen, type, ans, metHang]);
+      const gevallen = [
+        ['trucs', 'penning', '1r2kb1r/pp1qppp1/7p/n1pP4/2BN2n1/7P/PPPPQPP1/1RB1R1K1 w - - 0 1', 'c4b5', false],
+        ['koning', 'stuk', '4k3/8/4b3/2n5/2B5/8/8/6K1 w - - 0 1', 'c4e6', true]
+      ];
+      for (const [soort, type, fen, k, metHang] of gevallen) {
+        await vers(${W}, ${H});
+        await startOefening(soort);
+        await opdracht(fen, type, [k], metHang);
+        await zet1(k);
+        await page.waitForTimeout(3500);
+        const r = await eersteReden();
+        check(n, soort + ': een eerste reden (' + (r && r.tekst) + ')', !!r);
+        if (r) check(n, soort + ': helemaal in beeld en niet afgeknipt', binnen(r, ${W}, ${H}) && !r.over && r.top >= r.onderTop - 0.5 && r.bottom <= r.onderBottom + 0.5);
+      }
+      /* Veilig of valstrik: een zet die mat toelaat, de langste eerste reden van die oefening */
+      await vers(${W}, ${H});
+      await startOefening('best3');
+      await page.evaluate(async () => {
+        const S = parseFEN('6k1/2b2ppp/3q4/8/8/5N2/PPP2PPP/3Q1RK1 w - - 0 1'), m = legalMoves(S).find(x => moveKey(x) === 'f3e1');
+        makeMove(S, m); const mat = mateReply(S); unmakeMove(S);
+        genSafeTask = () => ({ S, move: m, trap: true, punish: mat, mate: true, loss: 100 });
+        setTask(null); setOptions(null); BD.arrows = [];
+        buildSafe();
+        await new Promise(r => setTimeout(r, 500));
+      });
+      await klikTekst(/Veilig/);
+      await page.waitForTimeout(3500);
+      const v = await eersteReden();
+      check(n, 'veilig of valstrik: een eerste reden (' + (v && v.tekst) + ')', !!v);
+      if (v) check(n, 'veilig of valstrik: helemaal in beeld en niet afgeknipt', binnen(v, ${W}, ${H}) && !v.over && v.top >= v.onderTop - 0.5 && v.bottom <= v.onderBottom + 0.5);` });
 }
 
 /* visual.md G1: een lange naam in de groet breekt af in plaats van "…", en de rij blijft 40 tot 41 hoog */

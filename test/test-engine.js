@@ -177,12 +177,20 @@ for (const wantTrap of [true, false]) {
   check('best3 gen', ok, 5);
 }
 
-/* Trap tasks must come with a capture as punishment. */
+/* Trap tasks come with a capture as punishment, or with the mate (fix list item 18). */
 {
-  const task = E.genSafeTask(true);
+  let seed = 1801;
+  const rng = () => {
+    seed = (seed + 0x6D2B79F5) >>> 0;
+    let x = Math.imul(seed ^ (seed >>> 15), seed | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+  const task = E.genSafeTask(true, rng);
+  check('trap: the seed gives a task', !!task, true);
   if (task) {
     E.makeMove(task.S, task.move);
-    check('trap punish is capture', E.isCapture(task.S, task.punish), true);
+    check('trap punish is a capture, or the mate', E.isCapture(task.S, task.punish) || task.mate === true, true);
     E.unmakeMove(task.S);
   }
 }

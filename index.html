@@ -1909,7 +1909,8 @@ function lineAfter(S, m, nodes) {
    at least 2.5 points below the best move, and is punished by a capture,
    Black's first move of that line. A move on which the line and the score
    disagree is neither: a piece that is lost after every move is no trap set
-   by this one. Returns the task or null. */
+   by this one. A move that allows mate in one while the best move does not is
+   a "valstrik" too, punished by the mate (task.mate). Returns the task or null. */
 function checkSafeTask(task, nodes) {
   nodes = nodes || CHECK_NODES;
   clearTT();
@@ -1917,8 +1918,15 @@ function checkSafeTask(task, nodes) {
   const best = think(S, 60000, 8, { nodes }).score;
   const line = lineAfter(S, task.move, nodes);
   if (!task.trap) return line.material >= -90 && !line.mateNext && best - line.white <= 200 ? task : null;
+  if (line.mateNext) {
+    if (best - line.white < 250) return null;
+    makeMove(S, task.move);
+    const mat = mateReply(S);
+    unmakeMove(S);
+    return Object.assign({}, task, { punish: mat, mate: true });
+  }
   if (line.material > -250 || best - line.white < 250 || !line.reply || !isCaptureAfter(S, task.move, line.reply)) return null;
-  return Object.assign({}, task, { punish: line.reply });
+  return Object.assign({}, task, { punish: line.reply, mate: false });
 }
 /* Red je stuk (plan rule 5.3): exactly one threat; the piece can be saved,
    best play losing at most a pawn against the position as it stands; every
@@ -2004,7 +2012,7 @@ function genSafeTask(wantTrap, rng) {
   const ruimte = () => NODES - n0 <= SAFE_NODES - 3 * CHECK_NODES - 5000;
   const confirm = t => {
     const c = checkSafeTask(t);
-    if (c && (!t.trap || isCaptureAfter(t.S, t.move, c.punish))) return c;
+    if (c && (!t.trap || c.mate || isCaptureAfter(t.S, t.move, c.punish))) return c;
     rejected++;
     return null;
   };
@@ -2022,11 +2030,12 @@ function genSafeTask(wantTrap, rng) {
       makeMove(S, m);
       const after = forcedMaterial(S);
       const loss = base - after;
-      if (wantTrap && loss >= 250) {
-        const reply = rootScores(S, 2);
+      const mat = wantTrap ? mateReply(S) : null;
+      if (wantTrap && (loss >= 250 || mat)) {
+        const reply = mat ? [] : rootScores(S, 2);
         unmakeMove(S);
-        const punish = reply.length ? reply[0].m : null;
-        if (punish && isCaptureAfter(S, m, punish)) {
+        const punish = mat || (reply.length ? reply[0].m : null);
+        if (punish && (mat || isCaptureAfter(S, m, punish))) {
           if (!ruimte()) return null;
           const c = confirm({ S, move: m, trap: true, punish, loss });
           if (c) return c;
@@ -6106,6 +6115,36 @@ function buildSafe() {
   return true;
 }
 
+/* Waarom een valstrik er een is (rijen V5 tot V7 van de schaakcoach, de eerste die past):
+   het stuk dat zette staat onbeschermd, het dekte iets en ging weg, of Turbo zet een truc */
+function valstrikWaarom(S, m, straf, mat) {
+  const stuk = NAME_NL[S.board[m.from].toLowerCase()];
+  const dekte = pieceAttacksSq(S, m.from, straf.to);
+  /* bij de matzet: dekte het stuk het matveld (V6 met een veld, de schaakcoach) */
+  if (mat) return dekte ? 'Je ' + stuk + ' dekte ' + alg(straf.to) + '. Nu niet meer.' : null;
+  makeMove(S, m);
+  const t = straf.flags === 'e' ? straf.to + 16 : straf.to, x = S.board[t];
+  let zin = null;
+  if (t === m.to) zin = 'Je ' + stuk + ' op ' + alg(m.to) + ' staat daar onbeschermd.';
+  else if (x && dekte && findAttacker(S, t, 'w') < 0) zin = 'Je ' + stuk + ' dekte je ' + NAME_NL[x.toLowerCase()] + ' op ' + alg(t) + '. Nu niet meer.';
+  else {
+    const info = patternsAfterMove(S, straf);
+    const truc = info.fork.length >= 2 ? 'vork' : info.pin ? 'penning' : info.skewer ? 'spies' : info.discovered.length ? 'aftrekaanval' : null;
+    if (truc) zin = 'Dan zet Turbo een ' + truc + '.';
+  }
+  unmakeMove(S);
+  return zin;
+}
+/* Waarom een veilige zet veilig is, naar de stelling en niet naar het antwoord van het kind (V3, V4, V10) */
+function veiligWaarom(S, m) {
+  makeMove(S, m);
+  const slagen = legalMoves(S).filter(x => isCapture(S, x));
+  const zin = !slagen.length ? 'Veilig: Turbo kan niets van je slaan.' :
+    slagen.every(x => seeSquare(S, x.to) <= 0) ? 'Veilig: elk stuk dat Turbo pakt, pak jij terug.' :
+      'Veilig: daarna kan Turbo niets winnen.';
+  unmakeMove(S);
+  return zin;
+}
 function safeAnswer(saidTrap) {
   if (!session || session.phase !== 'answer') return;
   session.phase = 'review';
@@ -6116,24 +6155,24 @@ function safeAnswer(saidTrap) {
   if (correct) { bump('c.safeCorrect', 1); }
   BD.arrows = [];
   if (t.trap) {
-    const pn = moveNameNL2After(t);
+    const pn = moveNameNL2After(t), waarom = valstrikWaarom(t.S, t.move, t.punish, t.mate);
     playMove(t.move, () => {
       later(() => {
         BD.arrows = [{ from: t.punish.from, to: t.punish.to, cls: 'a-coral' }];
         renderBoard();
         later(() => {
           playMove(t.punish, () => {
+            const tweede = [waarom, correct ? null : 'Kijk eerst wat Turbo terug kan doen.'].filter(Boolean).join(' ');
             awardRound(correct ? 3 : 0, correct ? 'Goed gezien! 🕵️' : 'Het was een valstrik',
-              correct ? 'Het was een valstrik: Turbo speelt dan <b>' + pn + '</b>.' :
-                'Turbo speelt dan <b>' + pn + '</b>. Kijk eerst wat Turbo terug kan doen.');
+              ['Turbo speelt dan <b>' + pn + '</b>' + (t.mate ? ': schaakmat.' : '.')].concat(tweede ? [tweede] : []));
           });
         }, 650);
       }, 500);
     });
   } else {
+    const waarom = veiligWaarom(t.S, t.move);
     playMove(t.move, () => {
-      awardRound(correct ? 3 : 0, correct ? 'Klopt, veilig! 🎉' : 'Deze was veilig',
-        correct ? 'Turbo kan niks afpakken.' : 'Turbo kon niks pakken.');
+      awardRound(correct ? 3 : 0, correct ? 'Klopt, veilig! 🎉' : 'Deze was veilig', waarom);
     });
   }
 }

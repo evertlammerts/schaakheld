@@ -171,20 +171,24 @@
     check('a2-a3 als veilig: afgekeurd', E.checkSafeTask({ S: S, move: zet(S, 'a2a3'), trap: false }) === null);
   });
 
-  regel('[5.3] Valstrik: alleen een zet die langs zijn lijn 2,5 punten of meer verliest; een slag op een pion met mat is dat niet', function (check) {
-    /* na Pf3-e1 is Dxh2 mat: veel slechter in de score, maar langs de lijn gaat alleen de pion op h2 */
+  /* fix list item 18 (de schaakcoach): een zet die mat in één toelaat is de duidelijkste valstrik; de straf is de matzet */
+  regel('[5.3] Valstrik: een zet die mat in één toelaat is een valstrik, met de matzet als straf', function (check) {
+    /* na Pf3-e1 is Dxh2 mat: langs de lijn gaat alleen de pion op h2 */
     const S = E.parseFEN('6k1/2b2ppp/3q4/8/8/5N2/PPP2PPP/3Q1RK1 w - - 0 1');
     E.clearTT();
     const l = E.lineAfter(S, zet(S, 'f3e1'), E.CHECK_NODES);
-    check('testopzet: Dxh2 slaat een pion en zet mat (' + l.material + ', ' + (l.reply && E.moveKey(l.reply)) + ')', l.material === -100 && l.mateNext);
-    check('Pf3-e1 als valstrik: afgekeurd', E.checkSafeTask({ S: S, move: zet(S, 'f3e1'), trap: true }) === null);
-    check('en als veilig ook', E.checkSafeTask({ S: S, move: zet(S, 'f3e1'), trap: false }) === null);
+    check('testopzet: Dxh2 zet mat (' + l.material + ', ' + (l.reply && E.moveKey(l.reply)) + ')', l.material === -100 && l.mateNext);
+    const t = E.checkSafeTask({ S: S, move: zet(S, 'f3e1'), trap: true });
+    check('Pf3-e1 als valstrik: goed, met Dxh2 als straf (' + (t && t.punish && E.moveKey(t.punish)) + ')', !!t && !!t.punish && E.moveKey(t.punish) === 'd6h2' && t.mate === true);
+    check('en als veilig afgekeurd', E.checkSafeTask({ S: S, move: zet(S, 'f3e1'), trap: false }) === null);
   });
 
   regel('[5.3] Veilig: een zet die mat in één toelaat is nooit veilig, ook als elke andere zet ook verliest', function (check) {
     /* de dame op f2 zet hoe dan ook mat: alleen de mat-in-één-toets houdt a2-a3 tegen */
     const S = E.parseFEN('4r1k1/8/8/8/8/8/P4q1P/7K w - - 0 1');
     check('a2-a3: niet veilig', E.checkSafeTask({ S: S, move: zet(S, 'a2a3'), trap: false }) === null);
+    /* elke zet laat mat toe, ook de beste: dan is a2-a3 ook geen valstrik */
+    check('a2-a3: ook geen valstrik', E.checkSafeTask({ S: S, move: zet(S, 'a2a3'), trap: true }) === null);
   });
 
   /* de drie voorraadregels van de reviewer en de regel van de coach (R1) */

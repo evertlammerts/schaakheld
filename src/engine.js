@@ -919,7 +919,8 @@ function lineAfter(S, m, nodes) {
    at least 2.5 points below the best move, and is punished by a capture,
    Black's first move of that line. A move on which the line and the score
    disagree is neither: a piece that is lost after every move is no trap set
-   by this one. Returns the task or null. */
+   by this one. A move that allows mate in one while the best move does not is
+   a "valstrik" too, punished by the mate (task.mate). Returns the task or null. */
 function checkSafeTask(task, nodes) {
   nodes = nodes || CHECK_NODES;
   clearTT();
@@ -927,8 +928,15 @@ function checkSafeTask(task, nodes) {
   const best = think(S, 60000, 8, { nodes }).score;
   const line = lineAfter(S, task.move, nodes);
   if (!task.trap) return line.material >= -90 && !line.mateNext && best - line.white <= 200 ? task : null;
+  if (line.mateNext) {
+    if (best - line.white < 250) return null;
+    makeMove(S, task.move);
+    const mat = mateReply(S);
+    unmakeMove(S);
+    return Object.assign({}, task, { punish: mat, mate: true });
+  }
   if (line.material > -250 || best - line.white < 250 || !line.reply || !isCaptureAfter(S, task.move, line.reply)) return null;
-  return Object.assign({}, task, { punish: line.reply });
+  return Object.assign({}, task, { punish: line.reply, mate: false });
 }
 /* Red je stuk (plan rule 5.3): exactly one threat; the piece can be saved,
    best play losing at most a pawn against the position as it stands; every
@@ -1014,7 +1022,7 @@ function genSafeTask(wantTrap, rng) {
   const ruimte = () => NODES - n0 <= SAFE_NODES - 3 * CHECK_NODES - 5000;
   const confirm = t => {
     const c = checkSafeTask(t);
-    if (c && (!t.trap || isCaptureAfter(t.S, t.move, c.punish))) return c;
+    if (c && (!t.trap || c.mate || isCaptureAfter(t.S, t.move, c.punish))) return c;
     rejected++;
     return null;
   };
@@ -1032,11 +1040,12 @@ function genSafeTask(wantTrap, rng) {
       makeMove(S, m);
       const after = forcedMaterial(S);
       const loss = base - after;
-      if (wantTrap && loss >= 250) {
-        const reply = rootScores(S, 2);
+      const mat = wantTrap ? mateReply(S) : null;
+      if (wantTrap && (loss >= 250 || mat)) {
+        const reply = mat ? [] : rootScores(S, 2);
         unmakeMove(S);
-        const punish = reply.length ? reply[0].m : null;
-        if (punish && isCaptureAfter(S, m, punish)) {
+        const punish = mat || (reply.length ? reply[0].m : null);
+        if (punish && (mat || isCaptureAfter(S, m, punish))) {
           if (!ruimte()) return null;
           const c = confirm({ S, move: m, trap: true, punish, loss });
           if (c) return c;

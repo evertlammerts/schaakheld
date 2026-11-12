@@ -690,7 +690,7 @@ async function orakelFlow5() {
   ];
   for (const g of VALSTRIK5) {
     for (const zei of ['Valstrik', 'Veilig']) {
-      await nogNiet('[5.5] Veilig of valstrik, ' + g[0] + ', het kind zei ' + zei + ': "Turbo speelt dan {zet}." en "' + g[3] + '"', async function (check) {
+      await regel('[5.5] Veilig of valstrik, ' + g[0] + ', het kind zei ' + zei + ': "Turbo speelt dan {zet}." en "' + g[3] + '"', async function (check) {
         const S = parseFEN(g[1]);
         const m = legalMoves(S).find(function (x) { return moveKey(x) === g[2]; });
         const bc = blunderCheck(S, m);
@@ -715,6 +715,32 @@ async function orakelFlow5() {
         } finally { genSafeTask = echt; }
       });
     }
+  }
+
+  /* fix list item 18: Pf3-e1 laat Dxh2 mat toe; het paard dekte h2 */
+  for (const zei of ['Valstrik', 'Veilig']) {
+    await regel('[5.5] Veilig of valstrik, een zet die mat toelaat, het kind zei ' + zei + ': "Turbo speelt dan {zet}: schaakmat." en "Je paard dekte h2. Nu niet meer."', async function (check) {
+      const S = parseFEN('6k1/2b2ppp/3q4/8/8/5N2/PPP2PPP/3Q1RK1 w - - 0 1');
+      const m = legalMoves(S).find(function (x) { return moveKey(x) === 'f3e1'; });
+      makeMove(S, m);
+      const mat = mateReply(S), eerste = 'Turbo speelt dan ' + moveNameNL(S, mat) + ': schaakmat.';
+      unmakeMove(S);
+      const taak = { S: S, move: m, trap: true, punish: mat, mate: true, loss: 100 };
+      const echt = genSafeTask;
+      genSafeTask = function () { return taak; };
+      try {
+        const a = nieuwKind();
+        await startOefening(a, 'best3');
+        await naarValstrikVraag5(a);
+        if (!check('testopzet: de valstrik-vraag staat klaar', a.get('!!session.task && !!session.task.move') && kanTikken(a, zei))) return;
+        tikTekst(a, zei);
+        await wacht(6000);
+        const r = redenen5(a);
+        check('de eerste reden (' + r.join(' / ') + ')', r[0] === eerste);
+        check('het paard dekte het matveld', r.join(' ').indexOf('Je paard dekte h2. Nu niet meer.') >= 0);
+        if (zei === 'Veilig') check('en waar je de volgende keer naar kijkt', /Kijk eerst wat Turbo terug kan doen\.$/.test(r.join(' ')));
+      } finally { genSafeTask = echt; }
+    });
   }
 
   /* ---------- 5.5: Speurogen noemt de aanvaller en het lidwoord ---------- */
@@ -751,7 +777,7 @@ async function orakelFlow5() {
   ];
   for (const g of VEILIG5) {
     for (const zei of ['Veilig', 'Valstrik']) {
-      await nogNiet('[5.5] Veilig of valstrik, ' + g[0] + ', het kind zei ' + zei + ': "' + g[3] + '"', async function (check) {
+      await regel('[5.5] Veilig of valstrik, ' + g[0] + ', het kind zei ' + zei + ': "' + g[3] + '"', async function (check) {
         const S = parseFEN(g[1]);
         const taak = { S: S, move: legalMoves(S).find(function (x) { return moveKey(x) === g[2]; }), trap: false, loss: 0 };
         const echt = genSafeTask;
