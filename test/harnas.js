@@ -117,6 +117,9 @@ function zetDatum(iso) {
 }
 function echteDatum() { Date = __EchteDate; __datumBasis = null; }
 
+/* een test die Math.random vastzet, laat dat niet na voor de tests erna */
+var __echteRandom = Math.random;
+
 /* ---------- handelingen zoals een kind ze doet ----------
    Een kind tikt alleen wat het ziet: een element dat zelf of via een ouder
    verborgen is, of dat achter een open venster ligt, laat de test falen. */
@@ -127,6 +130,8 @@ function tikbaar(app, el) {
   const p = app.doc.__pad(el), venster = app.el('overlay');
   if (!p) return 'hangt niet in de pagina';
   if (p.verborgen) return 'is verborgen';
+  /* de opmaak verbergt de kop op het speelscherm (body.speelt header.top), en die kent de shim niet */
+  if (app.doc.body.classList.contains('speelt') && p.tags.indexOf('header') >= 0) return 'staat in de kop, die het speelscherm verbergt';
   if (app.open() && el !== venster && p.keten.indexOf(venster) < 0) return 'ligt achter het open venster';
   return '';
 }
@@ -296,6 +301,7 @@ async function orakelBlok(naam, blok, gebouwd) {
   } finally {
     ORAKEL.apps.splice(voor).forEach(stopApparaat);
     echteDatum();
+    Math.random = __echteRandom;
   }
   if (gebouwd) {
     if (fouten.length) { fails++; ORAKEL.uit('FAIL  ' + naam + '  (' + fouten.join('; ') + ')'); }
@@ -350,7 +356,7 @@ async function orakelZelftest() {
 /* De harnas liegt niet over wat een kind ziet: bewezen op een eigen pagina,
    zonder app. */
 function harnasZelftest() {
-  const doc = maakDocument('<header><span class="xp"><b id="num">5</b> XP</span></header>' +
+  const doc = maakDocument('<header><span class="xp"><b id="num">5</b> XP</span><button id="kopKnop">Kop</button></header>' +
     '<section id="speel"><div id="balk" class="hidden"><button id="skip">Speel maar</button></div>' +
     '<div class="rij"><button id="zie">Zie mij</button></div><div class="hidden"><button>Verstopt</button></div></section>' +
     '<div id="overlay" class="hidden"><div id="modalBox"></div></div>');
@@ -362,6 +368,10 @@ function harnasZelftest() {
   ok('harnas: een knop in een verborgen ouder is niet te tikken', !kanTikken(app, 'Speel maar') &&
     gooit(function () { tikTekst(app, 'Speel maar'); }) && gooit(function () { tikEl(app, app.els.skip); }) && tikken === 0);
   ok('harnas: een knop in een verborgen blok zonder id is niet te tikken', !kanTikken(app, 'Verstopt'));
+  doc.body.classList.add('speelt');
+  ok('harnas: op het speelscherm is een knop in de kop niet te tikken', gooit(function () { tikEl(app, app.els.kopKnop); }));
+  doc.body.classList.remove('speelt');
+  ok('harnas: thuis wel', !gooit(function () { tikEl(app, app.els.kopKnop); }));
   app.els.balk.classList.remove('hidden');
   ok('harnas: zichtbaar gemaakt wel', kanTikken(app, 'Speel maar') && tikTekst(app, 'Speel maar') && tikken === 1);
   const lang = 'Typ deze vier woorden in de app. Of scan de code. ' + 'lamp boom kat vis '.repeat(6) + 'Werkt nog 9 minuten.';

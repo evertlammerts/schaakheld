@@ -13,10 +13,14 @@ P.name = 'Testkind'; closeModal();
 ok('apparaat-id: zonder randomUUID 32 hex-tekens', typeof crypto.randomUUID === 'undefined' && /^[0-9a-f]{32}$/.test(DEV));
 
 /* close any queued LEVEL OMHOOG modals so later modal assertions see past them */
+/* thuis komt een venster voor een nieuw level of een trofee die nog niet te zien was; een kind tikt het weg */
 function closeLevelUps() {
   var guard = 0;
-  while (guard++ < 8 && !__els.overlay.classList.contains('hidden') &&
-    __els.modalBox.innerHTML.indexOf('LEVEL OMHOOG') >= 0) fire(__els.lvlOk, 'click');
+  while (guard++ < 8 && !__els.overlay.classList.contains('hidden')) {
+    if (__els.modalBox.innerHTML.indexOf('LEVEL OMHOOG') >= 0) fire(__els.lvlOk, 'click');
+    else if (__els.modalBox.innerHTML.indexOf('id="trofOk"') >= 0) fire(__els.trofOk, 'click');
+    else break;
+  }
 }
 /* geen weekdoel gezet: zo kan doel-XP de exacte XP-checks hieronder niet vertroebelen */
 ok('init: geen weekdoel bij een vers profiel', P.weekGoal === null);
@@ -59,7 +63,8 @@ BD.marks.add(sqFromAlg('f4'));   /* found the free pawn */
 BD.marks.add(sqFromAlg('g4'));   /* wrong: knight nobody can capture */
 /* c6 (good trade) is missed */
 scanCheck();
-var explHtml = __els.taskBox.innerHTML;
+/* [2.4] de redenen staan onder het bord */
+var explHtml = __els.bubble.innerHTML + __els.taskBox.innerHTML;
 ok('expl: missed c6 explained as trade', explHtml.indexOf('goede ruil') >= 0);
 ok('expl: mentions capturing pawn d5', explHtml.indexOf('pion op d5') >= 0);
 ok('expl: wrong g4 explained (not capturable)', explHtml.indexOf('geen enkel wit stuk') >= 0);
@@ -73,7 +78,7 @@ session.task = { S: aS, type: 'attacked', targets: attackedPieces(aS, 'w'), extr
 session.phase = 'marking';
 BD.marks.clear(); /* miss everything */
 scanCheck();
-explHtml = __els.taskBox.innerHTML;
+explHtml = __els.bubble.innerHTML + __els.taskBox.innerHTML;
 ok('expl: attacked names attacker', explHtml.indexOf('loper op c3') >= 0);
 
 /* ---------- trucendoos: mat in twee is een plan van twee stappen ---------- */
@@ -90,12 +95,12 @@ puzzleAttempt(m2Kb6);
 drainTimers();
 ok('mat2: na de dwingende zet antwoordt Turbo en is het jouw matzet', session.phase === 'puzzle2' &&
   session.S.hist.length === 2 && session.mate2Answers.length >= 1 &&
-  __els.bubble.innerHTML.indexOf('SCHAAKMAT') >= 0);
+  __els.hulpZin.innerHTML.indexOf('Nu jij: geef mat') >= 0);
 var m2Wrong = legalMoves(session.S).find(function (m) { return !session.mate2Answers.some(function (a) { return sameMove(a, m); }); });
 puzzleAttempt(m2Wrong);
 drainTimers();
 ok('mat2: geen mat = uitleg en nog een kans', session.phase === 'puzzle2' && session.tries === 1 &&
-  __els.bubble.innerHTML.indexOf('Nog geen mat') >= 0);
+  __els.hulpZin.innerHTML.indexOf('Nog geen mat') >= 0);
 puzzleAttempt(session.mate2Answers[0]);
 drainTimers();
 ok('mat2: matzet na één misser = 1 ster, boekje telt', session.phase === 'review' &&
@@ -114,7 +119,7 @@ puzzleAttempt(legalMoves(m2S2).find(function (m) { return alg(m.to) === 'h7'; })
 drainTimers();
 ok('mat2: tweede misser = voorgespeeld tot mat, 0 sterren', session.phase === 'review' &&
   session.earned === m2Earned && gameStatus(session.S).reason === 'mat' &&
-  __els.bubble.innerHTML.indexOf('plan in twee stappen') >= 0);
+  __els.taskBox.innerHTML.indexOf('dan kan Turbo de mat niet meer tegenhouden') >= 0);
 
 /* ---------- koning ontsnapt ---------- */
 startDrill('koning');
@@ -134,13 +139,13 @@ puzzleAttempt(kKf1);
 ok('koning: fout = Turbo laat het mat zien', session.phase === 'busy');
 drainTimers();
 ok('koning: bord hersteld, nog een poging', session.phase === 'puzzle' && session.S.hist.length === 0 &&
-  session.tries === 1 && __els.bubble.innerHTML.indexOf('Nog één poging') >= 0);
+  session.tries === 1 && __els.hulpZin.innerHTML.indexOf('Probeer nog een zet') >= 0);
 koningHint();
 ok('koning: hint laat het reddende stuk glimmen', session.task.hintUsed && BD.glow.has(kH3.from));
 puzzleAttempt(kH4);
 drainTimers();
 ok('koning: redding na een misser = 1 ster', session.phase === 'review' && session.earned - kEarned === 1 &&
-  __els.bubble.innerHTML.indexOf('Gered') >= 0);
+  __els.taskBox.innerHTML.indexOf('Gered') >= 0);
 /* twee missers: de redding wordt voorgedaan */
 nextRound();
 drainTimers();
@@ -154,7 +159,7 @@ drainTimers();
 puzzleAttempt(legalMoves(kS2).find(function (m) { return alg(m.to) === 'h1'; }));
 drainTimers();
 ok('koning: tweede misser = redding voorgedaan, 0 sterren', session.phase === 'review' &&
-  session.earned === kEarned && __els.bubble.innerHTML.indexOf('Dit was de redding') >= 0);
+  session.earned === kEarned && __els.taskBox.innerHTML.indexOf('De redding was') >= 0);
 /* een zet die het potje meteen uitmaakt is altijd een ontsnapping, ook als
    de voorraad hem niet als antwoord noemt */
 nextRound();
@@ -180,7 +185,7 @@ kEarned = session.earned;
 puzzleAttempt(pRa2);
 drainTimers();
 ok('stuk: weggezet = 3 sterren met uitleg', session.phase === 'review' && session.earned - kEarned === 3 &&
-  __els.bubble.innerHTML.indexOf('Weggezet') >= 0);
+  __els.taskBox.innerHTML.indexOf('Weggezet') >= 0);
 ok('stuk: dekken wordt herkend', stukHow(parseFEN('6k1/8/8/8/8/2b5/8/R4RK1 w - - 0 1'),
   legalMoves(parseFEN('6k1/8/8/8/8/2b5/8/R4RK1 w - - 0 1')).find(function (m) { return alg(m.from) === 'f1' && alg(m.to) === 'b1'; }),
   { sq: sqFromAlg('a1') }).indexOf('Gedekt') >= 0);
@@ -214,12 +219,17 @@ ok('pad: gestart als wit, zet 1 van 6', session.kind === 'opening' && session.mo
 var opM = function (k) { return legalMoves(session.S).find(function (m) { return moveKey(m) === k; }); };
 onOpeningMove(opM('a2a3'));
 ok('pad: verkeerde zet = tip en nog een kans', session.tries === 1 && session.S.hist.length === 0 &&
-  __els.bubble.innerHTML.indexOf('Niet die') >= 0);
+  __els.hulpZin.innerHTML.indexOf('Niet die') >= 0);
+/* het waarom van de zet staat onder het bord tot Turbo gezet heeft; daarna de hint van de volgende zet */
+var onderBord = [], echteHulpZin = hulpZin;
+hulpZin = function (t) { onderBord.push(t || ''); echteHulpZin(t); };
 onOpeningMove(opM('e2e4'));
 drainTimers();
+hulpZin = echteHulpZin;
 ok('pad: goede zet na een misser = 2 sterren, uitleg, Turbo antwoordt uit het pad', session.kidMoves === 1 &&
   session.earned === 2 && session.S.hist.length === 2 && moveKey(session.S.hist[1].m) === 'e7e5' &&
-  __els.bubble.innerHTML.indexOf('midden') >= 0 && BD.mode === 'opening');
+  onderBord.some(function (t) { return t.indexOf('midden') >= 0; }) && BD.mode === 'opening' &&
+  __els.hulpZin.innerHTML.indexOf(PADEN[0].hint[1]) >= 0);
 openingHint();
 ok('pad: hint toont een pijl', BD.arrows.length === 1 && session.hintUsed === true);
 onOpeningMove(opM('g1f3'));
@@ -227,7 +237,7 @@ drainTimers();
 ok('pad: met hint 2 sterren', session.earned === 4 && session.kidMoves === 2);
 onOpeningMove(opM('a2a3'));
 onOpeningMove(opM('a2a3'));
-ok('pad: twee missers = de zet wordt aangewezen', BD.arrows.length === 1 && __els.bubble.innerHTML.indexOf('Deze bedoel ik') >= 0);
+ok('pad: twee missers = de zet wordt aangewezen', BD.arrows.length === 1 && __els.hulpZin.innerHTML.indexOf('Deze bedoel ik') >= 0);
 onOpeningMove(opM('f1c4'));
 drainTimers();
 ok('pad: aangewezen zet = 1 ster', session.earned === 5 && session.kidMoves === 3);
@@ -253,7 +263,8 @@ goHome();
 startOpening('coach', null);
 ok('coach: meters zichtbaar', !__els.meters.classList.contains('hidden') && __els.meters.innerHTML.indexOf('Centrum') >= 0);
 var cS = session.S;
-ok('coach: boekzet e4 = 3 sterren', coachEval(cS, opM('e2e4')).stars === 3 && coachEval(cS, opM('e2e4')).msg.indexOf('boekzet') >= 0);
+/* één lof, in de volgorde van tekst.md: het midden gaat voor de boekzet */
+ok('coach: boekzet e4 = 3 sterren', coachEval(cS, opM('e2e4')).stars === 3 && coachEval(cS, opM('e2e4')).msg.indexOf('midden') >= 0);
 ok('coach: a3 = 1 ster met tip', coachEval(cS, opM('a2a3')).stars === 1 && coachEval(cS, opM('a2a3')).msg.indexOf('sterker') >= 0);
 ok('coach: bord onaangeraakt door de beoordeling', cS.hist.length === 0);
 onOpeningMove(opM('e2e4'));
@@ -264,7 +275,7 @@ ok('coach: dame te vroeg = 0 sterren met uitleg', coachEval(session.S, opM('d1h5
 /* valstrik: na 1.e4 e5 2.Pf3 Pc6 is Pxe5 een stuk weggeven */
 var bS = parseFEN('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3');
 var bEv = coachEval(bS, legalMoves(bS).find(function (m) { return moveKey(m) === 'f3e5'; }));
-ok('coach: Pxe5 is een valstrik, 0 sterren', bEv.stars === 0 && bEv.msg.indexOf('valstrik') >= 0);
+ok('coach: Pxe5 kost een stuk, 0 sterren', bEv.stars === 0 && bEv.msg.indexOf('Er was een sterkere zet') >= 0);
 ok('coach: rokade = 3 sterren', (function () {
   var rS = parseFEN('r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 4');
   var ev = coachEval(rS, legalMoves(rS).find(function (m) { return m.flags === 'K'; }));
@@ -297,8 +308,9 @@ session.phase = 'marking';
 BD.marks.clear();
 BD.marks.add(sqFromAlg('g1')); /* fout: de koning telt niet */
 scanCheck();
-ok('dreiging: gemiste toren uitgelegd met de aanvaller', __els.taskBox.innerHTML.indexOf('loper op c3') >= 0 &&
-  __els.taskBox.innerHTML.indexOf('toren op a1') >= 0);
+explHtml = __els.bubble.innerHTML + __els.taskBox.innerHTML;
+ok('dreiging: gemiste toren uitgelegd met de aanvaller', explHtml.indexOf('loper op c3') >= 0 &&
+  explHtml.indexOf('toren op a1') >= 0);
 /* een gedekt stuk is geen dreiging */
 var thS2 = parseFEN('6k1/8/5b2/8/3P4/2P5/8/6K1 w - - 0 1'); /* Bxd4 cxd4: slechte ruil voor Turbo */
 ok('dreiging: gedekte pion is geen winst voor Turbo', threatDetails(thS2).length === 0);
@@ -310,8 +322,9 @@ drainTimers();
 ok('best3 r1: kiezen uit drie', session.round === 1 && !!(session.task && session.task.options));
 nextRound();
 drainTimers();
+/* de antwoorden staan in de onderste knoppenrij, net als Klaar! */
 ok('best3 r2: valstrik-vraag', session.round === 2 && typeof session.task.trap === 'boolean' &&
-  __els.optionsBox.innerHTML.indexOf('Valstrik') >= 0);
+  !!actionBtns.ansTrap && actionBtns.ansTrap.textContent.indexOf('Valstrik') >= 0);
 var earnedBefore = session.earned;
 safeAnswer(session.task.trap);
 drainTimers();
@@ -343,7 +356,7 @@ pickOption(bi);
 best3Confirm();
 drainTimers();
 ok('best3: correct on 2nd try = 1 star', session.earned === 1 && session.phase === 'review');
-ok('best3: explanation shown on correct', __els.taskBox.innerHTML.indexOf('Zo zit het') >= 0 &&
+ok('best3: explanation shown on correct', /Goud|Ja, die is het/.test(__els.taskBox.innerHTML) &&
   __els.taskBox.innerHTML.indexOf('🥇') >= 0);
 /* wrong-wrong -> auto reveal (ronde 2 is de valstrik-vraag, die eerst beantwoorden) */
 nextRound();
@@ -420,19 +433,22 @@ ok('game: turbo replied', session.S.hist.length === 2 && session.S.turn === 'w')
 /* predict window, driven directly: correct guess pays out */
 var pm = pickMove(session.S, 2);
 askPredict(pm);
-ok('predict: bar shown, timer armed', BD.mode === 'predict' &&
-  !!session.pending && !!session.predictTimer);
+ok('[2.8] predict: de vraag staat in de strook en er loopt geen klok', BD.mode === 'predict' &&
+  !!session.pending && !session.predictTimer && !__els.predictBar.classList.contains('hidden'));
 var xpBefore = P.xp;
 resolvePredict(pm.from); /* correct prediction */
 ok('predict: bonus +15', P.xp - xpBefore >= 15);
 ok('predict: bar hidden again', __els.predictBar.classList.contains('hidden'));
-/* predict timeout: no tap needed, the move plays by itself, no bonus */
+/* Turbo wacht op een tik, hoe lang het ook duurt; "Speel maar" laat hem zetten, zonder bonus */
 var pm2 = pickMove(session.S, 2);
 var hBefore = session.S.hist.length;
 var xpB2 = P.xp;
 askPredict(pm2);
-drainTimers(); /* fires the window timeout -> auto-resolve */
-ok('predict: timeout auto-plays, no bonus', session.S.hist.length === hBefore + 1 && P.xp === xpB2);
+drainTimers();
+ok('[2.8] predict: Turbo wacht, ook na lang wachten', session.S.hist.length === hBefore && BD.mode === 'predict');
+fire(__els.predictSkip, 'click');
+drainTimers();
+ok('[2.8] predict: Speel maar laat Turbo zetten, zonder bonus', session.S.hist.length === hBefore + 1 && P.xp === xpB2);
 /* double-resolve is harmless */
 resolvePredict(0);
 ok('predict: double resolve is a no-op', session.S.hist.length === hBefore + 1);
@@ -548,7 +564,7 @@ onKidMove(ra8);
 drainTimers();
 closeLevelUps();
 ok('mate: game over, kid wins', session.over === true && P.wins === winsBefore + 1);
-ok('mate: victory modal', __els.modalBox.innerHTML.indexOf('GEWONNEN') >= 0);
+ok('[2.5] mate: de eindkaart over het bord zegt Gewonnen!', __els.eindkaart.innerHTML.indexOf('Gewonnen!') >= 0);
 ok('badge: eerste potje en winnaar', !!P.badges.potje && !!P.badges.winst);
 
 /* ---------- gamification: badges, weekdoel, vorm, themes, modal queue ---------- */
@@ -690,7 +706,7 @@ session.task.targets.forEach(function (sq) { BD.marks.add(sq); });
 scanCheck();
 ok('vorm: opdracht gelogd na awardRound', Object.keys(DOC.log.scan || {}).length === 1 &&
   Object.values(DOC.log.scan)[0][3] === 3 && !!vormInfo('scan'));
-ok('vorm: zichtbaar in de sterrenbalk', __els.drillStars.innerHTML.indexOf('Vorm') >= 0);
+ok('[3.7] vorm: niet in de sterrenbalk', __els.drillStars.innerHTML.indexOf('Vorm') < 0);
 goHome();
 renderVorm();
 ok('vorm: kaart op Ik toont Speurogen met score', __els.vormList.innerHTML.indexOf('Speurogen') >= 0 &&
@@ -805,6 +821,16 @@ ok('modal zonder cancel: eigen knop sluit', modalOpen === false &&
     v.wins === 3 && v.c.winsL2 === 1 && v.c.safeCorrect === 7 && v.c.pat.vork === 4 &&
     v.badges.winst === true && v.badges.detective === true && v.name === 'Oscar' && v.theme === 'oceaan' &&
     v.best === 6 && v.streak === 2 && v.weekGoal === null && v.day.winsByLvl[1] === 1);
+  /* per apparaat: welke trofeeën dit apparaat al liet zien. De vorige release
+     kent dat veld niet; daar telt elke trofee die er al is als getoond. */
+  var d = normDoc(JSON.parse(JSON.stringify(oud)));
+  ok('compat: de trofeeën van de vorige release tellen als getoond', JSON.stringify((d.loc.shownBadges || []).slice().sort()) === '["detective","winst"]');
+  var metLijst = JSON.parse(JSON.stringify(oud));
+  metLijst.loc.shownBadges = ['winst', 'raket', 7];
+  ok('compat: een doc van nu houdt zijn lijst, alleen met trofeeën die er zijn', JSON.stringify(normDoc(metLijst).loc.shownBadges) === '["winst"]');
+  ok('compat: de lijst gaat mee door bewaren en laden', JSON.stringify(normDoc(JSON.parse(JSON.stringify(normDoc(metLijst)))).loc.shownBadges) === '["winst"]');
+  ok('compat: een oud plat profiel: elke trofee telt als getoond', JSON.stringify(migrateLegacy({ badges: { winst: true } }, 'd1').loc.shownBadges || null) === '["winst"]');
+  ok('een nieuw profiel: niets getoond, en het kent zijn level', (emptyDoc().loc.shownBadges || [1]).length === 0 && emptyDoc().loc.lastLevel === 0);
 })();
 /* doc en weergave lopen gelijk (predictHits niet: die is hierboven met opzet
    rechtstreeks in P gezet en dus alleen weergave) */
@@ -886,6 +912,7 @@ remote.set.badges.raket = true;
 ok('sync: remote doc toegepast', applyRemoteDoc(remote) === true);
 ok('sync: xp van het andere apparaat erbij', P.xp === xpNow + 100);
 ok('sync: trofee van het andere apparaat erbij', P.badges.raket === true);
+ok('sync: een trofee van het andere apparaat telt hier als getoond', (P.shownBadges || []).indexOf('raket') >= 0);
 ok('sync: lastLevel herberekend, geen feestmodal', P.lastLevel === levelIdx(P.xp) &&
   __els.overlay.classList.contains('hidden'));
 applyRemoteDoc(remote);
@@ -1221,8 +1248,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await tikje();
   ok('mp: winst alleen in winsOnline, niet in P.wins', session.over === true &&
     P.wins === winsVoor && (P.c.winsOnline || 0) === onlineVoor + 1 &&
-    __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0 &&
-    __els.modalBox.innerHTML.indexOf('Revanche') >= 0);
+    __els.eindkaart.innerHTML.indexOf('JIJ WINT') >= 0 &&
+    __els.eindkaart.innerHTML.indexOf('Revanche') >= 0);
 
   var kleurVoor = MP.myColor;
   fire(__els.mpRev, 'click');
@@ -1407,7 +1434,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     }));
     drainTimers();
     for (var k = 0; k < 20; k++) await null;
-    var html = __els.modalBox.innerHTML;
+    var html = __els.eindkaart.innerHTML;
     closeModal();
     mpStop();
     return html;
@@ -1427,10 +1454,10 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   MP = { room: 'r', seat: 's', host: true, myColor: 'w', gameNo: 1, revMine: false,
     revTheirs: false, peerName: 'Fien', open: false, weg: false };
   mpBeginGame();
-  ok('mp: stopknop staat onderaan, niet tegen het bord',
-    __els.actionRow.classList.contains('onderaan'));
+  ok('[2.3] mp: opgeven en remise staan achter ⋯, niet onder het bord', !actionBtns.mpStopBtn && !actionBtns.drawBtn);
   /* een potje verlaat je niet zomaar: de knop is opgeven, en die vraagt eerst */
-  fire(actionBtns.mpStopBtn, 'click');
+  fire(__els.meerBtn, 'click');
+  fire(document.getElementById('meerOpgeven'), 'click');
   ok('mp: opgeven vraagt eerst om bevestiging',
     __els.modalBox.innerHTML.indexOf('Opgeven?') >= 0 && __els.modalBox.innerHTML.indexOf('Fien') >= 0 &&
     !!MP && !!session && session.over !== true);
@@ -1440,12 +1467,13 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     __els.overlay.classList.contains('hidden'));
   /* opgeven: het potje is voorbij, het maatje wint, de kamer blijft voor revanche */
   var gpVoor = P.c.gamesPlayed;
-  fire(actionBtns.mpStopBtn, 'click');
+  fire(__els.meerBtn, 'click');
+  fire(document.getElementById('meerOpgeven'), 'click');
   fire(__els.rsJa, 'click');
   await tikje();
   ok('mp: na ja is het potje afgelopen en wint het maatje', !!MP && !!session && session.over === true &&
-    __els.modalBox.innerHTML.indexOf('Fien wint dit potje') >= 0 && __els.modalBox.innerHTML.indexOf('Je gaf op') >= 0 &&
-    __els.modalBox.innerHTML.indexOf('Revanche') >= 0);
+    __els.eindkaart.innerHTML.indexOf('Fien wint dit potje') >= 0 && __els.eindkaart.innerHTML.indexOf('Je gaf op') >= 0 &&
+    __els.eindkaart.innerHTML.indexOf('Revanche') >= 0);
   ok('mp: vroeg opgeven telt niet als gespeeld potje', P.c.gamesPlayed === gpVoor);
   closeModal();
   mpStop();
@@ -1471,7 +1499,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var xpO = P.xp, winsO = P.wins;
   mpMsg({ t: 'opgave', gameNo: 1 });
   ok('mp: opgave van het maatje = jij wint', session.over === true && P.xp === xpO && P.wins === winsO &&
-    __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0 && __els.modalBox.innerHTML.indexOf('geeft op') >= 0);
+    __els.eindkaart.innerHTML.indexOf('JIJ WINT') >= 0 && __els.eindkaart.innerHTML.indexOf('geeft op') >= 0);
   closeModal();
   mpStop();
 
@@ -1535,7 +1563,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   BD.mode = 'move';
   commitKid(legalMoves(session.S).find(function (x) { return alg(x.to) === 'a8'; }));
   await tikje();
-  ok('vriend: eindscherm biedt vrienden worden aan', __els.modalBox.innerHTML.indexOf('Vrienden worden') >= 0);
+  ok('vriend: eindscherm biedt vrienden worden aan', __els.eindkaart.innerHTML.indexOf('Vrienden worden') >= 0);
   fire(__els.mpVriend, 'click');
   await tikje();
   var vraag = vmaat.inbox.filter(function (m) { return m.t === 'vriend?'; })[0];
@@ -1576,7 +1604,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   commitKid(legalMoves(session.S).find(function (x) { return alg(x.to) === 'a8'; }));
   await tikje();
   ok('bewijs: het eindscherm biedt geen tweede vriendschap aan',
-    __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0 && __els.modalBox.innerHTML.indexOf('Vrienden worden') < 0);
+    __els.eindkaart.innerHTML.indexOf('JIJ WINT') >= 0 && __els.eindkaart.innerHTML.indexOf('Vrienden worden') < 0);
   closeModal();
   session = null;
   /* een bewijs uit een andere kamer telt niet, en rommel evenmin */
@@ -2119,12 +2147,14 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   /* tegen Turbo: opgeven vraagt, weglopen is opgeven, remise alleen bij een echt gelijke stand */
   startGame(2);
   drainTimers();
-  ok('offline: knoppenrij staat weer onder het bord en heeft opgeven en remise',
-    !__els.actionRow.classList.contains('onderaan') && !!actionBtns.resignBtn && !!actionBtns.drawBtn);
+  ok('[2.3] turbo: de hulpjes staan onder het bord, opgeven en remise achter ⋯',
+    !!actionBtns.cloudBtn && !!actionBtns.tip && !!actionBtns.undo && !actionBtns.resignBtn && !actionBtns.drawBtn);
   offerDraw();
   ok('turbo: remise meteen aan het begin wordt afgewimpeld', session.over !== true &&
     __els.bubble.innerHTML.indexOf('net begonnen') >= 0);
   fire(__els.backBtn, 'click');
+  /* de melding van Pauze komt thuis na een eventueel venster voor een level of trofee */
+  drainTimers();
   ok('[1.1] turbo: Pauze voor de eerste zet vraagt niets, bewaart niets en zegt dat het potje nog niet begonnen was',
     session === null && __els.overlay.classList.contains('hidden') && leesPotje() === null &&
     document.getElementById('toast').textContent.indexOf('nog niet begonnen') >= 0);
@@ -2133,11 +2163,12 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('[1.1] turbo: daarna begint een nieuw potje zonder vraag', session !== null && session.over !== true &&
     __els.overlay.classList.contains('hidden'));
   var gpT = P.c.gamesPlayed, xpT = P.xp;
-  fire(actionBtns.resignBtn, 'click');
+  fire(__els.meerBtn, 'click');
+  fire(document.getElementById('meerOpgeven'), 'click');
   fire(__els.rsJa, 'click');
   drainTimers();
   ok('turbo: opgeven aan het begin = Turbo wint, telt niet, geen XP', session.over === true &&
-    P.c.gamesPlayed === gpT && P.xp === xpT && __els.modalBox.innerHTML.indexOf('Je gaf op') >= 0);
+    P.c.gamesPlayed === gpT && P.xp === xpT && __els.eindkaart.innerHTML.indexOf('Je gaf op') >= 0);
   closeModal();
   /* na twintig zetten telt opgeven wel als gespeeld potje (en betaalt de troost-XP) */
   startGame(2);
@@ -2166,7 +2197,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   offerDraw();
   drainTimers();
   ok('turbo: remise aangenomen bij gelijke stand', session.over === true && P.xp - xpT === 30 &&
-    __els.modalBox.innerHTML.indexOf('Remise afgesproken') >= 0);
+    __els.eindkaart.innerHTML.indexOf('Remise afgesproken') >= 0);
   closeModal();
   goHome();
   ok('offline: na afloop gaat ← Home gewoon naar huis', session === null && __els.overlay.classList.contains('hidden'));

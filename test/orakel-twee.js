@@ -36,6 +36,88 @@ async function nodigUit(van) {
 }
 
 async function orakelTwee() {
+  /* ================= increment 2 ================= */
+
+  /* regel 2.5: op een speelscherm staat geen melding; een antwoord of een fout na een vriendenpotje staat in de strook */
+  await regel('[2.5] na een vriendenpotje: "Nu niet" op de vriendschapsvraag staat in de strook van wie vroeg, en zijn knop is weer als eerst', async function (check) {
+    const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
+    await samenSpelen(daan, fien);
+    await geefOp(aanZet(daan, fien));
+    tikTekst(daan, 'Vrienden worden');
+    await wacht();
+    check('testopzet: Fien kan "Nu niet" zeggen', kanTikken(fien, 'Nu niet'));
+    tikTekst(fien, 'Nu niet');
+    await wacht();
+    check('Daan leest het antwoord in de strook', /Fien wil nu even niet/.test(tekstVan(daan, 'bubble')));
+    check('de knop van Daan is weer als eerst', kanTikken(daan, 'Vrienden worden') && !/Gevraagd/.test(tekstVan(daan, 'eindkaart')));
+  });
+
+  await regel('[2.5] na een vriendenpotje: lukt de vraag of het ja niet, dan staat dat in de strook en is de knop weer als eerst', async function (check) {
+    const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
+    await samenSpelen(daan, fien);
+    await geefOp(aanZet(daan, fien));
+    const echt = crypto.subtle.generateKey;
+    const kapot = function () { return Promise.reject(new Error('geen sleutel')); };
+    try {
+      crypto.subtle.generateKey = kapot;
+      tikTekst(daan, 'Vrienden worden');
+      await wacht();
+      check('Daan leest in de strook dat het hier niet lukt', /Dat lukt hier niet/.test(tekstVan(daan, 'bubble')));
+      check('de knop van Daan is weer als eerst', kanTikken(daan, 'Vrienden worden') && !/Gevraagd/.test(tekstVan(daan, 'eindkaart')));
+      crypto.subtle.generateKey = echt;
+      tikTekst(fien, 'Vrienden worden');
+      await wacht();
+      check('testopzet: Daan krijgt de vraag van Fien', kanTikken(daan, 'Ja'));
+      crypto.subtle.generateKey = kapot;
+      tikTekst(daan, 'Ja');
+      await wacht();
+      check('Daan leest in de strook dat het niet lukte', /Dat lukte niet/.test(tekstVan(daan, 'bubble')));
+    } finally { crypto.subtle.generateKey = echt; }
+  });
+
+  /* D34: een sync telt als getoond wat van het andere apparaat kwam; wat hier verdiend is en wacht, blijft wachten */
+  await regel('[2.5] twee gekoppelde apparaten: een sync midden in een rondje laat het level en de trofee van hier wachten, en toont die van daar niet', async function (check) {
+    const tablet = maakApparaat('Mees');
+    let telefoon = maakApparaat(null);
+    tablet.ev('setPref("predict", false); setPref("guard", false)');
+    await tablet.ev('ensureAccount(); syncNow()');
+    await wacht();
+    /* koppelen zoals het eind van de koppelstap: hetzelfde account, en het profiel van de server erbij */
+    telefoon.ev('finishLink(' + tablet.get('JSON.stringify(ACC)') + ', null)');
+    await wacht();
+    check('testopzet: een profiel op twee apparaten', telefoon.get('P.name') === 'Mees' && telefoon.get('ACC.id') === tablet.get('ACC.id'));
+    /* op de telefoon de trofee Orakel, en die staat daarna op de server */
+    telefoon.ev('bump("c.predictHits", 5); checkBadges()');
+    await telefoon.ev('syncNow()');
+    await wacht();
+    tablet.ev('bump("xp", 140); bump("stars", 99)');
+    await startOefening(tablet, 'scan');
+    await scanGoed(tablet);
+    check('testopzet: op de tablet wachten level Paard en Sterrenregen', tablet.get('levelIdx(P.xp)') === 1 && tablet.get('!!P.badges.sterren'));
+    await tablet.ev('syncNow()');
+    await wacht();
+    check('testopzet: de sync bracht Orakel naar de tablet', tablet.get('!!P.badges.orakel'));
+    for (let i = 0; i < 4; i++) { tikTekst(tablet, 'Volgende'); await wacht(); await scanGoed(tablet); }
+    tikTekst(tablet, 'Volgende');
+    await wacht();
+    const kaart = tablet.scherm();
+    check('de kaart van het rondje toont het level en de trofee van de tablet', /Level Paard/.test(kaart) && /Sterrenregen/.test(kaart));
+    check('en niet de trofee van de telefoon', !/Orakel/.test(kaart));
+    tikTekst(tablet, 'Naar huis');
+    await wacht();
+    check('thuis het level', tablet.ziet('LEVEL OMHOOG'));
+    tablet.tik('lvlOk');
+    check('thuis geen trofee van de telefoon', !tablet.ziet('Orakel'));
+    await tablet.ev('syncNow()');
+    await wacht();
+    await telefoon.ev('syncNow()');
+    await wacht();
+    telefoon = herlaad(telefoon);
+    await wacht();
+    check('de telefoon toont bij het openen zijn eigen Orakel', telefoon.ziet('Orakel'));
+    check('en niet de Sterrenregen van de tablet', !telefoon.ziet('Sterrenregen'));
+  });
+
   /* ================= increment 4 ================= */
 
   /* regel 1.4: niets anders haalt het bewaarde potje tegen Turbo weg, ook niet

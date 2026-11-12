@@ -2,9 +2,10 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#BCE4F6">
+<meta name="color-scheme" content="light">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,27 +14,35 @@
 <title>SchaakHeld · Train je schaakbrein met Turbo</title>
 <style>
   :root {
-    --sky-hi: #E9F8FF;
-    --sky: #BCE4F6;
-    --sky-deep: #4E9BC4;
-    --grass: #CDEFD6;
-    --ink: #17456F;
-    --ink-soft: #4A6E92;
-    --sun: #FFC53D;
-    --sun-deep: #E8930C;
-    --coral: #FF6F59;
-    --coral-soft: #FFE3DD;
-    --leaf: #46B466;
-    --leaf-deep: #2E8C4C;
-    --leaf-soft: #DFF3E3;
-    --cream: #FFF9EC;
-    --card: #FFFFFF;
-    --board-light: #FFF3D0;
-    --board-dark: #58B7A6;
-    --font: "Arial Rounded MT Bold", "Chalkboard SE", "Comic Sans MS", "Trebuchet MS", sans-serif;
-    --bw: min(92vw, 54vh, 520px);
-    --shadow: 0 8px 24px rgba(23, 69, 111, .14);
+    color-scheme: light;
+    --sky-hi: #E9F8FF; --sky: #BCE4F6; --sky-deep: #4E9BC4; --grass: #CDEFD6;
+    --ink: #17456F; --ink-quiet: #3B5F82;
+    --sun: #FFC53D; --sun-deep: #E8930C; --sun-soft: #FFEDB8;
+    --leaf: #46B466; --leaf-deep: #267A41; --leaf-soft: #DFF3E3;
+    --coral: #FF6F59; --coral-deep: #B83C2A; --coral-soft: #FFE3DD;
+    --violet: #9B6FE8; --violet-soft: #EFE3FF; --cloud: #9DB4E8; --cloud-soft: #EAF0FF;
+    --cream: #FFF9EC; --white: #FFFFFF; --track: #E4EEF6; --accent-text: #9A5B00; --pc-green: #12402C;
+    --board-light: #FFF3D0; --board-dark: #58B7A6;
+    --surface: var(--white); --surface-quiet: var(--cream); --surface-sunk: var(--track);
+    --line: rgba(23, 69, 111, .12); --text: var(--ink); --text-quiet: var(--ink-quiet);
+    --primary: var(--sun); --primary-edge: var(--sun-deep); --on-primary: var(--ink); --selected-soft: var(--sun-soft);
+    --success: var(--leaf-deep); --on-success: var(--white); --success-soft: var(--leaf-soft);
+    --danger: var(--coral-deep); --on-danger: var(--white); --mark-bad: var(--coral);
+    --focus: var(--ink); --scrim: rgba(23, 69, 111, .45);
+    --font-display: ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-text: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --fw-regular: 400; --fw-bold: 700;
+    --fs-cap: 13px; --fs-sm: 15px; --fs-md: 17px; --fs-lg: 20px; --fs-xl: 24px; --fs-2xl: 32px;
+    --lh-text: 1.35; --lh-display: 1.15;
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+    --r-sm: 10px; --r-md: 16px; --r-lg: 24px; --r-pill: 999px;
+    --elev-0: none; --elev-1: 0 1px 2px rgba(23, 69, 111, .10); --elev-2: 0 8px 24px rgba(23, 69, 111, .14);
+    --border: 1px solid var(--line); --tap: 44px; --tap-main: 48px;
+    --dur-fast: 120ms; --dur: 200ms; --dur-slow: 320ms; --ease: cubic-bezier(.2, .8, .2, 1);
+    /* de oude namen blijven, zodat elke bestaande regel de nieuwe kleuren en letters meteen krijgt */
+    --ink-soft: var(--ink-quiet); --card: var(--surface); --shadow: var(--elev-2); --font: var(--font-text);
   }
+  @media (min-width: 700px) { :root { --fs-sm: 16px; --fs-md: 18px; } }
   * { box-sizing: border-box; }
   /* Geen dubbeltik-zoom: twee snelle tikken (stuk pakken, stuk zetten) zijn
      in dit spel altijd bedoeld als tikken. Knijpen om te zoomen blijft werken. */
@@ -46,6 +55,7 @@
     min-height: 100vh;
   }
   button { font-family: var(--font); color: var(--ink); }
+  h1, h2, h3, .btn, .tab, .display, .num { font-family: var(--font-display); }
   button:focus-visible { outline: 3px dashed var(--ink); outline-offset: 2px; } /* compat-allow css-focus-visible: Safari 15.0 tot 15.3 toont de gewone focusrand */
 
   .float-pc {
@@ -57,7 +67,7 @@
   header.top {
     position: relative; z-index: 2;
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 12px 16px 4px;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 4px;
     max-width: 1020px; margin: 0 auto;
   }
   .logo { display: flex; align-items: center; gap: 10px; }
@@ -85,7 +95,8 @@
   .xp-bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--sun), var(--sun-deep)); border-radius: 99px; transition: width .6s ease; }
   .xp-num { font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-  main { position: relative; z-index: 1; max-width: 1020px; margin: 0 auto; padding: 8px 14px 40px; }
+  main { position: relative; z-index: 1; max-width: 1020px; margin: 0 auto;
+    padding: 8px max(14px, env(safe-area-inset-right, 0px)) 40px max(14px, env(safe-area-inset-left, 0px)); }
   .screen.hidden { display: none; }
 
   /* ---------- home ---------- */
@@ -163,7 +174,6 @@
   /* raam draait 180°, maar stukken en coordinaten draaien terug zodat ze
      rechtop blijven staan voor de zwartspeler */
   .board-frame.flip .pc { display: inline-block; transform: rotate(180deg); }
-  .board-frame.flip .coord { display: inline-block; transform: rotate(180deg); }
 
   .pat-row {
     display: flex; align-items: center; gap: 10px; padding: 8px 12px;
@@ -308,23 +318,21 @@
   .friend.wait { background: var(--leaf-soft); }
   .friend .f-rm { width: 34px; height: 34px; font-size: 14px; box-shadow: none; background: transparent; color: var(--ink-soft); }
 
-  /* openingsschool: drie meters */
-  .meters { width: 100%; display: flex; flex-direction: column; gap: 8px; background: var(--card); border-radius: 18px; padding: 12px 16px; box-shadow: var(--shadow); }
+  /* openingsschool: drie meters op een rij */
+  .meters { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .meters.hidden { display: none; }
-  .meter { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-  .meter .m-l { width: 118px; font-weight: bold; }
-  .meter .m-t { flex: 1; height: 12px; background: #E4EEF6; border-radius: 99px; overflow: hidden; }
-  .meter .m-t i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #BDE8C9, var(--leaf)); transition: width .4s ease; }
-  .meter .m-v { width: 34px; text-align: right; font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .meters .m { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-cap); font-weight: var(--fw-bold); }
+  .meters .m > span:first-child { display: flex; justify-content: space-between; gap: 4px; }
+  .meters .m-v { font-weight: var(--fw-regular); color: var(--text-quiet); font-variant-numeric: tabular-nums; }
+  .meters .bar { display: block; height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
+  .meters .bar i { display: block; height: 100%; background: var(--leaf); border-radius: 999px; }
 
   /* ---------- play screen ---------- */
-  .playbar { display: flex; align-items: center; gap: 12px; margin: 6px 0 12px; }
   .back-btn {
     border: none; cursor: pointer; background: var(--card); box-shadow: var(--shadow);
     border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: bold;
     white-space: nowrap; min-height: 44px;
   }
-  #modeTitle { font-size: 19px; font-weight: bold; }
   .bewaard { font-size: 13px; font-weight: bold; color: var(--ink-soft); white-space: nowrap; }
 
   /* ---------- Verder: wat er bezig is ---------- */
@@ -349,41 +357,11 @@
   }
   .verder-ook .vo-pijl { font-size: 18px; }
   .verder-bewaard { margin: 6px 16px 0; font-size: 13px; color: var(--ink); }
-  #roundChip {
-    margin-left: auto; background: var(--card); border-radius: 999px; padding: 7px 14px;
-    font-size: 14px; box-shadow: var(--shadow); font-variant-numeric: tabular-nums;
-  }
-  .play-wrap { display: flex; gap: 22px; justify-content: center; align-items: flex-start; }
-  .board-side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 
-  .predict {
-    width: var(--bw);
-    background: #EFE3FF; border: 2px solid #C9AEF0; border-radius: 16px;
-    padding: 10px 14px 8px; font-size: 15px; line-height: 1.35;
-    display: flex; flex-direction: column; gap: 8px;
-  }
-  .predict.hidden { display: none; }
-  .predict-main { display: flex; align-items: center; gap: 10px; }
-  .predict button {
-    margin-left: auto; border: none; cursor: pointer; border-radius: 999px;
-    padding: 7px 12px; background: var(--card); font-size: 13px; box-shadow: 0 2px 0 #C9AEF0;
-    white-space: nowrap;
-  }
-  .predict-track { height: 6px; background: rgba(255, 255, 255, .7); border-radius: 99px; overflow: hidden; }
-  .predict-track i { display: block; height: 100%; width: 100%; background: #9B6FE8; border-radius: 99px; }
 
-  .board-frame {
-    position: relative;
-    padding: 10px; background: var(--cream); border-radius: 20px;
-    box-shadow: var(--shadow), inset 0 0 0 2px #F0E3C0;
-  }
-  #board {
-    width: var(--bw); height: var(--bw);
-    display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
-    border-radius: 12px; overflow: hidden;
-  }
   .cell {
     position: relative; border: none; padding: 0; margin: 0; cursor: pointer;
+    min-width: 0; min-height: 0; overflow: hidden;
     display: grid; place-items: center;
     font-size: calc(var(--bw) / 8 * .72);
     line-height: 1;
@@ -391,13 +369,6 @@
   }
   .cell.light { background: var(--board-light); }
   .cell.dark { background: var(--board-dark); }
-  .coord {
-    position: absolute; font-size: calc(var(--bw) / 8 * .17); font-weight: bold;
-    color: rgba(23, 69, 111, .55); pointer-events: none;
-  }
-  .cell.dark .coord { color: rgba(255, 255, 255, .8); }
-  .coord.file { right: 4px; bottom: 3px; }
-  .coord.rank { left: 4px; top: 3px; }
   .pc { pointer-events: none; -webkit-user-select: none; user-select: none; position: relative; z-index: 1; }
   .pc.w {
     color: #FFFFFF;
@@ -406,7 +377,7 @@
       0 .09em .06em rgba(23, 69, 111, .35);
   }
   .pc.t {
-    color: #3E9B60;
+    color: var(--pc-green);
     text-shadow: .035em 0 0 #FFFDF4, -.035em 0 0 #FFFDF4, 0 .035em 0 #FFFDF4, 0 -.035em 0 #FFFDF4,
       .025em .025em 0 #FFFDF4, -.025em .025em 0 #FFFDF4, .025em -.025em 0 #FFFDF4, -.025em -.025em 0 #FFFDF4,
       0 .09em .06em rgba(23, 69, 111, .35);
@@ -415,7 +386,7 @@
      zwart 180° gedraaid is (een absolute positie binnen het gedraaide raam
      zou spiegelen) */
   .ghost { position: fixed; z-index: 30; pointer-events: none; display: grid; place-items: center;
-    font-size: calc(var(--bw) / 8 * .72); line-height: 1; transition: transform .22s ease; }
+    line-height: 1; transition: transform .22s ease; }
 
   /* Laatste zet: goud op een licht vak, brons op een donker vak. De oude
      kleuren lagen te dicht bij het muntbord: #79C4A9 op #58B7A6 scheelt
@@ -429,54 +400,57 @@
      staat hieronder en is even specifiek, dus die kleurt er overheen. */
   .cell.last.light { background: #FFBE20; }
   .cell.last.dark { background: #6B3F00; }
-  .cell.sel { box-shadow: inset 0 0 0 4px var(--sun); }
-  .cell.sel.light, .cell.sel.dark { background: #FFE08A; }
+  /* tekens in twee tinten: inkt en wit, zodat er op elk vak van elk thema een deel 3:1 haalt */
+  .cell.sel { box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 5px #FFFFFF; }
+  .cell.sel.light, .cell.sel.dark { background: var(--sun-soft); }
   .cell.dot::after {
-    content: ''; position: absolute; inset: 0; margin: auto; width: 26%; height: 26%;
-    border-radius: 50%; background: rgba(23, 69, 111, .3);
+    content: ''; position: absolute; inset: 0; margin: auto; width: 28%; height: 28%;
+    border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px #FFFFFF;
   }
   .cell.ring::after {
-    content: ''; position: absolute; inset: 6%; border-radius: 50%;
-    border: calc(var(--bw) / 8 * .07) solid rgba(255, 111, 89, .8);
+    content: ''; position: absolute; inset: 5%; border-radius: 50%;
+    border: calc(var(--bw) / 8 * .08) solid var(--ink); box-shadow: 0 0 0 2px #FFFFFF, inset 0 0 0 2px #FFFFFF;
   }
   .cell.mark { box-shadow: inset 0 0 0 4px var(--sun); }
   .cell.mark::before {
     content: '⭐'; position: absolute; right: 2%; top: 2%; z-index: 2;
     font-size: calc(var(--bw) / 8 * .3);
   }
-  .cell.good { box-shadow: inset 0 0 0 4px var(--leaf); }
+  .cell.good { box-shadow: inset 0 0 0 4px var(--leaf-deep); }
   .cell.good::before {
     content: '✔'; position: absolute; right: 4%; top: 0; z-index: 2; color: #fff;
-    background: var(--leaf); border-radius: 50%; width: 30%; height: 30%;
+    background: var(--success); border-radius: 50%; width: 30%; height: 30%;
     font-size: calc(var(--bw) / 8 * .2); display: grid; place-items: center;
   }
-  .cell.bad { box-shadow: inset 0 0 0 4px var(--coral); animation: shake .4s ease; }
+  .cell.bad { box-shadow: inset 0 0 0 4px var(--mark-bad); animation: shake .4s ease; }
   .cell.bad::before {
     content: '✖'; position: absolute; right: 4%; top: 0; z-index: 2; color: #fff;
-    background: var(--coral); border-radius: 50%; width: 30%; height: 30%;
+    background: var(--danger); border-radius: 50%; width: 30%; height: 30%;
     font-size: calc(var(--bw) / 8 * .2); display: grid; place-items: center;
   }
-  .cell.missed { box-shadow: inset 0 0 0 4px var(--coral); animation: pulse-miss 1s ease infinite; }
+  /* gemist is geen fout om te straffen: een gestippelde rand, geen rood */
+  .cell.missed { background-image: linear-gradient(rgba(255, 237, 184, .75), rgba(255, 237, 184, .75)); }
+  .cell.missed::after { content: ''; position: absolute; inset: 4%; border: 3px dashed var(--ink); border-radius: 6px; animation: pulse 1s ease 2; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
   @keyframes shake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-5%) } 75% { transform: translateX(5%) } }
   @keyframes pulse-miss { 0%,100% { box-shadow: inset 0 0 0 4px rgba(255,111,89,1) } 50% { box-shadow: inset 0 0 0 7px rgba(255,111,89,.5) } }
   .cell.hero-pc { animation: hero-glow 1.4s ease infinite; }
   @keyframes hero-glow { 0%,100% { box-shadow: inset 0 0 0 4px var(--sun) } 50% { box-shadow: inset 0 0 0 8px rgba(255,197,61,.55) } }
-  .cell.check { background: radial-gradient(circle, #FF8A76 20%, #FF6F59 100%) !important; animation: pulse-miss 1s ease infinite; }
+  .cell.check { background: radial-gradient(circle, #FF8A76 20%, #FF6F59 100%) !important; animation: pulse-miss 1s ease 3; }
+  /* de hint moet ook op de koning die schaak staat te zien zijn: zijn eigen animatie wint van die van schaak */
+  .cell.check.hero-pc { animation: hero-glow 1.4s ease infinite; }
   .cell.spy { box-shadow: inset 0 0 0 4px #9B6FE8; }
 
-  #arrows { position: absolute; inset: 10px; width: var(--bw); height: var(--bw); pointer-events: none; z-index: 20; }
+  #arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
   .a-sun { stroke: var(--sun-deep); fill: var(--sun-deep); }
-  .a-coral { stroke: #E8402A; fill: #E8402A; }
+  .a-coral { stroke: var(--coral-deep); fill: var(--coral-deep); }
   .a-leaf { stroke: var(--leaf-deep); fill: var(--leaf-deep); }
-  #arrows line { stroke-width: 13; stroke-linecap: round; opacity: .85; }
-  #arrows polygon { opacity: .85; }
+  .a-opt-a { stroke: var(--accent-text); fill: var(--accent-text); }
+  .a-opt-b { stroke: var(--coral-deep); fill: var(--coral-deep); }
+  .a-opt-c { stroke: var(--leaf-deep); fill: var(--leaf-deep); }
+  #arrows line { stroke-width: 13; stroke-linecap: round; opacity: .9; }
+  #arrows polygon { opacity: .9; }
 
-  .cloudbar {
-    width: var(--bw); background: #EAF0FF; border: 2px dashed #9DB4E8; border-radius: 16px;
-    padding: 9px 14px; font-size: 14.5px; color: #44578C; line-height: 1.4;
-  }
-  .cloudbar.hidden { display: none; }
-  .cloudbar .cloud-sub { font-size: 12.5px; opacity: .85; }
   .board-frame.cloud {
     box-shadow: 0 0 0 4px #9DB4E8, 0 12px 34px rgba(90, 120, 200, .35);
     background: #EAF0FF;
@@ -484,30 +458,7 @@
   .board-frame.cloud .cell.light { background: #F0F4FF; }
   .board-frame.cloud .cell.dark { background: #92A9DC; }
 
-  .patience { width: var(--bw); display: flex; align-items: center; gap: 8px; }
-  .patience.hidden { display: none; }
-  .pat-track {
-    position: relative; flex: 1; height: 26px; background: var(--card);
-    border-radius: 999px; box-shadow: var(--shadow); overflow: visible;
-  }
-  .pat-track i {
-    position: absolute; inset: 4px auto 4px 4px; width: 0%;
-    background: linear-gradient(90deg, #BDE8C9, var(--leaf)); border-radius: 999px;
-    max-width: calc(100% - 8px);
-  }
-  .pat-track.full i { background: linear-gradient(90deg, var(--sun), var(--sun-deep)); }
-  .pat-turtle { position: absolute; top: -6px; left: 0; font-size: 24px; transition: left .3s linear; z-index: 2; }
-  .pat-track.full .pat-turtle { animation: bob 0.6s ease-in-out infinite; }
-  .pat-flag { font-size: 22px; }
-  .pat-label { font-size: 12.5px; color: var(--ink-soft); white-space: nowrap; }
 
-  .action-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: var(--bw); }
-  /* Stoppen in een online potje is onomkeerbaar. Vlak onder het bord werd
-     die knop per ongeluk aangetikt na een zet op de onderste rij, dus in
-     een potje samen zakt de rij naar de onderkant van de kolom, voorbij de
-     puntenwijzer. .board-side is een flex-kolom, dus order regelt dat
-     zonder de drill-knoppen (die horen wel bij het bord) te verplaatsen. */
-  .action-row.onderaan { order: 1; margin-top: 4px; }
   .btn {
     border: none; cursor: pointer; border-radius: 999px;
     padding: 13px 26px; font-size: 17px; font-weight: bold;
@@ -517,17 +468,12 @@
   .btn:active { transform: translateY(2px); }
   .btn:disabled { opacity: .45; cursor: default; }
   .btn.sun { background: var(--sun); box-shadow: 0 4px 0 var(--sun-deep); }
-  .btn.leaf { background: var(--leaf); color: #fff; box-shadow: 0 4px 0 var(--leaf-deep); }
-  .btn.coral { background: var(--coral); color: #fff; box-shadow: 0 4px 0 #D14A36; }
+  .btn.leaf { background: var(--success); color: var(--on-success); box-shadow: 0 4px 0 #1A5A2E; }
+  .btn.coral { background: var(--danger); color: var(--on-danger); box-shadow: 0 4px 0 #8A2B1E; }
   .btn.plain { background: var(--card); box-shadow: 0 4px 0 #D9E5EE; }
   .btn.small { padding: 9px 16px; font-size: 14.5px; }
 
-  .points-card {
-    width: var(--bw); background: var(--card); border-radius: 16px;
-    padding: 10px 14px 12px; box-shadow: var(--shadow);
-  }
-  .points-title { font-size: 13px; font-weight: bold; color: var(--ink-soft); margin-bottom: 6px; }
-  .points-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .points-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 12px; }
   .pt-chip {
     display: inline-flex; align-items: center; gap: 5px;
     background: var(--cream); border: 2px solid #F0E3C0; border-radius: 999px;
@@ -535,22 +481,14 @@
     font-variant-numeric: tabular-nums;
   }
   .pt-glyph { font-size: 21px; line-height: 1; }
-  .points-note { font-size: 12.5px; color: var(--ink-soft); line-height: 1.4; margin-top: 7px; }
 
-  .panel { flex: 1 1 300px; max-width: 370px; min-width: 270px; display: flex; flex-direction: column; gap: 14px; }
-  .bubble-row { display: flex; gap: 10px; align-items: flex-start; }
-  .mascot {
-    flex: 0 0 auto; width: 52px; height: 52px; font-size: 30px;
-    display: grid; place-items: center; background: var(--leaf-soft); border-radius: 50%;
-  }
-  .panel .bubble { flex: 1; min-height: 46px; }
   .task {
-    background: var(--card); border-radius: 18px; padding: 14px 16px;
-    box-shadow: var(--shadow); font-size: 16.5px; line-height: 1.4;
+    background: var(--surface); border: var(--border); border-radius: 16px; padding: 10px 12px;
+    font-size: var(--fs-sm); line-height: 1.35;
   }
   .task .sub { font-size: 13.5px; color: var(--ink-soft); margin-top: 6px; line-height: 1.35; }
   .task .expl-line { margin: .45em 0; padding: 7px 10px; border-radius: 10px; background: var(--cream); color: var(--ink); }
-  .task.hidden, #optionsBox.hidden, #gameInfo.hidden { display: none; }
+  .task.hidden, #optionsBox.hidden { display: none; }
   #optionsBox { display: flex; flex-direction: column; gap: 9px; }
   .opt-btn {
     border: none; cursor: pointer; text-align: left;
@@ -567,26 +505,197 @@
   .opt-btn.picked { box-shadow: 0 0 0 3px var(--sun), var(--shadow); }
   .opt-btn.wrong { opacity: .45; text-decoration: line-through; pointer-events: none; }
   .opt-btn.right { box-shadow: 0 0 0 3px var(--leaf), var(--shadow); }
-  .answer-row { display: flex; gap: 10px; }
-  .answer-row .btn { flex: 1; }
-
-  #gameInfo { display: flex; flex-direction: column; gap: 10px; }
-  .tray {
-    background: var(--card); border-radius: 16px; padding: 10px 14px;
-    box-shadow: var(--shadow); font-size: 14px;
+  /* De Beste Zet: drie keuzes op een rij, de letter in de kleur van zijn pijl */
+  .options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .opt {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; height: 56px; padding: 3px 4px; gap: 2px;
+    border: 2px solid rgba(23, 69, 111, .25); border-radius: var(--r-md); background: var(--surface); cursor: pointer;
+    color: var(--text); font: inherit;
   }
-  .tray .tray-pcs { font-size: 22px; line-height: 1.2; min-height: 26px; letter-spacing: 2px; }
-  .tray .tray-pcs .pc { font-size: 22px; }
-  .mat-diff { font-weight: bold; color: var(--leaf-deep); }
-  .toggles { display: flex; gap: 8px; flex-wrap: wrap; }
-  .tgl {
-    border: none; cursor: pointer; border-radius: 999px; padding: 8px 13px;
-    font-size: 13px; background: #E4EEF6; color: var(--ink-soft); box-shadow: none;
-  }
-  .tgl.on { background: var(--leaf-soft); color: var(--leaf-deep); box-shadow: inset 0 0 0 2px var(--leaf); }
+  .opt .o-letter { font-family: var(--font-display); font-weight: var(--fw-bold); font-size: 18px; line-height: 1; }
+  .opt .o-move { font-size: 13px; line-height: 1.15; color: var(--text-quiet); text-align: center; }
+  .opt.a .o-letter { color: var(--accent-text); }
+  .opt.b .o-letter { color: var(--coral-deep); }
+  .opt.c .o-letter { color: var(--leaf-deep); }
+  .opt.picked { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); background: var(--sun-soft); }
+  .opt.wrong { opacity: .45; text-decoration: line-through; pointer-events: none; }
+  .opt.right { border-color: var(--leaf-deep); box-shadow: inset 0 0 0 1px var(--leaf-deep); }
 
-  .drill-stars { font-size: 15px; background: var(--card); border-radius: 16px; padding: 10px 14px; box-shadow: var(--shadow); }
-  .drill-stars.hidden { display: none; }
+
+
+  /* ---------- het speelscherm: balk, strook, bord en onderkant op één scherm ---------- */
+  :root {
+    --app-h: 100vh;
+    --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px);
+    --g: 8px; --gap: 8px; --coord: 14px; --bar-h: 52px; --strip-h: 70px;
+    --bottom-min: 146px; --bottom-min-task: 146px; --board-max: 760px; --side: 300px;
+  }
+  @media (min-height: 720px) { :root { --strip-h: 94px; } }
+  /* kort scherm (de app met browserbalken): eerst wijkt wat om het bord staat */
+  @media (max-height: 659px) and (orientation: portrait) {
+    :root { --bar-h: 44px; --strip-h: 62px; --coord: 12px; --gap: 6px; --bottom-min: 60px; --bottom-min-task: 120px; }
+  }
+  @media (min-width: 560px) and (orientation: portrait) {
+    :root { --g: 24px; --gap: 12px; --coord: 18px; --bar-h: 64px; --strip-h: 98px; --bottom-min: 168px; --bottom-min-task: 168px; }
+  }
+  body.speelt { min-height: 0; }
+  body.speelt header.top { display: none; }
+  body.speelt main { max-width: none; padding: 0; }
+  .play {
+    --board: min(
+      calc(100vw - 2 * var(--g) - var(--coord)),
+      calc(var(--app-h) - var(--safe-t) - var(--safe-b) - var(--bar-h) - var(--strip-h) - var(--coord) - var(--bottom-min) - 3 * var(--gap)),
+      var(--board-max));
+    --bw: var(--board);
+    height: var(--app-h); overflow: hidden;
+    display: grid; grid-template-columns: 100%;
+    grid-template-rows: var(--bar-h) var(--strip-h) calc(var(--board) + var(--coord)) minmax(var(--bottom-min), 1fr);
+    grid-template-areas: "bar" "strip" "board" "bottom";
+    row-gap: var(--gap);
+    padding-top: var(--safe-t); padding-bottom: var(--safe-b);
+  }
+  .play.oefening { --bottom-min: var(--bottom-min-task); }
+  .play-bar { grid-area: bar; display: flex; align-items: center; gap: 8px; padding: 0 var(--g); min-width: 0; }
+  .tegen {
+    flex: 1; min-width: 0; min-height: 44px; display: flex; flex-direction: column; justify-content: center;
+    align-items: flex-start; gap: 1px; border: none; background: none; padding: 0 4px; cursor: pointer;
+    text-align: left; line-height: 1.15;
+  }
+  .tegen-naam { max-width: 100%; font-family: var(--font-display); font-weight: 700; font-size: 17px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tegen-sub { max-width: 100%; font-size: 13px; color: var(--text-quiet); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tegen-sub .hidden { display: none; }
+  .tegen-sub > span:not(:empty):not(.hidden) ~ span:not(:empty):not(.hidden)::before { content: ' · '; }
+  .meer-btn {
+    flex: none; width: 44px; height: 44px; border: 1.5px solid rgba(23, 69, 111, .25); border-radius: 50%;
+    background: var(--surface); font-size: 20px; font-weight: 700; cursor: pointer;
+  }
+  @media (max-width: 399px) { .play-bar { gap: 6px; } .back-btn { padding: 6px 10px; } }
+  .play-strip {
+    grid-area: strip; position: relative; margin: 0 var(--g); min-height: 0;
+    display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px 14px; border-radius: 16px;
+    background: var(--surface); border: var(--border); overflow: hidden;
+  }
+  .play-strip .mascot { flex: none; width: 28px; height: 28px; font-size: 18px; display: grid; place-items: center; }
+  /* een hoogte in procenten houdt WebKit hier niet vast; de strook heeft een vaste hoogte, dus die telt */
+  /* de strook scrolt nooit: wat niet past, wordt korter */
+  .play-strip .s-txt { flex: 1; min-width: 0; max-height: calc(var(--strip-h) - 22px); overflow: hidden; font-size: var(--fs-md); line-height: 1.35; }
+  @media (max-height: 659px) and (orientation: portrait) {
+    .play-strip { padding: 4px 12px 12px; }
+    .play-strip .s-txt { line-height: 1.3; max-height: calc(var(--strip-h) - 16px); }
+  }
+  /* een spelzin die niet in twee regels past: een stap kleiner, drie regels; op een lage telefoon is de strook van een potje daarvoor 72 hoog */
+  .play-strip.klein .s-txt { font-size: var(--fs-sm); line-height: 1.2; }
+  @media (max-height: 719px) and (max-width: 559px) and (orientation: portrait) {
+    .play:not(.oefening) { --strip-h: 72px; }
+    .play:not(.oefening) .play-strip { padding: 4px 12px 10px; }
+    .play:not(.oefening) .play-strip .s-txt { max-height: calc(var(--strip-h) - 14px); }
+  }
+  .play-strip.predict { background: var(--violet-soft); }
+  .play-strip.cloud { background: var(--cloud-soft); border: 2px dashed var(--cloud); }
+  .play-strip.cloud #bubble { display: none; }
+  #cloudBar.hidden, #predictBar.hidden, #patience.hidden { display: none; }
+  #predictBar { flex: none; align-self: center; }
+  #predictSkip { min-height: 44px; padding: 0 14px; }
+  #patience { position: absolute; left: 12px; right: 12px; bottom: 2px; }
+  .pat-track { position: relative; height: 6px; background: var(--track); border-radius: 999px; }
+  .pat-track i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--leaf); border-radius: 999px; }
+  .pat-track.full i { background: var(--sun); }
+  .pat-turtle { position: absolute; top: -3px; left: 0; font-size: 12px; line-height: 1; transition: left .3s linear; }
+  .play-board {
+    grid-area: board; display: grid; justify-content: center;
+    grid-template-columns: var(--coord) var(--board); grid-template-rows: var(--board) var(--coord);
+  }
+  .board-frame {
+    grid-column: 2; grid-row: 1; position: relative; width: var(--board); height: var(--board);
+    border-radius: 10px; box-shadow: var(--elev-2), 0 0 0 2px var(--cream);
+  }
+  #board {
+    width: 100%; height: 100%; border-radius: 10px; overflow: hidden;
+    display: grid; grid-template: repeat(8, minmax(0, 1fr)) / repeat(8, minmax(0, 1fr));
+  }
+  .coords-r, .coords-f { display: flex; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-cap); color: var(--text-quiet); }
+  .coords-r { grid-column: 1; grid-row: 1; flex-direction: column; }
+  .coords-f { grid-column: 2; grid-row: 2; }
+  .coords-r span, .coords-f span { flex: 1; display: grid; place-items: center; line-height: 1; }
+  .eindkaart {
+    grid-column: 2; grid-row: 1; z-index: 25; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    padding: 16px; text-align: center; background: var(--surface); border-radius: 16px;
+    box-shadow: var(--elev-2); animation: pop-in var(--dur-slow) var(--ease);
+  }
+  .eindkaart.hidden { display: none; }
+  .eindkaart .ek-turbo { width: 88px; height: 88px; display: grid; place-items: center; font-size: 56px; line-height: 1;
+    background: var(--leaf-soft); border-radius: 50%; }
+  .eindkaart h2 { margin: 0; font-size: var(--fs-xl); }
+  .eindkaart p { margin: 0; font-size: var(--fs-sm); color: var(--text-quiet); }
+  .eindkaart .ek-xp { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); color: var(--accent-text); }
+  .ek-trofee { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .ek-badge { display: flex; flex-direction: column; align-items: center; width: 88px; font-size: var(--fs-cap); font-weight: 700; }
+  .ek-be { font-size: 40px; line-height: 1.1; }
+  /* op een bord onder 400 px: zonder plaatje (Turbo praat al in de strook) en een trofee als een regel */
+  .eindkaart.klein { padding: 12px; gap: 6px; }
+  .eindkaart.klein .ek-turbo { display: none; }
+  .eindkaart.klein h2 { font-size: var(--fs-lg); }
+  .eindkaart.klein .ek-badge { flex-direction: row; gap: 6px; width: auto; }
+  .eindkaart.klein .ek-be { font-size: 28px; }
+  .eindkaart .ek-btns { display: flex; flex-direction: column; gap: 8px; width: min(100%, 280px); }
+  .play-bottom {
+    grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+    padding: 0 var(--g) 8px;
+  }
+  /* kort scherm: ook hier wijken de tussenruimtes van 8 naar 6, zodat drie regels uitleg en de knoppen in 120 passen */
+  @media (max-height: 659px) and (orientation: portrait) { .play-bottom { gap: 6px; padding-bottom: 6px; } }
+  .play-bottom .action-row { margin-top: auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+  .play-bottom .action-row .btn { min-height: 48px; padding: 0 10px; white-space: nowrap; }
+  .play-bottom #optionsBox { order: -1; }
+  /* de zin die de opdracht uitlegt, een hint of een poging: onder het bord, boven de knoppen */
+  .play-bottom #hulpZin { order: -2; font-size: var(--fs-sm); line-height: 1.33; }
+  .play-bottom #hulpZin.hidden, .play-bottom.uitleg #hulpZin { display: none; }
+  /* na een antwoord: het oordeel en Volgende op de eerste rij, de redenen eronder */
+  .play-bottom.uitleg {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr);
+    gap: 4px 8px; margin: 0 var(--g) 8px; padding: 8px 8px 0 12px;
+    background: var(--surface); border: var(--border); border-radius: 16px; overflow: hidden;
+  }
+  .play-bottom.uitleg #optionsBox, .play-bottom.uitleg #meters { display: none; }
+  .play-bottom.uitleg #taskBox { display: contents; }
+  .play-bottom.uitleg .e-head { grid-column: 1; grid-row: 1; align-self: center; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); }
+  .play-bottom.uitleg .action-row { grid-column: 2; grid-row: 1; margin: 0; display: block; }
+  .play-bottom.uitleg .action-row .btn { min-height: 44px; padding: 0 16px; }
+  .play-bottom.uitleg .e-body { grid-column: 1 / -1; grid-row: 2; min-height: 0; overflow-y: auto; padding-bottom: 8px; font-size: var(--fs-sm); line-height: 1.33; }
+  .e-body p { margin: 0 0 4px; }
+  .e-body ul { margin: 0; padding-left: 1.1em; }
+  .e-body li { margin: 0 0 4px; }
+  /* Hint staat links met zijn eigen breedte, nooit op de plek van Volgende (rechts in de oordeelrij) */
+  .play-bottom .action-row .btn.hint { justify-self: start; padding: 0 18px; }
+  .play-bottom .action-row .btn.helper {
+    min-height: 52px; padding: 2px 6px; white-space: pre-line; font-size: var(--fs-cap); line-height: 1.2;
+  }
+  @media (orientation: landscape) and (min-width: 560px) {
+    .play {
+      --g: 24px; --coord: 18px;
+      --board: min(
+        calc(var(--app-h) - var(--safe-t) - var(--safe-b) - 2 * 16px - var(--coord)),
+        calc(100vw - var(--side) - 3 * var(--g) - var(--coord)),
+        var(--board-max));
+      grid-template-columns: calc(var(--board) + var(--coord)) var(--side);
+      grid-template-rows: auto auto minmax(0, 1fr);
+      grid-template-areas: "board bar" "board strip" "board bottom";
+      column-gap: var(--g); row-gap: 12px; justify-content: center;
+      padding: calc(16px + var(--safe-t)) var(--g) calc(16px + var(--safe-b));
+    }
+    .play-board { align-self: center; }
+    .play-bar, .play-bottom { padding-left: 0; padding-right: 0; }
+    /* in de smalle kolom: Pauze en ⋯ op de eerste rij, tegen wie je speelt eronder */
+    .play-bar { flex-wrap: wrap; }
+    .tegen { order: 3; flex-basis: 100%; }
+    .meer-btn { margin-left: auto; }
+    .play-bottom .action-row .btn { white-space: normal; font-size: var(--fs-cap); min-height: 52px; padding: 0 6px; }
+    .play-strip { margin: 0; height: auto; min-height: 88px; max-height: 180px; }
+    .play-strip .s-txt { max-height: 158px; }
+  }
+  @media (orientation: landscape) and (min-width: 1100px) { .play { --side: 340px; } }
 
   /* ---------- overlay & modal ---------- */
   /* De overlay scrolt en het venster staat met margin: auto in het midden:
@@ -659,9 +768,6 @@
   #fx { position: fixed; inset: 0; z-index: 99; pointer-events: none; }
 
   @media (max-width: 760px) {
-    .play-wrap { flex-direction: column; align-items: center; }
-    .panel { order: -1; max-width: min(94vw, 560px); width: 100%; min-width: 0; }
-    .bubble-row .bubble { font-size: 14.5px; }
     header.top { flex-wrap: wrap; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -812,68 +918,37 @@
   </section>
 
   <section id="scr-play" class="screen hidden">
-    <div class="playbar">
-      <button id="backBtn" class="back-btn">‹ Pauze</button>
-      <span id="modeTitle"></span>
-      <span id="bewaard" class="bewaard hidden">✔ bewaard</span>
-      <span id="roundChip"></span>
-    </div>
-    <div class="play-wrap">
-      <div class="board-side">
-        <div id="predictBar" class="predict hidden">
-          <div class="predict-main">
-            <span>🔮</span><span id="predictTxt">Turbo denkt na… wat gaat hij doen? Tik zijn stuk aan!</span>
-            <button id="predictSkip">▶ Speel maar</button>
-          </div>
-          <div class="predict-track"><i id="predictTimer"></i></div>
-        </div>
-        <div id="cloudBar" class="cloudbar hidden">☁️ <b>DENKWOLK</b> <span id="cloudDepth"></span><br>
-          <span class="cloud-sub">Hier mag alles: schuif ook Turbo's stukken. Niks telt echt!</span></div>
+    <div id="play" class="play">
+      <div class="play-bar">
+        <button id="backBtn" class="back-btn">‹ Pauze</button>
+        <button id="materiaal" class="tegen" type="button">
+          <span id="modeTitle" class="tegen-naam"></span>
+          <span class="tegen-sub"><span id="roundChip"></span><span id="drillStars" class="hidden"></span><span id="bewaard" class="bewaard hidden">✔ bewaard</span><span id="verschil"></span></span>
+        </button>
+        <button id="meerBtn" class="meer-btn" aria-label="Meer: remise, opgeven, puntenwijzer">⋯</button>
+      </div>
+      <div id="strook" class="play-strip">
+        <span class="mascot" id="mascotFace">🐢</span>
+        <div class="s-txt"><div id="bubble">…</div><div id="cloudBar" class="hidden">☁️ <b>DENKWOLK</b> <span id="cloudDepth"></span><br>Hier mag alles: schuif ook Turbo's stukken. Niks telt echt!</div></div>
+        <div id="predictBar" class="hidden"><button id="predictSkip" class="btn plain small">▶ Speel maar</button></div>
+        <div id="patience" class="hidden"><div class="pat-track" id="patTrack"><i id="patFill"></i><span class="pat-turtle" id="patTurtle">🐢</span></div></div>
+      </div>
+      <div class="play-board">
+        <div class="coords-r" id="coordsR"></div>
         <div class="board-frame">
           <div id="board"></div>
           <svg id="arrows" viewBox="0 0 800 800"></svg>
         </div>
-        <div id="patience" class="patience hidden">
-          <span class="pat-label">Denk-meter</span>
-          <div class="pat-track" id="patTrack">
-            <i id="patFill"></i>
-            <span class="pat-turtle" id="patTurtle">🐢</span>
-          </div>
-          <span class="pat-flag">🏁</span>
-        </div>
-        <div id="actionRow" class="action-row"></div>
-        <div class="points-card">
-          <div class="points-title">🏅 Puntenwijzer</div>
-          <div class="points-row">
-            <span class="pt-chip"><span class="pt-glyph">♟︎</span>1</span>
-            <span class="pt-chip"><span class="pt-glyph">♞︎</span>3</span>
-            <span class="pt-chip"><span class="pt-glyph">♝︎</span>3</span>
-            <span class="pt-chip"><span class="pt-glyph">♜︎</span>5</span>
-            <span class="pt-chip"><span class="pt-glyph">♛︎</span>9</span>
-            <span class="pt-chip"><span class="pt-glyph">♚︎</span>∞</span>
-          </div>
-          <div class="points-note">Evenveel punten = eerlijke ruil. Paard tegen loper? Allebei 3, prima!
-            Minder punten geven dan pakken = winst. En de koning ruil je nooit. 😉</div>
-        </div>
+        <div class="coords-f" id="coordsF"></div>
+        <div id="eindkaart" class="eindkaart hidden"></div>
       </div>
-      <aside class="panel">
-        <div class="bubble-row">
-          <span class="mascot" id="mascotFace">🐢</span>
-          <div id="bubble" class="bubble">…</div>
-        </div>
+      <div id="onder" class="play-bottom">
+        <div id="hulpZin" class="hidden"></div>
+        <div id="actionRow" class="action-row"></div>
         <div id="taskBox" class="task hidden"></div>
-        <div id="meters" class="meters hidden"></div>
         <div id="optionsBox" class="hidden"></div>
-        <div id="gameInfo" class="hidden">
-          <div class="tray">Jij pakte: <span class="mat-diff" id="matKid"></span><div class="tray-pcs" id="trayKid"></div></div>
-          <div class="tray"><span id="trayTurboLabel">Turbo pakte:</span> <span class="mat-diff" id="matTurbo"></span><div class="tray-pcs" id="trayTurbo"></div></div>
-          <div class="toggles">
-            <button id="tglGuard" class="tgl">🛡️ Blunder-alarm</button>
-            <button id="tglPredict" class="tgl">🔮 Voorspellen</button>
-          </div>
-        </div>
-        <div id="drillStars" class="drill-stars hidden"></div>
-      </aside>
+        <div id="meters" class="meters hidden"></div>
+      </div>
     </div>
   </section>
 </main>
@@ -2423,7 +2498,7 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
    profiel van een ander apparaat (tweede iPad, straks de server). P is de
    platte weergave die de rest van de UI leest. Schrijven gaat via bump,
    setPref en addBadge, nooit rechtstreeks in P. Alleen de lokale velden
-   (streak, lastLevel, day) schrijft de UI direct; die neemt saveP mee.
+   (streak, lastLevel, day, shownBadges) schrijft de UI direct; die neemt saveP mee.
    - Tellers (xp, sterren, wins, c.*): G-Counter, per teller een map
      {apparaatId: bijdrage}. Weergave is de som, merge is per apparaat max.
      Zo telt +50 op de ene iPad en +30 op de andere op tot +80.
@@ -2434,10 +2509,11 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
    - De vorm-log (log.<spel>.<id>): G-Set van opdrachtresultaten, alleen de
      laatste 28 dagen; daar komt de vorm-score uit.
    - Vrienden (friends.<id>): per vriend een LWW-register.
-   - Streak, lastLevel, dag en weekSeen zijn per apparaat en mergen niet. */
+   - Streak, lastLevel, dag, weekSeen en shownBadges (de trofeeën die dit
+     apparaat liet zien) zijn per apparaat en mergen niet. */
 function defaultP() {
   return { name: '', xp: 0, sound: true, guard: true, predict: true, weekGoal: null,
-    wins: 0, stars: 0, streak: 0, best: 0, lastLevel: null,
+    wins: 0, stars: 0, streak: 0, best: 0, lastLevel: 0, shownBadges: [],
     theme: 'munt', badges: {}, day: null, weekSeen: null, wk: {}, log: {}, friends: {},
     c: { gamesPlayed: 0, winsL2: 0, winsL3: 0, winsOnline: 0, perfectScans: 0,
       safeCorrect: 0, best3Gold: 0, predictHits: 0, patienceBonus: 0,
@@ -2489,7 +2565,7 @@ const DEV = (() => {
 function emptyDoc() {
   return { v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: {}, max: { best: 0, goal: {} },
     log: {}, friends: {},
-    loc: { streak: 0, lastLevel: null, day: null, weekSeen: null } };
+    loc: { streak: 0, lastLevel: 0, day: null, weekSeen: null, shownBadges: [] } };
 }
 
 /* ISO-week als 'YYYY-Www', maandag als eerste dag: de week is de eenheid
@@ -2637,7 +2713,10 @@ function normDoc(raw) {
     d.loc.lastLevel = raw.loc.lastLevel == null ? null : +raw.loc.lastLevel || 0;
     d.loc.day = raw.loc.day && typeof raw.loc.day === 'object' ? raw.loc.day : null;
     d.loc.weekSeen = typeof raw.loc.weekSeen === 'string' ? raw.loc.weekSeen.slice(0, 8) : null;
-  }
+  } else d.loc.lastLevel = null;
+  /* een doc van voor deze lijst heeft elke trofee die het heeft al laten zien */
+  const getoond = (raw.loc && Array.isArray(raw.loc.shownBadges) ? raw.loc.shownBadges : Object.keys(d.set.badges)).slice(0, MAX_BADGES);
+  d.loc.shownBadges = getoond.filter((k, i) => typeof k === 'string' && d.set.badges[k] === true && getoond.indexOf(k) === i);
   return d;
 }
 
@@ -2679,7 +2758,7 @@ function migrateLegacy(o, dev) {
   for (const f of PREFS) d.lww[f] = { v: o[f], t: o[f] === defs[f] ? 0 : t };
   d.max.best = +o.best || 0;
   d.loc = { streak: +o.streak || 0, lastLevel: o.lastLevel == null ? null : o.lastLevel,
-    day: o.day || null, weekSeen: null };
+    day: o.day || null, weekSeen: null, shownBadges: Object.keys(d.set.badges) };
   return d;
 }
 
@@ -2699,6 +2778,7 @@ function viewFromDoc(d) {
   for (const wk in d.max.goal) p.xp += d.max.goal[wk];
   p.streak = +d.loc.streak || 0;
   p.lastLevel = d.loc.lastLevel == null ? null : d.loc.lastLevel;
+  p.shownBadges = d.loc.shownBadges.slice();
   p.day = d.loc.day || null;
   p.weekSeen = d.loc.weekSeen || null;
   return p;
@@ -2722,6 +2802,7 @@ loadProfile();
 function saveP() {
   DOC.loc.streak = P.streak;
   DOC.loc.lastLevel = P.lastLevel;
+  DOC.loc.shownBadges = P.shownBadges.slice();
   DOC.loc.day = P.day;
   DOC.loc.weekSeen = P.weekSeen;
   if (P.best > DOC.max.best) DOC.max.best = P.best;
@@ -2822,15 +2903,19 @@ function mergeDoc(a, b) {
   return res;
 }
 
-/* Voegt het profiel van een ander apparaat bij het onze. lastLevel is
-   afgeleid en wordt herberekend, zodat elders verdiende levels hier niet
-   alsnog een stapel feestmodals geven. De aanroeper ververst zelf de UI. */
+/* Voegt het profiel van een ander apparaat bij het onze. Wat het andere
+   apparaat verdiende, vierde dat apparaat al: een level of trofee die zo
+   binnenkomt telt hier als getoond. Wat hier verdiend is en nog op de
+   eindkaart of thuis wacht, blijft wachten. De aanroeper ververst zelf de UI. */
 function applyRemoteDoc(remote) {
   if (!remote || remote.v !== 2) return false;
   saveP();
+  const levelHier = levelIdx(P.xp), badgesHier = Object.assign({}, P.badges);
   DOC = mergeDoc(DOC, normDoc(remote));
   P = viewFromDoc(DOC);
-  P.lastLevel = levelIdx(P.xp);
+  if (P.lastLevel == null || P.lastLevel >= levelHier) P.lastLevel = levelIdx(P.xp);
+  P.shownBadges = P.shownBadges.filter(id => P.badges[id]);
+  for (const id in P.badges) if (!badgesHier[id] && !P.shownBadges.includes(id)) P.shownBadges.push(id);
   saveP();
   return true;
 }
@@ -2957,7 +3042,6 @@ function syncSoon() {
 function refreshAfterSync() {
   updateHud();
   applyTheme();
-  updateToggles();
   if (!session) renderHome();
 }
 
@@ -3233,9 +3317,7 @@ function mpStop(stil) {
   if (!stil) mpSend({ t: 'weg' });
   try { if (MP.ws) MP.ws.close(); } catch (e) {}
   MP = null;
-  const frame = document.querySelector('.board-frame');
-  if (frame) frame.classList.remove('flip');
-  $('trayTurboLabel').textContent = 'Turbo pakte:';
+  draaiBord(false);
 }
 
 /* de verbinding komt niet meer terug: eerlijk zeggen en naar huis. Ook
@@ -3420,24 +3502,18 @@ function mpBeginGame() {
   session = { kind: 'game', online: true, S: newGame(), level: 0, tips: 0,
     over: false, pending: null, myColor: MP.myColor };
   showScreen('play');
-  $('modeTitle').textContent = '🤝 Samen spelen';
-  $('roundChip').textContent = mpNaam();
-  $('trayTurboLabel').textContent = mpNaam() + ' pakte:'; /* textContent: geen escHtml */
+  $('modeTitle').textContent = '🤝 ' + mpNaam(); /* textContent: geen escHtml */
+  $('roundChip').textContent = '';
   clearBD();
-  const frame = document.querySelector('.board-frame');
-  if (frame) frame.classList.toggle('flip', MP.myColor === 'b');
+  draaiBord(MP.myColor === 'b');
   renderBoard();
   setTask(null);
   setOptions(null);
   $('drillStars').classList.add('hidden');
-  $('gameInfo').classList.remove('hidden');
   $('patience').classList.add('hidden');
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
   updateTrays();
-  updateToggles();
-  setActions([{ label: '🤝 Remise?', cls: 'plain small', fn: offerDraw, id: 'drawBtn' },
-    { label: '🏳️ Opgeven', cls: 'plain small', fn: resignAsk, id: 'mpStopBtn' }]);
-  $('actionRow').classList.add('onderaan');
+  setActions([]);
   if (MP.myColor === 'w') {
     BD.mode = 'move';
     say('Jij speelt met wit tegen ' + mpNaam() + '. Jij mag beginnen! ⬜');
@@ -3463,9 +3539,8 @@ function mpOnZet(m) {
     updateTrays();
     const st = gameStatus(session.S);
     if (st.over) { endGame(st); return; }
-    if (inCheck(session.S)) { snd.check(); showToast('SCHAAK! 👑', true); }
     BD.mode = 'move';
-    say('Jij weer! Wat wordt je plan? 💭');
+    if (inCheck(session.S)) { snd.check(); say('Schaak! Red je koning. 👑'); } else say('Jij weer! Wat wordt je plan? 💭');
   });
 }
 
@@ -3498,8 +3573,7 @@ function mpOnSync(m) {
   clearSel();
   BD.last = null;
   BD.check = inCheck(S) ? S.kings[S.turn] : null;
-  const frame = document.querySelector('.board-frame');
-  if (frame) frame.classList.toggle('flip', MP.myColor === 'b');
+  draaiBord(MP.myColor === 'b');
   renderBoard();
   updateTrays();
   /* de stand kan al uit zijn (mat tijdens het verbindingsgat): dan meteen
@@ -3522,7 +3596,7 @@ function mpRevanche() {
 function mpMaybeRevanche() {
   if (!MP) return;
   if (!(MP.revMine && MP.revTheirs)) {
-    if (MP.revTheirs && !MP.revMine) showToast(mpNaam() + ' wil revanche! 🔁', true);
+    if (MP.revTheirs && !MP.revMine) say(mpNaam() + ' wil revanche! 🔁');
     return;
   }
   closeModal();
@@ -3767,9 +3841,9 @@ async function vriendVragen() {
      Allebei apart vragen zou twee geheimen maken, en van het tweede weet
      de ander niets. */
   if (MP.hunVraag) { dropModal('vriendvraag'); vriendJa(); return; }
-  try { MP.ecdh = await ecdhStart(); } catch (e) { showToast('Dat lukt hier niet 😕'); return; }
+  try { MP.ecdh = await ecdhStart(); } catch (e) { say('Dat lukt hier niet 😕'); vriendKnopTerug(); return; }
   mpSend({ t: 'vriend?', pub: MP.ecdh.pub });
-  showToast('Gevraagd! Wachten op ' + mpNaam() + '… 🤝', true);
+  say('Gevraagd! Wachten op ' + mpNaam() + '… 🤝');
 }
 async function vriendJa() {
   if (!MP || MP.viaFriend || !MP.hunVraag) return;
@@ -3781,7 +3855,7 @@ async function vriendJa() {
     mpSend({ t: 'vriend', pub: e.pub });
     await bewaarVriend(k, false);
     vriendKlaar(k);
-  } catch (err) { showToast('Dat lukte niet 😕'); }
+  } catch (err) { say('Dat lukte niet 😕'); vriendKnopTerug(); }
 }
 function mpOnVriendVraag(m) {
   if (!MP || MP.viaFriend || !geldigePub(m.pub)) return;
@@ -3816,14 +3890,21 @@ function mpOnVriendVraag(m) {
 }
 async function mpOnVriend(m) {
   if (!MP || !MP.ecdh) return;
-  if (m.nee === true) { MP.ecdh = null; showToast(mpNaam() + ' wil nu even niet 🙂'); return; }
+  if (m.nee === true) { MP.ecdh = null; say(mpNaam() + ' wil nu even niet 🙂'); vriendKnopTerug(); return; }
   if (!geldigePub(m.pub)) return;
   try {
     const k = await ecdhFinish(MP.ecdh.kp, m.pub);
     MP.ecdh = null;
     await bewaarVriend(k, true);
     vriendKlaar(k);
-  } catch (err) { MP.ecdh = null; }
+  } catch (err) { MP.ecdh = null; say('Dat lukte niet 😕'); vriendKnopTerug(); }
+}
+/* na een nee of een fout kan het kind het opnieuw vragen; op het speelscherm staat geen melding, dus de zin staat in de strook */
+function vriendKnopTerug() {
+  const b = $('mpVriend');
+  if (!b) return;
+  b.disabled = false;
+  b.textContent = '🤝 Vrienden worden';
 }
 async function bewaarVriend(k, host) {
   const id = (await sha256hex(k)).slice(0, 16);
@@ -4203,6 +4284,8 @@ function levelIdx(xp) {
 /* Level-up kan ook zonder XP-verandering (een meesterproef halen), dus we
    vergelijken met de laatst gevierde rang in plaats van voor/na addXP. */
 function checkLevelUp() {
+  /* op een speelscherm is het level een badge op de eindkaart; het venster komt thuis */
+  if (speelschermOpen()) return;
   const cur = levelIdx(P.xp);
   if (P.lastLevel == null || cur < P.lastLevel) { P.lastLevel = cur; saveP(); return; }
   if (cur === P.lastLevel) return;
@@ -4326,14 +4409,31 @@ const cellEls = {};
       const sq = rank * 16 + file;
       const b = document.createElement('button');
       b.className = 'cell ' + (((rank + file) % 2 === 1) ? 'light' : 'dark');
-      if (file === 0) { const c = document.createElement('span'); c.className = 'coord rank'; c.textContent = rank + 1; b.appendChild(c); }
-      if (rank === 0) { const c = document.createElement('span'); c.className = 'coord file'; c.textContent = 'abcdefgh'[file]; b.appendChild(c); }
       b.addEventListener('click', () => onCell(sq));
       boardEl.appendChild(b);
       cellEls[sq] = b;
     }
   }
+  zetCoords(false);
 })();
+/* de letters en cijfers staan naast het bord en volgen het omgedraaide bord */
+function zetCoords(zwart) {
+  const r = [8, 7, 6, 5, 4, 3, 2, 1], f = 'abcdefgh'.split('');
+  if (zwart) { r.reverse(); f.reverse(); }
+  $('coordsR').innerHTML = r.map(x => '<span>' + x + '</span>').join('');
+  $('coordsF').innerHTML = f.map(x => '<span>' + x + '</span>').join('');
+}
+function draaiBord(zwart) {
+  const frame = document.querySelector('.board-frame');
+  if (frame) frame.classList.toggle('flip', zwart);
+  zetCoords(zwart);
+}
+/* iOS 15 kent geen dvh, en 100vh is in een Safari-tab hoger dan wat je ziet */
+function setAppH() { document.documentElement.style.setProperty('--app-h', innerHeight + 'px'); }
+addEventListener('resize', setAppH);
+/* direct na het draaien meldt iOS nog de oude innerHeight */
+addEventListener('orientationchange', () => setTimeout(setAppH, 300)); /* compat-allow api.HTMLBodyElement.orientationchange_event: waar hij ontbreekt vangt resize het al op */
+setAppH();
 
 const BD = { mode: 'off', sel: null, dots: new Set(), marks: new Set(), last: null,
   check: null, glow: new Set(), spy: new Set(), result: null, arrows: [] };
@@ -4401,7 +4501,7 @@ function animateMove(m, done) {
   const fr = fromEl.getBoundingClientRect(), tr = toEl.getBoundingClientRect();
   const g = document.createElement('span');
   g.className = 'ghost';
-  g.style.width = fr.width + 'px'; g.style.height = fr.height + 'px';
+  g.style.width = fr.width + 'px'; g.style.height = fr.height + 'px'; g.style.fontSize = (fr.width * .72) + 'px';
   /* schermcoordinaten op document.body (position: fixed): rotatie-
      onafhankelijk, dus ook goed onder .board-frame.flip */
   g.style.left = fr.left + 'px'; g.style.top = fr.top + 'px';
@@ -4438,9 +4538,56 @@ function playMove(m, cb) {
 }
 
 /* ---------- panel helpers ---------- */
-function say(txt) { $('bubble').innerHTML = txt; }
-function setTask(html) {
+function say(txt) {
+  $('bubble').innerHTML = txt;
+  const s = $('strook'), t = s.querySelector('.s-txt');
+  s.classList.remove('klein');
+  /* past een zin niet in twee regels, dan een stap kleiner in drie; de strook scrolt nooit */
+  if (t && t.scrollHeight > t.clientHeight + 1) s.classList.add('klein');
+}
+/* in de strook alleen de vraag, die past altijd; de zin die de opdracht uitlegt staat onder het bord,
+   zodat geen uitleg halverwege een zin wordt afgeknipt */
+const OPDRACHTEN = {
+  'scan.attacked': ['Welke stukken van jou valt Turbo aan?', 'Tik ze allemaal aan. Een stuk is aangevallen als een groen stuk het kan slaan als Turbo aan zet is.'],
+  'scan.capture': ['Welke groene stukken kun jij nu slaan?', 'Tik ze allemaal aan. Kijk bij al je witte stukken wat ze kunnen pakken.'],
+  'scan.mobility': ['Waar kan je {stuk} op {veld} heen?', 'Tik alle velden aan, ook de verre. Het stuk dat oplicht is het.'],
+  'scan.free': ['Welk groen stuk sla je met winst?', 'Gratis is het mooist. Een ruil telt ook, als jij meer pakt dan Turbo terugpakt. Soms zijn er meer.'],
+  'scan.threat': ['Wat kan Turbo nu met winst pakken?', 'Doe alsof jij past. Tik je stukken aan die Turbo dan wint: hij slaat, en jij pakt minder terug.'],
+  'best3.best3': ['Welke zet is de beste voor wit? Tik er een aan.', null],
+  'best3.safe': ['Is {zet} veilig?', 'De pijl laat de zet zien. Kijk wat Turbo daarna kan doen: pakt hij dan iets van je af?'],
+  'trucs.vork': ['Vind de vork! 🍴', 'Eén zet die twee stukken van Turbo tegelijk aanvalt, vanaf een veilig veld.'],
+  'trucs.penning': ['Zet een penning! 📌', 'Zet een stuk van Turbo vast: er staat iets belangrijkers achter, zoals de koning of de dame.'],
+  'trucs.spies': ['Zet een spies! 🍢', 'Val de koning of de dame aan. Die moet weg, en dan pak je wat erachter staat.'],
+  'trucs.aftrek': ['Vind de aftrekaanval! 🎭', 'Zet een stuk opzij, zodat jouw stuk erachter ineens aanvalt.'],
+  'trucs.mat1': ['Mat in één zet! 👑', 'Geef schaak zo dat Turbo\'s koning zich op geen enkele manier kan redden.'],
+  'trucs.mat2': ['Mat in twee zetten! 👑', 'Eerst een zet waarna Turbo de mat niet meer kan tegenhouden. Turbo antwoordt, en dan geef jij mat.'],
+  'koning.schaak': ['Je staat schaak! Red je koning.', 'Weglopen, ertussen zetten of de aanvaller slaan. {goed}'],
+  'koning.mat1': ['Turbo dreigt mat in één!', 'Doe je niets, dan sta je de volgende zet mat. Welke zet houdt dat tegen?'],
+  'koning.mat2': ['Turbo dreigt mat in twee!', 'Turbo heeft een plan van twee zetten. Zie wat hij wil, en houd het tegen.'],
+  'koning.stuk': ['Red je stuk! 🛡️', 'Een stuk van jou hangt. Zet het weg, dek het, zet er iets tussen, of val zelf iets aan.'],
+  'opening.coach': ['Jouw zet. Wat bouwt je stelling op?', 'Pak het midden, haal een stuk naar buiten, of breng je koning veilig. Kijk ook wat Turbo dreigt.'],
+  'opening.pad': ['Zet {k} van {m}: speel het pad na.', '{hint}']
+};
+function vul(t, w) { return t == null ? null : t.replace(/\{(\w+)\}/g, (x, k) => (w && k in w ? w[k] : x)); }
+function hulpZin(txt) {
+  const h = $('hulpZin');
+  h.innerHTML = txt || '';
+  h.classList.toggle('hidden', !txt);
+}
+function opdracht(vraag, hulp) { say(vraag); hulpZin(hulp); }
+function opdrachtVan(sleutel, w) { opdracht(vul(OPDRACHTEN[sleutel][0], w), vul(OPDRACHTEN[sleutel][1], w)); }
+/* de strook laat een ding tegelijk zien: de voorspelvraag, de denkwolk of Turbo's zin */
+function strookModus(m) {
+  $('strook').classList.toggle('predict', m === 'predict');
+  $('strook').classList.toggle('cloud', m === 'cloud');
+  $('predictBar').classList.toggle('hidden', m !== 'predict');
+  $('cloudBar').classList.toggle('hidden', m !== 'cloud');
+}
+/* de uitleg na een antwoord staat onder het bord, met Volgende erboven;
+   de openingsles zet er ook de opdracht van de volgende zet, zonder Volgende */
+function setTask(html, uitleg) {
   const t = $('taskBox');
+  $('onder').classList.toggle('uitleg', html != null && uitleg !== false);
   if (html == null) { t.classList.add('hidden'); return; }
   t.innerHTML = html;
   t.classList.remove('hidden');
@@ -4455,7 +4602,6 @@ const actionBtns = {};
 function setActions(list) {
   const row = $('actionRow');
   row.innerHTML = '';
-  row.classList.remove('onderaan'); /* standaard vlak onder het bord; mp zet hem laag */
   for (const k in actionBtns) delete actionBtns[k];
   for (const a of list) {
     const b = document.createElement('button');
@@ -4476,7 +4622,7 @@ function spin(show, txt) {
    Met cancelable=true krijgt de modal een ✕ en sluit hij ook via een tik
    naast de kaart of Escape. Zonder die vlag sluit alleen een eigen knop,
    zodat keuzes met gevolgen (wissen, level-up, verbinden) bewust blijven. */
-let modalQueue = [], modalOpen = false, modalCancelable = false, modalKey = null;
+let modalQueue = [], modalOpen = false, modalCancelable = false, modalKey = null, naVensterFn = null;
 function renderModal(html, setup, cancelable, key) {
   modalCancelable = !!cancelable;
   modalKey = key || null;
@@ -4505,7 +4651,10 @@ function closeModal() {
   modalKey = null;
   $('overlay').classList.add('hidden');
   modalQueue = [];
+  if (naVensterFn) { const f = naVensterFn; naVensterFn = null; f(); }
 }
+/* een melding die pas komt als het kind de vensters heeft weggetikt: een venster verbergt hem anders meteen */
+function naVensters(fn) { if (modalOpen) naVensterFn = fn; else fn(); }
 /* Een vraag waarvan het antwoord niet meer telt mag niet alsnog gesteld
    worden: wachtte hij in de rij, dan verdwijnt hij hier. */
 function dropModal(key) {
@@ -4535,7 +4684,10 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && modalOpen && modalCancelable) closeModal();
 });
 let toastTimer = 0;
+function speelschermOpen() { return !$('scr-play').classList.contains('hidden'); }
 function showToast(txt, gold, ms) {
+  /* op een speelscherm is elke plek bezet: daar nooit een melding */
+  if (speelschermOpen()) return;
   const t = $('toast');
   const n = t.cloneNode(false);
   n.textContent = txt;
@@ -4557,12 +4709,15 @@ document.addEventListener('pointerdown', e => {
 function showScreen(name) {
   $('scr-home').classList.toggle('hidden', name !== 'home');
   $('scr-play').classList.toggle('hidden', name !== 'play');
+  document.body.classList.toggle('speelt', name === 'play');
+  sluitEindkaart();
+  $('play').classList.toggle('oefening', name === 'play' && !!session && session.kind !== 'game');
+  setAppH();
   try { window.scrollTo(0, 0); } catch (e) {}
   if (name === 'play') {
     $('backBtn').textContent = session && session.online ? '← Home' : '‹ Pauze';
     $('bewaard').classList.add('hidden');
     terugTab = laatsteTab;
-    try { $('board').scrollIntoView({ block: 'nearest' }); } catch (e) {}
   }
 }
 
@@ -4607,43 +4762,48 @@ const PATTERNS = {
 function patName(S, sq) { return NAME_NL[S.board[sq].toLowerCase()]; }
 
 /* Welk patroon maakt zet m (op positie S, vóór de zet)? Voor de duiding. */
-function patternCallout(S, m) {
-  const info = patternsAfterMove(S, m);
-  if (info.mate) return null;
+/* een zet kan meer trucs tegelijk zijn; met een voorkeur (de truc van de opdracht) wint die, anders de eerste */
+function patternCallout(S, m, voorkeur) {
+  const alle = patternCallouts(S, m);
+  return alle.find(c => c.key === voorkeur) || alle[0] || null;
+}
+function patternCallouts(S, m) {
+  const info = patternsAfterMove(S, m), uit = [];
+  if (info.mate) return uit;
   const disKing = info.discovered.find(x => x.isKing);
   if (disKing) {
-    return { key: 'aftrek', info,
+    uit.push({ key: 'aftrek', info,
       what: 'AFTREKSCHAAK! 🎭 Het stuk erachter geeft ineens schaak!',
-      squares: [disKing.from, disKing.target] };
+      squares: [disKing.from, disKing.target] });
   }
   if (info.safe && info.fork.length >= 2) {
     const names = info.fork.map(t => patName(S, t));
-    return { key: 'vork', info,
-      what: 'VORK! 🍴 Eén zet valt ' + names.join(' én ') + ' tegelijk aan!',
-      squares: info.fork.slice() };
+    uit.push({ key: 'vork', info,
+      what: 'VORK! 🍴 Eén zet valt ' + (names.length > 1 ? names.slice(0, -1).join(', ') + ' en ' + names[names.length - 1] : names[0]) + ' tegelijk aan.',
+      squares: info.fork.slice() });
   }
   if (info.safe && info.skewer) {
     makeMove(S, m);
     const ft = S.board[info.skewer.front].toLowerCase();
     unmakeMove(S);
     if (ft === 'k' || ft === 'q') {
-      return { key: 'spies', info,
-        what: 'SPIES! 🍢 De ' + NAME_NL[ft] + ' moet vluchten, en dan pak je wat erachter staat!',
-        squares: [info.skewer.front, info.skewer.back] };
+      uit.push({ key: 'spies', info,
+        what: 'SPIES! 🍢 De ' + NAME_NL[ft] + ' moet vluchten, en dan pak je wat erachter staat.',
+        squares: [info.skewer.front, info.skewer.back] });
     }
   }
   if (info.safe && info.pin && patternMatches(S, m, 'penning', info)) {
-    return { key: 'penning', info,
+    uit.push({ key: 'penning', info,
       what: 'PENNING! 📌 De ' + patName(S, info.pin.front) + ' kan niet meer weg!',
-      squares: [info.pin.front, info.pin.back] };
+      squares: [info.pin.front, info.pin.back] });
   }
-  if (info.safe && info.discovered.length) {
+  if (info.safe && info.discovered.length && !disKing) {
     const d = info.discovered[0];
-    return { key: 'aftrek', info,
+    uit.push({ key: 'aftrek', info,
       what: 'AFTREKAANVAL! 🎭 Het stuk erachter valt ineens aan!',
-      squares: [d.from, d.target] };
+      squares: [d.from, d.target] });
   }
-  return null;
+  return uit;
 }
 
 function countPattern(key) {
@@ -4668,16 +4828,17 @@ function renderPatBook() {
 /* ---------- session ---------- */
 let session = null;
 
-function goHome(tab) {
+function goHome(tab, daarna) {
   if (INV) inviteClear(); /* wie wegloopt laat geen briefje liggen */
+  /* een level of trofee die op het speelscherm wachtte, krijgt thuis zijn venster; een melding komt daarna */
+  setTimeout(() => { thuisVieren(); if (daarna) naVensters(daarna); }, 0);
   if (MP) mpStop(); /* weglopen uit een online potje = netjes gedag zeggen */
   session = null;
   clearBD();
   closeModal();
   spin(false);
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
   $('patience').classList.add('hidden');
-  $('cloudBar').classList.add('hidden');
   $('meters').classList.add('hidden');
   const cloudFrame = document.querySelector('.board-frame');
   if (cloudFrame) cloudFrame.classList.remove('cloud', 'flip');
@@ -4733,13 +4894,20 @@ function leesPotje() {
   } catch (e) { return { kapot: true }; }
 }
 /* een potje zonder zet is er nog niet: dan staat er ook niets */
+function potjeInhoud() {
+  const S = session.cloud ? session.cloud.realS : session.S;
+  return { level: session.level, moves: S.hist.map(h => moveKey(h.m)), tips: session.tips,
+    drawAsked: session.drawAsked == null ? null : session.drawAsked, started: session.started, patXP: session.patXP || 0 };
+}
 function bewaarPotje() {
   if (!session || session.kind !== 'game' || session.online || session.over) return;
-  const S = session.cloud ? session.cloud.realS : session.S;
-  if (!S.hist.length) { opslag(POTJE_KEY, null); $('bewaard').classList.add('hidden'); return; }
-  const gelukt = opslag(POTJE_KEY, JSON.stringify({ v: 1, level: session.level, moves: S.hist.map(h => moveKey(h.m)),
-    tips: session.tips, drawAsked: session.drawAsked == null ? null : session.drawAsked,
-    started: session.started, updated: Date.now(), patXP: session.patXP || 0 }));
+  const inhoud = potjeInhoud();
+  if (!inhoud.moves.length) { opslag(POTJE_KEY, null); session.laatstBewaard = null; $('bewaard').classList.add('hidden'); return; }
+  /* wat al zo bewaard staat, hoeft niet nog eens: een mislukte herhaling zou een verlies melden dat er niet is */
+  const sleutel = JSON.stringify(inhoud);
+  if (sleutel === session.laatstBewaard) { toonBewaard(true); return; }
+  const gelukt = opslag(POTJE_KEY, JSON.stringify(Object.assign({ v: 1 }, inhoud, { updated: Date.now() })));
+  if (gelukt) session.laatstBewaard = sleutel;
   toonBewaard(gelukt);
 }
 /* De sterren van een rondje staan al in het profiel; een rondje dat niet te
@@ -4815,8 +4983,7 @@ function pauze() {
       r ? '✔ Bewaard. Je kunt later verder bij opdracht ' + (r.round + 1) + '.' :
       'Nog geen opdracht af, dus er is nog niets bewaard. Volgende keer begin je bij opdracht 1.';
   }
-  goHome(terugTab);
-  if (melding) showToast(melding, false, 6000);
+  goHome(terugTab, melding ? () => showToast(melding, false, 6000) : null);
 }
 
 /* De Verder-kaart: wat er bezig is, het bewaarde potje eerst */
@@ -4870,9 +5037,8 @@ function startDrill(kind) {
   session = { kind, S: null, round: verder ? verder.round : 0, earned: verder ? verder.earned : 0, task: null, phase: 'idle', lastType: null };
   showScreen('play');
   $('modeTitle').textContent = MODE_TITLES[kind];
-  $('gameInfo').classList.add('hidden');
   $('patience').classList.add('hidden');
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
   $('drillStars').classList.remove('hidden');
   setTask(null); setOptions(null);
   updateDrillStars();
@@ -4882,10 +5048,8 @@ function startDrill(kind) {
 
 function updateDrillStars() {
   if (!session || session.kind === 'game') return;
-  const vorm = vormTxt(session.kind);
-  $('drillStars').innerHTML = '⭐ Sterren dit rondje: <b>' + session.earned + '</b>' +
-    (P.streak >= 2 ? ' &nbsp;·&nbsp; 🔥 <b>' + P.streak + '</b> op een rij!' : '') +
-    (vorm ? ' &nbsp;·&nbsp; ' + vorm : '');
+  /* tijdens het oefenen alleen de sterren: de vorm staat op Ik */
+  $('drillStars').innerHTML = '⭐ ' + session.earned;
 }
 
 function nextRound() {
@@ -4894,9 +5058,11 @@ function nextRound() {
   session.S = null;
   renderBoard();
   setOptions(null);
+  setTask(null);
+  hulpZin(null);
   session.round++;
   if (session.round > 5) { drillSummary(); return; }
-  $('roundChip').textContent = 'Opdracht ' + session.round + ' van 5';
+  $('roundChip').textContent = session.round + ' van 5';
   setActions([]);
   spin(true, pick(SPIN_LINES));
   later(() => {
@@ -4931,14 +5097,6 @@ function sameMove(a, b) { return a.from === b.from && a.to === b.to && (a.promo 
 /* --- trucendrills: vind de vork/penning/spies/aftrek/matzet --- */
 const TRUC_TYPES = ['vork', 'vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat1', 'mat2'];
 const TRUC_DIFF = { vork: .4, penning: .6, spies: .6, aftrek: .7, mat1: .5, mat2: .9 };
-const TRUC_TEXTS = {
-  vork: ['Vind de VORK! 🍴', 'Speel een zet die twee stukken van Turbo tegelijk aanvalt. Kies wel een veilig veld!'],
-  penning: ['Zet een PENNING! 📌', 'Zet een stuk van Turbo vast: het mag niet meer weg, omdat er iets belangrijkers achter staat.'],
-  spies: ['Zet een SPIES! 🍢', 'Val de koning of dame aan zodat die moet vluchten, en pak daarna wat erachter staat.'],
-  aftrek: ['AFTREKAANVAL! 🎭', 'Verplaats een stuk zodat het stuk erachter ineens aanvalt.'],
-  mat1: ['SCHAAKMAT in één zet! 👑', 'Turbo’s koning kan nergens meer heen. Vind de winnende zet!'],
-  mat2: ['SCHAAKMAT in twéé zetten! 👑👑', 'Eerst een zet waar Turbo niks tegen kan doen, dan mat. Wat je ook probeert: Turbo mag antwoorden, en dan moet het mat zijn.']
-};
 
 function buildTrucs() {
   let type = pick(TRUC_TYPES);
@@ -4955,13 +5113,8 @@ function buildTrucs() {
   task.hintUsed = false;
   BD.mode = 'puzzle';
   renderBoard();
-  const tx = TRUC_TEXTS[task.type];
-  setTask('<b>' + tx[0] + '</b><div class="sub">' + tx[1] + '<br>' + PATTERNS[task.type].e + ' ' +
-    PATTERNS[task.type].les + '</div>');
-  say(pick(['Deze truc zit verstopt in het bord. Vind hem! 🎒',
-    'Echte schakers zien deze meteen… jij straks ook! 🐢',
-    'Speur rustig. De truc is er, beloofd!']));
-  setActions([{ label: '💡 Hint', cls: 'plain small', fn: trucHint, id: 'hint' }]);
+  opdrachtVan('trucs.' + task.type);
+  setActions([{ label: '💡 Hint', cls: 'plain small hint', fn: trucHint, id: 'hint' }]);
   return true;
 }
 
@@ -4972,7 +5125,7 @@ function trucHint() {
   t.hintUsed = true;
   BD.glow.add(t.answers[0].m.from);
   renderBoard();
-  say('Psst… kijk eens goed naar dat glimmende stuk! (Je kunt nu nog maximaal 2 sterren halen.)');
+  hulpZin('Kijk naar het stuk dat nu oplicht. Met deze hint is de opdracht nog 2 sterren waard.');
   if (actionBtns.hint) actionBtns.hint.disabled = true;
 }
 
@@ -4992,14 +5145,13 @@ function puzzleAttempt(m) {
     playMove(m, () => {
       const S = session.S;
       const reply = rootScores(S, 2)[0];
-      say('Goed! Turbo probeert nog te ontsnappen met <b>' + moveNameNL(S, reply.m) + '</b>… 🐢');
+      hulpZin('Goed zo! Turbo antwoordt met <b>' + moveNameNL(S, reply.m) + '</b>. Nu jij: geef mat.');
       later(() => {
         playMove(reply.m, () => {
           session.mate2Answers = matingMoves(S, 1);
           session.phase = 'puzzle2';
           BD.mode = 'puzzle';
           renderBoard();
-          say('Nu jij: geef SCHAAKMAT! 👑');
         });
       }, 700);
     });
@@ -5008,15 +5160,15 @@ function puzzleAttempt(m) {
   if (patternMatches(session.S, m, type, info)) {
     session.phase = 'review';
     BD.mode = 'off';
-    const co = type === 'mat1' ? null : patternCallout(session.S, m);
+    const co = type === 'mat1' ? null : patternCallout(session.S, m, type);
     playMove(m, () => {
       if (co) BD.spy = new Set(co.squares);
       BD.glow.clear();
       renderBoard();
       countPattern(type);
       const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
-      awardRound(stars, (type === 'mat1' ? 'SCHAAKMAT! 👑 Turbo kan geen kant meer op!' :
-        (co ? co.what : 'Gevonden!')) + ' Zo herken je een ' + PATTERNS[type].n.toLowerCase() + '!');
+      awardRound(stars, type === 'mat1' ? 'Schaakmat! 👑' : 'Gevonden!',
+        type === 'mat1' || !co ? 'Turbo\'s koning kan zich niet meer redden.' : co.what);
     });
     return;
   }
@@ -5026,26 +5178,25 @@ function puzzleAttempt(m) {
   snd.bad();
   const near = (type !== 'mat1' && type !== 'mat2' && patternMatches(session.S, m, type,
     Object.assign({}, info, { safe: true })) && !info.safe) ?
-    'Bijna! Dat lijkt op een ' + PATTERNS[type].n.toLowerCase() +
-    ', maar Turbo kan je stuk daar zó pakken. Zoek een véilig veld!' : null;
+    'Bijna: dat lijkt op een ' + PATTERNS[type].n.toLowerCase() +
+    ', maar Turbo kan je stuk daar pakken. Zoek een veilig veld.' : null;
   if (session.tries >= 2) {
     session.phase = 'review';
     BD.mode = 'off';
     const ans = t.answers[0];
     const name = moveNameNL(session.S, ans.m);
     if (type === 'mat2') { revealMate2(ans.m); return; }
-    const co = type === 'mat1' ? null : patternCallout(session.S, ans.m);
+    const co = type === 'mat1' ? null : patternCallout(session.S, ans.m, type);
     BD.arrows = [{ from: ans.m.from, to: ans.m.to, cls: 'a-leaf' }];
     playMove(ans.m, () => {
       if (co) BD.spy = new Set(co.squares);
       BD.glow.clear();
       renderBoard();
-      awardRound(0, 'Kijk: <b>' + name + '</b>. ' + (co ? co.what : 'Dát is hem!') +
-        ' Volgende keer zie jij hem! 💪');
+      awardRound(0, 'Zo zit het', co ? '<b>' + name + '</b>: ' + co.what : 'Dit was mat: <b>' + name + '</b>.');
     });
   } else {
-    say(near || pick(['Die doet iets anders. Probeer nog eens! Denk aan: ' + PATTERNS[type].les.toLowerCase(),
-      'Nog niet de truc! Kijk naar álle stukken van Turbo. Nog één poging!']));
+    hulpZin(near || (type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + PATTERNS[type].n.toLowerCase() + '.') +
+      ' Kijk naar alle stukken van Turbo, en probeer nog een zet.');
   }
 }
 
@@ -5058,7 +5209,7 @@ function mate2Second(m) {
     playMove(m, () => {
       countPattern('mat2');
       const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
-      awardRound(stars, 'SCHAAKMAT in twee! 👑👑 Eerst de dwingende zet, dan de genadeklap. Zo denkt een echte schaker!');
+      awardRound(stars, 'Mat in twee! 👑', 'Na je eerste zet kon Turbo de mat niet meer tegenhouden. Een plan!');
     });
     return;
   }
@@ -5075,9 +5226,9 @@ function mate2Second(m) {
     playMove(ans, () => {
       BD.arrows = [];
       renderBoard();
-      awardRound(0, 'Dit was hem: <b>' + ansName + '</b> is mat. Je eerste zet was al goed, de tweede zie je de volgende keer! 💪');
+      awardRound(0, 'Zo zit het', 'Dit was mat: <b>' + ansName + '</b>. Je eerste zet was al goed!');
     });
-  } else say('Nog geen mat: Turbo’s koning kan dan nog weg. Kijk welk veld je nog niet dekt! 👑');
+  } else hulpZin('Nog geen mat: Turbo kan zich dan nog redden. Probeer nog een zet.');
 }
 /* de hele matvoering voorspelen na twee missers */
 function revealMate2(first) {
@@ -5098,7 +5249,7 @@ function revealMate2(first) {
           if (!session || session.kind !== 'trucs' || !mate) return;
           BD.arrows = [{ from: mate.from, to: mate.to, cls: 'a-leaf' }];
           playMove(mate, () => {
-            awardRound(0, 'Kijk: eerst <b>' + firstName + '</b>, Turbo moet wel, en dan mat. Zo’n plan in twee stappen zie jij de volgende keer! 💪');
+            awardRound(0, 'Zo zit het', 'Eerst <b>' + firstName + '</b>: dan kan Turbo de mat niet meer tegenhouden.');
           });
         }, 600);
       });
@@ -5124,26 +5275,9 @@ function buildScan() {
   if (type === 'mobility') BD.glow.add(task.extra);
   renderBoard();
   let main, sub;
-  if (type === 'threat') {
-    main = 'Wat dreigt Turbo? Tik jóuw stukken aan die hij nu met winst kan pakken, als hij aan zet zou zijn!';
-    sub = 'Doe alsof jij past. Kijk bij elk stuk van Turbo: wat kan hij dan slaan, en pak jij dan iets terug?';
-  } else if (type === 'attacked') {
-    main = 'Tik al jóuw witte stukken aan die Turbo aanvalt!';
-    sub = 'Een stuk is aangevallen als een groen stuk het zou kunnen slaan. Kijk bij élk wit stuk!';
-  } else if (type === 'capture') {
-    main = 'Tik alle gróene stukken aan die jij nu kunt slaan!';
-    sub = 'Kijk bij al je witte stukken: wat kunnen ze pakken?';
-  } else if (type === 'mobility') {
-    main = 'Waar kan jouw ' + NAME_NL[task.S.board[task.extra].toLowerCase()] + ' op ' +
-      alg(task.extra) + ' allemaal naartoe? Tik álle velden aan!';
-    sub = 'Het glimmende stuk. Vergeet de verre velden niet!';
-  } else {
-    main = 'Welk groen stuk kun je met WINST slaan? Tik het aan!';
-    sub = 'Helemaal gratis is het mooiste! Maar een goede ruil telt ook: dan win jij méér punten dan Turbo terugpakt. Soms zijn er twee!';
-  }
-  setTask('<b>' + main + '</b><div class="sub">' + sub + '</div>');
-  say(pick(['Speuren maar! Neem rustig de tijd. 🔍', 'Kijk het héle bord rond, hoekje voor hoekje!', 'Echte speurneuzen missen niks! 👀']));
-  setActions([{ label: 'Klaar! ✔', cls: 'leaf', fn: scanCheck }]);
+  opdrachtVan('scan.' + type, type === 'mobility' ?
+    { stuk: NAME_NL[task.S.board[task.extra].toLowerCase()], veld: alg(task.extra) } : null);
+  setActions([{ label: 'Klaar! ✔', cls: 'sun', fn: scanCheck }]);
   return true;
 }
 
@@ -5161,18 +5295,8 @@ function scanCheck() {
   const errs = bad.size + missed.size;
   const stars = errs === 0 ? 3 : (errs === 1 ? 2 : (good.size >= Math.ceil(T.size / 2) ? 1 : 0));
   if (stars === 3) { bump('c.perfectScans', 1); }
-  const msgs = {
-    3: 'PERFECT gespeurd! Alles gevonden! 🎉',
-    2: 'Bijna perfect! Eéntje fout. Turbo legt het uit! 👇',
-    1: 'Goed geprobeerd! Turbo legt uit wat je miste. 👇',
-    0: 'Geen zorgen, zo leer je het! Turbo legt alles uit. 👇'
-  };
-  const expl = scanExplanations(session.task, bad, missed);
-  if (expl.length) {
-    setTask('<b>Zo zit het:</b><div class="sub">' +
-      expl.map(e => '<div class="expl-line">' + e + '</div>').join('') + '</div>');
-  }
-  awardRound(stars, msgs[stars]);
+  const expl = scanExplanations(session.task, bad, missed).map(e => e.replace(/^[^A-Za-zÀ-ÿ<]+/, ''));
+  awardRound(stars, stars === 3 ? 'Perfect gespeurd!' : 'Zo zit het', expl.length ? expl : 'Alles gevonden. 🎉');
 }
 
 /* Kid points from centipawns, consistent with the Puntenwijzer (queen 950 -> 9). */
@@ -5212,7 +5336,7 @@ function scanExplanations(task, bad, missed) {
     }
   } else if (task.type === 'mobility') {
     const hn = NAME_NL[S.board[task.extra].toLowerCase()];
-    if (missed.size) out.push('🔴 De rode velden: daar kon je ' + hn + ' óók naartoe. Tel ze eens na!');
+    if (missed.size) out.push('De omrande velden: daar kon je ' + hn + ' óók naartoe. Tel ze eens na!');
     for (const sq of bad) {
       const p = S.board[sq];
       if (sq === task.extra)
@@ -5289,15 +5413,10 @@ function buildSafe() {
   BD.mode = 'off';
   BD.arrows = [{ from: task.move.from, to: task.move.to, cls: 'a-sun' }];
   renderBoard();
-  setTask('Jij (wit) wilt deze zet doen:<br><b>' + moveNameNL(task.S, task.move) + '</b>' +
-    '<div class="sub">Denk éérst vooruit: wat kan Turbo dáárna allemaal doen?</div>');
-  say('Is dit veilig? Of pakt Turbo dan iets van je af? 🤔');
-  setOptions('<div class="answer-row">' +
-    '<button id="ansSafe" class="btn leaf">✅ Veilig!</button>' +
-    '<button id="ansTrap" class="btn coral">⚠️ Valstrik!</button></div>');
-  $('ansSafe').addEventListener('click', () => safeAnswer(false));
-  $('ansTrap').addEventListener('click', () => safeAnswer(true));
-  setActions([]);
+  opdrachtVan('best3.safe', { zet: moveNameNL(task.S, task.move) });
+  /* de antwoorden zijn de onderste rij, zoals Klaar!: bovenin staat na het antwoord Volgende */
+  setActions([{ label: '✅ Veilig!', cls: 'leaf', fn: () => safeAnswer(false), id: 'ansSafe' },
+    { label: '⚠️ Valstrik!', cls: 'coral', fn: () => safeAnswer(true), id: 'ansTrap' }]);
   return true;
 }
 
@@ -5305,6 +5424,7 @@ function safeAnswer(saidTrap) {
   if (!session || session.phase !== 'answer') return;
   session.phase = 'review';
   setOptions(null);
+  setActions([]);
   const t = session.task;
   const correct = saidTrap === t.trap;
   if (correct) { bump('c.safeCorrect', 1); }
@@ -5317,18 +5437,17 @@ function safeAnswer(saidTrap) {
         renderBoard();
         later(() => {
           playMove(t.punish, () => {
-            awardRound(correct ? 3 : 0, correct ?
-              'Goed gezien, detective! 🕵️ Het wás een valstrik: <b>' + pn + '</b>.' :
-              'Oei, het was een valstrik! Kijk: <b>' + pn + '</b>. Denk eraan: eerst kijken wat Turbo terug kan doen!');
+            awardRound(correct ? 3 : 0, correct ? 'Goed gezien! 🕵️' : 'Het was een valstrik',
+              correct ? 'Het was een valstrik: Turbo speelt dan <b>' + pn + '</b>.' :
+                'Turbo speelt dan <b>' + pn + '</b>. Kijk eerst wat Turbo terug kan doen.');
           });
         }, 650);
       }, 500);
     });
   } else {
     playMove(t.move, () => {
-      awardRound(correct ? 3 : 0, correct ?
-        'Klopt! Deze zet is veilig. Turbo kan niks afpakken. 🎉' :
-        'Deze was juist véilig! Turbo kon niks pakken. Niet overal spoken zien 😉');
+      awardRound(correct ? 3 : 0, correct ? 'Klopt, veilig! 🎉' : 'Deze was veilig',
+        correct ? 'Turbo kan niks afpakken.' : 'Turbo kon niks pakken.');
     });
   }
 }
@@ -5354,19 +5473,20 @@ function buildBest3() {
   session.diff = Math.min(1, Math.max(.2, 1 - (gap - 180) / 1200));
   BD.mode = 'off';
   renderBoard();
-  setTask('<b>Welke zet is de BESTE voor wit?</b>' +
-    '<div class="sub">Tik een zet aan om hem op het bord te zien. Denk bij élke zet: wat doet Turbo daarna? Kies pas als je alle drie hebt bekeken!</div>');
-  say('Kijk eerst alle drie! Pas kiezen als je zeker bent. 🐢');
+  opdrachtVan('best3.best3');
   let h = '';
   task.options.forEach((o, i) => {
-    h += '<button class="opt-btn" data-i="' + i + '"><span class="opt-tag">' + 'ABC'[i] + '</span><span>' +
+    h += '<button class="opt ' + 'abc'[i] + '" data-i="' + i + '"><span class="o-letter">' + 'ABC'[i] + '</span><span class="o-move">' +
       moveNameNL(task.S, o.m) + '</span></button>';
   });
-  setOptions(h);
-  document.querySelectorAll('.opt-btn').forEach(b => {
+  setOptions('<div class="options">' + h + '</div>');
+  document.querySelectorAll('.opt[data-i]').forEach(b => {
     b.addEventListener('click', () => pickOption(+b.dataset.i));
   });
   setActions([{ label: 'Deze kies ik! 🎯', cls: 'sun', fn: best3Confirm, id: 'confirm', disabled: true }]);
+  /* na veilig of valstrik staan de keuzes waar Volgende stond: een tweede tik op Volgende kiest zo niets (D34) */
+  session.keuzeOpen = false;
+  later(() => { if (session.task === task) session.keuzeOpen = true; }, 350);
   return true;
 }
 
@@ -5416,29 +5536,26 @@ function best3Explanations(task) {
   return lines;
 }
 
-function showBest3Explanation(lines) {
-  setTask('<b>Zo zit het:</b><div class="sub">' +
-    lines.map(e => '<div class="expl-line">' + e + '</div>').join('') + '</div>');
-}
-
 function pickOption(i) {
-  if (!session || session.phase !== 'choose') return;
-  const b = document.querySelector('.opt-btn[data-i="' + i + '"]');
+  if (!session || session.phase !== 'choose' || !session.keuzeOpen) return;
+  const b = document.querySelector('.opt[data-i="' + i + '"]');
   if (!b || b.classList.contains('wrong')) return;
   snd.select();
   session.picked = i;
-  document.querySelectorAll('.opt-btn').forEach(x => x.classList.remove('picked'));
+  document.querySelectorAll('.opt[data-i]').forEach(x => x.classList.remove('picked'));
   b.classList.add('picked');
   const o = session.task.options[i];
-  BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-sun' }];
+  /* de pijl heeft de kleur van de letter op de knop */
+  BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-opt-' + 'abc'[i] }];
   renderBoard();
+  say('Wat doet Turbo daarna? Kijk ook naar de andere twee.');
   if (actionBtns.confirm) actionBtns.confirm.disabled = false;
 }
 
 function best3Confirm() {
   if (!session || session.phase !== 'choose' || session.picked == null) return;
   const t = session.task, i = session.picked, o = t.options[i];
-  const btn = document.querySelector('.opt-btn[data-i="' + i + '"]');
+  const btn = document.querySelector('.opt[data-i="' + i + '"]');
   session.tries++;
   if (actionBtns.confirm) actionBtns.confirm.disabled = true;
   if (o === t.best) {
@@ -5448,16 +5565,12 @@ function best3Confirm() {
     const lines = best3Explanations(t);
     BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-leaf' }];
     playMove(o.m, () => {
-      showBest3Explanation(lines);
-      awardRound(session.tries === 1 ? 3 : 1, session.tries === 1 ?
-        'GOUD! 🥇 Meteen de beste zet gevonden! Lees maar waarom die zo goed is. 👇' :
-        'Ja! Díe is het! Goed doorgedacht! Kijk hieronder waarom. 👇');
+      awardRound(session.tries === 1 ? 3 : 1, session.tries === 1 ? 'Goud! 🥇' : 'Ja, die is het!', lines);
     });
   } else {
     session.phase = 'busy';
     btn.classList.add('wrong');
     btn.classList.remove('picked');
-    say('Hmm… kijk wat er dán gebeurt! 👀');
     BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-coral' }];
     const S = session.S;
     playMove(o.m, () => {
@@ -5475,18 +5588,17 @@ function best3Confirm() {
               if (session.tries >= 2) {
                 session.phase = 'review';
                 const bi = t.options.indexOf(t.best);
-                const bb = document.querySelector('.opt-btn[data-i="' + bi + '"]');
+                const bb = document.querySelector('.opt[data-i="' + bi + '"]');
                 if (bb) bb.classList.add('right');
                 const lines = best3Explanations(t);
                 BD.arrows = [{ from: t.best.m.from, to: t.best.m.to, cls: 'a-leaf' }];
                 playMove(t.best.m, () => {
-                  showBest3Explanation(lines);
-                  awardRound(0, 'De beste was: <b>' + bb.textContent.slice(1) + '</b>. Hieronder zie je waarom. Volgende keer heb jij hem! 💪');
+                  awardRound(0, 'Zo zit het', lines);
                 });
               } else {
                 session.phase = 'choose';
                 session.picked = null;
-                say('Die was niet top: Turbo doet dan <b>' + pn + '</b>. Probeer een andere! 🤔');
+                say('Niet de beste: kijk wat Turbo dan doet. Kies een andere.');
               }
             }, 900);
           });
@@ -5498,12 +5610,6 @@ function best3Confirm() {
 
 /* --- koning ontsnapt: verdedigen --- */
 const KONING_DIFF = { schaak: .4, mat1: .6, mat2: .85, stuk: .5 };
-const KONING_TEXTS = {
-  schaak: ['Je staat SCHAAK! 👑', 'Red je koning: weglopen, ertussen zetten, of de aanvaller slaan. Er is maar één goede manier!'],
-  mat1: ['Turbo dreigt MAT in één! 😱', 'Als jij niets doet, is het volgende zet mat. Welke zet voorkomt dat?'],
-  mat2: ['Turbo dreigt MAT in twee! 😱😱', 'Turbo heeft een plan van twee zetten. Kijk wat hij wil, en zet er een stokje voor.'],
-  stuk: ['Red je stuk! 🛡️', 'Een stuk van jou hangt: Turbo pakt het zo af. Zet het weg, dek het, of val zelf iets aan.']
-};
 /* de koningspuzzels komen uit de vooraf geverifieerde voorraad (src/koning.js);
    binnen een sessie geen herhaling zolang de voorraad dat toelaat */
 function pickKoningTask() {
@@ -5534,11 +5640,10 @@ function buildKoning() {
   BD.mode = 'puzzle';
   if (task.type !== 'stuk') BD.check = task.S.kings.w;
   renderBoard();
-  const tx = KONING_TEXTS[task.type];
-  setTask('<b>' + tx[0] + '</b><div class="sub">' + tx[1] + '</div>');
-  say(task.type === 'stuk' ? 'Kijk eerst: welk stuk van jou wordt aangevallen, en door wie? 🐢' :
-    'Kijk eerst: welk stuk van mij valt aan? En waar kan je koning nog heen? 🐢');
-  setActions([{ label: '💡 Hint', cls: 'plain small', fn: koningHint, id: 'hint' }]);
+  const n = task.answers.length;
+  opdrachtVan('koning.' + task.type, { goed: n === 1 ? 'Er is één goede zet.' :
+    'Er zijn ' + (['', '', 'twee', 'drie', 'vier'][n] || n) + ' goede zetten.' });
+  setActions([{ label: '💡 Hint', cls: 'plain small hint', fn: koningHint, id: 'hint' }]);
   return true;
 }
 function koningHint() {
@@ -5548,18 +5653,19 @@ function koningHint() {
   t.hintUsed = true;
   BD.glow.add(t.type === 'stuk' ? t.hang.sq : t.answers[0].m.from);
   renderBoard();
-  say(t.type === 'stuk' ? 'Psst… dát stuk staat in gevaar. (Nu nog maximaal 2 sterren.)' :
-    'Psst… met dat glimmende stuk kun je je redden. (Nu nog maximaal 2 sterren.)');
+  const koning = t.type !== 'stuk' && t.answers[0].m.from === t.S.kings.w;
+  hulpZin((t.type === 'stuk' ? 'Het stuk dat nu oplicht, staat in gevaar.' : koning ? 'Je koning moet het zelf doen.' :
+    'Met het stuk dat nu oplicht, kun je je redden.') + ' Met deze hint is de opdracht nog 2 sterren waard.');
   if (actionBtns.hint) actionBtns.hint.disabled = true;
 }
-/* hoe redt de zet het stuk: weg, gedekt, of tegenaanval */
+/* hoe redt de zet het stuk; alleen wat de code kan waarmaken: "weggezet" zegt niet dat het nieuwe veld veilig is */
 function stukHow(S, m, hang) {
-  if (m.from === hang.sq) return 'Weggezet: buiten bereik. 🏃';
+  if (m.from === hang.sq) return 'Weggezet.';
   makeMove(S, m);
   const dekt = findAttacker(S, hang.sq, 'w') >= 0;
   unmakeMove(S);
-  if (dekt) return 'Gedekt: als Turbo slaat, pak jij terug en verliest hij punten. 🛡️';
-  return 'Tegenaanval: Turbo heeft nu zelf iets te redden. ⚔️';
+  if (dekt) return 'Gedekt: slaat Turbo, dan pak jij terug.';
+  return 'Turbo wint nu niets meer.';
 }
 function koningAttempt(m) {
   if (!session || session.phase !== 'puzzle') return;
@@ -5577,8 +5683,7 @@ function koningAttempt(m) {
     const how = t.type === 'stuk' ? stukHow(S, m, t.hang) : null;
     playMove(m, () => {
       const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
-      awardRound(stars, t.type === 'stuk' ? ('Gered! ' + how) :
-        'Gered! 🛡️ Turbo’s plan is van tafel. Eerst kijken wat er dreigt, dán zetten: precies zo!');
+      awardRound(stars, 'Gered! 🛡️', t.type === 'stuk' ? how : 'Turbo\'s plan is van tafel. Eerst kijken wat er dreigt, dan zetten.');
     });
     return;
   }
@@ -5596,8 +5701,7 @@ function koningAttempt(m) {
     const how = t.type === 'stuk' ? stukHow(S, ans, t.hang) : null;
     const ansName = moveNameNL(S, ans);
     playMove(ans, () => {
-      awardRound(0, 'Dit was de redding: <b>' + ansName + '</b>. ' + (how || 'Daarna kan Turbo niet meer mat zetten.') +
-        ' Volgende keer zie jij hem! 💪');
+      awardRound(0, 'Zo zit het', 'De redding was <b>' + ansName + '</b>. ' + (how || 'Daarna kan Turbo niet meer mat zetten.'));
     });
     return;
   }
@@ -5614,16 +5718,19 @@ function koningAttempt(m) {
       playMove(reply.m, () => {
         const st2 = gameStatus(S);
         const cap = S.hist[S.hist.length - 1].cap;
-        const txt = st2.over && st2.reason === 'mat' ? 'Schaakmat! 😱 Dat was dus niet de redding.' :
-          (t.type === 'stuk' && cap ? 'Turbo pakt je ' + NAME_NL[cap.toLowerCase()] + ' gewoon af. 😬' :
-            'Turbo speelt <b>' + replyName + '</b> en het gevaar is er nog. 😬');
+        /* "toch" alleen als Turbo het stuk pakt dat al hing */
+        const hing = t.type === 'stuk' && reply.m.to === (m.from === t.hang.sq ? m.to : t.hang.sq);
+        const txt = st2.over && st2.reason === 'mat' ? 'Turbo speelt <b>' + replyName + '</b>: schaakmat. Dat was dus niet de redding.' :
+          t.type === 'stuk' && cap ? 'Turbo speelt <b>' + replyName + '</b> en pakt ' + (hing ? 'toch je ' + NAME_NL[cap.toLowerCase()] :
+            'je ' + NAME_NL[cap.toLowerCase()] + ' op ' + alg(reply.m.to)) + '.' :
+            'Turbo speelt <b>' + replyName + '</b>, en het gevaar is er nog.';
         later(() => {
           unmakeMove(S); unmakeMove(S);
           BD.arrows = []; BD.last = null;
           BD.check = t.type === 'stuk' ? null : S.kings.w;
           renderBoard();
           session.phase = 'puzzle'; BD.mode = 'puzzle';
-          say(txt + ' Nog één poging!');
+          hulpZin(txt + ' Probeer nog een zet.');
         }, 900);
       });
     }, 600);
@@ -5656,10 +5763,13 @@ function scoreTask(stars) {
   updateHud();
   bewaarRondje();
 }
-function awardRound(stars, msg) {
+function awardRound(stars, kop, redenen) {
   if (!session || session.kind === 'game') return;
+  const lijst = [].concat(redenen).filter(Boolean);
   scoreTask(stars);
-  say(msg);
+  hulpZin(null);
+  setTask('<div class="e-head">' + kop + '</div><div class="e-body">' + (lijst.length > 1 ?
+    '<ul>' + lijst.map(e => '<li>' + e + '</li>').join('') + '</ul>' : '<p>' + lijst[0] + '</p>') + '</div>');
   setActions([{ label: 'Volgende ▶', cls: 'sun', fn: nextRound }]);
 }
 
@@ -5671,7 +5781,7 @@ function drillSummary() {
   if (e >= 12) { snd.win(); celebrate(); } else snd.good();
   const kind = session.kind;
   showModal('<div class="m-emoji">' + emoji + '</div><h2>Rondje klaar!</h2>' +
-    '<p>Je verdiende <b>' + e + '</b> van de 15 sterren.<br>' + line + '</p>' +
+    '<p>Je verdiende <b>' + e + '</b> van de 15 sterren.<br>' + line + '</p>' + trofeeRij(voorKaart()) +
     '<div class="m-btns"><button class="btn sun" id="mAgain">Nog een rondje! 🔁</button>' +
     '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', () => {
       $('mAgain').addEventListener('click', () => { closeModal(); startDrill(kind); });
@@ -5769,9 +5879,8 @@ function startOpening(mode, pad) {
     diff: mode === 'pad' ? .5 : .6, t0: Date.now() };
   showScreen('play');
   $('modeTitle').textContent = '📖 ' + (pad ? pad.naam : 'De vier regels');
-  $('gameInfo').classList.add('hidden');
   $('patience').classList.add('hidden');
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
   $('drillStars').classList.remove('hidden');
   $('meters').classList.toggle('hidden', mode !== 'coach');
   setTask(null); setOptions(null);
@@ -5780,18 +5889,19 @@ function startOpening(mode, pad) {
   if (frame) frame.classList.toggle('flip', color === 'b');
   renderBoard();
   updateDrillStars();
-  setActions(mode === 'pad' ? [{ label: '💡 Hint', cls: 'plain small', fn: openingHint, id: 'hint' }] : []);
+  setActions(mode === 'pad' ? [{ label: '💡 Hint', cls: 'plain small hint', fn: openingHint, id: 'hint' }] : []);
+  hulpZin(null);
   if (color === 'b') { BD.mode = 'off'; say('Jij speelt met zwart. Wit begint… ⏳'); later(openingTurbo, 500); }
   else kidOpeningTurn();
 }
 function renderMeters() {
   if (!session || session.kind !== 'opening' || session.mode !== 'coach') return;
   const pr = principles(session.S, session.color);
-  const row = (e, naam, val, max, txt) => '<div class="meter"><span class="m-l">' + e + ' ' + naam + '</span>' +
-    '<span class="m-t"><i style="width:' + Math.round(Math.min(1, val / max) * 100) + '%"></i></span><span class="m-v">' + txt + '</span></div>';
-  $('meters').innerHTML = row('🎯', 'Centrum', pr.centrum, 12, pr.centrum + '/12') +
-    row('🐎', 'Ontwikkeling', pr.dev, 4, pr.dev + '/4') +
-    row('🏰', 'Koning veilig', session.castled ? 1 : 0, 1, session.castled ? 'ja' : 'nog niet');
+  const row = (naam, val, max, txt) => '<div class="m"><span>' + naam + ' <span class="m-v">' + txt + '</span></span>' +
+    '<span class="bar"><i style="width:' + Math.round(Math.min(1, val / max) * 100) + '%"></i></span></div>';
+  $('meters').innerHTML = row('Centrum', pr.centrum, 12, pr.centrum + '/12') +
+    row('Stukken', pr.dev, 4, pr.dev + '/4') +
+    row('Koning', session.castled ? 1 : 0, 1, session.castled ? 'veilig' : 'nog niet');
 }
 function kidOpeningTurn() {
   if (!session || session.kind !== 'opening') return;
@@ -5805,13 +5915,12 @@ function kidOpeningTurn() {
   $('roundChip').textContent = 'Zet ' + (session.kidMoves + 1) + ' van ' + session.maxMoves;
   renderMeters();
   if (actionBtns.hint) actionBtns.hint.disabled = false;
-  /* na een zet blijft de uitleg van die zet staan; de volgende tip staat in het taakvak */
   if (session.mode === 'pad') {
-    setTask('<b>Zet ' + (session.kidMoves + 1) + '</b><div class="sub">' + session.pad.hint[session.kidMoves] + '</div>');
-    if (session.kidMoves === 0) say('Speel het pad na. Bij elke zet vertel ik waarom hij goed is. 📖');
+    opdrachtVan('opening.pad', { k: session.kidMoves + 1, m: session.maxMoves, hint: session.pad.hint[session.kidMoves] });
   } else {
-    setTask('<b>Jouw zet</b><div class="sub">Midden pakken, een stuk naar buiten, of je koning veilig. Kijk ook wat Turbo dreigt!</div>');
-    if (session.kidMoves === 0) say('Speel maar! Ik geef sterren voor elke zet die iets opbouwt. 🧭');
+    opdrachtVan('opening.coach');
+    /* het pad hield op: dat zegt de plek van de uitleg, één zet lang */
+    if (session.padOp) { hulpZin('Het pad is hier op. Nu spelen we door met de coach! 🧭'); session.padOp = false; }
   }
 }
 function openingHint() {
@@ -5822,7 +5931,7 @@ function openingHint() {
   session.hintUsed = true;
   BD.arrows = [{ from: m.from, to: m.to, cls: 'a-sun' }];
   renderBoard();
-  say('Kijk, deze pijl. (Met hint nog maximaal 2 sterren.)');
+  hulpZin('Kijk, deze pijl. Met deze hint is de zet nog 2 sterren waard.');
   if (actionBtns.hint) actionBtns.hint.disabled = true;
 }
 /* beoordeling van een coach-zet: engine-check eerst, dan de principes */
@@ -5846,23 +5955,24 @@ function coachEval(S, m) {
   unmakeMove(S);
   const dC = after.centrum - before.centrum, dD = after.dev - before.dev;
   let score = (book ? 3 : 0) + dC * .5 + dD * 2 + (castled ? 3 : 0) + (goodCap ? 2 : 0) - (again ? 2 : 0) - (queenEarly ? 2 : 0);
+  /* één lof en één opmerking, de belangrijkste eerst: materiaal winnen weegt het zwaarst */
   const plus = [], min = [];
-  if (book) plus.push('Een echte boekzet! 📖');
-  if (castled) plus.push('Rokade: koning veilig, toren doet mee. 🏰');
   if (goodCap) plus.push('Je wint materiaal. 🏅');
+  if (castled) plus.push('Rokade: koning veilig, toren doet mee. 🏰');
   if (dD > 0) plus.push('Een stuk naar buiten. 🐎');
   if (dC > 0) plus.push('Je pakt meer van het midden. 🎯');
-  if (again) min.push('Dit stuk zette je al: in de opening liever elk stuk één keer.');
+  if (book) plus.push('Een echte boekzet! 📖');
   if (queenEarly) min.push('Je dame zo vroeg? Turbo jaagt erop. Eerst je kleine stukken.');
+  if (again) min.push('Dit stuk zette je al: in de opening liever elk stuk één keer.');
   if (dC < 0) min.push('Je grip op het midden wordt minder.');
   let stars, msg;
   if (blunder) {
     stars = 0;
-    msg = 'Oei, een valstrik: Turbo speelt dan <b>' + (punish || 'iets sterks') + '</b> en dat kost je wat. Kijk vóór je zet wat Turbo terug kan doen!';
+    msg = punish ? 'Er was een sterkere zet. Kijk wat Turbo nu kan doen: <b>' + punish + '</b>.' : 'Er was een sterkere zet.';
   } else {
     stars = score >= 2.5 ? 3 : (score >= 1 ? 2 : (score >= 0 ? 1 : 0));
-    msg = (plus.length ? plus.join(' ') : 'Prima, maar het midden, een nieuw stuk of de rokade was nog sterker.') +
-      (min.length ? ' ' + min.join(' ') : '');
+    msg = plus.length ? plus[0] + (min.length ? ' ' + min[0] : '') :
+      min.length ? min[0] : 'Prima. Nog sterker was het midden, een nieuw stuk of de rokade.';
   }
   return { stars, msg, castled };
 }
@@ -5879,10 +5989,10 @@ function onOpeningMove(m) {
         const exp = legalMoves(S).find(x => moveKey(x) === k);
         BD.arrows = [{ from: exp.from, to: exp.to, cls: 'a-leaf' }];
         renderBoard();
-        say('Deze bedoel ik: <b>' + moveNameNL(S, exp) + '</b>. Speel hem maar!');
+        hulpZin('Deze bedoel ik: <b>' + moveNameNL(S, exp) + '</b>. Speel hem maar!');
       } else {
         renderBoard();
-        say('Niet die. ' + session.pad.hint[session.kidMoves] + ' Probeer nog eens!');
+        hulpZin('Niet die. ' + session.pad.hint[session.kidMoves] + ' Probeer nog eens!');
       }
       return;
     }
@@ -5903,7 +6013,7 @@ function finishOpeningMove(m, stars, msg, castled) {
     if (!session || session.kind !== 'opening') return;
     session.kidMoves++;
     scoreTask(stars);
-    say(msg + (stars === 3 ? ' ⭐⭐⭐' : ''));
+    hulpZin(msg + (stars === 3 ? ' ⭐⭐⭐' : ''));
     renderMeters();
     const st = gameStatus(session.S);
     if (st.over) { openingEnd(); return; }
@@ -5925,7 +6035,7 @@ function openingTurbo() {
       session.maxMoves = Math.max(session.maxMoves, session.kidMoves + 3);
       $('meters').classList.remove('hidden');
       setActions([]);
-      say('Het pad is hier op. Nu spelen we door met de coach! 🧭');
+      session.padOp = true;
     }
   }
   if (!m) m = bookMove(S) || pickMove(S, 2);
@@ -6008,24 +6118,23 @@ function startGame(level, bewaard) {
     pending: null, drawAsked: bewaard ? bewaard.r.drawAsked : null, started: bewaard ? bewaard.r.started : Date.now(),
     patXP: bewaard ? bewaard.r.patXP || 0 : 0 };
   showScreen('play');
-  $('modeTitle').textContent = MODE_TITLES.game;
-  $('roundChip').textContent = TURBO_NAMES[level];
+  /* in de balk de naam zonder het plaatje van de niveaukeuze: zo past de naam */
+  $('modeTitle').textContent = TURBO_NAMES[level].replace(/^\S+\s/, '');
+  $('roundChip').textContent = '';
   clearBD();
   renderBoard();
   setTask(null); setOptions(null);
   $('drillStars').classList.add('hidden');
-  $('gameInfo').classList.remove('hidden');
   $('patience').classList.remove('hidden');
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
   updateTrays();
-  updateToggles();
   gameActions();
   const laatste = session.S.hist[session.S.hist.length - 1];
   if (laatste) BD.last = [laatste.m.from, laatste.m.to];
   BD.check = inCheck(session.S) ? session.S.kings[session.S.turn] : null;
   renderBoard();
   /* een hervat potje staat al precies zo bewaard; een nieuw potje haalt een oud record weg */
-  if (bewaard) toonBewaard(true); else bewaarPotje();
+  if (bewaard) { session.laatstBewaard = JSON.stringify(potjeInhoud()); toonBewaard(true); } else bewaarPotje();
   if (session.S.turn === 'w') kidTurn(); else { BD.mode = 'off'; turboTurn(); }
   if (bewaard) say('Welkom terug! Je potje staat nog precies zo. ' +
     (session.S.turn !== 'w' ? 'Ik ben aan zet.' : inCheck(session.S) ? 'Je staat schaak!' : 'Jij bent aan zet.'));
@@ -6033,11 +6142,10 @@ function startGame(level, bewaard) {
 
 function gameActions() {
   setActions([
-    { label: '☁️ Denkwolk', cls: 'plain small', fn: enterCloud, id: 'cloudBtn' },
-    { label: '↩ Zet terug', cls: 'plain small', fn: undoMove, id: 'undo' },
-    { label: '👀 Speurbril (' + session.tips + ')', cls: 'plain small', fn: useTip, id: 'tip', disabled: session.tips <= 0 },
-    { label: '🤝 Remise?', cls: 'plain small', fn: offerDraw, id: 'drawBtn' },
-    { label: '🏳️ Opgeven', cls: 'plain small', fn: resignAsk, id: 'resignBtn' }
+    /* in de zijkolom staat het plaatje boven het woord, op de telefoon ernaast */
+    { label: '☁️\nDenkwolk', cls: 'plain small helper', fn: enterCloud, id: 'cloudBtn' },
+    { label: '👀\nSpeurbril ' + session.tips, cls: 'plain small helper', fn: useTip, id: 'tip', disabled: session.tips <= 0 },
+    { label: '↩\nZet terug', cls: 'plain small helper', fn: undoMove, id: 'undo' }
   ]);
   if (actionBtns.tip) actionBtns.tip.title = 'Laat alle aangevallen stukken even oplichten. Drie keer per potje.';
   if (actionBtns.cloudBtn) actionBtns.cloudBtn.title = 'Oefenbord: probeer zetten uit zonder dat het telt.';
@@ -6076,8 +6184,11 @@ function turboAcceptsDraw(S) {
   return Math.abs(evalWhite(S)) <= 120;
 }
 function offerDraw() {
-  if (!session || session.kind !== 'game' || session.over || BD.mode !== 'move') return;
+  const wacht = sluitVoorspelvraag();
+  if (!session || session.kind !== 'game' || session.over || (BD.mode !== 'move' && !wacht)) return;
   const S = session.S;
+  /* Turbo antwoordt eerst; zegt hij nee, dan doet hij daarna de zet waar de vraag over ging */
+  const daarna = () => { if (wacht && session && !session.over) later(() => doTurboMove(wacht, true), 900); };
   if (session.online) {
     if (session.drawAsked != null && S.hist.length - session.drawAsked < 10) {
       say('Je hebt net al remise aangeboden. Speel eerst nog even door. 🐢');
@@ -6095,12 +6206,14 @@ function offerDraw() {
   }
   if (session.drawAsked != null && S.hist.length - session.drawAsked < 10) {
     say('Je vroeg het net al. Speel eerst nog tien zetten, dan mag je het weer vragen. 🐢');
+    daarna();
     return;
   }
   session.drawAsked = S.hist.length;
   bewaarPotje();
   say(S.hist.length < MIN_PLIES_TELT ? 'Remise? Nu al? Nee hoor, we zijn net begonnen! Speel maar door. 🐢' :
     (evalWhite(S) > 0 ? 'Remise? Nee, jij staat beter! Probeer maar te winnen. 🐢' : 'Remise? Nee hoor, ik sta goed. Speel maar door! 🐢'));
+  daarna();
 }
 /* online: het maatje biedt remise aan */
 function mpOnRemiseVraag(m) {
@@ -6124,7 +6237,7 @@ function mpOnRemise(m) {
   if (!session || !session.online || session.over || !MP || +m.gameNo !== MP.gameNo) return;
   if (session.drawAsked == null) return; /* alleen een antwoord op ons eigen aanbod telt */
   if (m.ok === true) endGame({ over: true, result: 'd', reason: 'remise' });
-  else { say(mpNaam() + ' wil doorspelen. Oké, dan gaan we door! 💪'); showToast(mpNaam() + ' wil doorspelen 💪'); }
+  else say(mpNaam() + ' wil doorspelen. Oké, dan gaan we door! 💪');
 }
 function mpOnOpgave(m) {
   if (!session || !session.online || session.over || !MP || +m.gameNo !== MP.gameNo) return;
@@ -6138,16 +6251,17 @@ function enterCloud() {
   session.cloud = { realS: session.S, realLast: BD.last, over: false, counted: false };
   session.S = parseFEN(toFEN(session.S));
   clearSel();
+  BD.spy.clear();
   BD.last = null;
   BD.mode = 'cloud';
   const frame = document.querySelector('.board-frame');
   if (frame) frame.classList.add('cloud');
-  $('cloudBar').classList.remove('hidden');
+  strookModus('cloud');
   updateCloudBar();
   renderBoard();
   cloudActions();
   snd.select();
-  say('Welkom in mijn denkwolk! ☁️ Probeer je plan: schuif je eigen stukken én die van mij. Kijk wat er gebeurt!');
+  say('Welkom in mijn denkwolk! ☁️ Probeer je plan: schuif jouw stukken en die van mij.');
 }
 
 function updateCloudBar() {
@@ -6157,9 +6271,9 @@ function updateCloudBar() {
 
 function cloudActions() {
   setActions([
-    { label: '🌤 Terug naar echt', cls: 'sun', fn: exitCloud, id: 'cloudExit' },
-    { label: '↩ Stapje terug', cls: 'plain small', fn: cloudUndo, id: 'cloudUndoBtn' },
-    { label: '🐢 Wat zou Turbo doen?', cls: 'plain small', fn: cloudTurbo, id: 'cloudTurboBtn' }
+    { label: '🌤\nTerug naar echt', cls: 'sun small helper', fn: exitCloud, id: 'cloudExit' },
+    { label: '↩\nStapje terug', cls: 'plain small helper', fn: cloudUndo, id: 'cloudUndoBtn' },
+    { label: '🐢\nWat zou Turbo doen?', cls: 'plain small helper', fn: cloudTurbo, id: 'cloudTurboBtn' }
   ]);
 }
 
@@ -6215,7 +6329,7 @@ function exitCloud() {
   BD.mode = 'move';
   const frame = document.querySelector('.board-frame');
   if (frame) frame.classList.remove('cloud');
-  $('cloudBar').classList.add('hidden');
+  strookModus(null);
   renderBoard();
   gameActions();
   say('En, plan klaar? Doe je zet in het écht! 🐢');
@@ -6227,7 +6341,6 @@ function kidTurn(quiet) {
   startPatience();
   if (inCheck(session.S)) {
     snd.check();
-    showToast('SCHAAK! 😱');
     say('Je staat schaak! Red je koning! 👑');
   } else if (!quiet) say(coachSay());
 }
@@ -6280,6 +6393,7 @@ function onCell(sq) {
   if (BD.mode === 'predict') {
     const p = session.S.board[sq];
     if (p && colorOf(p) === 'b') resolvePredict(sq);
+    else if (p) say('Dat is jouw stuk. Welk stuk zet Turbo? Tik het aan.');
     return;
   }
   if (BD.mode === 'puzzle') {
@@ -6378,7 +6492,7 @@ function onKidMove(m) {
       showModal('<div class="m-emoji">🐢❗</div><h2>Wacht even!</h2>' +
         '<p>Deze zet kan je een stuk kosten!<br>Kijk nog eens goed: wat kan Turbo hierna állemaal doen?</p>' +
         '<div class="m-btns"><button class="btn sun" id="gLook">🔍 Ik kijk nog even</button>' +
-        '<button class="btn coral" id="gGo">Toch doen! 😤</button></div>', () => {
+        '<button class="btn plain" id="gGo">Ik weet het zeker</button></div>', () => {
           $('gLook').addEventListener('click', () => { closeModal(); BD.mode = 'move'; renderBoard(); });
           $('gGo').addEventListener('click', () => { closeModal(); commitKid(m); });
         });
@@ -6390,6 +6504,7 @@ function onKidMove(m) {
 
 function commitKid(m) {
   if (!session || session.kind !== 'game') return;
+  BD.spy.clear();
   stopPatience();
   if (!session.online && patFull) {
     addXP(5, 'Denk-bonus! 🐢');
@@ -6407,7 +6522,7 @@ function commitKid(m) {
     }
     const st = gameStatus(S);
     if (st.over) { endGame(st); return; }
-    if (inCheck(S)) { snd.check(); showToast('SCHAAK! 👑', true); }
+    if (inCheck(S)) snd.check();
     if (session.online) {
       BD.mode = 'off';
       say('Nu ' + mpNaam() + '… 💭');
@@ -6420,12 +6535,8 @@ function commitKid(m) {
         bewaarPotje();
         addXP(10, 'Truc: ' + PATTERNS[co.key].n + '! ' + PATTERNS[co.key].e);
       }
-      say('Dat is een ' + co.what + ' Goed gezien van jou! 🌟');
-      BD.spy = new Set(co.squares);
-      renderBoard();
-      later(() => {
-        if (session && session.kind === 'game') { BD.spy.clear(); renderBoard(); }
-      }, 3500);
+      say('Dat is een ' + co.what + ' Goed gezien!');
+      trucRandjes(co.squares);
       later(turboTurn, 1100);
     } else {
       say('Hmm… nu ik! 💭');
@@ -6446,43 +6557,52 @@ function turboTurn() {
   }, 80);
 }
 
-/* Non-blocking predict window: guessing is optional, Turbo plays by himself
-   when the timer runs out. Tapping a green piece counts as the prediction. */
-const PREDICT_MS = 4000;
+/* De voorspelvraag wacht: een tik op een groen stuk is de voorspelling,
+   "Speel maar" slaat hem over. Er loopt geen klok die de zet afpakt. */
 function askPredict(m) {
   session.pending = m;
   BD.mode = 'predict';
-  $('predictBar').classList.remove('hidden');
-  say('Denk vooruit: wat is Turbo van plan? 🔮');
-  const t = $('predictTimer');
-  t.style.transition = 'none';
-  t.style.width = '100%';
-  void t.offsetWidth;
-  t.style.transition = 'width ' + PREDICT_MS + 'ms linear';
-  t.style.width = '0%';
-  session.predictTimer = later(() => resolvePredict(null), PREDICT_MS + 100);
+  strookModus('predict');
+  say('Welk stuk zet Turbo? Tik het aan.');
+  hulpjesAan(false);
+}
+/* zolang de voorspelvraag open staat, doen Denkwolk, Speurbril en Zet terug niets: ze staan dan ook uit */
+function hulpjesAan(aan) {
+  for (const id of ['cloudBtn', 'tip', 'undo']) if (actionBtns[id]) actionBtns[id].disabled = !aan || (id === 'tip' && session.tips <= 0);
+}
+/* Remise aanbieden sluit een open voorspelvraag; Turbo antwoordt eerst en doet daarna de zet die wachtte */
+function sluitVoorspelvraag() {
+  if (!session || !session.pending || BD.mode !== 'predict') return null;
+  const m = session.pending;
+  session.pending = null;
+  strookModus(null);
+  hulpjesAan(true);
+  return m;
 }
 
 function resolvePredict(sq) {
   if (!session || session.kind !== 'game' || !session.pending) return;
-  clearTimeout(session.predictTimer);
   const m = session.pending;
   session.pending = null;
   BD.mode = 'off';
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
+  hulpjesAan(true);
+  let stil = false;
   if (sq != null) {
-    if (sq === m.from) {
+    const rokadeToren = m.flags === 'K' ? m.from + 3 : m.flags === 'Q' ? m.from - 4 : -1;
+    if (sq === m.from || sq === rokadeToren) {
       addXP(15, 'Goed voorspeld! 🔮');
       bump('c.predictHits', 1);
       checkBadges();
       snd.star();
-      showToast('🔮 Goed voorspeld!', true);
+      say('Goed voorspeld! +15 XP 🔮');
+      stil = true;
     } else say('Goede gok! Maar kijk wat ik écht doe… 🐢');
   }
-  doTurboMove(m);
+  doTurboMove(m, stil);
 }
 
-function doTurboMove(m) {
+function doTurboMove(m, stil) {
   if (!session || session.kind !== 'game' || !m) return;
   const S = session.S;
   const co = patternCallout(S, m);
@@ -6494,13 +6614,9 @@ function doTurboMove(m) {
     if (co) {
       countPattern(co.key);
       say('Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢');
-      BD.spy = new Set(co.squares);
-      renderBoard();
-      later(() => {
-        if (session && session.kind === 'game') { BD.spy.clear(); renderBoard(); }
-      }, 3500);
+      trucRandjes(co.squares);
       kidTurn(true);
-    } else kidTurn();
+    } else kidTurn(stil);
   });
 }
 
@@ -6516,7 +6632,7 @@ function startPatience() {
   const step = () => {
     const f = Math.min(1, (performance.now() - patT0) / PAT_MS);
     $('patFill').style.width = (f * 100) + '%';
-    $('patTurtle').style.left = 'calc(' + (f * 100) + '% - ' + Math.round(f * 28) + 'px)';
+    $('patTurtle').style.left = 'calc(' + (f * 100) + '% - ' + Math.round(f * 16) + 'px)';
     if (f >= 1) { patFull = true; track.classList.add('full'); return; }
     patRAF = requestAnimationFrame(step);
   };
@@ -6531,6 +6647,7 @@ function undoMove() {
   unmakeMove(S); unmakeMove(S);
   bewaarPotje();
   clearSel();
+  BD.spy.clear();
   BD.last = null;
   BD.check = inCheck(S) ? S.kings[S.turn] : null;
   renderBoard();
@@ -6539,24 +6656,32 @@ function undoMove() {
   startPatience();
 }
 
+/* de randjes van een truc gaan na even vanzelf weg; alleen die van de truc, niet die van een Speurbril erna */
+function trucRandjes(velden) {
+  const eigen = BD.spy = new Set(velden);
+  renderBoard();
+  later(() => {
+    if (session && session.kind === 'game') { eigen.clear(); renderBoard(); }
+  }, 3500);
+}
+
 function useTip() {
   if (!session || session.kind !== 'game' || session.tips <= 0 || BD.mode !== 'move') return;
   const S = session.S;
   const spy = new Set([...attackedPieces(S, 'w'), ...attackedPieces(S, 'b')]);
   if (spy.size === 0) {
-    say('De speurbril laat alle stukken oplichten die aangevallen worden. Maar nu wordt er nog níks aangevallen, alles staat veilig! Je bril blijft op zak. 👓');
+    say('De speurbril laat aangevallen stukken zien. Nu wordt er niks aangevallen, dus hij blijft op zak. 👓');
     return;
   }
   session.tips--;
   bewaarPotje();
   if (actionBtns.tip) {
-    actionBtns.tip.textContent = '👀 Speurbril (' + session.tips + ')';
+    actionBtns.tip.textContent = '👀\nSpeurbril ' + session.tips;
     if (session.tips === 0) actionBtns.tip.disabled = true;
   }
   BD.spy = spy;
   renderBoard();
-  say('Paarse randjes = die stukken worden aangevallen! Kijk snel, hij werkt maar even! 👀');
-  later(() => { BD.spy.clear(); if (session && session.kind === 'game') renderBoard(); }, 4500);
+  say('Paarse randjes: die stukken worden aangevallen.');
 }
 
 const PTS = { p: 1, n: 3, b: 3, r: 5, q: 9 };
@@ -6573,16 +6698,72 @@ function updateTrays() {
     if (isWhitePiece(u.cap) === mijnWit) { tur += glyph; dt += PTS[t] || 0; }
     else { kid += glyph; dk += PTS[t] || 0; }
   }
-  $('trayKid').innerHTML = kid || '<span style="opacity:.4">nog niks</span>';
-  $('trayTurbo').innerHTML = tur || '<span style="opacity:.4">nog niks</span>';
-  const diff = dk - dt;
-  $('matKid').textContent = diff > 0 ? '+' + diff + ' punten! 😃' : '';
-  $('matTurbo').textContent = diff < 0 ? '+' + (-diff) + ' punten 😬' : '';
+  session.geslagen = { kid, tur };
+  /* uit de stukken die er staan, niet uit wat geslagen is: zo telt een promotie mee */
+  let mat = 0;
+  for (let sq = 0; sq < 128; sq++) {
+    const p = (sq & 0x88) ? null : S.board[sq];
+    if (p) mat += (PTS[p.toLowerCase()] || 0) * (isWhitePiece(p) === mijnWit ? 1 : -1);
+  }
+  session.verschil = mat;
+  $('verschil').textContent = mat > 0 ? '♟ Jij +' + mat : mat < 0 ? '♟ ' + tegenNaam() + ' +' + (-mat) : '';
 }
-
-function updateToggles() {
-  $('tglGuard').classList.toggle('on', P.guard);
-  $('tglPredict').classList.toggle('on', P.predict);
+function tegenNaam() { return session && session.online ? mpNaam() : 'Turbo'; }
+function punten(n) { return n + (n === 1 ? ' punt' : ' punten'); }
+/* het blad met geslagen stukken: wat het getal in de balk betekent */
+function openMateriaal() {
+  if (!session || session.kind !== 'game') return;
+  updateTrays();
+  const d = session.verschil, wie = escHtml(tegenNaam()), g = session.geslagen;
+  showModal('<h2>' + (d > 0 ? 'Jij staat ' + punten(d) + ' voor.' :
+    d < 0 ? wie + ' staat ' + punten(-d) + ' voor.' : 'Jullie staan gelijk in punten.') + '</h2>' +
+    '<p>Pion 1, paard 3, loper 3, toren 5, dame 9.</p>' +
+    '<div class="tray">Jij pakte:<div class="tray-pcs">' + (g.kid || 'nog niks') + '</div></div>' +
+    '<div class="tray">' + wie + ' pakte:<div class="tray-pcs">' + (g.tur || 'nog niks') + '</div></div>' +
+    '<div class="m-btns"><button class="btn sun" id="matOk">Oké</button></div>', () => {
+      $('matOk').addEventListener('click', closeModal);
+    }, true);
+}
+function puntenwijzer() {
+  showModal('<h2>🏅 Puntenwijzer</h2><div class="points-row">' +
+    [['♟︎', 1], ['♞︎', 3], ['♝︎', 3], ['♜︎', 5], ['♛︎', 9], ['♚︎', '∞']].map(c =>
+      '<span class="pt-chip"><span class="pt-glyph">' + c[0] + '</span>' + c[1] + '</span>').join('') + '</div>' +
+    '<p>Evenveel punten = eerlijke ruil. Paard tegen loper? Allebei 3, prima! ' +
+    'Minder punten geven dan pakken = winst. En de koning ruil je nooit. 😉</p>' +
+    '<div class="m-btns"><button class="btn sun" id="pwOk">Oké</button></div>', () => {
+      $('pwOk').addEventListener('click', closeModal);
+    }, true);
+}
+/* ⋯: wat je maar af en toe nodig hebt */
+function openMeer() {
+  if (!session) return;
+  const potje = session.kind === 'game' && !session.over;
+  const knoppen = (potje ? [['meerRemise', '🤝 Remise aanbieden'], ['meerOpgeven', '🏳️ Opgeven']] : [])
+    .concat([['meerPunten', '🏅 Puntenwijzer']])
+    .concat(potje && !session.online ? [['meerHulp', '⚙️ Hulp aan of uit']] : [])
+    .concat([['meerGeluid', '🔊 Geluid: ' + (P.sound ? 'aan' : 'uit')]]);
+  showModal('<h2>' + (potje ? 'Potje' : 'Meer') + '</h2><div class="m-btns">' + knoppen.map(k => '<button class="btn plain" id="' + k[0] + '">' + k[1] + '</button>').join('') + '</div>', () => {
+    const doe = (id, fn) => { if ($(id)) $(id).addEventListener('click', () => { closeModal(); fn(); }); };
+    doe('meerRemise', offerDraw);
+    doe('meerOpgeven', resignAsk);
+    doe('meerPunten', puntenwijzer);
+    doe('meerHulp', openHulp);
+    doe('meerGeluid', () => { setPref('sound', !P.sound); openMeer(); });
+  }, true);
+}
+/* in een potje: alleen de twee schakelaars, met hun stand in woorden; Alles wissen hoort niet één tik van een lopend potje */
+function openHulp() {
+  const tekst = () => '<button class="btn plain" id="hulpGuard">🛡️ Blunder-alarm: ' + (P.guard ? 'aan' : 'uit') + '</button>' +
+    '<button class="btn plain" id="hulpPredict">🔮 Voorspellen: ' + (P.predict ? 'aan' : 'uit') + '</button>';
+  showModal('<h2>Hulp aan of uit</h2><div class="m-btns" id="hulpRij">' + tekst() + '</div>' +
+    '<div class="m-btns"><button class="btn sun" id="hulpKlaar">Klaar</button></div>', () => {
+      const bind = () => {
+        $('hulpGuard').addEventListener('click', () => { setPref('guard', !P.guard); $('hulpRij').innerHTML = tekst(); bind(); });
+        $('hulpPredict').addEventListener('click', () => { setPref('predict', !P.predict); $('hulpRij').innerHTML = tekst(); bind(); });
+      };
+      bind();
+      $('hulpKlaar').addEventListener('click', closeModal);
+    }, true);
 }
 
 /* einde van een online potje: neutrale taal (geen Turbo), geen XP (dat
@@ -6590,20 +6771,18 @@ function updateToggles() {
    alleen binnen deze sessie, kleuren wisselen om */
 function endGameOnline(st, drawTxt) {
   const ik = session.myColor || 'w';
-  let emoji, h, p;
+  let h, p;
   /* gameStatus meldt remise als result 'd', nooit als een leeg result. Op
      !st.result testen betekende dat de remise-tak nooit aansloeg: bij pat,
      de 50-zettenregel of te weinig materiaal kregen BEIDE kinderen te
      horen dat de ander gewonnen had. */
   if (st.result === 'd') {
-    emoji = '🤝';
     h = 'Gelijkspel!';
     p = (drawTxt[st.reason] || 'Remise!') + '<br>Goed gespeeld, allebei!';
     snd.star();
   } else if (st.result === ik) {
-    emoji = '🏆';
     h = 'JIJ WINT!';
-    p = st.reason === 'opgave' ? escHtml(mpNaam()) + ' geeft op. Goed gespeeld, kampioen!' : 'Schaakmat! Wat een partij, kampioen!';
+    p = st.reason === 'opgave' ? escHtml(mpNaam()) + ' geeft op. Goed gespeeld!' : 'Schaakmat! Wat een partij.';
     /* alleen een eigen online-teller: NIET de gedeelde 'wins' of de
        dag-'wins', want die geven via de dagmissies en de "versla Turbo"-
        trofee XP, en twee kinderen op een bank zouden dat zo farmen. Online
@@ -6612,15 +6791,15 @@ function endGameOnline(st, drawTxt) {
     snd.win();
     celebrate();
   } else {
-    emoji = '💪';
     h = escHtml(mpNaam()) + ' wint dit potje';
-    p = (st.reason === 'opgave' ? 'Je gaf op. Dat mag, maar de volgende keer vecht je door!' : 'Schaakmat… maar goed gespeeld!') + ' Pak je revanche!';
+    p = st.reason === 'opgave' ? 'Je gaf op. Netjes afgesloten. Revanche?' : 'Schaakmat… maar goed gespeeld! Pak je revanche!';
     snd.bad();
   }
   checkBadges();
   const vriendKnop = MP && !MP.viaFriend ? '<button class="btn plain" id="mpVriend">🤝 Vrienden worden</button>' : '';
-  showModal('<div class="m-emoji">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p>' +
-    '<div class="m-btns"><button class="btn sun" id="mpRev">🔁 Revanche!</button>' + vriendKnop +
+  say(h);
+  toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p><!--trofeeen-->' +
+    '<div class="ek-btns"><button class="btn sun" id="mpRev">🔁 Revanche!</button>' + vriendKnop +
     '<button class="btn plain" id="mpEind">🏠 Stoppen</button></div>', () => {
       $('mpRev').addEventListener('click', () => {
         $('mpRev').disabled = true;
@@ -6632,7 +6811,7 @@ function endGameOnline(st, drawTxt) {
         $('mpVriend').textContent = '🤝 Gevraagd…';
         vriendVragen();
       });
-      $('mpEind').addEventListener('click', () => { closeModal(); mpVerlaat(); });
+      $('mpEind').addEventListener('click', () => { sluitEindkaart(); mpVerlaat(); });
     });
 }
 
@@ -6643,8 +6822,15 @@ function endGame(st, stil) {
   session.over = true;
   if (!session.online) opslag(POTJE_KEY, null);
   BD.mode = 'off';
+  /* opgeven kan terwijl de voorspelvraag openstaat */
+  session.pending = null;
+  strookModus(null);
   stopPatience();
   renderBoard();
+  /* een afgelopen potje staat niet meer bewaard en heeft geen hulpjes meer: alleen de eindkaart telt */
+  $('bewaard').classList.add('hidden');
+  $('patience').classList.add('hidden');
+  setActions([]);
   const drawTxt = { pat: 'Pat! De koning kan nergens meer heen, maar staat geen schaak.',
     '50': 'Vijftig zetten zonder slaan of pionzet.', materiaal: 'Te weinig stukken om mat te zetten.',
     remise: 'Remise afgesproken: jullie vonden het allebei gelijk.' };
@@ -6653,27 +6839,26 @@ function endGame(st, stil) {
   if (telt) bump('c.gamesPlayed', 1);
   if (session.online) { if (telt) bumpWeek('online', 1); endGameOnline(st, drawTxt); return; }
   if (telt) bumpWeek('potjes' + session.level, 1);
-  let emoji, h, p, xp;
+  let h, p, xp;
   if (st.result === 'w') {
-    emoji = '🏆'; h = 'JE HEBT GEWONNEN!';
-    p = 'Schaakmat! Turbo buigt voor jou. Wat een partij!';
+    h = 'Gewonnen!';
+    p = 'Schaakmat! Ik buig voor jou. Wat een partij.';
     bump('wins', 1);
     if (session.level === 2) bump('c.winsL2', 1);
     if (session.level === 3) bump('c.winsL3', 1);
     ensureDay();
     xp = gameWinXP(session.level);
-    if (xp === TIRED_XP) p += '<br><small>Deze Turbo is moe van al dat verliezen: kleine bonus. Probeer een sterkere Turbo, of kom morgen terug!</small>';
+    if (xp === TIRED_XP) p += '<br><small>Ik ben moe van al dat verliezen. Vandaag krijg je voor deze Turbo nog ' + TIRED_XP + ' XP per winst. Probeer een sterkere Turbo!</small>';
     P.day.winsByLvl[session.level] = (P.day.winsByLvl[session.level] || 0) + 1;
     bumpWeek('wins' + session.level, 1);
     snd.win(); celebrate();
   } else if (st.result === 'b') {
-    emoji = '🐢'; h = 'Turbo wint dit potje';
-    p = (st.reason === 'opgave' ? 'Je gaf op. Dat mag, maar de volgende keer vecht je door: ik maak ook fouten!' :
-      'Schaakmat… maar goed volgehouden! Van elke partij word je slimmer.') + '<br><small>💡 ' +
+    h = 'Turbo wint dit potje';
+    p = (st.reason === 'opgave' ? 'Je gaf op. Prima, dit potje is klaar.' : 'Schaakmat. Goed volgehouden!') + '<br><small>💡 ' +
       pick(LOSS_TIPS) + '</small>';
     xp = telt ? 15 : 0; if (!stil) snd.bad();
   } else {
-    emoji = '🤝'; h = 'Gelijkspel!';
+    h = 'Gelijkspel!';
     p = drawTxt[st.reason] || 'Niemand wint, niemand verliest.';
     xp = telt ? 30 : 0; snd.good();
   }
@@ -6683,10 +6868,12 @@ function endGame(st, stil) {
   if (stil) return;
   const lvl = session.level;
   later(() => {
-    showModal('<div class="m-emoji">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p>' +
-      '<div class="m-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
+    say(h);
+    toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p>' +
+      (xp ? '<p class="ek-xp">+' + xp + ' XP</p>' : '<p>Dit potje telt niet mee: het was korter dan tien zetten.</p>') + '<!--trofeeen-->' +
+      '<div class="ek-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
       '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', () => {
-        $('mAgain').addEventListener('click', () => { closeModal(); startGame(lvl); });
+        $('mAgain').addEventListener('click', () => startGame(lvl));
         $('mHome').addEventListener('click', goHome);
       });
   }, 900);
@@ -6756,17 +6943,55 @@ const BADGES = [
   { id: 'koning', e: '👑', n: 'Koningskind', d: 'Bereik level Koning', chk: () => levelIdx(P.xp) >= 5 }
 ];
 
+/* Een trofee, een level of een gehaald weekdoel wacht op de eindkaart van het potje of rondje. Wat dit
+   apparaat aan trofeeën liet zien, staat per apparaat in P.shownBadges, zodat een trofee die nog wachtte als
+   het kind pauzeerde of herlaadde thuis komt, en nooit twee keer (D34). */
+function bewaarVoorKaart(b) { if (session) (session.voorKaart = session.voorKaart || []).push(b); }
+function nogTeTonen() { return BADGES.filter(b => P.badges[b.id] && !P.shownBadges.includes(b.id)); }
+function alsGetoond(lijst) {
+  for (const b of lijst) if (!P.shownBadges.includes(b.id)) P.shownBadges.push(b.id);
+  saveP();
+}
+function voorKaart() {
+  const l = nogTeTonen();
+  alsGetoond(l);
+  if (session) { l.push(...(session.voorKaart || [])); session.voorKaart = []; }
+  const cur = levelIdx(P.xp);
+  if (P.lastLevel != null && cur > P.lastLevel) l.push({ e: LEVELS[cur].g, n: 'Level ' + LEVELS[cur].n });
+  return l;
+}
 function checkBadges() {
   checkLevelUp();
-  for (const b of BADGES) {
-    if (!P.badges[b.id] && b.chk()) {
-      addBadge(b.id);
-      snd.win();
-      burstCenter();
-      showToast('🏆 Trofee verdiend: ' + b.e + ' ' + b.n + '!', true);
-    }
-  }
+  for (const b of BADGES) if (!P.badges[b.id] && b.chk()) addBadge(b.id);
 }
+/* thuis: wat op een speelscherm verdiend is en nog niet te zien was */
+function thuisVieren() {
+  checkLevelUp();
+  const lijst = nogTeTonen();
+  if (!lijst.length) return;
+  alsGetoond(lijst);
+  snd.win();
+  burstCenter();
+  const meer = lijst.length > 1;
+  showModal('<div class="m-emoji">🏆</div><h2>' + (meer ? 'Trofeeën verdiend!' : 'Trofee verdiend!') + '</h2>' +
+    '<p>Je verdiende ' + (meer ? 'ze' : 'hem') + ' tijdens het spelen.</p>' +
+    trofeeRij(lijst) + '<div class="m-btns"><button class="btn sun" id="trofOk">Super! 🎉</button></div>',
+    () => $('trofOk').addEventListener('click', closeModal));
+}
+/* het einde van een potje is een kaart over het bord, geen venster */
+function trofeeRij(lijst) {
+  return lijst.length ? '<div class="ek-trofee">' +
+    lijst.map(b => '<span class="ek-badge"><span class="ek-be">' + b.e + '</span>' + b.n + '</span>').join('') + '</div>' : '';
+}
+function toonEindkaart(html, setup) {
+  const k = $('eindkaart');
+  k.innerHTML = html.replace('<!--trofeeen-->', trofeeRij(voorKaart()));
+  /* de kaart ligt op het bord; onder 400 px past de volle kaart daar niet in (de opmaak kan het bord niet meten) */
+  k.classList.toggle('klein', $('board').getBoundingClientRect().height < 400);
+  k.classList.remove('hidden');
+  if (setup) setup();
+}
+function sluitEindkaart() { $('eindkaart').classList.add('hidden'); $('eindkaart').innerHTML = ''; }
 
 function renderBadges() {
   const grid = $('badgeGrid');
@@ -6834,6 +7059,7 @@ function checkGoal() {
     saveP();
     syncSoon();
     celebrate();
+    if (speelschermOpen()) bewaarVoorKaart({ e: '🎯', n: 'Weekdoel gehaald!' });
     showToast('🎯 Weekdoel gehaald!', true);
     floatXP('+' + GOAL_XP + ' ⭐ Weekdoel gehaald! 🎯');
     updateHud();
@@ -7093,9 +7319,18 @@ function showHomeTab(name) {
    op het startscherm en maakten het druk */
 function openSettings() {
   showModal('<div class="m-emoji">⚙️</div><h2>Instellingen</h2>' +
-    '<div class="m-btns"><button class="btn sun" id="setLink">🔑 Speel op een ander apparaat</button>' +
+    '<div class="m-btns"><button class="btn plain tgl" id="tglGuard">🛡️ Blunder-alarm</button>' +
+    '<button class="btn plain tgl" id="tglPredict">🔮 Voorspellen</button>' +
+    '<button class="btn sun" id="setLink">🔑 Speel op een ander apparaat</button>' +
     '<button class="btn plain" id="setReset">🗑️ Alles wissen</button>' +
     '<button class="btn plain" id="setClose">Klaar</button></div>', () => {
+      const schakel = () => {
+        $('tglGuard').classList.toggle('on', P.guard);
+        $('tglPredict').classList.toggle('on', P.predict);
+      };
+      schakel();
+      $('tglGuard').addEventListener('click', () => { setPref('guard', !P.guard); schakel(); });
+      $('tglPredict').addEventListener('click', () => { setPref('predict', !P.predict); schakel(); });
       $('setLink').addEventListener('click', () => { closeModal(); linkShareFlow(); });
       $('setReset').addEventListener('click', () => { closeModal(); confirmReset(); });
       $('setClose').addEventListener('click', closeModal);
@@ -7160,8 +7395,8 @@ function confirmReset() {
 }
 $('sndBtn').addEventListener('click', () => { setPref('sound', !P.sound); updateHud(); if (P.sound) snd.select(); });
 $('predictSkip').addEventListener('click', () => resolvePredict(null));
-$('tglGuard').addEventListener('click', () => { setPref('guard', !P.guard); updateToggles(); });
-$('tglPredict').addEventListener('click', () => { setPref('predict', !P.predict); updateToggles(); });
+$('meerBtn').addEventListener('click', openMeer);
+$('materiaal').addEventListener('click', openMateriaal);
 
 function askName() {
   showModal('<div class="m-emoji">🐢</div><h2>Hoi! Ik ben Turbo!</h2>' +
@@ -7180,6 +7415,8 @@ function askName() {
     });
 }
 
+/* een profiel dat zijn level nooit bewaarde: het level van nu telt als gevierd */
+if (P.lastLevel == null) { P.lastLevel = levelIdx(P.xp); saveP(); }
 applyTheme();
 renderHome();
 $('homeBubble').textContent = pick(HOME_LINES);
@@ -7187,7 +7424,7 @@ showScreen('home');
 if (!checkPlayFragment() && !checkLinkFragment()) {
   if (!P.name && !ACC) askWelcome();
   else if (!P.name) askName();
-  else checkNewWeek();
+  else { checkNewWeek(); thuisVieren(); }
 }
 if (ACC) syncNow();
 friendPollSoon(1500);
