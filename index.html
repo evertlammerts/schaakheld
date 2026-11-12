@@ -294,9 +294,10 @@
   /* een platte rij op de pagina, geen kaart: zo houden de spelknoppen hun plek boven de tabbalk */
   .weekstrip {
     width: 100%; border: none; background: none; box-shadow: none; cursor: pointer; text-align: left; font: inherit; color: var(--text);
-    display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 4px; margin: 0; font-size: 15px; line-height: 1.2;
+    display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 2px; margin: 0; font-size: 15px; line-height: 1.2;
   }
-  .weekstrip .dots { display: flex; gap: 4px; flex: none; }
+  /* zo krap dat ook het langste weekdoel in twee regels past op 360 breed */
+  .weekstrip .dots { display: flex; gap: 3px; flex: none; }
   .weekstrip .dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 1.5px solid rgba(23, 69, 111, .3); display: block; }
   .weekstrip .dots i.on { background: var(--leaf-deep); border-color: var(--leaf-deep); }
   .weekstrip .dots i.today { box-shadow: 0 0 0 2px var(--sun); }
@@ -4938,6 +4939,19 @@ const OEFENZIN = {
 };
 const turboNaam = l => TURBO_NAMES[l].replace(/^\S+\s/, '');
 function dagenSinds(datum, now) { return Math.floor((now - Date.parse(datum + 'T00:00:00Z')) / 86400000); }
+/* een profiel van voor lastSeen weet toch wanneer het kind er was: de laatste dag met een dagteller */
+function laatsteDag(P) {
+  let laatst = null;
+  for (const W in P.wk || {}) {
+    const m = /^(\d{4})-W(\d{2})$/.exec(W);
+    const i = m ? [6, 5, 4, 3, 2, 1, 0].find(d => +P.wk[W]['d' + d] > 0) : undefined;
+    if (i === undefined) continue;
+    const jan4 = Date.UTC(+m[1], 0, 4), maandag1 = jan4 - ((new Date(jan4).getUTCDay() || 7) - 1) * 86400000;
+    const dag = new Date(maandag1 + ((+m[2] - 1) * 7 + i) * 86400000).toISOString().slice(0, 10);
+    if (!laatst || dag > laatst) laatst = dag;
+  }
+  return laatst;
+}
 function stadium(P) {
   if (P.c.winsL2 >= 1 || P.start === 'sterk') return 'sterk';
   if (P.start === 'nieuw' ? P.xp < 400 && P.wins === 0 : !P.start && P.xp < 150 && P.c.gamesPlayed < 3) return 'nieuw';
@@ -4991,7 +5005,8 @@ function nextStep(P, ctx) {
   if (bezig.length) return Object.assign({}, bezig[0], { ook: bezig.slice(1).map(b => b.ook), bezig });
   const st = stadium(P), ls = turboVoorstel(P, st), li = levelIdx(P.xp, P), lvl = LEVELS[li];
   const uit = (rule, title, text, button, action) => ({ rule, title, text, button, action, ook: [], bezig });
-  if (P.lastSeen && dagenSinds(P.lastSeen, ctx.now) >= 3) {
+  const gezienOp = P.lastSeen || laatsteDag(P);
+  if (gezienOp && dagenSinds(gezienOp, ctx.now) >= 3) {
     return uit('R3', 'Speel een potje', 'Je bent nog steeds ' + lvl.n + ' ' + lvl.g + '. Zin in een potje tegen ' +
       turboNaam(ls) + '?', 'Speel een potje', { go: 'game', level: ls });
   }
@@ -7129,7 +7144,7 @@ function renderWeekStrip() {
   const W = curWeek(), g = P.weekGoal;
   const dots = DAG_NAMEN.map((d, i) => '<i class="' + (wkGet(W, 'd' + i) > 0 ? 'on' : '') +
     (i === dagIdx() ? ' today' : '') + '"></i>').join('');
-  const txt = g ? Math.min(goalProgress(g, W), g.n) + ' van ' + goalText(g, true) : 'Kies een weekdoel: wat wil jij deze week doen?';
+  const txt = g ? Math.min(goalProgress(g, W), g.n) + ' van ' + goalText(g, true) : 'Kies een doel voor deze week';
   el.innerHTML = '<span class="dots">' + dots + '</span><span class="ws-txt">' + txt + '</span><span class="ws-arrow">›</span>';
 }
 

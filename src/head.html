@@ -281,9 +281,10 @@
   /* een platte rij op de pagina, geen kaart: zo houden de spelknoppen hun plek boven de tabbalk */
   .weekstrip {
     width: 100%; border: none; background: none; box-shadow: none; cursor: pointer; text-align: left; font: inherit; color: var(--text);
-    display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 4px; margin: 0; font-size: 15px; line-height: 1.2;
+    display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 2px; margin: 0; font-size: 15px; line-height: 1.2;
   }
-  .weekstrip .dots { display: flex; gap: 4px; flex: none; }
+  /* zo krap dat ook het langste weekdoel in twee regels past op 360 breed */
+  .weekstrip .dots { display: flex; gap: 3px; flex: none; }
   .weekstrip .dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 1.5px solid rgba(23, 69, 111, .3); display: block; }
   .weekstrip .dots i.on { background: var(--leaf-deep); border-color: var(--leaf-deep); }
   .weekstrip .dots i.today { box-shadow: 0 0 0 2px var(--sun); }

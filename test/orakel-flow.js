@@ -1620,7 +1620,8 @@ async function orakelFlow() {
   });
 
   await regel('[3.11] op maandag staat achter de kaart van de nieuwe week de stand van de nieuwe week', async function (check) {
-    zetDatum('2026-11-12T16:00:00');
+    /* zaterdag nog gespeeld: maandag is geen welkom terug, zodat de kaart het weekdoel laat zien */
+    zetDatum('2026-11-14T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game";' +
       'setPref("weekGoal", { kind: "top", n: 2, game: "scan" }); bumpWeek("top.scan", 1)');
@@ -1643,6 +1644,22 @@ async function orakelFlow() {
     check('de groet', tekstVan(b, 'groet') === 'Welkom terug, Mees! 👋');
     check('de kaart', /^Speel een potje/.test(tekstVan(b, 'verder')) && /Je bent nog steeds Loper/.test(tekstVan(b, 'verder')));
     check('de naam één keer', (tekstVan(b, 'view-spelen').match(/Mees/g) || []).length === 1);
+  });
+
+  /* decision D32: een document van voor lastSeen neemt de laatste dag met iets erop uit de dagtellers */
+  await regel('[3.9] compat: een document van nu zonder lastSeen, laatst geteld vijf dagen geleden: welkom terug', async function (check) {
+    const a = await kindUitDoc(docVan('Daan', { xp: 2710, stars: 70, 'wk.2026-W45.d5': 1, 'wk.2026-W45.opdr': 4, 'wk.2026-W44.d1': 2 }));
+    check('testopzet: geen lastSeen', a.get('P.lastSeen') === null);
+    const r = await stap(a);
+    check('R3', r.rule === 'R3');
+    check('de groet', tekstVan(a, 'groet') === 'Welkom terug, Daan! 👋');
+  });
+
+  await regel('[3.9] compat: een document van nu zonder lastSeen, laatst geteld gisteren: geen welkom terug', async function (check) {
+    const a = await kindUitDoc(docVan('Daan', { xp: 2710, stars: 70, 'wk.2026-W45.d5': 1, 'wk.2026-W46.d2': 3, 'wk.2026-W46.opdr': 3 }));
+    const r = await stap(a);
+    check('geen R3', r.rule !== 'R3');
+    check('de groet', tekstVan(a, 'groet') === 'Hoi Daan! 👋');
   });
 
   await regel('[3.9] de groet: "Hoi Mees! 👋", zonder naam "Hoi! 👋", en welkom terug zonder naam zonder komma', async function (check) {
@@ -1737,6 +1754,12 @@ async function orakelFlow() {
     };
     check('een nieuw kind: Slaapkop Turbo', JSON.stringify(await niveau('setPref("start", "nieuw")')) === '[true,true,1]');
     check('wie Super Turbo versloeg: Super Turbo', JSON.stringify(await niveau('bump("wins", 1); bump("c.winsL3", 1)')) === '[true,true,3]');
+  });
+
+  await regel('[3.11] de weekregel zonder doel nodigt uit in één korte zin', async function (check) {
+    const a = nieuwKind();
+    a.ev('renderHome()');
+    check('de zin', /^Kies een doel voor deze week\s*›?$/.test(tekstVan(a, 'weekStrip')));
   });
 
   await regel('[3.11] een tik op de weekregel opent Ik bij "Deze week"', async function (check) {
