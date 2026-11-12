@@ -587,6 +587,21 @@
   .coords-r { grid-column: 1; grid-row: 1; flex-direction: column; }
   .coords-f { grid-column: 2; grid-row: 2; }
   .coords-r span, .coords-f span { flex: 1; display: grid; place-items: center; line-height: 1; }
+  .eindkaart {
+    grid-column: 2; grid-row: 1; z-index: 25; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    padding: 16px; text-align: center; background: rgba(255, 255, 255, .95); border-radius: 16px;
+    box-shadow: var(--elev-2); animation: pop-in var(--dur-slow) var(--ease);
+  }
+  .eindkaart.hidden { display: none; }
+  .eindkaart .ek-turbo { font-size: 64px; line-height: 1; }
+  .eindkaart h2 { margin: 0; font-size: var(--fs-xl); }
+  .eindkaart p { margin: 0; font-size: var(--fs-sm); color: var(--text-quiet); }
+  .eindkaart .ek-xp { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); color: var(--accent-text); }
+  .ek-trofee { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .ek-badge { display: flex; flex-direction: column; align-items: center; width: 88px; font-size: var(--fs-cap); font-weight: 700; }
+  .ek-be { font-size: 40px; line-height: 1.1; }
+  .eindkaart .ek-btns { display: flex; flex-direction: column; gap: 8px; width: min(100%, 280px); }
   .play-bottom {
     grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
     padding: 0 var(--g) 8px;
@@ -865,6 +880,7 @@
           <svg id="arrows" viewBox="0 0 800 800"></svg>
         </div>
         <div class="coords-f" id="coordsF"></div>
+        <div id="eindkaart" class="eindkaart hidden"></div>
       </div>
       <div id="onder" class="play-bottom">
         <div id="actionRow" class="action-row"></div>
@@ -4572,6 +4588,7 @@ function showScreen(name) {
   $('scr-home').classList.toggle('hidden', name !== 'home');
   $('scr-play').classList.toggle('hidden', name !== 'play');
   document.body.classList.toggle('speelt', name === 'play');
+  sluitEindkaart();
   $('play').classList.toggle('task', name === 'play' && !!session && session.kind !== 'game');
   setAppH();
   try { window.scrollTo(0, 0); } catch (e) {}
@@ -6544,7 +6561,7 @@ function useTip() {
   }
   BD.spy = spy;
   renderBoard();
-  say('Paarse randjes = die stukken worden aangevallen! Ze blijven staan tot je zet. 👀');
+  say('Paarse randjes: die stukken worden aangevallen.');
 }
 
 const PTS = { p: 1, n: 3, b: 3, r: 5, q: 9 };
@@ -6631,7 +6648,7 @@ function endGameOnline(st, drawTxt) {
   } else if (st.result === ik) {
     emoji = '🏆';
     h = 'JIJ WINT!';
-    p = st.reason === 'opgave' ? escHtml(mpNaam()) + ' geeft op. Goed gespeeld, kampioen!' : 'Schaakmat! Wat een partij, kampioen!';
+    p = st.reason === 'opgave' ? escHtml(mpNaam()) + ' geeft op. Goed gespeeld!' : 'Schaakmat! Wat een partij.';
     /* alleen een eigen online-teller: NIET de gedeelde 'wins' of de
        dag-'wins', want die geven via de dagmissies en de "versla Turbo"-
        trofee XP, en twee kinderen op een bank zouden dat zo farmen. Online
@@ -6642,14 +6659,14 @@ function endGameOnline(st, drawTxt) {
   } else {
     emoji = '💪';
     h = escHtml(mpNaam()) + ' wint dit potje';
-    p = (st.reason === 'opgave' ? 'Je gaf op. Dat mag, maar de volgende keer vecht je door!' : 'Schaakmat… maar goed gespeeld!') + ' Pak je revanche!';
+    p = st.reason === 'opgave' ? 'Je gaf op. Netjes afgesloten. Revanche?' : 'Schaakmat… maar goed gespeeld! Pak je revanche!';
     snd.bad();
   }
-  checkBadges();
+  const nieuw = checkBadges(true);
   const vriendKnop = MP && !MP.viaFriend ? '<button class="btn plain" id="mpVriend">🤝 Vrienden worden</button>' : '';
-  showModal('<div class="m-emoji">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p>' +
-    '<div class="m-btns"><button class="btn sun" id="mpRev">🔁 Revanche!</button>' + vriendKnop +
-    '<button class="btn plain" id="mpEind">🏠 Stoppen</button></div>', () => {
+  toonEindkaart('<div class="ek-turbo">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p><!--trofeeen-->' +
+    '<div class="ek-btns"><button class="btn sun" id="mpRev">🔁 Revanche!</button>' + vriendKnop +
+    '<button class="btn plain" id="mpEind">🏠 Stoppen</button></div>', nieuw, () => {
       $('mpRev').addEventListener('click', () => {
         $('mpRev').disabled = true;
         $('mpRev').textContent = '🔁 Wachten op ' + mpNaam() + '…';
@@ -6660,7 +6677,7 @@ function endGameOnline(st, drawTxt) {
         $('mpVriend').textContent = '🤝 Gevraagd…';
         vriendVragen();
       });
-      $('mpEind').addEventListener('click', () => { closeModal(); mpVerlaat(); });
+      $('mpEind').addEventListener('click', () => { sluitEindkaart(); mpVerlaat(); });
     });
 }
 
@@ -6683,21 +6700,20 @@ function endGame(st, stil) {
   if (telt) bumpWeek('potjes' + session.level, 1);
   let emoji, h, p, xp;
   if (st.result === 'w') {
-    emoji = '🏆'; h = 'JE HEBT GEWONNEN!';
-    p = 'Schaakmat! Turbo buigt voor jou. Wat een partij!';
+    emoji = '🏆'; h = 'Gewonnen!';
+    p = 'Schaakmat! Ik buig voor jou. Wat een partij.';
     bump('wins', 1);
     if (session.level === 2) bump('c.winsL2', 1);
     if (session.level === 3) bump('c.winsL3', 1);
     ensureDay();
     xp = gameWinXP(session.level);
-    if (xp === TIRED_XP) p += '<br><small>Deze Turbo is moe van al dat verliezen: kleine bonus. Probeer een sterkere Turbo, of kom morgen terug!</small>';
+    if (xp === TIRED_XP) p += '<br><small>Ik ben moe van al dat verliezen. Vandaag krijg je voor deze Turbo nog ' + TIRED_XP + ' XP per winst. Probeer een sterkere Turbo!</small>';
     P.day.winsByLvl[session.level] = (P.day.winsByLvl[session.level] || 0) + 1;
     bumpWeek('wins' + session.level, 1);
     snd.win(); celebrate();
   } else if (st.result === 'b') {
     emoji = '🐢'; h = 'Turbo wint dit potje';
-    p = (st.reason === 'opgave' ? 'Je gaf op. Dat mag, maar de volgende keer vecht je door: ik maak ook fouten!' :
-      'Schaakmat… maar goed volgehouden! Van elke partij word je slimmer.') + '<br><small>💡 ' +
+    p = (st.reason === 'opgave' ? 'Je gaf op. Prima, dit potje is klaar.' : 'Schaakmat. Goed volgehouden!') + '<br><small>💡 ' +
       pick(LOSS_TIPS) + '</small>';
     xp = telt ? 15 : 0; if (!stil) snd.bad();
   } else {
@@ -6706,15 +6722,16 @@ function endGame(st, stil) {
     xp = telt ? 30 : 0; snd.good();
   }
   if (xp) addXP(xp, st.result === 'w' ? 'Gewonnen! 🏆' : 'Goed gespeeld!');
-  checkBadges();
+  const nieuw = checkBadges(!stil);
   saveP();
   if (stil) return;
   const lvl = session.level;
   later(() => {
-    showModal('<div class="m-emoji">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p>' +
-      '<div class="m-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
-      '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', () => {
-        $('mAgain').addEventListener('click', () => { closeModal(); startGame(lvl); });
+    toonEindkaart('<div class="ek-turbo">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p>' +
+      '<p class="ek-xp">' + (xp ? '+' + xp + ' XP' : 'Dit potje telt niet mee.') + '</p><!--trofeeen-->' +
+      '<div class="ek-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
+      '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', nieuw, () => {
+        $('mAgain').addEventListener('click', () => startGame(lvl));
         $('mHome').addEventListener('click', goHome);
       });
   }, 900);
@@ -6784,17 +6801,31 @@ const BADGES = [
   { id: 'koning', e: '👑', n: 'Koningskind', d: 'Bereik level Koning', chk: () => levelIdx(P.xp) >= 5 }
 ];
 
-function checkBadges() {
+/* aan het einde van een potje staan nieuwe trofeeën in de eindkaart, niet in een melding */
+function checkBadges(inKaart) {
   checkLevelUp();
+  const nieuw = [];
   for (const b of BADGES) {
     if (!P.badges[b.id] && b.chk()) {
       addBadge(b.id);
+      nieuw.push(b);
+      if (inKaart) continue;
       snd.win();
       burstCenter();
       showToast('🏆 Trofee verdiend: ' + b.e + ' ' + b.n + '!', true);
     }
   }
+  return nieuw;
 }
+/* het einde van een potje is een kaart over het bord, geen venster */
+function toonEindkaart(html, nieuw, setup) {
+  const k = $('eindkaart');
+  k.innerHTML = html.replace('<!--trofeeen-->', nieuw.length ? '<div class="ek-trofee">' +
+    nieuw.map(b => '<span class="ek-badge"><span class="ek-be">' + b.e + '</span>' + b.n + '</span>').join('') + '</div>' : '');
+  k.classList.remove('hidden');
+  if (setup) setup();
+}
+function sluitEindkaart() { $('eindkaart').classList.add('hidden'); $('eindkaart').innerHTML = ''; }
 
 function renderBadges() {
   const grid = $('badgeGrid');

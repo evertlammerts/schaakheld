@@ -898,7 +898,7 @@ async function orakelFlow() {
     check('de strook zegt wat er gemist is', /Gemist/.test(tekstVan(a, 'strook')));
   });
 
-  await nogNiet('[2.5] het einde van een potje is een kaart over het bord, met Revanche!, Naar huis en nieuwe trofeeën', async function (check) {
+  await regel('[2.5] het einde van een potje is een kaart over het bord, met Revanche!, Naar huis en nieuwe trofeeën', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
     a.tik('verderKaart');
     await wacht();

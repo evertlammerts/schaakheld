@@ -551,7 +551,7 @@ onKidMove(ra8);
 drainTimers();
 closeLevelUps();
 ok('mate: game over, kid wins', session.over === true && P.wins === winsBefore + 1);
-ok('mate: victory modal', __els.modalBox.innerHTML.indexOf('GEWONNEN') >= 0);
+ok('[2.5] mate: de eindkaart over het bord zegt Gewonnen!', __els.eindkaart.innerHTML.indexOf('Gewonnen!') >= 0);
 ok('badge: eerste potje en winnaar', !!P.badges.potje && !!P.badges.winst);
 
 /* ---------- gamification: badges, weekdoel, vorm, themes, modal queue ---------- */
@@ -1224,8 +1224,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await tikje();
   ok('mp: winst alleen in winsOnline, niet in P.wins', session.over === true &&
     P.wins === winsVoor && (P.c.winsOnline || 0) === onlineVoor + 1 &&
-    __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0 &&
-    __els.modalBox.innerHTML.indexOf('Revanche') >= 0);
+    __els.eindkaart.innerHTML.indexOf('JIJ WINT') >= 0 &&
+    __els.eindkaart.innerHTML.indexOf('Revanche') >= 0);
 
   var kleurVoor = MP.myColor;
   fire(__els.mpRev, 'click');
@@ -1410,7 +1410,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     }));
     drainTimers();
     for (var k = 0; k < 20; k++) await null;
-    var html = __els.modalBox.innerHTML;
+    var html = __els.eindkaart.innerHTML;
     closeModal();
     mpStop();
     return html;
@@ -1448,8 +1448,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   fire(__els.rsJa, 'click');
   await tikje();
   ok('mp: na ja is het potje afgelopen en wint het maatje', !!MP && !!session && session.over === true &&
-    __els.modalBox.innerHTML.indexOf('Fien wint dit potje') >= 0 && __els.modalBox.innerHTML.indexOf('Je gaf op') >= 0 &&
-    __els.modalBox.innerHTML.indexOf('Revanche') >= 0);
+    __els.eindkaart.innerHTML.indexOf('Fien wint dit potje') >= 0 && __els.eindkaart.innerHTML.indexOf('Je gaf op') >= 0 &&
+    __els.eindkaart.innerHTML.indexOf('Revanche') >= 0);
   ok('mp: vroeg opgeven telt niet als gespeeld potje', P.c.gamesPlayed === gpVoor);
   closeModal();
   mpStop();
@@ -1475,7 +1475,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var xpO = P.xp, winsO = P.wins;
   mpMsg({ t: 'opgave', gameNo: 1 });
   ok('mp: opgave van het maatje = jij wint', session.over === true && P.xp === xpO && P.wins === winsO &&
-    __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0 && __els.modalBox.innerHTML.indexOf('geeft op') >= 0);
+    __els.eindkaart.innerHTML.indexOf('JIJ WINT') >= 0 && __els.eindkaart.innerHTML.indexOf('geeft op') >= 0);
   closeModal();
   mpStop();
 
@@ -1539,7 +1539,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   BD.mode = 'move';
   commitKid(legalMoves(session.S).find(function (x) { return alg(x.to) === 'a8'; }));
   await tikje();
-  ok('vriend: eindscherm biedt vrienden worden aan', __els.modalBox.innerHTML.indexOf('Vrienden worden') >= 0);
+  ok('vriend: eindscherm biedt vrienden worden aan', __els.eindkaart.innerHTML.indexOf('Vrienden worden') >= 0);
   fire(__els.mpVriend, 'click');
   await tikje();
   var vraag = vmaat.inbox.filter(function (m) { return m.t === 'vriend?'; })[0];
@@ -1580,7 +1580,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   commitKid(legalMoves(session.S).find(function (x) { return alg(x.to) === 'a8'; }));
   await tikje();
   ok('bewijs: het eindscherm biedt geen tweede vriendschap aan',
-    __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0 && __els.modalBox.innerHTML.indexOf('Vrienden worden') < 0);
+    __els.eindkaart.innerHTML.indexOf('JIJ WINT') >= 0 && __els.eindkaart.innerHTML.indexOf('Vrienden worden') < 0);
   closeModal();
   session = null;
   /* een bewijs uit een andere kamer telt niet, en rommel evenmin */
@@ -2004,7 +2004,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   fire(__els.rsJa, 'click');
   drainTimers();
   ok('turbo: opgeven aan het begin = Turbo wint, telt niet, geen XP', session.over === true &&
-    P.c.gamesPlayed === gpT && P.xp === xpT && __els.modalBox.innerHTML.indexOf('Je gaf op') >= 0);
+    P.c.gamesPlayed === gpT && P.xp === xpT && __els.eindkaart.innerHTML.indexOf('Je gaf op') >= 0);
   closeModal();
   /* na twintig zetten telt opgeven wel als gespeeld potje (en betaalt de troost-XP) */
   startGame(2);
@@ -2033,7 +2033,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   offerDraw();
   drainTimers();
   ok('turbo: remise aangenomen bij gelijke stand', session.over === true && P.xp - xpT === 30 &&
-    __els.modalBox.innerHTML.indexOf('Remise afgesproken') >= 0);
+    __els.eindkaart.innerHTML.indexOf('Remise afgesproken') >= 0);
   closeModal();
   goHome();
   ok('offline: na afloop gaat ← Home gewoon naar huis', session === null && __els.overlay.classList.contains('hidden'));

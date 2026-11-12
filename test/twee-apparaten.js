@@ -20,6 +20,11 @@ function ok(naam, cond) {
 
 /* de wereld een stukje vooruit: timers en de microtaakwachtrij van beide
    apparaten, tot alles is uitgewerkt */
+/* het einde van een potje staat in de eindkaart over het bord, niet in een venster */
+function eindziet(app, tekst) {
+  return app.get('$("eindkaart").classList.contains("hidden") ? "" : $("eindkaart").textContent').indexOf(tekst) >= 0;
+}
+
 async function tik(venster) {
   const tot = __klok + (venster == null ? 5000 : venster);
   for (let i = 0; i < 5; i++) {
@@ -105,14 +110,14 @@ async function alles() {
   const wit = evert.get('MP.myColor') === 'w' ? evert : oscar;
   const zwart = wit === evert ? oscar : evert;
   ok('potje: mat, de winnaar wint en de verliezer verliest',
-    wit.ziet('JIJ WINT') && zwart.ziet('wint dit potje') &&
+    eindziet(wit, 'JIJ WINT') && eindziet(zwart, 'wint dit potje') &&
     wit.get('session.over') === true && zwart.get('session.over') === true);
   ok('potje: online winst telt apart, niet als winst op Turbo',
     wit.get('P.c.winsOnline') === 1 && wit.get('P.c.wins || 0') === 0);
 
   /* ---------- 2. allebei tegelijk vrienden worden ---------- */
   ok('vrienden: het eindscherm biedt het allebei aan',
-    evert.ziet('Vrienden worden') && oscar.ziet('Vrienden worden'));
+    eindziet(evert, 'Vrienden worden') && eindziet(oscar, 'Vrienden worden'));
   evert.tik('mpVriend');
   oscar.tik('mpVriend');
   await tik();
@@ -164,7 +169,7 @@ async function alles() {
   witNu.ev('BD.mode = "move"');
   await speel(evert, oscar, 'a1a8');
   ok('herkennen: het eindscherm biedt geen tweede vriendschap aan',
-    evert.open() && oscar.open() && !evert.ziet('Vrienden worden') && !oscar.ziet('Vrienden worden') &&
+    eindziet(evert, 'Revanche') && eindziet(oscar, 'Revanche') && !eindziet(evert, 'Vrienden worden') && !eindziet(oscar, 'Vrienden worden') &&
     evert.get('Object.keys(P.friends).length') === 1 && oscar.get('Object.keys(P.friends).length') === 1);
   evert.ev('mpVerlaat()');
   oscar.ev('mpVerlaat()');
@@ -223,7 +228,7 @@ async function alles() {
   opgever.tik('rsJa');
   await tik();
   ok('opgeven: de ander wint en beide kanten zijn klaar',
-    blijver.ziet('JIJ WINT') && opgever.get('session.over') === true &&
+    eindziet(blijver, 'JIJ WINT') && opgever.get('session.over') === true &&
     blijver.get('session.over') === true);
   ok('opgeven: een kort potje telt niet mee voor de week',
     blijver.get('wkGet(curWeek(), "online") || 0') === weekVoor);
@@ -270,7 +275,7 @@ async function alles() {
   await tik();
   ok('remise: ja = gelijkspel op allebei de telefoons',
     evert.get('session.over') === true && oscar.get('session.over') === true &&
-    evert.ziet('Gelijkspel') && oscar.ziet('Gelijkspel'));
+    eindziet(evert, 'Gelijkspel') && eindziet(oscar, 'Gelijkspel'));
   evert.tik('mpEind');
   oscar.tik('mpEind');
   await tik();
@@ -428,7 +433,7 @@ async function alles() {
   (evert.get('MP.myColor') === 'w' ? evert : oscar).ev('BD.mode = "move"');
   await speel(evert, oscar, 'a1a8');
   ok('weghalen: en het eindscherm biedt vrienden worden weer aan',
-    evert.ziet('Vrienden worden') && oscar.ziet('Vrienden worden'));
+    eindziet(evert, 'Vrienden worden') && eindziet(oscar, 'Vrienden worden'));
   evert.ev('mpVerlaat()');
   oscar.ev('mpVerlaat()');
   await tik();

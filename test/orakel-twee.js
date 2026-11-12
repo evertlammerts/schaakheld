@@ -280,7 +280,7 @@ async function orakelTwee() {
     check('bij Fien', /Daan start het potje\. Even wachten\./.test(fien.scherm()));
   });
 
-  await nogNiet('[4.7] een vriendschapsvraag na een potje staat in de eindkaart van de ander, niet erachter', async function (check) {
+  await regel('[4.7] een vriendschapsvraag na een potje staat in de eindkaart van de ander, niet erachter', async function (check) {
     const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
     await samenSpelen(daan, fien);
     await geefOp(aanZet(daan, fien));
