@@ -49,6 +49,12 @@ function wekelijks(app) {
   return tekstVan(app, 'weekCard');
 }
 
+/* naar huis zoals een kind: "Naar huis" als dat er staat, anders de terugknop */
+async function naarHuis(app) {
+  if (kanTikken(app, 'Naar huis')) { tikTekst(app, 'Naar huis'); await wacht(); }
+  if (!app.open() && opSpeelscherm(app)) { app.tik('backBtn'); await wacht(); }
+}
+
 /* een level omhoog legt een venster over Volgende; een kind tikt dat eerst weg */
 async function volgende(app) {
   for (let i = 0; i < 8 && app.ziet('LEVEL OMHOOG'); i++) app.tik('lvlOk');
@@ -93,7 +99,7 @@ async function orakelFlow() {
     await wacht();
     check('zelfde stand en wie er aan zet is', b.fen() === fen);
     check('zelfde niveau', b.get('session && session.level') === 2);
-    check('de Speurbril heeft er nog 2', knoppen(b).some(function (k) { return /Speurbril\D*2/.test(k.textContent || ''); }));
+    check('de Speurbril heeft er nog 2', knopTeksten(b).some(function (t) { return /Speurbril\D*2/.test(t); }));
   });
 
   await nogNiet('[1.1] herladen als Turbo aan zet is: Turbo zet', async function (check) {
@@ -190,7 +196,7 @@ async function orakelFlow() {
     const zetten = ['e2e4', 'e7e5'];
     const a = nieuwKind({ opslag: opslagMetPotje(2, zetten) });
     await startPotje(a, 1);
-    check('de vraag noemt opgeven', a.open() && /opgeven/i.test(a.scherm()) && a.ziet('Nee, verder spelen'));
+    check('de vraag noemt opgeven', a.open() && /opgeven/i.test(a.scherm()) && kanTikken(a, 'Nee, verder spelen'));
     tikTekst(a, 'Nee, verder spelen');
     await wacht();
     check('terug in hetzelfde potje', opSpeelscherm(a) && a.fen() === toFEN(naSpelen(zetten)) && a.get('session.level') === 2);
@@ -338,10 +344,9 @@ async function orakelFlow() {
     await wacht();
     b.ev('closeModal()');
     await startOefening(b, 'scan');
-    await volgende(b);
     await rondjeGoed(b, 3);
     await volgende(b);
-    b.ev('closeModal()');
+    await naarHuis(b);
     check('telt in de nieuwe week: 1 van 2', /1\s*(\/|van)\s*2/.test(wekelijks(b)));
   });
 
@@ -364,7 +369,7 @@ async function orakelFlow() {
     const a = nieuwKind();
     await startOefening(a, 'opening');
     const pad = a.el('modalBox').querySelectorAll('[data-pad]')[0];
-    if (pad) fire(pad, 'click', { target: pad });
+    if (pad) tikEl(a, pad, 'een openingspad');
     await wacht();
     check('in de les', opSpeelscherm(a));
     a.tik('backBtn');
@@ -441,7 +446,7 @@ async function orakelFlow() {
     /* meteen een nieuw potje, voordat de keten van de opdracht afloopt */
     if (heeftKlik(a, 'spelTurbo')) a.tik('spelTurbo'); else a.ev('startGameFlow()');
     const knop = a.el('modalBox').querySelectorAll('[data-lvl="1"]')[0];
-    if (knop) fire(knop, 'click', { target: knop });
+    if (knop) tikEl(a, knop, 'niveau 1');
     await wacht();
     check('het nieuwe potje begint in de beginstand', a.fen() === START_FEN_O);
     check('jij bent aan zet', a.get('session && session.S.turn') === 'w' && a.get('session.kind') === 'game');
@@ -465,7 +470,7 @@ async function orakelFlow() {
     const fout = a.get('session.task.options.findIndex(function (o) { return o !== session.task.best; })');
     const knop = a.el('optionsBox').querySelectorAll('.opt-btn[data-i="' + fout + '"]')[0];
     check('de opties zijn aan te tikken', !!knop);
-    if (knop) fire(knop, 'click', { target: knop });
+    if (knop) tikEl(a, knop, 'een foute optie');
     tikTekst(a, 'Deze kies ik');
     drainTimers(400, 50);
     a.tik('backBtn');
@@ -549,7 +554,7 @@ async function orakelFlow() {
     await startOefening(a, 'scan');
     await rondjeGoed(a, 5);
     await volgende(a);
-    a.ev('closeModal()');
+    await naarHuis(a);
     check('het doel staat op 1 van 2', /1\s*(\/|van)\s*2/.test(wekelijks(a)));
   });
 
@@ -591,12 +596,12 @@ async function orakelFlow() {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5']) });
     a.tik('verderKaart');
     await wacht();
-    const zicht = knoppen(a).map(function (k) { return k.textContent || ''; }).join(' | ');
+    const zicht = knopTeksten(a).join(' | ');
     check('Denkwolk, Speurbril en Zet terug in de rij', /Denkwolk/.test(zicht) && /Speurbril/.test(zicht) && /Zet terug/.test(zicht));
     check('Opgeven en Remise niet in de rij', !/Opgeven/.test(zicht) && !/Remise/.test(zicht));
     a.tik('meerBtn');
     await wacht();
-    const menu = knoppen(a).map(function (k) { return k.textContent || ''; }).join(' | ');
+    const menu = knopTeksten(a).join(' | ');
     check('achter ⋯', /Remise aanbieden/.test(menu) && /Opgeven/.test(menu) && /Puntenwijzer/.test(menu));
   });
 
@@ -641,8 +646,8 @@ async function orakelFlow() {
     tikTekst(a, 'Klaar');
     await wacht();
     const onder = a.el('onder');
-    const eerste = onder.querySelectorAll('button')[0] || (onder.children || [])[0];
-    check('Volgende is de eerste knop onder het bord', !!eerste && /Volgende/.test(eerste.textContent || ''));
+    const eerste = onder.querySelectorAll('button').concat(onder.children || []).filter(function (k) { return !tikbaar(a, k); })[0];
+    check('Volgende is de eerste knop onder het bord', !!eerste && /Volgende/.test(knopTekst(a, eerste)));
     check('de strook zegt wat er gemist is', /Gemist/.test(tekstVan(a, 'strook')));
   });
 
@@ -682,6 +687,7 @@ async function orakelFlow() {
       zet(a, 'e2e4');
       await wacht(20000);
       check('Turbo vraagt en wacht', a.get('session.S.hist.length') === 1);
+      check('"Speel maar" staat in beeld', kanTikken(a, 'Speel maar'));
       tikTekst(a, 'Speel maar');
       await wacht();
       check('na "Speel maar" zet Turbo', a.get('session.S.hist.length') === 2);
@@ -838,7 +844,7 @@ async function orakelFlow() {
     const a = await kindUitDoc(docVan('Mees', { xp: 1800, stars: 69, wins: 6, 'c.winsL2': 2, 'c.perfectScans': 8, 'c.gamesPlayed': 25 },
       { max: { best: 10, goal: { '2026-W42': 60, '2026-W43': 60, '2026-W44': 60, '2026-W45': 60 } } }));
     a.tik('tabIk');
-    const t = tekstVan(a, 'levelPath');
+    const t = tekstVan(a, 'levelPath') + ' ' + tekstVan(a, 'lpNext');
     check('de XP is gehaald', /✔\s*1800 XP/.test(t));
     check('de proef staat nog open, 2 van 3', /Nog te doen[^]*versla Turbo[^]*2 van 3/.test(t));
   });
@@ -846,7 +852,7 @@ async function orakelFlow() {
   await nogNiet('[3.5] Ik: XP en de meesterproef als twee aparte controles (Lotte)', async function (check) {
     const a = await kindUitDoc(docVan('Lotte', { xp: 2565, stars: 230, wins: 1, 'c.perfectScans': 13, 'c.gamesPlayed': 7 }));
     a.tik('tabIk');
-    const t = tekstVan(a, 'levelPath');
+    const t = tekstVan(a, 'levelPath') + ' ' + tekstVan(a, 'lpNext');
     check('de XP is gehaald', /✔\s*900 XP/.test(t));
     check('de proef staat nog open, 0 van 1', /Nog te doen[^]*versla Turbo[^]*0 van 1/.test(t));
   });
@@ -860,14 +866,16 @@ async function orakelFlow() {
 
   await nogNiet('[3.6] het getal dat het level bepaalt heet XP, zonder ster', async function (check) {
     const a = nieuwKind();
-    const kop = Object.keys(a.els).map(function (k) { return a.els[k]._html || ''; }).find(function (h) { return h.indexOf('id="xpNum"') >= 0; }) || '';
-    check('in de kop geen ster bij het getal, wel XP', /id="xpNum"[^]*?XP/.test(kop) && !/id="xpNum"[^>]*>[^<]*<\/b>\s*⭐/.test(kop));
+    const kop = a.doc.__ouderTekst(a.els.xpNum);
+    check('in de kop staat XP bij het getal, zonder ster', /XP/.test(kop) && !/⭐/.test(kop));
     a.tik('tabIk');
-    check('op het levelpad XP', /XP/.test(tekstVan(a, 'levelPath')) && !/\d+\s*⭐/.test(tekstVan(a, 'levelPath')));
+    const pad = tekstVan(a, 'levelPath') + ' ' + tekstVan(a, 'lpNext');
+    check('op het levelpad XP', /XP/.test(pad) && !/\d+\s*⭐/.test(pad));
     await startOefening(a, 'scan');
-    await scanGoed(a);
-    const zwevend = (document.body.children || []).concat(a.doc.body.children || []).map(function (c) { return c.textContent || ''; });
-    check('de zwevende winst zegt XP', zwevend.some(function (t) { return /\+\d+ XP/.test(t); }));
+    for (const sq of a.get('session.task.targets.slice()')) tikVeld(a, sq);
+    tikTekst(a, 'Klaar');
+    const zwevend = function () { return (a.doc.body.children || []).some(function (c) { return /\+\d+ XP/.test(a.doc.__tekst(c)); }); };
+    check('de zwevende winst zegt XP', await zagOoit(zwevend, 3000));
     check('de trofee voor 100 sterren telt sterren', /100 sterren/.test(a.get('BADGES.find(function (b) { return b.id === "sterren"; }).d')));
   });
 
@@ -907,7 +915,7 @@ async function orakelFlow() {
     check('alles staat erin', plek.every(function (i) { return i >= 0; }));
     check('Alles wissen als laatste', plek[6] === Math.max.apply(null, plek));
     const veld = a.el('modalBox').querySelectorAll('input')[0];
-    if (veld) { veld.value = 'Mees de Grote'; fire(veld, 'input', { target: veld }); fire(veld, 'change', { target: veld }); }
+    if (veld) { vulIn(a, veld, 'Mees de Grote'); fire(veld, 'change', { target: veld }); }
     await wacht();
     check('de naam is te veranderen', a.get('P.name') === 'Mees de Grote');
   });
@@ -964,12 +972,10 @@ async function orakelFlow() {
       const a = nieuwKind();
       a.ev('linkEntryFlow()');
       await wacht();
-      const veld = a.el('wordInp');
-      veld.value = geval[1];
-      fire(veld, 'input', { target: veld });
+      vulIn(a, a.el('wordInp'), geval[1]);
       await wacht();
       check('vier woorden in genummerde vakjes', /1\s*lang[^]*2\s*beloven[^]*3\s*kaal[^]*4\s*neer/.test(tekstVan(a, 'wordChips')));
-      check('de knop staat aan', heeftKlik(a, 'linkGo') && !a.el('linkGo').disabled);
+      check('de knop staat aan', heeftKlik(a, 'linkGo') && !a.el('linkGo').disabled && !tikbaar(a, a.el('linkGo')));
     });
   }
 
@@ -977,9 +983,7 @@ async function orakelFlow() {
     const a = nieuwKind();
     a.ev('linkEntryFlow()');
     await wacht();
-    const veld = a.el('wordInp');
-    veld.value = 'lang beloven kaal lamq';
-    fire(veld, 'input', { target: veld });
+    vulIn(a, a.el('wordInp'), 'lang beloven kaal lamq');
     await wacht();
     check('"\'lamq\' ken ik niet"', /'lamq' ken ik niet/.test(a.scherm()));
   });
@@ -997,12 +1001,10 @@ async function orakelFlow() {
     const a = nieuwKind();
     a.ev('mpWordFlow()');
     await wacht();
-    const veld = a.el('mpInp');
-    veld.value = 'lang neer';
-    fire(veld, 'input', { target: veld });
+    vulIn(a, a.el('mpInp'), 'lang neer');
     await wacht();
     check('twee genummerde woorden', /1\s*lang[^]*2\s*neer/.test(tekstVan(a, 'mpChips')));
-    check('Verbind! staat aan', heeftKlik(a, 'mpKoppel') && !a.el('mpKoppel').disabled);
+    check('Verbind! staat aan', heeftKlik(a, 'mpKoppel') && !a.el('mpKoppel').disabled && !tikbaar(a, a.el('mpKoppel')));
   });
 
   await nogNiet('[4.10] de koppelcode zegt in hele minuten hoe lang hij werkt, en biedt daarna een nieuwe', async function (check) {

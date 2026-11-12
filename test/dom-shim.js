@@ -4,16 +4,64 @@ var elc = 0;
 /* Een apparaat heeft zijn eigen DOM, opslag en adresbalk. De nep-server, de
    relay, de klok en de crypto zijn van de wereld en dus gedeeld: twee
    apparaten praten met dezelfde server, net als echt. */
+var __LEEG = /^(area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr)$/;
+function __tags() { return /<(\/?)([a-zA-Z][\w-]*)((?:\s+[^\s=>\/]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*(\/?)>/g; }
+function __attrs(s) {
+  const attrs = {}, ar = /([^\s=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+  let a;
+  while ((a = ar.exec(s || '')) !== null) attrs[a[1].toLowerCase()] = a[2] != null ? a[2] : a[3] != null ? a[3] : a[4] != null ? a[4] : '';
+  return attrs;
+}
+/* commentaar telt niet als opmaak; zelfde lengte, dus posities blijven kloppen */
+function __zonderCommentaar(html) { return String(html).replace(/<!--[^]*?-->/g, function (m) { return ' '.repeat(m.length); }); }
+/* de inhoud van het element waarvan de open-tag bij `vanaf` eindigt, tot zijn eigen sluittag */
+function __binnenVan(html, tag, vanaf) {
+  let diepte = 1, t;
+  const re = new RegExp('<' + tag + '\\b|</' + tag + '\\s*>', 'gi');
+  re.lastIndex = vanaf;
+  while ((t = re.exec(html)) !== null) {
+    diepte += t[0][1] === '/' ? -1 : 1;
+    if (diepte === 0) return html.slice(vanaf, t.index);
+  }
+  return html.slice(vanaf);
+}
+function __ontsnap(t) {
+  return t.replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'").replace(/&#(\d+);/g, function (m, n) { return String.fromCharCode(+n); })
+    .replace(/&#x([0-9a-f]+);/gi, function (m, n) { return String.fromCharCode(parseInt(n, 16)); }).replace(/&amp;/g, '&');
+}
 function maakDocument(vast) {
   const els = {};
-  /* Een element met een id in vers geschreven HTML is in een echte browser een
-     nieuwe knoop: zijn luisteraars zijn weg. De shim geeft hetzelfde gecachete
-     object terug, dus wissen we ze hier. Het element waarin geschreven wordt
-     blijft wel bestaan, dus daar stapelen luisteraars op, net als echt. */
-  function versHtml(html) {
-    const re = /id="([^"]+)"/g;
+  const body = makeEl('body');
+  function verborgenAttrs(attrs) {
+    return /(^|\s)hidden(\s|$)/.test(attrs.class || '') || 'hidden' in attrs || /display\s*:\s*none/.test(attrs.style || '');
+  }
+  function verborgenZelf(el) {
+    return el._cls.has('hidden') || el.style.display === 'none' || !!(el._attrs && 'hidden' in el._attrs);
+  }
+  /* Een element in vers geschreven HTML is in een echte browser een nieuwe
+     knoop: zonder luisteraars, met de klassen, data en inhoud uit de opmaak.
+     Elk element met een id wordt dus opnieuw gemaakt; wie het oude nog vasthoudt,
+     houdt een losse knoop vast, net als echt. */
+  function bouw(html) {
+    const schoon = __zonderCommentaar(html), re = __tags();
     let m;
-    while ((m = re.exec(html)) !== null) { const el = els[m[1]]; if (el) el._ev = {}; }
+    while ((m = re.exec(schoon)) !== null) {
+      if (m[1]) continue;
+      const tag = m[2].toLowerCase(), attrs = __attrs(m[3]);
+      if (!attrs.id) continue;
+      const k = makeEl(attrs.id);
+      k._tag = tag;
+      k._attrs = attrs;
+      if (attrs.class) k.className = attrs.class;
+      for (const n in attrs) {
+        if (n.indexOf('data-') === 0) k.dataset[n.slice(5).replace(/-([a-z])/g, (x, c) => c.toUpperCase())] = attrs[n];
+      }
+      if ('disabled' in attrs) k.disabled = true;
+      if ('value' in attrs) k.value = attrs.value;
+      if (!__LEEG.test(tag) && !m[4]) k._html = __binnenVan(html, tag, re.lastIndex);
+      els[attrs.id] = k;
+    }
   }
   function makeEl(id) {
   const el = { id, children: [], style: {}, dataset: {}, _ev: {}, _html: '', _text: '',
@@ -34,25 +82,45 @@ function maakDocument(vast) {
   });
   Object.defineProperty(el, 'innerHTML', {
     get: () => el._html,
-    set: v => { el._html = String(v); el.children = []; versHtml(v); }
+    set: v => { el._html = String(v); el._text = ''; el._qsa = null; el.children = []; bouw(el._html); }
   });
   Object.defineProperty(el, 'textContent', {
     get: () => el._text || el._html.replace(/<[^>]*>/g, ''),
-    set: v => { el._text = String(v); el._html = String(v); }
+    set: v => { el._text = String(v); el._html = String(v); el._qsa = null; el.children = []; }
   });
-  el.appendChild = c => { el.children.push(c); return c; };
+  el.appendChild = c => {
+    if (c._ouder) c._ouder.children = c._ouder.children.filter(x => x !== c);
+    c._ouder = el;
+    c._los = false;
+    el.children.push(c);
+    return c;
+  };
   el.querySelectorAll = sel => zoekIn([el], sel);
   el.querySelector = sel => zoekIn([el], sel)[0] || null;
   el.addEventListener = (t, fn) => { (el._ev[t] || (el._ev[t] = [])).push(fn); };
   el.style.setProperty = function () {};
   el.getBoundingClientRect = () => ({ left: 0, top: 0, right: 100, bottom: 20, width: 40, height: 40 });
-  el.remove = () => {};
+  el.remove = () => {
+    if (el._ouder) el._ouder.children = el._ouder.children.filter(x => x !== el);
+    el._ouder = null;
+    el._los = true;
+  };
   el.closest = () => makeEl('closest' + (elc++));
   /* showToast vervangt de toast door een kloon; zonder dit las een test de oude */
-  el.replaceWith = n => { if (n && n.id && els[n.id] === el) els[n.id] = n; };
+  el.replaceWith = n => {
+    if (n && n.id && els[n.id] === el) els[n.id] = n;
+    if (el._ouder) { el._ouder.children = el._ouder.children.map(x => x === el ? n : x); n._ouder = el._ouder; el._ouder = null; }
+    el._los = true;
+  };
   el.scrollIntoView = () => { __scrolls.push({ el: id }); };
   el.focus = () => {};
-  el.cloneNode = () => makeEl(id);
+  el.cloneNode = () => {
+    const n = makeEl(id);
+    n._tag = el._tag;
+    n._attrs = el._attrs;
+    n.className = el.className;
+    return n;
+  };
     el.getContext = () => ({ clearRect() {}, save() {}, restore() {}, translate() {}, rotate() {}, fillRect() {} });
     return el;
   }
@@ -60,34 +128,152 @@ function maakDocument(vast) {
      via een klasse of data-attribuut bindt (niveaus, opties, openingen) zijn zo
      dezelfde objecten die een test aantikt. Alleen enkelvoudige selectors
      (tag, #id, .klasse, [attr], [attr="v"], en lijsten met komma's). */
-  function knopen(host) {
-    if (host._qsa && host._qsa.html === host._html) return host._qsa.knopen;
-    const lijst = [];
-    const re = /<([a-zA-Z][\w-]*)((?:\s+[^\s=>\/]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*\/?>/g;
-    let m;
-    while ((m = re.exec(host._html)) !== null) {
-      const tag = m[1].toLowerCase(), attrs = {};
-      const ar = /([^\s=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
-      let a;
-      while ((a = ar.exec(m[2])) !== null) attrs[a[1].toLowerCase()] = a[2] != null ? a[2] : a[3] != null ? a[3] : a[4] != null ? a[4] : '';
-      const sluit = host._html.indexOf('</' + tag, re.lastIndex);
-      const binnen = sluit < 0 ? '' : host._html.slice(re.lastIndex, sluit);
-      const k = attrs.id ? (els[attrs.id] || (els[attrs.id] = makeEl(attrs.id))) : makeEl('_q' + (elc++));
+  /* Elk element zonder id hoort bij het binnenste element met een id om zich
+     heen: daar wordt het een keer gemaakt, en elke zoekvraag (via dat element,
+     een ouder of het document) geeft hetzelfde object. Een element met een id
+     telt met zijn huidige inhoud, niet met wat zijn ouder ooit schreef. */
+  function eigen(host) {
+    if (host._qsa && host._qsa.html === host._html) return host._qsa.items;
+    const items = [], schoon = __zonderCommentaar(host._html), re = __tags();
+    let m, overslaan = null;
+    while ((m = re.exec(schoon)) !== null) {
+      const tag = m[2].toLowerCase(), leeg = __LEEG.test(tag) || !!m[4];
+      if (overslaan) {
+        if (tag === overslaan.tag && !leeg) overslaan.diepte += m[1] ? -1 : 1;
+        if (overslaan.diepte === 0) overslaan = null;
+        continue;
+      }
+      if (m[1]) continue;
+      const attrs = __attrs(m[3]);
+      if (attrs.id) {
+        if (!els[attrs.id]) bouw(m[0]);
+        items.push({ id: attrs.id });
+        if (!leeg) overslaan = { tag, diepte: 1 };
+        continue;
+      }
+      const k = makeEl('_q' + (elc++));
       k._tag = tag;
       k._attrs = attrs;
-      if (!attrs.id || !k._qsaGezien) {
-        k._qsaGezien = true;
-        if (attrs.class && !k._cls.size) k.className = attrs.class;
-        for (const n in attrs) {
-          if (n.indexOf('data-') === 0) k.dataset[n.slice(5).replace(/-([a-z])/g, (x, c) => c.toUpperCase())] = attrs[n];
-        }
-        if (!k._html && !k._text) k._text = binnen.replace(/<[^>]*>/g, '');
-        if ('disabled' in attrs) k.disabled = true;
+      k._host = host;
+      k._pos = m.index;
+      if (attrs.class) k.className = attrs.class;
+      for (const n in attrs) {
+        if (n.indexOf('data-') === 0) k.dataset[n.slice(5).replace(/-([a-z])/g, (x, c) => c.toUpperCase())] = attrs[n];
       }
-      lijst.push(k);
+      if ('disabled' in attrs) k.disabled = true;
+      if ('value' in attrs) k.value = attrs.value;
+      if (!leeg) k._html = __binnenVan(host._html, tag, re.lastIndex);
+      items.push({ k });
     }
-    host._qsa = { html: host._html, knopen: lijst };
+    host._qsa = { html: host._html, items };
+    return items;
+  }
+  function knopen(host, diepte) {
+    const lijst = [];
+    if ((diepte || 0) > 40) return lijst;
+    for (const it of eigen(host)) {
+      if (it.k) { lijst.push(it.k); continue; }
+      const k = els[it.id];
+      lijst.push(k);
+      if (k._html) for (const x of knopen(k, (diepte || 0) + 1)) lijst.push(x);
+    }
     return lijst;
+  }
+  /* Waar een element hangt: de keten van ouders tot de pagina, en of iets op
+     die weg verborgen is. Een element met een id hangt in het binnenste
+     element waarvan de HTML het noemt; een element zonder id in het element
+     waarin de app het schreef, en alleen als geen element met een id ertussen
+     zit (dan is dat zijn echte ouder, en deze kopie oud). null: los. */
+  function ouderVan(el) {
+    if (el === body) return null;
+    if (el._los) return { los: true };
+    if (el._ouder) return { ouder: el._ouder, omhullend: [] };
+    let host = null, pos = -1;
+    if (el.id && els[el.id] === el) {
+      const zoek = new RegExp('<[a-zA-Z][\\w-]*\\s[^>]*\\bid="' + el.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"');
+      const naam = 'id="' + el.id + '"';
+      const kandidaten = Object.keys(els).map(k => els[k]).concat([body])
+        .filter(h => h !== el && h._html && h._html.indexOf(naam) >= 0 && zoek.test(schoonVan(h)));
+      host = kandidaten.find(h => !kandidaten.some(g => g !== h && g !== body && els[g.id] === g &&
+        h._html.indexOf('id="' + g.id + '"') >= 0)) || null;
+      if (host) pos = schoonVan(host).search(zoek);
+    } else if (el._host && el._host._qsa && el._host._qsa.html === el._host._html &&
+      el._host._qsa.items.some(it => it.k === el)) {
+      host = el._host;
+      pos = el._pos;
+    }
+    if (!host) return { los: true };
+    eigen(host);
+    const stapel = [], schoon = schoonVan(host), re = __tags();
+    let m;
+    while ((m = re.exec(schoon)) !== null && m.index < pos) {
+      const tag = m[2].toLowerCase();
+      if (m[1]) {
+        for (let i = stapel.length - 1; i >= 0; i--) if (stapel[i].tag === tag) { stapel.length = i; break; }
+      } else if (!__LEEG.test(tag) && !m[4]) stapel.push({ tag, attrs: __attrs(m[3]), k: levend(host, m.index) });
+    }
+    /* staat er een element met een id tussen, dan is dat de echte ouder; noemt
+       die het niet meer, dan is dit een oude kopie */
+    if (stapel.some(t => t.attrs.id && els[t.attrs.id])) return { los: true };
+    return { ouder: host, omhullend: stapel };
+  }
+  function schoonVan(h) {
+    if (h._schoonVan !== h._html) { h._schoon = __zonderCommentaar(h._html); h._schoonVan = h._html; }
+    return h._schoon;
+  }
+  /* het object van een element zonder id op die plek, als de app het al kent */
+  function levend(host, pos) {
+    if (!host._qsa || host._qsa.html !== host._html) return null;
+    const it = host._qsa.items.find(x => x.k && x.k._pos === pos);
+    return it ? it.k : null;
+  }
+  function tagVerborgen(t) {
+    const live = t.attrs.id && els[t.attrs.id];
+    if (live) return verborgenZelf(live);
+    if (t.k) return verborgenZelf(t.k) || !!t.k._los;
+    return verborgenAttrs(t.attrs);
+  }
+  /* de keten van ouders, of null als het element nergens meer hangt */
+  function pad(el) {
+    const keten = [];
+    let verborgen = verborgenZelf(el), nu = el;
+    for (let i = 0; i < 60 && nu !== body; i++) {
+      const o = ouderVan(nu);
+      if (!o || o.los) return null;
+      if (o.omhullend.some(tagVerborgen)) verborgen = true;
+      nu = o.ouder;
+      keten.push(nu);
+      if (nu !== body && verborgenZelf(nu)) verborgen = true;
+    }
+    return nu === body ? { keten, verborgen } : null;
+  }
+  /* de tekst die een kind ziet: zonder tags, zonder verborgen delen, en met de
+     huidige inhoud van elk element met een id (de app kan die later hebben
+     veranderd) */
+  function zichtbareTekst(el) {
+    const delen = [];
+    const html = el._html || el._text || '';
+    if (el._html || !el._text) {
+      const schoon = __zonderCommentaar(html), re = __tags();
+      let m, vorig = 0, overslaan = null;
+      while ((m = re.exec(schoon)) !== null) {
+        const tag = m[2].toLowerCase();
+        if (overslaan) {
+          if (tag === overslaan.tag && !__LEEG.test(tag) && !m[4]) overslaan.diepte += m[1] ? -1 : 1;
+          if (overslaan.diepte === 0) { overslaan = null; vorig = re.lastIndex; }
+          continue;
+        }
+        delen.push(schoon.slice(vorig, m.index));
+        vorig = re.lastIndex;
+        if (m[1] || __LEEG.test(tag) || m[4]) continue;
+        const attrs = __attrs(m[3]), live = (attrs.id && els[attrs.id]) || levend(el, m.index);
+        if (live && !verborgenZelf(live) && !live._los) delen.push(' ' + zichtbareTekst(live) + ' ');
+        if (live || verborgenAttrs(attrs)) overslaan = { tag, diepte: 1 };
+      }
+      if (!overslaan) delen.push(schoon.slice(vorig));
+    } else delen.push(el._text);
+    for (const c of el.children || []) if (!verborgenZelf(c)) delen.push(' ' + zichtbareTekst(c) + ' ');
+    return __ontsnap(delen.join(' ')).replace(/\s+/g, ' ').trim();
   }
   function past(k, enkel) {
     const t = enkel.match(/^[a-zA-Z][\w-]*/);
@@ -114,35 +300,28 @@ function maakDocument(vast) {
      aantikt wat een kind ziet. Een ouder houdt de opmaak van toen. */
   if (vast == null && typeof __VASTE_OPMAAK === 'string') vast = __VASTE_OPMAAK;
   if (vast) {
-    const lees = { _html: vast, _qsa: null };
-    knopen(lees);
-    const leeg = /^(area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr)$/;
-    const re = /<([a-zA-Z][\w-]*)\b[^>]*\bid="([^"]+)"[^>]*>/g;
-    let m;
-    while ((m = re.exec(vast)) !== null) {
-      const tag = m[1].toLowerCase(), el = els[m[2]];
-      if (!el || leeg.test(tag)) continue;
-      let diepte = 1, i = re.lastIndex, eind = vast.length;
-      const open = new RegExp('<' + tag + '\\b|</' + tag + '\\s*>', 'gi');
-      open.lastIndex = i;
-      let t;
-      while ((t = open.exec(vast)) !== null) {
-        diepte += t[0][1] === '/' ? -1 : 1;
-        if (diepte === 0) { eind = t.index; break; }
-      }
-      el._html = vast.slice(i, eind);
-      el._text = '';
-    }
+    bouw(vast);
+    body._html = vast;
+  }
+  /* de zichtbare tekst van het element direct om dit element heen */
+  function ouderTekst(el) {
+    const o = el && ouderVan(el);
+    if (!o || o.los) return '';
+    const t = o.omhullend[o.omhullend.length - 1];
+    return t && t.k ? zichtbareTekst(t.k) : zichtbareTekst(o.ouder);
   }
   return {
     __els: els,
+    __pad: pad,
+    __tekst: zichtbareTekst,
+    __ouderTekst: ouderTekst,
     getElementById(id) { return els[id] || (els[id] = makeEl(id)); },
-    createElement() { return makeEl('_c' + (elc++)); },
+    createElement(tag) { const e = makeEl('_c' + (elc++)); e._tag = String(tag || '').toLowerCase(); return e; },
     querySelectorAll(sel) { return zoekIn(Object.keys(els).map(k => els[k]).filter(e => e._html), sel); },
     /* zonder treffer een los element, zoals de shim altijd deed: de app leest
        vaak .board-frame uit de vaste opmaak, die de shim niet kent */
     querySelector(sel) { return this.querySelectorAll(sel)[0] || makeEl('_q' + (elc++)); },
-    body: makeEl('body'),
+    body,
     documentElement: makeEl('documentElement'),
     /* document-brede handlers echt bewaren, zodat fire(document, 'keydown', ...)
        in de flowtests de app-code raakt (Escape sluit een modal) */

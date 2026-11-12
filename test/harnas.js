@@ -30,10 +30,11 @@ function maakApparaat(naam, opties) {
     get(expr) { return ev('(' + expr + ')'); },
     el(id) { return doc.getElementById(id); },
     modal() { return doc.getElementById('modalBox').innerHTML; },
-    scherm() { return app.modal().replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90); },
+    /* de hele tekst van het open venster zoals een kind hem leest */
+    scherm() { return app.open() ? doc.__tekst(doc.getElementById('modalBox')) : ''; },
     ziet(t) { return app.open() && app.modal().indexOf(t) >= 0; },
     open() { return !doc.getElementById('overlay').classList.contains('hidden'); },
-    tik(id) { fire(doc.getElementById(id), 'click'); },
+    tik(id) { return tikEl(app, doc.__els[id], '#' + id); },
     fen() { return app.get('session && session.S ? toFEN(session.S) : null'); }
   };
   ORAKEL.apps.push(app);
@@ -64,6 +65,22 @@ async function wacht(venster) {
   }
 }
 
+/* de klok in stapjes van 50 ms vooruit, met na elke stap de vraag: is het nu
+   waar? Voor wat maar even in beeld is, zoals een zwevende winst of een zet
+   die Turbo laat zien en weer terugneemt. */
+async function zagOoit(vraag, venster) {
+  const tot = __klok + (venster == null ? 5000 : venster);
+  let gezien = !!vraag();
+  while (__klok < tot) {
+    const stap = Math.min(tot, __klok + 50);
+    drainTot(400, stap);
+    if (__klok < stap) __klok = stap;
+    for (let j = 0; j < 40; j++) await null;
+    if (vraag()) gezien = true;
+  }
+  return gezien;
+}
+
 /* ---------- een vaste datum ----------
    De app leest de tijd uit Date. Een test die een week, een dag of "drie
    dagen weg" nodig heeft, zet hier de datum; de virtuele klok van de timers
@@ -83,41 +100,85 @@ function zetDatum(iso) {
 }
 function echteDatum() { Date = __EchteDate; __datumBasis = null; }
 
-/* ---------- handelingen zoals een kind ze doet ---------- */
+/* ---------- handelingen zoals een kind ze doet ----------
+   Een kind tikt alleen wat het ziet: een element dat zelf of via een ouder
+   verborgen is, of dat achter een open venster ligt, laat de test falen. */
+
+/* waarom dit element nu niet te tikken is, of '' als het wel kan */
+function tikbaar(app, el) {
+  if (!el) return 'bestaat niet';
+  const p = app.doc.__pad(el), venster = app.el('overlay');
+  if (!p) return 'hangt niet in de pagina';
+  if (p.verborgen) return 'is verborgen';
+  if (app.open() && el !== venster && p.keten.indexOf(venster) < 0) return 'ligt achter het open venster';
+  return '';
+}
+
+/* heeft het element zelf geen luisteraar, dan krijgt de eerste ouder met een
+   luisteraar de tik, zoals een klik in de browser omhoog bubbelt; een knop die
+   uit staat doet niets, net als echt */
+function tikEl(app, el, naam) {
+  const waarom = tikbaar(app, el);
+  if (waarom) throw new Error('tik op ' + (naam || (el && el.id)) + ': ' + waarom);
+  if (el.disabled) return false;
+  if (el._ev.click && el._ev.click.length) { fire(el, 'click', { target: el }); return true; }
+  for (const o of app.doc.__pad(el).keten) {
+    if (o._ev && o._ev.click && o._ev.click.length) { fire(o, 'click', { target: el }); return true; }
+  }
+  return true;
+}
+
+/* een veld invullen zoals een kind typt: alleen een veld dat het ziet */
+function vulIn(app, el, tekst) {
+  const waarom = tikbaar(app, el);
+  if (waarom) throw new Error('typen in ' + (el && el.id) + ': ' + waarom);
+  el.value = tekst;
+  fire(el, 'input', { target: el });
+}
+
+/* een tik op een veld van het bord: alleen als het bord in beeld is */
+function tikVeld(app, sq) {
+  const waarom = tikbaar(app, app.els.board);
+  if (waarom) throw new Error('tik op het bord: ' + waarom);
+  app.ev('onCell(' + sq + ')');
+}
 
 /* een zet via het bord: eerst het stuk, dan het veld (de tikhandler) */
 function zet(app, key) {
-  return app.ev('(function () {' +
-    'var m = legalMoves(session.S).find(function (x) { return moveKey(x) === ' + JSON.stringify(key) + '; });' +
-    'if (!m) return false; onCell(m.from); onCell(m.to); return true; })()');
+  const m = app.get('(function () { var m = legalMoves(session.S).find(function (x) { return moveKey(x) === ' +
+    JSON.stringify(key) + '; }); return m ? [m.from, m.to] : null; })()');
+  if (!m) return false;
+  tikVeld(app, m[0]);
+  tikVeld(app, m[1]);
+  return true;
 }
 
-/* alles wat nu te tikken valt: in een open venster alleen het venster */
+/* alles wat nu te tikken valt: knoppen, links en [data-tik] in beeld */
 function knoppen(app) {
-  if (app.open()) return app.el('modalBox').querySelectorAll('button, a, [data-tik]');
-  const uit = [];
-  const els = app.els;
-  for (const id in els) {
-    const e = els[id];
-    for (const c of e.children || []) if (c.textContent && uit.indexOf(c) < 0) uit.push(c);
-    if (e._html && !e.classList.contains('hidden')) {
-      for (const k of e.querySelectorAll('button, a, [data-tik]')) if (uit.indexOf(k) < 0) uit.push(k);
-    }
+  const uit = [], kandidaten = [];
+  const voeg = function (k) { if (k && kandidaten.indexOf(k) < 0) kandidaten.push(k); };
+  const bronnen = app.open() ? [app.el('modalBox')] : Object.keys(app.els).map(function (id) { return app.els[id]; });
+  for (const e of bronnen) {
+    if (e._tag === 'button' || e._tag === 'a' || (e._attrs && 'data-tik' in e._attrs)) voeg(e);
+    for (const c of e.children || []) if (c.textContent) voeg(c);
+    if (e._html) for (const k of e.querySelectorAll('button, a, [data-tik]')) voeg(k);
   }
+  for (const k of kandidaten) if (!tikbaar(app, k)) uit.push(k);
   return uit;
 }
+function knopTekst(app, k) { return app.doc.__tekst(k); }
+function knopTeksten(app) { return knoppen(app).map(function (k) { return knopTekst(app, k); }); }
 
-/* een knop aantikken op wat erop staat; heeft hij zelf geen luisteraar, dan
-   krijgt de lijst eromheen de tik, zoals een klik in de browser omhoog bubbelt */
+function vindKnop(app, tekst) {
+  return knoppen(app).find(function (b) { return !b.disabled && knopTekst(app, b).indexOf(tekst) >= 0; }) || null;
+}
+function kanTikken(app, tekst) { return !!vindKnop(app, tekst); }
+
+/* een knop aantikken op wat erop staat */
 function tikTekst(app, tekst) {
-  const k = knoppen(app).find(function (b) { return !b.disabled && (b.textContent || '').indexOf(tekst) >= 0; });
-  if (!k) return false;
-  if (k._ev.click && k._ev.click.length) { fire(k, 'click', { target: k }); return true; }
-  for (const id in app.els) {
-    const host = app.els[id];
-    if (host._qsa && host._qsa.knopen.indexOf(k) >= 0) fire(host, 'click', { target: k });
-  }
-  return true;
+  const k = vindKnop(app, tekst);
+  if (!k) throw new Error('geen knop "' + tekst + '" in beeld die iets doet');
+  return tikEl(app, k, '"' + tekst + '"');
 }
 
 function heeftKlik(app, id) {
@@ -125,17 +186,17 @@ function heeftKlik(app, id) {
   return !!(e && e._ev.click && e._ev.click.length);
 }
 
+/* in beeld: het element en al zijn ouders zijn zichtbaar */
 function zichtbaar(app, id) {
   const e = app.els[id];
-  return !!e && !e.classList.contains('hidden');
+  const p = e && app.doc.__pad(e);
+  return !!p && !p.verborgen;
 }
 
+/* de tekst in het element die een kind ziet (verborgen delen tellen niet) */
 function tekstVan(app, id) {
   const e = app.els[id];
-  if (!e) return '';
-  const binnen = (e._html || e._text || '').replace(/<[^>]*>/g, ' ');
-  const kids = (e.children || []).map(function (c) { return c.textContent || ''; }).join(' ');
-  return (binnen + ' ' + kids).replace(/\s+/g, ' ').trim();
+  return e ? app.doc.__tekst(e) : '';
 }
 
 function toastTekst(app) {
@@ -159,7 +220,7 @@ async function startPotje(app, niveau) {
   await wacht();
   const knop = app.el('modalBox').querySelectorAll('[data-lvl="' + niveau + '"]')[0];
   if (!knop) return false;
-  fire(knop, 'click', { target: knop });
+  tikEl(app, knop, 'niveau ' + niveau);
   await wacht();
   return true;
 }
@@ -172,7 +233,7 @@ async function startOefening(app, soort) {
 /* Speurogen goed beantwoorden: elk aangevallen veld aantikken, dan Klaar */
 async function scanGoed(app) {
   const doelen = app.get('session.task.targets.slice()');
-  for (const sq of doelen) app.ev('onCell(' + sq + ')');
+  for (const sq of doelen) tikVeld(app, sq);
   tikTekst(app, 'Klaar');
   await wacht();
 }
@@ -185,14 +246,16 @@ async function zetEnWacht(app, key) {
 
 /* opgeven zoals een kind: de knop Opgeven (in de rij of achter ⋯), dan ja */
 async function geefOp(app) {
-  if (!tikTekst(app, 'Opgeven')) { app.tik('meerBtn'); await wacht(); tikTekst(app, 'Opgeven'); }
+  if (!kanTikken(app, 'Opgeven')) { app.tik('meerBtn'); await wacht(); }
+  tikTekst(app, 'Opgeven');
   await wacht();
   tikTekst(app, 'Ja');
   await wacht();
 }
 
 async function biedRemise(app) {
-  if (!tikTekst(app, 'Remise')) { app.tik('meerBtn'); await wacht(); tikTekst(app, 'Remise'); }
+  if (!kanTikken(app, 'Remise')) { app.tik('meerBtn'); await wacht(); }
+  tikTekst(app, 'Remise');
   await wacht();
 }
 
@@ -245,4 +308,43 @@ async function orakelZelftest() {
   ok('orakel: wat nog niet gebouwd is maar slaagt, maakt de suite rood',
     naOnverwacht === f0 + 1 && regels[2].indexOf('FAIL') === 0);
   ok('orakel: een gebouwde regel die faalt, maakt de suite rood', naKapot === f0 + 2);
+  harnasZelftest();
+}
+
+/* De harnas liegt niet over wat een kind ziet: bewezen op een eigen pagina,
+   zonder app. */
+function harnasZelftest() {
+  const doc = maakDocument('<header><span class="xp"><b id="num">5</b> XP</span></header>' +
+    '<section id="speel"><div id="balk" class="hidden"><button id="skip">Speel maar</button></div>' +
+    '<div class="rij"><button id="zie">Zie mij</button></div><div class="hidden"><button>Verstopt</button></div></section>' +
+    '<div id="overlay" class="hidden"><div id="modalBox"></div></div>');
+  const app = { doc, els: doc.__els, el: function (id) { return doc.getElementById(id); },
+    open: function () { return !doc.getElementById('overlay').classList.contains('hidden'); } };
+  const gooit = function (f) { try { f(); return false; } catch (e) { return true; } };
+  let tikken = 0;
+  app.els.skip.addEventListener('click', function () { tikken++; });
+  ok('harnas: een knop in een verborgen ouder is niet te tikken', !kanTikken(app, 'Speel maar') &&
+    gooit(function () { tikTekst(app, 'Speel maar'); }) && gooit(function () { tikEl(app, app.els.skip); }) && tikken === 0);
+  ok('harnas: een knop in een verborgen blok zonder id is niet te tikken', !kanTikken(app, 'Verstopt'));
+  app.els.balk.classList.remove('hidden');
+  ok('harnas: zichtbaar gemaakt wel', kanTikken(app, 'Speel maar') && tikTekst(app, 'Speel maar') && tikken === 1);
+  const lang = 'Typ deze vier woorden in de app. Of scan de code. ' + 'lamp boom kat vis '.repeat(6) + 'Werkt nog 9 minuten.';
+  app.el('modalBox').innerHTML = '<h2>Jouw code</h2><p>' + lang + '</p><p class="hidden">Deze code is op.</p>' +
+    '<p>&#39;lamq&#39; ken ik niet &amp; zo</p><button id="ok">Klaar</button>';
+  app.el('overlay').classList.remove('hidden');
+  const tekst = doc.__tekst(app.el('modalBox'));
+  ok('harnas: de hele tekst van een venster, zonder verborgen deel, met tekens zoals ze er staan',
+    tekst.length > 150 && /Werkt nog 9 minuten\.$/.test(tekst.split(' \'lamq')[0]) && !/Deze code is op/.test(tekst) &&
+    /'lamq' ken ik niet & zo/.test(tekst));
+  ok('harnas: met een open venster ligt de rest erachter', gooit(function () { tikEl(app, app.els.zie); }) &&
+    !gooit(function () { tikEl(app, app.els.ok); }));
+  app.el('modalBox').innerHTML = '<button class="b">Nog eens</button>';
+  let keer = 0;
+  const bind = function () { app.el('modalBox').querySelectorAll('.b')[0].addEventListener('click', function () { keer++; }); };
+  bind();
+  app.el('modalBox').innerHTML = '<button class="b">Nog eens</button>';
+  bind();
+  tikTekst(app, 'Nog eens');
+  ok('harnas: twee keer dezelfde HTML geeft nieuwe knoppen, dus een tik telt een keer', keer === 1);
+  ok('harnas: de tekst naast een element', doc.__ouderTekst(app.els.num) === '5 XP');
 }

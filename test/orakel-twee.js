@@ -7,8 +7,10 @@ var SAMEN = 'schaakheld-samen';
 
 function aanZet(a, b) { return a.get('!!(session && MP && session.S.turn === MP.myColor)') ? a : b; }
 
+/* wat een kind nu leest: het open venster en de plekken met tekst die in beeld zijn */
 function zegt(app) {
-  return [app.modal(), tekstVan(app, 'verder'), tekstVan(app, 'bubble'), tekstVan(app, 'strook'), tekstVan(app, 'eindkaart')].join(' ');
+  return [app.scherm()].concat(['verder', 'bubble', 'strook', 'eindkaart'].filter(function (id) { return zichtbaar(app, id); })
+    .map(function (id) { return tekstVan(app, id); })).join(' ');
 }
 
 /* twee kinderen worden vrienden zoals in de app: een potje, een geeft op,
@@ -172,7 +174,6 @@ async function orakelTwee() {
     await wacht();
     daan.tik('invJa');
     await wacht();
-    tikTekst(fien, 'Spelen');
     fien.tik('mpGo');
     await wacht();
     check('testopzet: samen in een potje', fien.get('!!(session && session.online)') && daan.get('!!(session && session.online)'));
@@ -192,7 +193,7 @@ async function orakelTwee() {
     await nodigUit(fien);
     await daan.ev('friendPoll()');
     await wacht();
-    check('testopzet: Daan krijgt de vraag', daan.ziet('Nu niet'));
+    check('testopzet: Daan krijgt de vraag', kanTikken(daan, 'Nu niet'));
     tikTekst(daan, 'Nu niet');
     await wacht(30000);
     check('Fien leest het', /Daan kan nu even niet/.test(zegt(fien)));
@@ -206,8 +207,8 @@ async function orakelTwee() {
     await wacht();
     fien.tik('mpJa');
     await wacht();
-    check('bij Daan', /Daan start het potje\./.test(daan.modal()));
-    check('bij Fien', /Daan start het potje\. Even wachten\./.test(fien.modal()));
+    check('bij Daan', /Daan start het potje\./.test(daan.scherm()));
+    check('bij Fien', /Daan start het potje\. Even wachten\./.test(fien.scherm()));
   });
 
   await nogNiet('[4.7] een vriendschapsvraag na een potje staat in de eindkaart van de ander, niet erachter', async function (check) {
@@ -229,12 +230,11 @@ async function orakelTwee() {
     const woorden = mees.modal().replace(/<[^>]*>/g, ' ').split(/[^a-z]+/).filter(function (w) { return WOORDEN.indexOf(w) >= 0; }).slice(0, 4);
     check('testopzet: vier woorden op het scherm', woorden.length === 4);
     ipad.ev('linkEntryFlow()');
-    const veld = ipad.el('wordInp');
-    veld.value = woorden.join(' ');
-    fire(veld, 'input', { target: veld });
+    await wacht();
+    vulIn(ipad, ipad.el('wordInp'), woorden.join(' '));
     tikTekst(ipad, 'Koppel');
     await wacht();
-    check('het profiel van Mees is gevonden', ipad.ziet('Mees'));
+    check('het profiel van Mees is gevonden', /Mees/.test(ipad.scherm()));
   });
 
   await nogNiet('[4.9] de nep-server: een kamer met een potje leeft 12 uur stil, een lege kamer een kwartier', async function (check) {
