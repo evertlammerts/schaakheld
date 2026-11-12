@@ -898,6 +898,46 @@ function checkPieceTask(task) {
   return scores.every(v => best - v <= 100) ? task : null;
 }
 
+/* How move m saves White's hanging piece on hangSq, for the explanation of
+   Red je stuk; first match wins. "Safe" means Black wins nothing by capturing
+   on that square (the exchange, not only "a white piece defends it": a
+   defended queen that a pawn attacks is still lost). Points are 1, 3, 5, 9. */
+function saveKind(S, m, hangSq) {
+  const moved = m.from === hangSq;
+  const took = isCapture(S, m) ? (S.board[capturedSq(S, m)] || 'p').toLowerCase() : null;
+  const tookOne = took ? { took: NAME_NL[took], a: POINTS[took] } : {};
+  const hangVal = VAL[S.board[hangSq].toLowerCase()];
+  const takerOfHang = took && pieceAttacksSq(S, m.to, hangSq);
+  const sliders = piecesOf(S, 'b').filter(a => 'brq'.includes(S.board[a].toLowerCase()) && pieceAttacksSq(S, a, hangSq));
+  makeMove(S, m);
+  const at = moved ? m.to : hangSq;
+  const back = seeSquare(S, at), safe = back === 0, attackedNow = attacked(S, at, 'b');
+  const blocked = !moved && sliders.some(a => S.board[a] && !pieceAttacksSq(S, a, hangSq) && between(a, hangSq, m.to));
+  const check = inCheck(S);
+  const threatens = !took && piecesOf(S, 'b').some(t => S.board[t] !== 'k' && pieceAttacksSq(S, m.to, t) && VAL[S.board[t].toLowerCase()] >= hangVal);
+  unmakeMove(S);
+  const backPts = Math.round(back / 100) >= 9 ? 9 : Math.round(back / 100);
+  const out = (kind, extra) => Object.assign({ kind, sq: alg(at) }, tookOne, extra || {});
+  if (takerOfHang && safe) return out('aanvaller');
+  if (moved) {
+    if (!attackedNow) return out('weg');
+    if (safe) return out('weg-gedekt');
+    if (took && VAL[took] >= back) return out('ruil', { b: backPts });
+  } else if (safe) return out(blocked ? 'ertussen' : 'gedekt');
+  else if (took && VAL[took] >= back) return out('ruil', { b: backPts });
+  if (!took && (check || threatens)) return out('tegenaanval');
+  return out('anders');
+}
+/* Is square c strictly on the straight line between a and b? */
+function between(a, b, c) {
+  const df = (b & 15) - (a & 15), dr = (b >> 4) - (a >> 4);
+  const n = Math.max(Math.abs(df), Math.abs(dr));
+  if (n < 2 || (df !== 0 && dr !== 0 && Math.abs(df) !== Math.abs(dr))) return false;
+  const step = Math.sign(dr) * 16 + Math.sign(df);
+  for (let i = 1, s = a + step; i < n; i++, s += step) if (s === c) return true;
+  return false;
+}
+
 /* Safe-or-trap: a quiet white move that either holds (loss<=60) or drops >=250
    by force, confirmed by checkSafeTask. After three candidates that the check
    rejects it gives up, so the child never waits long. A trap's punishment is
@@ -1335,25 +1375,31 @@ function genPieceTask(rng) {
   rng = rng || Math.random;
   let rejected = 0;
   for (let tries = 0; tries < 120 && rejected < 3; tries++) {
-    const S = randomPosition({ noise: 260, minPlies: 8, maxPlies: 24, maxImbalance: 600 }, rng);
-    if (inCheck(S)) continue;
-    const th = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250);
-    if (th.length !== 1) continue;
-    const base = forcedMaterial(S);
-    const saves = [], moves = legalMoves(S);
-    for (const m of moves) {
-      makeMove(S, m);
-      const st = gameStatus(S);
-      const after = st.over ? base : forcedMaterial(S);
-      unmakeMove(S);
-      if (after - base >= -60) saves.push({ m, info: null });
-    }
-    if (!saves.length || saves.length > 4) continue;
-    const task = { S, type: 'stuk', hang: th[0], answers: saves };
+    const task = pieceTaskFrom(randomPosition({ noise: 260, minPlies: 8, maxPlies: 24, maxImbalance: 600 }, rng));
+    if (!task) continue;
     if (checkPieceTask(task)) return task;
     rejected++;
   }
   return null;
+}
+/* The Red je stuk task in position S, before the check: one white piece
+   hangs, and one to four moves keep the material. Null otherwise. The stock
+   (STUK_POOL) is made from this too. */
+function pieceTaskFrom(S) {
+  if (S.turn !== 'w' || inCheck(S)) return null;
+  const th = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250);
+  if (th.length !== 1) return null;
+  const base = forcedMaterial(S);
+  const saves = [];
+  for (const m of legalMoves(S)) {
+    makeMove(S, m);
+    const st = gameStatus(S);
+    const after = st.over ? base : forcedMaterial(S);
+    unmakeMove(S);
+    if (after - base >= -60) saves.push({ m, info: null });
+  }
+  if (!saves.length || saves.length > 4) return null;
+  return { S, type: 'stuk', hang: th[0], answers: saves };
 }
 
 /* --- the key moment of a game against Turbo (the child plays White) --- */
@@ -1453,7 +1499,8 @@ function keyMoment(S) {
 /* A type serves only with this many verified puzzles: fewer, and a child who
    plays daily recognises the positions within a week (decision D24). */
 const TRUC_MIN = 15;
-/* "<board> <side>|<type>|<answer>[,<answer>]" as a task, or null. */
+/* "<board> <side>|<type>|<answer>[,<answer>]" as a task, or null; a Red je
+   stuk task (STUK_POOL) gets its hanging piece too. */
 function trucTask(line) {
   const parts = String(line).split('|');
   if (parts.length !== 3) return null;
@@ -1461,7 +1508,12 @@ function trucTask(line) {
   const legal = legalMoves(S);
   const answers = parts[2].split(',').map(k => legal.find(m => moveKey(m) === k));
   if (!answers.length || answers.some(m => !m)) return null;
-  return { S, type: parts[1], answers: answers.map(m => ({ m, info: null })) };
+  const task = { S, type: parts[1], answers: answers.map(m => ({ m, info: null })) };
+  if (task.type === 'stuk') {
+    task.hang = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250)[0];
+    if (!task.hang) return null;
+  }
+  return task;
 }
 /* The trick types the stock can serve. */
 function trucTypes(pool) {
@@ -1498,5 +1550,5 @@ if (typeof module !== 'undefined') {
     winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
     repetitions, positionKey, SUPER_NODES, CHECK_NODES, checkSafeTask, checkPieceTask,
-    POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes };
+    POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };
 }

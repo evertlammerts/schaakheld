@@ -126,9 +126,37 @@
     check('de stand blijft onaangeroerd', E.toFEN(S) === fen);
   });
 
+  /* ---------- 5.5: de uitleg bij Red je stuk zegt wat waar is ---------- */
+
+  regel('[5.5] Red je stuk: een slag is nooit "weggezet"; wegzetten alleen naar een veld dat Turbo niet aanvalt', function (check) {
+    const soort = function (fen, hang, k) {
+      const S = E.parseFEN(fen), voor = E.toFEN(S);
+      const r = E.saveKind(S, zet(S, k), E.sqFromAlg(hang));
+      check(k + ': het bord blijft zoals het was', E.toFEN(S) === voor);
+      return r;
+    };
+    /* zoals bij Daan: de loper slaat op e6, en het paard op c5 slaat terug */
+    const daan = '4k3/8/4b3/2n5/2B5/8/8/6K1 w - - 0 1';
+    let r = soort(daan, 'c4', 'c4e6');
+    check('Lxe6, Pxe6: een ruil, loper tegen loper (' + JSON.stringify(r) + ')', r.kind === 'ruil' && r.took === 'loper' && r.a === 3 && r.b === 3);
+    r = soort(daan, 'c4', 'c4e2');
+    check('Le2: weg, daar valt Turbo niets aan (' + JSON.stringify(r) + ')', r.kind === 'weg');
+    r = soort(daan, 'c4', 'c4b3');
+    check('Lb3 staat nog steeds onder vuur: niet weg (' + JSON.stringify(r) + ')', r.kind !== 'weg' && r.kind !== 'weg-gedekt');
+    r = soort('4r1k1/8/8/b7/4N3/8/1P6/6K1 w - - 0 1', 'e4', 'e4c3');
+    check('Pc3: aangevallen door de loper maar gedekt door de pion (' + JSON.stringify(r) + ')', r.kind === 'weg-gedekt' && r.sq === 'c3');
+    /* zoals K6 bij increment 1: de dame op d6 valt de toren op h2 aan, en een stuk zet zich ertussen */
+    r = soort('6k1/8/3q4/8/7B/8/5P1R/5K2 w - - 0 1', 'h2', 'h4g3');
+    check('Lg3 tussen dame en toren (' + JSON.stringify(r) + ')', r.kind === 'ertussen');
+    r = soort('4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1', 'e4', 'd2d3');
+    check('d3 dekt het paard: Txe4 kost Turbo de toren (' + JSON.stringify(r) + ')', r.kind === 'gedekt');
+    r = soort('6k1/8/8/3p4/2P1N3/8/8/6K1 w - - 0 1', 'e4', 'c4d5');
+    check('cxd5 slaat de aanvaller van het paard (' + JSON.stringify(r) + ')', r.kind === 'aanvaller' && r.took === 'pion');
+  });
+
   /* ---------- 5.1: de voorraad trucs ---------- */
 
-  const TYPES = ['vork', 'penning', 'spies', 'aftrek', 'mat2'];
+  const TYPES = ['vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat2'];
   const leesTruc = function (regel) {
     const delen = String(regel).split('|');
     if (delen.length !== 3) throw new Error('geen drie delen: ' + regel);
@@ -138,6 +166,7 @@
   const herkend = function (t) {
     const m = t.antwoorden[0];
     if (t.type === 'mat2') return E.matesIn(t.S, m, 2);
+    if (t.type === 'mat1') return E.patternsAfterMove(t.S, m).mate;
     const info = E.patternsAfterMove(t.S, m);
     if (t.type === 'vork') return info.fork.length >= 2;
     if (t.type === 'penning') return !!info.pin;
@@ -202,6 +231,70 @@
         }
       }
     }
+  });
+
+  /* ---------- 5.9: Red je stuk uit een geverifieerde voorraad ---------- */
+
+  regel('[5.9] elke Red je stuk-opdracht in de voorraad: er hangt een stuk, elke redding houdt het materiaal, elke andere zet niet', function (check) {
+    check('er is een voorraad STUK_POOL met minstens 15', typeof STUK_POOL !== 'undefined' && Array.isArray(STUK_POOL) && STUK_POOL.length >= 15);
+    if (typeof STUK_POOL === 'undefined') return;
+    const slecht = [];
+    for (const regel of STUK_POOL) {
+      const t = E.trucTask(regel);
+      if (!t || t.type !== 'stuk' || !t.hang || t.S.turn !== 'w' || E.inCheck(t.S) || t.answers.length > 4) { slecht.push(regel); continue; }
+      const basis = E.forcedMaterial(t.S);
+      const houdt = function (m) {
+        E.makeMove(t.S, m);
+        const st = E.gameStatus(t.S);
+        const na = st.over ? basis : E.forcedMaterial(t.S);
+        E.unmakeMove(t.S);
+        return na - basis >= -60;
+      };
+      const antwoord = function (m) { return t.answers.some(function (a) { return E.moveKey(a.m) === E.moveKey(m); }); };
+      if (!t.answers.every(function (a) { return houdt(a.m); }) || E.legalMoves(t.S).some(function (m) { return !antwoord(m) && houdt(m); })) slecht.push(regel);
+    }
+    check('elke regel klopt' + (slecht.length ? ' (niet: ' + slecht.slice(0, 3).join('; ') + ')' : ''), slecht.length === 0);
+  });
+
+  regel('[5.9] een steekproef van vijf uit de Red je stuk-voorraad: elke redding blijft bij diep nadenken binnen een pion van de beste', function (check) {
+    if (!check('er is een voorraad STUK_POOL', typeof STUK_POOL !== 'undefined' && Array.isArray(STUK_POOL))) return;
+    if (!knoopbudget(check)) return;
+    const rng = vast(20261113), van = STUK_POOL.slice();
+    for (let i = 0; i < 5 && van.length; i++) {
+      const regel = van.splice(Math.floor(rng() * van.length), 1)[0];
+      const t = E.trucTask(regel);
+      const scores = t.answers.map(function (a) {
+        E.makeMove(t.S, a.m);
+        const st = E.gameStatus(t.S);
+        const wit = st.over ? (st.reason === 'mat' ? E.MATE : 0) : -E.think(t.S, 20000, 10, { nodes: 60000 }).score;
+        E.unmakeMove(t.S);
+        return wit;
+      });
+      const best = Math.max.apply(null, scores);
+      check(regel + ': elke redding binnen 100 van de beste (' + scores.join(', ') + ')', scores.every(function (v) { return best - v <= 100; }));
+    }
+  });
+
+  /* De generatoren die live blijven, op vaste zaden. Op deze Mac onder een
+     seconde per opdracht; de echte maat is een paar seconden onder de 6x
+     vertraging in Chromium (gemeten in de review, ux-run/reviews/inc5/snelheid.md). */
+  regel('[5.9] de generatoren die live blijven en het lezen van een voorraadregel blijven snel', function (check) {
+    const traagst = {};
+    const meet = function (naam, f) {
+      for (let i = 1; i <= 3; i++) {
+        const rng = vast(i * 7919), t = Date.now();
+        f(rng);
+        traagst[naam] = Math.max(traagst[naam] || 0, Date.now() - t);
+      }
+    };
+    for (const type of ['attacked', 'capture', 'mobility', 'free', 'threat']) meet('speurogen ' + type, function (rng) { E.genScanTask(type, rng); });
+    meet('veilig of valstrik', function (rng) { E.genSafeTask(rng() < 0.5, rng); });
+    meet('de beste zet', function (rng) { E.genBest3(rng); });
+    const t0 = Date.now();
+    if (typeof TRUC_POOL !== 'undefined') for (const r of TRUC_POOL.slice(0, 50)) E.trucTask(r);
+    traagst['50 voorraadregels lezen'] = Date.now() - t0;
+    for (const naam in traagst) check(naam + ': ' + traagst[naam] + ' ms', traagst[naam] < 1000);
+    console.log('  live generatoren, traagste van 3 (ms): ' + JSON.stringify(traagst));
   });
 
   /* ---------- 5.6: drie keer dezelfde stelling ---------- */

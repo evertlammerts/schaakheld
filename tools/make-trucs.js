@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 /* Maakt en controleert de voorraad trucs voor de Trucendoos (vork, penning,
-   spies, aftrekaanval, mat in twee) met de echte engine, en schrijft ze als
-   src/trucs.js. Een truc goed controleren kost seconden per stelling, op een
-   trage telefoon tientallen; daarom gebeurt het vooraf.
+   spies, aftrekaanval, mat in een en in twee) en de voorraad opdrachten voor
+   Red je stuk met de echte engine, en schrijft ze als src/trucs.js
+   (TRUC_POOL en STUK_POOL). Een opdracht goed controleren kost seconden per
+   stelling, op een trage telefoon tientallen; daarom gebeurt het vooraf.
 
    Een werker zoekt een vaste tijd en schrijft wat hij vindt naar zijn eigen
    bestand; samenvoegen schrijft src/trucs.js:
-     node tools/make-trucs.js zoek <seconden> <zaad> <uitvoer.json> [types, of mat2]
+     node tools/make-trucs.js zoek <seconden> <zaad> <uitvoer.json> [types, of mat1, mat2 of stuk]
      node tools/make-trucs.js merge <deel.json> ...
    Elk zoeken met hetzelfde zaad vindt dezelfde stellingen: alle zoektochten
    in de engine tellen knopen, geen tijd.
@@ -18,14 +19,16 @@
    4. de winst bij het patroon hoort: na de truc, zwarts beste antwoord en
       wits beste antwoord slaat wit op een veld van de vork, de penning, de
       spies of de aftrekaanval.
-   Mat in twee komt van genMate2Task, dat exact is. */
+   Mat in een en mat in twee komen van genMate1Task en genMate2Task, die exact
+   zijn. Red je stuk komt van pieceTaskFrom, met de nacontrole van regel 5.3
+   en een diepere: elke redding blijft binnen een pion van de beste. */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const E = require(path.join(__dirname, '..', 'src', 'engine.js'));
 
-const TYPES = ['vork', 'penning', 'spies', 'aftrek', 'mat2'];
-const DOEL = { vork: 150, penning: 80, spies: 40, aftrek: 60, mat2: 120 };
+const TYPES = ['vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat2', 'stuk'];
+const DOEL = { vork: 150, penning: 80, spies: 40, aftrek: 60, mat1: 120, mat2: 120, stuk: 120 };
 const LIJN_KNOPEN = 150000, DIEP_KNOPEN = 600000;
 
 function mulberry32(a) {
@@ -136,6 +139,32 @@ function zoekPatroon(rng, types) {
   return { bord: bord(S), type, antwoorden: antwoorden.map(E.moveKey) };
 }
 
+function zoekMat1(rng) {
+  const t = E.genMate1Task(rng);
+  if (!t) return null;
+  const S = zonderRechten(t.S);
+  if (E.inCheck(S)) return null;
+  const antwoorden = E.matingMoves(S, 1);
+  if (!antwoorden.length || antwoorden.length > 2 || antwoorden.some(bijzonder)) return null;
+  return { bord: bord(S), type: 'mat1', antwoorden: antwoorden.map(E.moveKey) };
+}
+
+function zoekStuk(rng) {
+  const S = zonderRechten(E.randomPosition({ noise: 260, minPlies: 8, maxPlies: 24, maxImbalance: 600 }, rng));
+  const t = E.pieceTaskFrom(S);
+  if (!t || t.answers.some(a => bijzonder(a.m)) || !E.checkPieceTask(t)) return null;
+  const scores = t.answers.map(a => {
+    E.makeMove(S, a.m);
+    const st = E.gameStatus(S);
+    const r = st.over ? { score: st.reason === 'mat' ? -E.MATE : 0, depth: 99 } : E.think(S, 60000, 10, { nodes: DIEP_KNOPEN });
+    E.unmakeMove(S);
+    return { wit: -r.score, diep: r.depth };
+  });
+  const best = Math.max(...scores.map(x => x.wit));
+  if (scores.some(x => x.diep < 5 || best - x.wit > 100)) return null;
+  return { bord: bord(S), type: 'stuk', antwoorden: t.answers.map(a => E.moveKey(a.m)) };
+}
+
 function zoekMat2(rng) {
   const t = E.genMate2Task(rng);
   if (!t) return null;
@@ -147,13 +176,13 @@ function zoekMat2(rng) {
 }
 
 function zoek(seconden, zaad, uitvoer, soorten) {
-  const alleenMat2 = soorten[0] === 'mat2';
+  const enkel = { mat1: zoekMat1, mat2: zoekMat2, stuk: zoekStuk }[soorten[0]];
   const rng = mulberry32(zaad >>> 0);
   const t0 = Date.now(), gevonden = [], gezien = new Set(), telling = {};
   let pogingen = 0;
   while (Date.now() - t0 < seconden * 1000) {
     pogingen++;
-    const p = alleenMat2 ? zoekMat2(rng) : zoekPatroon(rng, soorten);
+    const p = enkel ? enkel(rng) : zoekPatroon(rng, soorten);
     if (!p || gezien.has(p.bord)) continue;
     gezien.add(p.bord);
     gevonden.push(p);
@@ -175,17 +204,18 @@ function merge(bestanden) {
       (perType[p.type] = perType[p.type] || []).push(p);
     }
   }
-  const pool = [], telling = {}, weg = [];
+  const pool = [], stukken = [], telling = {}, weg = [];
   for (const type of TYPES) {
     const lijst = (perType[type] || []).sort((a, b) => a.bord < b.bord ? -1 : 1).slice(0, DOEL[type]);
     if (lijst.length < E.TRUC_MIN) { if (lijst.length) weg.push(type + ' (' + lijst.length + ')'); continue; }
     telling[type] = lijst.length;
-    for (const p of lijst) pool.push(p.bord + '|' + p.type + '|' + p.antwoorden.join(','));
+    for (const p of lijst) (type === 'stuk' ? stukken : pool).push(p.bord + '|' + p.type + '|' + p.antwoorden.join(','));
   }
-  const uit = "'use strict';\n/* Gegenereerd door tools/make-trucs.js; niet met de hand bewerken. " + pool.length +
-    ' geverifieerde trucs: ' + Object.keys(telling).map(k => k + ' ' + telling[k]).join(', ') + '. */\n' +
+  const uit = "'use strict';\n/* Gegenereerd door tools/make-trucs.js; niet met de hand bewerken. " +
+    (pool.length + stukken.length) + ' geverifieerde opdrachten: ' + Object.keys(telling).map(k => k + ' ' + telling[k]).join(', ') + '. */\n' +
     'const TRUC_POOL = ' + JSON.stringify(pool) + ';\n' +
-    "if (typeof module !== 'undefined') module.exports = { TRUC_POOL };\n";
+    'const STUK_POOL = ' + JSON.stringify(stukken) + ';\n' +
+    "if (typeof module !== 'undefined') module.exports = { TRUC_POOL, STUK_POOL };\n";
   fs.writeFileSync(path.join(__dirname, '..', 'src', 'trucs.js'), uit);
   process.stderr.write('samengevoegd: ' + JSON.stringify(telling) + (weg.length ? '; te weinig, weggelaten: ' + weg.join(', ') : '') + '\n');
 }
