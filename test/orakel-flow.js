@@ -49,10 +49,17 @@ function wekelijks(app) {
   return tekstVan(app, 'weekCard');
 }
 
+/* een level omhoog legt een venster over Volgende; een kind tikt dat eerst weg */
+async function volgende(app) {
+  for (let i = 0; i < 8 && app.ziet('LEVEL OMHOOG'); i++) app.tik('lvlOk');
+  tikTekst(app, 'Volgende');
+  await wacht();
+}
+
 async function rondjeGoed(app, n) {
   for (let i = 0; i < n; i++) {
     await scanGoed(app);
-    if (i < n - 1) { tikTekst(app, 'Volgende'); await wacht(); }
+    if (i < n - 1) await volgende(app);
   }
 }
 
@@ -257,7 +264,7 @@ async function orakelFlow() {
     await wacht();
     a.tik('setReset');
     await wacht();
-    check('de vraag noemt het potje dat bezig is', /potje dat bezig is/.test(a.scherm()));
+    check('de vraag noemt het potje dat bezig is', a.ziet('potje dat bezig is'));
     a.tik('rstGo');
     await wacht();
     check('het potje is weg', opgeslagen(a, POTJE) === null);
@@ -331,13 +338,26 @@ async function orakelFlow() {
     await wacht();
     b.ev('closeModal()');
     await startOefening(b, 'scan');
-    tikTekst(b, 'Volgende');
-    await wacht();
+    await volgende(b);
     await rondjeGoed(b, 3);
-    tikTekst(b, 'Volgende');
-    await wacht();
+    await volgende(b);
     b.ev('closeModal()');
     check('telt in de nieuwe week: 1 van 2', /1\s*(\/|van)\s*2/.test(wekelijks(b)));
+  });
+
+  await nogNiet('[1.6] een rondje is af bij het vijfde antwoord: wie dan weggaat, laat geen opdracht 6 achter', async function (check) {
+    const a = nieuwKind();
+    a.ev('setPref("weekGoal", { kind: "top", n: 2, game: "scan" })');
+    await startOefening(a, 'scan');
+    await rondjeGoed(a, 5);
+    for (let i = 0; i < 8 && a.ziet('LEVEL OMHOOG'); i++) a.tik('lvlOk');
+    a.tik('backBtn');
+    await wacht();
+    check('Pauze zegt dat het rondje klaar is', /Rondje klaar/.test(toastTekst(a)));
+    check('er blijft geen rondje staan', opgeslagen(a, RONDJES) === null && tekstVan(a, 'verder') === '');
+    check('de topronde telt meteen', /1\s*(\/|van)\s*2/.test(wekelijks(a)));
+    await startOefening(a, 'scan');
+    check('een nieuw rondje begint bij opdracht 1', /opdracht 1 van 5/i.test(tekstVan(a, 'roundChip')));
   });
 
   await nogNiet('[1.6] een openingsles bewaart alleen de sterren en zegt dat', async function (check) {
@@ -367,7 +387,7 @@ async function orakelFlow() {
   await nogNiet('[1.7] met een potje zegt een regel dat het op dit apparaat blijft', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5']) });
     await wacht();
-    check('"Bewaard op deze ..."', /Bewaard op deze/.test(tekstVan(a, 'verder')));
+    check('"blijft staan op deze ..."', /blijft staan op (deze|dit) /.test(tekstVan(a, 'verder')));
   });
 
   await nogNiet('[1.7] alleen een rondje: de kaart noemt het rondje en gaat verder bij die opdracht', async function (check) {
@@ -528,8 +548,7 @@ async function orakelFlow() {
     a.ev('setPref("weekGoal", { kind: "top", n: 2, game: "scan" })');
     await startOefening(a, 'scan');
     await rondjeGoed(a, 5);
-    tikTekst(a, 'Volgende');
-    await wacht();
+    await volgende(a);
     a.ev('closeModal()');
     check('het doel staat op 1 van 2', /1\s*(\/|van)\s*2/.test(wekelijks(a)));
   });
