@@ -91,6 +91,8 @@
 
   /* ---------- home ---------- */
   .groet { display: flex; align-items: center; gap: 8px; min-height: 40px; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); }
+  /* één regel, ook met een lange naam: anders schuiven de spelknoppen onder de tabbalk */
+  #groet { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .groet-turtle { width: 28px; height: 28px; display: grid; place-items: center; font-size: 18px; background: var(--leaf-soft); border-radius: 50%; }
   @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
   .bubble {
@@ -195,6 +197,7 @@
   }
   .card-title { font-size: 15px; font-weight: bold; color: var(--ink-soft); margin-bottom: 10px; letter-spacing: .3px; }
   .card-sub { font-weight: normal; font-size: 12px; }
+  .card-uitleg { margin: -4px 0 10px; font-size: var(--fs-cap); line-height: 1.35; color: var(--text-quiet); }
 
   .level-path { display: flex; align-items: flex-start; }
   .lp-node {
@@ -793,7 +796,7 @@
   <section id="scr-home" class="screen">
     <!-- Tab 1: Spelen — alleen kiezen wat je gaat doen -->
     <div id="view-spelen" class="home-view">
-      <div class="groet"><span class="groet-turtle">🐢</span><span>Hoi <span id="heyName">kampioen</span>! 👋</span></div>
+      <div class="groet"><span class="groet-turtle">🐢</span><span id="groet">Hoi! 👋</span></div>
       <div id="verder" class="verder hidden"></div>
       <button id="weekStrip" class="weekstrip" title="Jouw week"></button>
       <div class="mode-grid games">
@@ -873,7 +876,8 @@
         <div id="weekCard"></div>
       </div>
       <div class="home-card">
-        <div class="card-title">📈 Jouw vorm <span class="card-sub">(de laatste 14 dagen)</span></div>
+        <div class="card-title">📈 Jouw vorm</div>
+        <div class="card-uitleg" id="vormUitleg">Hoe vaak, hoe goed en hoe moeilijk, de laatste 14 dagen. 100 is het hoogst.</div>
         <div id="vormList"></div>
       </div>
       <div class="home-card">

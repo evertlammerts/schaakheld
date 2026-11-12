@@ -12,11 +12,11 @@ P.name = 'Testkind'; closeModal();
 /* iOS 15.0 kent crypto.randomUUID niet (de shim ook niet): dan maakt de terugval het apparaat-id */
 ok('apparaat-id: zonder randomUUID 32 hex-tekens', typeof crypto.randomUUID === 'undefined' && /^[0-9a-f]{32}$/.test(DEV));
 
-/* close any queued LEVEL OMHOOG modals so later modal assertions see past them */
+/* close any queued level-up modals so later modal assertions see past them */
 function closeLevelUps() {
   var guard = 0;
   while (guard++ < 8 && !__els.overlay.classList.contains('hidden') &&
-    __els.modalBox.innerHTML.indexOf('LEVEL OMHOOG') >= 0) fire(__els.lvlOk, 'click');
+    __els.modalBox.innerHTML.indexOf('Level omhoog') >= 0) fire(__els.lvlOk, 'click');
 }
 /* geen weekdoel gezet: zo kan doel-XP de exacte XP-checks hieronder niet vertroebelen */
 ok('init: geen weekdoel bij een vers profiel', P.weekGoal === null);
@@ -566,7 +566,15 @@ goHome();
 showHomeTab('ik');
 fire(__els.goalBtn, 'click');
 ok('weekdoel: kiezer open met sjablonen en aantallen', __els.modalBox.innerHTML.indexOf('Wat wordt je doel') >= 0 &&
-  __els.goalKinds.innerHTML.indexOf('Opdrachten') >= 0 && __els.goalNs.innerHTML.indexOf('data-n="20"') >= 0);
+  __els.goalKinds.innerHTML.indexOf('Opdrachten') >= 0 && __els.goalNs.innerHTML.indexOf('data-n="3"') >= 0);
+ok('tekst: de kiezer begint bij 3 potjes tegen de Turbo die bij je past', __els.goalKinds.innerHTML.indexOf('chip on" data-kind="potjes"') >= 0 &&
+  __els.goalNs.innerHTML.indexOf('chip on big" data-n="3"') >= 0 &&
+  __els.goalSub.innerHTML.indexOf('chip on" data-lvl="' + turboVoorstel(P, stadium(P)) + '"') >= 0);
+ok('tekst: de soorten zeggen wat telt', __els.goalKinds.innerHTML.indexOf('Potjes uitspelen tegen Turbo') >= 0 &&
+  __els.goalKinds.innerHTML.indexOf('Toprondes (12 sterren of meer)') >= 0);
+fire(__els.goalKinds, 'click', { target: { dataset: { kind: 'opdr' } } });
+ok('tekst: opdrachten zonder schooldag', __els.goalPreview.innerHTML.indexOf('Een paar rondjes per week en je bent er.') >= 0 &&
+  __els.goalPreview.innerHTML.indexOf('schooldag') < 0);
 fire(__els.goalKinds, 'click', { target: { dataset: { kind: 'potjes' } } });
 ok('weekdoel: potjes-sjabloon toont de drie Turbo\'s', __els.goalSub.innerHTML.indexOf('Super Turbo') >= 0);
 fire(__els.goalSub, 'click', { target: { dataset: { lvl: '1' } } });
@@ -710,7 +718,9 @@ ok('[3.7] vorm: niet in de sterrenbalk', __els.drillStars.innerHTML.indexOf('Vor
 goHome();
 renderVorm();
 ok('vorm: kaart op Ik toont Speurogen met score', __els.vormList.innerHTML.indexOf('Speurogen') >= 0 &&
-  __els.vormList.innerHTML.indexOf('vorm-s') >= 0 && __els.vormList.innerHTML.indexOf('nog geen vorm') >= 0);
+  __els.vormList.innerHTML.indexOf('vorm-s') >= 0 && __els.vormList.innerHTML.indexOf('nog niet gespeeld de laatste twee weken') >= 0 &&
+  __els.vormList.innerHTML.indexOf('nog geen vorm') < 0);
+ok('tekst: onder de vormkaart wat het getal is', __els.vormUitleg.textContent === 'Hoe vaak, hoe goed en hoe moeilijk, de laatste 14 dagen. 100 is het hoogst.');
 /* gates: meesterproeven remmen pure XP-farm */
 var gSave = { xp: P.xp, ps: P.c.perfectScans, w2: P.c.winsL2, w3: P.c.winsL3 };
 P.xp = 10000; P.c.perfectScans = 0; P.c.winsL2 = 0; P.c.winsL3 = 0;
@@ -1028,6 +1038,7 @@ ok('[3.8] level omhoog: testopzet, een level met een nieuw bord', lvlNu >= 1);
 P.lastLevel = lvlNu - 1;
 checkLevelUp();
 ok('[3.8] level omhoog zegt waar het nieuwe bord staat', __els.modalBox.innerHTML.indexOf('Kies het bij Ik, onder Bordkleuren') >= 0);
+ok('tekst: "Level omhoog!" zonder hoofdletters', __els.modalBox.innerHTML.indexOf('<h2>Level omhoog!</h2>') >= 0);
 closeLevelUps();
 /* wissen zit nu achter het tandwiel (⚙️ Instellingen) */
 fire(__els.setBtn, 'click');

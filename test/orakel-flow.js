@@ -57,7 +57,7 @@ async function naarHuis(app) {
 
 /* een level omhoog legt een venster over Volgende; een kind tikt dat eerst weg */
 async function volgende(app) {
-  for (let i = 0; i < 8 && app.ziet('LEVEL OMHOOG'); i++) app.tik('lvlOk');
+  for (let i = 0; i < 8 && app.ziet('Level omhoog'); i++) app.tik('lvlOk');
   tikTekst(app, 'Volgende');
   await wacht();
 }
@@ -675,7 +675,7 @@ async function orakelFlow() {
     a.ev('setPref("weekGoal", { kind: "top", n: 2, game: "scan" })');
     await startOefening(a, 'scan');
     await rondjeGoed(a, 5);
-    for (let i = 0; i < 8 && a.ziet('LEVEL OMHOOG'); i++) a.tik('lvlOk');
+    for (let i = 0; i < 8 && a.ziet('Level omhoog'); i++) a.tik('lvlOk');
     a.tik('backBtn');
     await wacht();
     check('Pauze zegt dat het rondje klaar is', /Rondje klaar/.test(toastTekst(a)));
@@ -1142,7 +1142,7 @@ async function orakelFlow() {
     a.ev('bump("xp", 500); bump("c.perfectScans", 5)');
     a.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(4)));
     const r = await stap(a);
-    check('R3 welkom terug met Loper', r.rule === 'R3' && /Welkom terug, Mees!/.test(r.title) && /Loper/.test(r.text));
+    check('R3 met Loper; het welkom staat in de groet', r.rule === 'R3' && r.title === 'Speel een potje' && /Loper/.test(r.text));
   });
 
   await regel('[3.1] geval 6: weekdoel potjes 3, er staan er 2: R4 "Nog 1 potje tegen ..."', async function (check) {
@@ -1632,6 +1632,38 @@ async function orakelFlow() {
     check('testopzet: de kaart van de nieuwe week staat open', b.open() && /Nieuwe week/.test(b.scherm()));
     const kaart = tekstVan(b, 'verder');
     check('erachter: het doel met 2 te gaan, zonder bijna', /Je weekdoel/.test(kaart) && /Nog 2 toprondes/.test(kaart) && !/Bijna/.test(kaart));
+  });
+
+  await regel('[3.9] wie terugkomt: de groet zegt "Welkom terug, Mees!", de kaart "Speel een potje", de naam staat er één keer', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); P.lastSeen = ' + JSON.stringify(dagenTerug(5)) + '; saveP()');
+    const b = herlaad(a);
+    await wacht();
+    check('de groet', tekstVan(b, 'groet') === 'Welkom terug, Mees! 👋');
+    check('de kaart', /^Speel een potje/.test(tekstVan(b, 'verder')) && /Je bent nog steeds Loper/.test(tekstVan(b, 'verder')));
+    check('de naam één keer', (tekstVan(b, 'view-spelen').match(/Mees/g) || []).length === 1);
+  });
+
+  await regel('[3.9] de groet: "Hoi Mees! 👋", zonder naam "Hoi! 👋", en welkom terug zonder naam zonder komma', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('renderHome()');
+    check('met naam', tekstVan(a, 'groet') === 'Hoi Mees! 👋');
+    const b = maakApparaat(null);
+    b.ev('renderHome()');
+    check('zonder naam', tekstVan(b, 'groet') === 'Hoi! 👋');
+    b.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(5)) + '; renderHome()');
+    check('welkom terug zonder naam', tekstVan(b, 'groet') === 'Welkom terug! 👋');
+  });
+
+  await regel('[3.1] een naam met opmaak staat als tekst op Spelen', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('setPref("name", "<b>Mees</b>"); P.lastSeen = ' + JSON.stringify(dagenTerug(5)) + '; renderHome()');
+    const ontsnapt = function (t) { return t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'); };
+    check('de groet toont de tekens', ontsnapt(a.get('$("groet").textContent')).indexOf('<b>Mees</b>') >= 0);
+    check('de kaart maakt er geen opmaak van', a.el('verder').innerHTML.indexOf('<b>') < 0);
   });
 
   await regel('[3.11] een tik op de weekregel opent Ik bij "Deze week"', async function (check) {

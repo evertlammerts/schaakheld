@@ -54,13 +54,13 @@ const DRILLS = {
 const GOAL_KINDS = {
   opdr: { e: '🎯', naam: 'Opdrachten', ns: [10, 20, 40], key: () => 'opdr',
     txt: g => g.n + ' opdrachten' },
-  potjes: { e: '🏆', naam: 'Potjes tegen Turbo', ns: [2, 3, 5], lvl: true,
+  potjes: { e: '🏆', naam: 'Potjes uitspelen tegen Turbo', ns: [2, 3, 5], lvl: true,
     key: g => 'potjes' + g.lvl, txt: g => g.n + ' potjes tegen ' + TURBO_NAMES[g.lvl] + (g.lvl < 3 ? ' of sterker' : '') },
   wins: { e: '🥇', naam: 'Winnen van Turbo', ns: [1, 2, 3], lvl: true,
     key: g => 'wins' + g.lvl, txt: g => g.n + ' keer winnen van ' + TURBO_NAMES[g.lvl] + (g.lvl < 3 ? ' of sterker' : '') },
   vriend: { e: '🤝', naam: 'Potjes met een vriend', ns: [1, 2, 3], key: () => 'online',
     txt: g => g.n + (g.n === 1 ? ' potje' : ' potjes') + ' met een vriend' },
-  top: { e: '🌟', naam: 'Toprondes', ns: [1, 2, 3], game: true, key: g => 'top.' + g.game,
+  top: { e: '🌟', naam: 'Toprondes (12 sterren of meer)', ns: [1, 2, 3], game: true, key: g => 'top.' + g.game,
     txt: g => g.n + (g.n === 1 ? ' topronde' : ' toprondes') + ' bij ' + DRILLS[g.game].naam }
 };
 
@@ -1814,7 +1814,7 @@ function checkLevelUp() {
   const L = LEVELS[cur];
   const th = THEMES.find(t => t.lvl === cur);
   snd.level(); celebrate();
-  showModal('<div class="m-emoji">' + L.g + '</div><h2>LEVEL OMHOOG!</h2>' +
+  showModal('<div class="m-emoji">' + L.g + '</div><h2>Level omhoog!</h2>' +
     '<p>Je bent nu een echte <b>' + L.n + '</b>!' +
     (th ? '<br><br>🎨 Nieuw bord ontgrendeld: <b>' + th.naam + '</b>!<br>Kies het bij Ik, onder Bordkleuren.' : '') +
     '</p><div class="m-btns"><button class="btn sun" id="lvlOk">Super! 🎉</button></div>',
@@ -1829,7 +1829,6 @@ function updateHud() {
   $('xpFill').style.width = levelBalk(P) + '%';
   $('statStars').textContent = P.stars;
   $('statWins').textContent = P.wins;
-  $('heyName').textContent = P.name || 'kampioen';
 }
 
 function floatXP(txt) {
@@ -2516,7 +2515,7 @@ function nextStep(P, ctx) {
   const st = stadium(P), ls = turboVoorstel(P, st), li = levelIdx(P.xp, P), lvl = LEVELS[li];
   const uit = (rule, title, text, button, action) => ({ rule, title, text, button, action, ook: [], bezig });
   if (P.lastSeen && dagenSinds(P.lastSeen, ctx.now) >= 3) {
-    return uit('R3', 'Welkom terug, ' + P.name + '!', 'Je bent nog steeds ' + lvl.n + ' ' + lvl.g + '. Zin in een potje tegen ' +
+    return uit('R3', 'Speel een potje', 'Je bent nog steeds ' + lvl.n + ' ' + lvl.g + '. Zin in een potje tegen ' +
       turboNaam(ls) + '?', 'Speel een potje', { go: 'game', level: ls });
   }
   const g = P.weekGoal, W = isoWeek(ctx.now);
@@ -2578,6 +2577,9 @@ function renderVerder() {
     ', ook als je de app dichtdoet.</div>';
   el.innerHTML = h;
   el.classList.remove('hidden');
+  /* het welkom hoort bij de groet, zodat de naam niet twee keer onder elkaar staat */
+  const welkom = !(b && b.kapot) && r.rule === 'R3', naam = P.name ? (welkom ? ', ' : ' ') + P.name : '';
+  $('groet').textContent = (welkom ? 'Welkom terug' : 'Hoi') + naam + '! 👋';
   if (b && b.kapot) $('verderWeg').addEventListener('click', () => { opslag(POTJE_KEY, null); renderVerder(); });
   else $('verderKaart').addEventListener('click', () => doeActie(r.action));
   el.querySelectorAll('.verder-ook').forEach(o => o.addEventListener('click', () => doeActie(ook[+o.dataset.ook].action)));
@@ -4656,7 +4658,8 @@ function renderWeekStrip() {
 
 function goalFlow() {
   const g = P.weekGoal;
-  const st = { kind: g ? g.kind : 'opdr', n: g ? g.n : null, lvl: g ? (g.lvl || 2) : 2, game: g ? (g.game || 'scan') : 'scan' };
+  /* de kinderen kwamen voor de potjes: zonder doel begint de kiezer bij potjes tegen de Turbo die bij je past */
+  const st = { kind: g ? g.kind : 'potjes', n: g ? g.n : null, lvl: g ? (g.lvl || 2) : turboVoorstel(P, stadium(P)), game: g ? (g.game || 'scan') : 'scan' };
   const chip = (cls, id, val, label, on) => '<button class="chip' + (on ? ' on' : '') + (cls ? ' ' + cls : '') +
     '" data-' + id + '="' + val + '">' + label + '</button>';
   const render = () => {
@@ -4704,8 +4707,7 @@ function goalFlow() {
     }, true);
 }
 function goalMotto(g) {
-  const per = g.kind === 'opdr' ? Math.ceil(g.n / 5) : null;
-  if (per) return 'Dat is er ' + per + ' per schooldag. Goed te doen! 🐢';
+  if (g.kind === 'opdr') return 'Een paar rondjes per week en je bent er.';
   if (g.kind === 'top') return 'Een topronde is 12 sterren of meer in één rondje. 🌟';
   if (g.kind === 'wins') return 'Langzaam denken is snel winnen! 🐢';
   if (g.kind === 'vriend') return 'Nodig een vriend uit via 🤝 Vrienden.';
@@ -4785,7 +4787,7 @@ function renderVorm() {
     const v = vormInfo(k);
     return '<div class="vorm-row"><span class="vorm-e">' + DRILLS[k].e + '</span><span class="vorm-n">' + DRILLS[k].naam +
       (v ? '<span class="vorm-sub">' + v.n + (v.n === 1 ? ' opdracht' : ' opdrachten') + ' in 14 dagen</span>' :
-        '<span class="vorm-sub">nog geen vorm: speel een rondje!</span>') + '</span>' +
+        '<span class="vorm-sub">nog niet gespeeld de laatste twee weken</span>') + '</span>' +
       (v ? '<span class="vorm-s">' + v.score + (v.delta > 0 ? ' <span class="vorm-d">↑' + v.delta + '</span>' : '') + '</span>' : '') + '</div>';
   }).join('');
 }
@@ -4957,7 +4959,7 @@ function askName() {
       const go = () => {
         const v = $('nameInp').value.trim();
         setPref('name', v || 'kampioen');
-        updateHud();
+        renderHome();
         closeModal();
       };
       $('nameGo').addEventListener('click', go);
