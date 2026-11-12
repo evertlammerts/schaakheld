@@ -5,6 +5,14 @@ function ok(name, cond) {
   print((cond ? 'PASS' : 'FAIL') + '  ' + name);
 }
 
+/* "Nu niet" legt een briefje in de bus van wie uitnodigde (regel 4.6); de tests hieronder tellen de
+   bussen van hun eigen briefjes, dus dat antwoord gaat na de tik weer weg */
+async function nuNiet() {
+  var voor = Object.keys(__server.buses);
+  fire(__els.invNee, 'click');
+  for (var j = 0; j < 40; j++) await null;
+  Object.keys(__server.buses).forEach(function (b) { if (voor.indexOf(b) < 0) delete __server.buses[b]; });
+}
 /* init already ran at load; name modal should be open (no stored name) */
 ok('init: name modal open', !__els.overlay.classList.contains('hidden'));
 P.name = 'Testkind'; closeModal();
@@ -1279,8 +1287,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await tikje();
   hostSock.send(JSON.stringify({ t: 'hallo', naam: 'Mo' }));
   await tikje();
-  ok('mp gast: wachten tot de host start', __els.modalBox.innerHTML.indexOf('Mo') >= 0 &&
-    __els.modalBox.innerHTML.indexOf('start drukt') >= 0);
+  ok('[4.7] mp gast: wachten tot de host start, en de kaart zegt wie', __els.modalBox.innerHTML.indexOf('Mo start het potje. Even wachten.') >= 0);
   hostSock.send(JSON.stringify({ t: 'start', jij: 'b', n: 1 }));
   await tikje();
   ok('mp gast: potje als zwart, wit is aan zet', !!session && session.online === true &&
@@ -1768,7 +1775,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await friendPoll();
   for (i = 0; i < 30; i++) await null;
   ok('uitnodiging: en dan wel getoond', __els.modalBox.innerHTML.indexOf('wil een potje spelen') >= 0 && seenInv.length === 1);
-  fire(__els.invNee, 'click');
+  await nuNiet();
   /* twee vrienden nodigen elkaar tegelijk uit: rol b (wij, host=false) krijgt
      de vraag te zien en houdt zijn eigen uitnodiging tot het kind ja zegt */
   seenInv = [];
@@ -1778,7 +1785,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   for (i = 0; i < 30; i++) await null;
   ok('uitnodiging: gekruist, rol b krijgt de vraag en houdt zolang zijn eigen uitnodiging',
     INV !== null && __els.modalBox.innerHTML.indexOf('wil een potje spelen') >= 0);
-  fire(__els.invNee, 'click');
+  await nuNiet();
   ok('uitnodiging: nu niet = ons eigen wachtscherm komt terug',
     INV !== null && __els.modalBox.innerHTML.indexOf('Wachten op Mila') >= 0);
   closeModal();
@@ -1979,7 +1986,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   for (i = 0; i < 30; i++) await null;
   ok('twee kanten: de uitnodiging van Bo komt langs ons eigen wachtscherm heen',
     __els.modalBox.innerHTML.indexOf('Bo wil een potje spelen') >= 0 && !!INV && INV.fid === fid);
-  fire(__els.invNee, 'click');
+  await nuNiet();
   ok('twee kanten: nu niet = ons wachtscherm terug en onze uitnodiging staat nog',
     !!INV && INV.fid === fid && __els.modalBox.innerHTML.indexOf('Wachten op Mila') >= 0);
   /* een tweede briefje van Bo staat op het scherm als onze eigen uitnodiging
@@ -1999,7 +2006,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('twee kanten: onze uitnodiging verloopt, maar de vraag van Bo blijft staan',
     INV === null && MP === null && __els.modalBox.innerHTML.indexOf('Bo wil een potje spelen') >= 0 &&
     modalQueue.length === 1);
-  fire(__els.invNee, 'click');
+  await nuNiet();
   for (i = 0; i < 20; i++) await null;
   ok('twee kanten: een verlopen uitnodiging stopt met wachten en zegt het',
     INV === null && MP === null && __els.modalBox.innerHTML.indexOf('heeft niet gekeken') >= 0);

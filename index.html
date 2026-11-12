@@ -3580,6 +3580,7 @@ function mpOnHallo() {
   if (MP.host) {
     showModal('<div class="m-emoji">🎉</div><h2>Verbonden met ' + escHtml(mpNaam()) + '!</h2>' + trio +
       '<p>Zien jullie allebei dezelfde drie plaatjes? Dan zit je echt bij elkaar!</p>' +
+      '<p><b>' + escHtml(P.name || 'Jij') + ' start het potje.</b></p>' +
       '<div class="m-btns"><button class="btn sun" id="mpGo">▶ Spelen!</button>' +
       '<button class="btn plain" id="mpNee">Stoppen</button></div>', () => {
         $('mpGo').addEventListener('click', () => { closeModal(); mpHostStart(); });
@@ -3587,7 +3588,7 @@ function mpOnHallo() {
       }, false, 'mpverbonden');
   } else {
     showModal('<div class="m-emoji">🎉</div><h2>Verbonden met ' + escHtml(mpNaam()) + '!</h2>' + trio +
-      '<p>Zien jullie allebei dezelfde drie plaatjes?<br>Wachten tot ' + escHtml(mpNaam()) + ' op start drukt… ⏳</p>' +
+      '<p>Zien jullie allebei dezelfde drie plaatjes?</p><p><b>' + escHtml(mpNaam()) + ' start het potje. Even wachten.</b></p>' +
       '<div class="m-btns"><button class="btn plain" id="mpNee">Stoppen</button></div>', () => {
         $('mpNee').addEventListener('click', () => { closeModal(); mpVerlaat(); });
       }, false, 'mpverbonden');
@@ -4009,6 +4010,20 @@ function mpOnVriendVraag(m) {
   }
   MP.hunVraag = m.pub;
   const naam = escHtml(mpNaam());
+  const vak = $('ekVraag');
+  if (vak && MP.S && MP.over && session && session.online && session.over && !$('eindkaart').classList.contains('hidden')) {
+    vak.innerHTML = '<p><b>' + naam + ' wil vrienden worden!</b> Jullie moeten allebei op Ja tikken.</p>' +
+      '<div class="ek-btns"><button class="btn sun" id="ekVrJa">Ja, vrienden! 🤝</button>' +
+      '<button class="btn plain" id="ekVrNee">Nu niet</button></div>';
+    if ($('mpVriend')) $('mpVriend').classList.add('hidden');
+    $('ekVrJa').addEventListener('click', () => { vak.innerHTML = ''; vriendJa(); });
+    $('ekVrNee').addEventListener('click', () => {
+      vak.innerHTML = '';
+      if (MP) MP.hunVraag = null;
+      mpSend({ t: 'vriend', nee: true });
+    });
+    return;
+  }
   showModal('<div class="m-emoji">🤝</div><h2>' + naam + ' wil vrienden worden!</h2>' +
     '<p>Dan kunnen jullie elkaar de volgende keer met één tik uitnodigen.<br>Jullie moeten allebei op Ja tikken.</p>' +
     '<div class="m-btns"><button class="btn sun" id="vrJa">Ja, vrienden! 🤝</button>' +
@@ -4075,8 +4090,9 @@ async function inviteFriend(fid) {
   }
   if (!resp || !resp.room) { showToast('De server doet even niet mee… probeer zo nog eens! 🛜'); return; }
   const to = await busFor(f, theirRole(f));
+  const invId = b64url(randBytes(9));
   const blob = b64url(await sealJSON(f.k, 'uitnodiging',
-    { id: b64url(randBytes(9)), room: resp.room, seat: resp.guest, naam: P.name || 'kampioen', ts: Date.now() }));
+    { id: invId, room: resp.room, seat: resp.guest, naam: P.name || 'kampioen', ts: Date.now() }));
   /* tijdens het wachten op de server kan het kind al op een binnengekomen
      uitnodiging zijn ingegaan; dan is onze eigen niet meer aan de orde */
   if (bezet()) return;
@@ -4085,7 +4101,7 @@ async function inviteFriend(fid) {
       body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob }) });
   } catch (e) {}
   if (bezet()) return;
-  INV = { fid, bus: to.bus, bewijs: to.bewijs, tot: Date.now() + INVITE_TTL };
+  INV = { fid, id: invId, bus: to.bus, bewijs: to.bewijs, tot: Date.now() + INVITE_TTL };
   mpStart(resp.room, resp.seat, true);
   MP.viaFriend = fid;
   wachtScherm();
@@ -4170,6 +4186,17 @@ async function friendPoll() {
       if (!bytes) continue;
       let inv = null;
       try { inv = await openJSON(P.friends[fid].k, 'uitnodiging', bytes); } catch (e) {}
+      if (inv && inv.nee === true && typeof inv.id === 'string' && !seenInv.includes(inv.id) &&
+          INV && INV.fid === fid && INV.id === inv.op && Date.now() - +inv.ts < INVITE_TTL) {
+        markSeen(inv.id);
+        const naam = escHtml(P.friends[fid].naam);
+        inviteClear();
+        if (MP) mpStop();
+        closeModal();
+        naarHuisMelding('🙂', naam + ' kan nu even niet', 'Probeer het later nog eens.');
+        renderFriends();
+        break;
+      }
       if (!geldigeUitnodiging(inv) || seenInv.includes(inv.id)) continue;
       /* kruisende uitnodigingen tussen dezelfde twee: rol a houdt de zijne */
       if (INV && INV.fid === fid && myRole(P.friends[fid]) === 'a') continue;
@@ -4179,7 +4206,8 @@ async function friendPoll() {
       wachtScherm(); /* niet getoond: ons eigen scherm terug */
     }
   } catch (e) {}
-  friendPollSoon();
+  /* wie op een antwoord wacht, kijkt vaker: "Nu niet" hoort snel aan te komen */
+  friendPollSoon(INV ? 5000 : undefined);
 }
 /* pas als de vraag echt op het scherm staat is het briefje 'gezien'; anders
    komt het bij de volgende ronde gewoon terug */
@@ -4187,6 +4215,8 @@ function showInvite(fid, inv) {
   const f = P.friends[fid];
   if (!f || session || (MP && !INV) || modalOpen) return false;
   markSeen(inv.id);
+  /* de bus voor een "Nu niet" alvast uitrekenen, zodat het antwoord meteen weg kan */
+  const neeBus = busFor(f, theirRole(f));
   showModal('<div class="m-emoji">♟️</div><h2>' + escHtml(f.naam) + ' wil een potje spelen!</h2>' +
     '<p>Doe je mee? Wie wit krijgt, hoor je zo.</p>' +
     '<div class="m-btns"><button class="btn sun" id="invJa">Ja, spelen! 🎉</button>' +
@@ -4205,10 +4235,21 @@ function showInvite(fid, inv) {
       });
       $('invNee').addEventListener('click', () => {
         closeModal();
+        zegNee(f, neeBus, inv.id);
         wachtScherm();
       });
     }, false, 'uitnodiging');
   return true;
+}
+/* "Nu niet": een kort briefje in de bus van wie uitnodigde, die daar toch al op let */
+async function zegNee(f, bus, op) {
+  if (!netAvailable()) return;
+  try {
+    const to = await bus;
+    const blob = b64url(await sealJSON(f.k, 'uitnodiging', { id: b64url(randBytes(9)), nee: true, op, ts: Date.now() }));
+    await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob }) });
+  } catch (e) {}
 }
 function removeFriendAsk(fid) {
   const f = P.friends[fid];
@@ -6909,7 +6950,7 @@ function openHulp() {
 /* einde van een online potje: neutrale taal (geen Turbo), geen XP (dat
    zou een farm-route zijn), wel de tellers, en de revanche uit het memo:
    alleen binnen deze sessie, kleuren wisselen om */
-function endGameOnline(st, drawTxt) {
+function endGameOnline(st, drawTxt, telt) {
   const ik = session.myColor || 'w';
   let h, p;
   /* gameStatus meldt remise als result 'd', nooit als een leeg result. Op
@@ -6932,15 +6973,18 @@ function endGameOnline(st, drawTxt) {
     celebrate();
   } else {
     h = escHtml(mpNaam()) + ' wint dit potje';
-    p = st.reason === 'opgave' ? 'Je gaf op. Netjes afgesloten. Revanche?' : 'Schaakmat… maar goed gespeeld! Pak je revanche!';
+    p = st.reason === 'opgave' ? 'Je gaf op. Netjes afgesloten. Revanche?' : 'Schaakmat. Goed gespeeld! Revanche?';
     snd.bad();
   }
   const nieuw = checkBadges(true);
   const vriendKnop = MP && !MP.viaFriend ? '<button class="btn plain" id="mpVriend">🤝 Vrienden worden</button>' : '';
+  /* een vriendenpotje geeft geen XP; alleen een weekdoel met vriendenpotjes telt het */
+  const week = telt && P.weekGoal && P.weekGoal.kind === 'vriend' ? '<p>Telt mee voor je weekdoel. 🎯</p>' : '';
   say(h);
-  toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p><!--trofeeen-->' +
+  toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p>' + week + '<!--trofeeen-->' +
+    '<div id="ekVraag"></div>' +
     '<div class="ek-btns"><button class="btn sun" id="mpRev">🔁 Revanche!</button>' + vriendKnop +
-    '<button class="btn plain" id="mpEind">🏠 Stoppen</button></div>', nieuw, () => {
+    '<button class="btn plain" id="mpEind">🏠 Naar huis</button></div>', nieuw, () => {
       $('mpRev').addEventListener('click', () => {
         $('mpRev').disabled = true;
         $('mpRev').textContent = '🔁 Wachten op ' + mpNaam() + '…';
@@ -6978,7 +7022,7 @@ function endGame(st, stil) {
     if (MP) MP.over = true;
     opslag(SAMEN_KEY, null);
     if (telt) bumpWeek('online', 1);
-    endGameOnline(st, drawTxt);
+    endGameOnline(st, drawTxt, telt);
     return;
   }
   if (telt) bumpWeek('potjes' + session.level, 1);

@@ -323,7 +323,7 @@ async function orakelTwee() {
     check('in hetzelfde potje: de stand na e2e4, op beide borden', fien2.fen() === naE4 && daan.fen() === naE4);
   });
 
-  await nogNiet('[4.6] "Nu niet" op een uitnodiging bereikt wie uitnodigde', async function (check) {
+  await regel('[4.6] "Nu niet" op een uitnodiging bereikt wie uitnodigde', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     await wordenVrienden(fien, daan);
     await nodigUit(fien);
@@ -331,11 +331,11 @@ async function orakelTwee() {
     await wacht();
     check('testopzet: Daan krijgt de vraag', kanTikken(daan, 'Nu niet'));
     tikTekst(daan, 'Nu niet');
-    await wacht(30000);
-    check('Fien leest het', /Daan kan nu even niet/.test(zegt(fien)));
+    /* het antwoord gaat versleuteld via de bus: in stapjes wachten, zodat dat werk ook af kan */
+    check('Fien leest het', await zagOoit(function () { return /Daan kan nu even niet/.test(zegt(fien)); }, 30000));
   });
 
-  await nogNiet('[4.7] beide verbonden kaarten zeggen wie het potje start', async function (check) {
+  await regel('[4.7] beide verbonden kaarten zeggen wie het potje start', async function (check) {
     const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
     await daan.ev('mpHostQR()');
     await wacht();
@@ -347,7 +347,7 @@ async function orakelTwee() {
     check('bij Fien', /Daan start het potje\. Even wachten\./.test(fien.scherm()));
   });
 
-  await nogNiet('[4.7] een vriendschapsvraag na een potje staat in de eindkaart van de ander, niet erachter', async function (check) {
+  await regel('[4.7] een vriendschapsvraag na een potje staat in de eindkaart van de ander, niet erachter', async function (check) {
     const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
     await samenSpelen(daan, fien);
     await geefOp(aanZet(daan, fien));
