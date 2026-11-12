@@ -16,7 +16,7 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
    profiel van een ander apparaat (tweede iPad, straks de server). P is de
    platte weergave die de rest van de UI leest. Schrijven gaat via bump,
    setPref en addBadge, nooit rechtstreeks in P. Alleen de lokale velden
-   (streak, lastLevel, day) schrijft de UI direct; die neemt saveP mee.
+   (streak, lastLevel, day, shownBadges) schrijft de UI direct; die neemt saveP mee.
    - Tellers (xp, sterren, wins, c.*): G-Counter, per teller een map
      {apparaatId: bijdrage}. Weergave is de som, merge is per apparaat max.
      Zo telt +50 op de ene iPad en +30 op de andere op tot +80.
@@ -27,10 +27,11 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
    - De vorm-log (log.<spel>.<id>): G-Set van opdrachtresultaten, alleen de
      laatste 28 dagen; daar komt de vorm-score uit.
    - Vrienden (friends.<id>): per vriend een LWW-register.
-   - Streak, lastLevel, dag en weekSeen zijn per apparaat en mergen niet. */
+   - Streak, lastLevel, dag, weekSeen en shownBadges (de trofeeën die dit
+     apparaat liet zien) zijn per apparaat en mergen niet. */
 function defaultP() {
   return { name: '', xp: 0, sound: true, guard: true, predict: true, weekGoal: null,
-    wins: 0, stars: 0, streak: 0, best: 0, lastLevel: null,
+    wins: 0, stars: 0, streak: 0, best: 0, lastLevel: 0, shownBadges: [],
     theme: 'munt', badges: {}, day: null, weekSeen: null, wk: {}, log: {}, friends: {},
     c: { gamesPlayed: 0, winsL2: 0, winsL3: 0, winsOnline: 0, perfectScans: 0,
       safeCorrect: 0, best3Gold: 0, predictHits: 0, patienceBonus: 0,
@@ -82,7 +83,7 @@ const DEV = (() => {
 function emptyDoc() {
   return { v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: {}, max: { best: 0, goal: {} },
     log: {}, friends: {},
-    loc: { streak: 0, lastLevel: null, day: null, weekSeen: null } };
+    loc: { streak: 0, lastLevel: 0, day: null, weekSeen: null, shownBadges: [] } };
 }
 
 /* ISO-week als 'YYYY-Www', maandag als eerste dag: de week is de eenheid
@@ -230,7 +231,10 @@ function normDoc(raw) {
     d.loc.lastLevel = raw.loc.lastLevel == null ? null : +raw.loc.lastLevel || 0;
     d.loc.day = raw.loc.day && typeof raw.loc.day === 'object' ? raw.loc.day : null;
     d.loc.weekSeen = typeof raw.loc.weekSeen === 'string' ? raw.loc.weekSeen.slice(0, 8) : null;
-  }
+  } else d.loc.lastLevel = null;
+  /* een doc van voor deze lijst heeft elke trofee die het heeft al laten zien */
+  const getoond = (raw.loc && Array.isArray(raw.loc.shownBadges) ? raw.loc.shownBadges : Object.keys(d.set.badges)).slice(0, MAX_BADGES);
+  d.loc.shownBadges = getoond.filter((k, i) => typeof k === 'string' && d.set.badges[k] === true && getoond.indexOf(k) === i);
   return d;
 }
 
@@ -272,7 +276,7 @@ function migrateLegacy(o, dev) {
   for (const f of PREFS) d.lww[f] = { v: o[f], t: o[f] === defs[f] ? 0 : t };
   d.max.best = +o.best || 0;
   d.loc = { streak: +o.streak || 0, lastLevel: o.lastLevel == null ? null : o.lastLevel,
-    day: o.day || null, weekSeen: null };
+    day: o.day || null, weekSeen: null, shownBadges: Object.keys(d.set.badges) };
   return d;
 }
 
@@ -292,6 +296,7 @@ function viewFromDoc(d) {
   for (const wk in d.max.goal) p.xp += d.max.goal[wk];
   p.streak = +d.loc.streak || 0;
   p.lastLevel = d.loc.lastLevel == null ? null : d.loc.lastLevel;
+  p.shownBadges = d.loc.shownBadges.slice();
   p.day = d.loc.day || null;
   p.weekSeen = d.loc.weekSeen || null;
   return p;
@@ -315,6 +320,7 @@ loadProfile();
 function saveP() {
   DOC.loc.streak = P.streak;
   DOC.loc.lastLevel = P.lastLevel;
+  DOC.loc.shownBadges = P.shownBadges.slice();
   DOC.loc.day = P.day;
   DOC.loc.weekSeen = P.weekSeen;
   if (P.best > DOC.max.best) DOC.max.best = P.best;
@@ -415,15 +421,19 @@ function mergeDoc(a, b) {
   return res;
 }
 
-/* Voegt het profiel van een ander apparaat bij het onze. lastLevel is
-   afgeleid en wordt herberekend, zodat elders verdiende levels hier niet
-   alsnog een stapel feestmodals geven. De aanroeper ververst zelf de UI. */
+/* Voegt het profiel van een ander apparaat bij het onze. Wat het andere
+   apparaat verdiende, vierde dat apparaat al: een level of trofee die zo
+   binnenkomt telt hier als getoond. Wat hier verdiend is en nog op de
+   eindkaart of thuis wacht, blijft wachten. De aanroeper ververst zelf de UI. */
 function applyRemoteDoc(remote) {
   if (!remote || remote.v !== 2) return false;
   saveP();
+  const levelHier = levelIdx(P.xp), badgesHier = Object.assign({}, P.badges);
   DOC = mergeDoc(DOC, normDoc(remote));
   P = viewFromDoc(DOC);
-  P.lastLevel = levelIdx(P.xp);
+  if (P.lastLevel == null || P.lastLevel >= levelHier) P.lastLevel = levelIdx(P.xp);
+  P.shownBadges = P.shownBadges.filter(id => P.badges[id]);
+  for (const id in P.badges) if (!badgesHier[id] && !P.shownBadges.includes(id)) P.shownBadges.push(id);
   saveP();
   return true;
 }
@@ -1349,9 +1359,9 @@ async function vriendVragen() {
      Allebei apart vragen zou twee geheimen maken, en van het tweede weet
      de ander niets. */
   if (MP.hunVraag) { dropModal('vriendvraag'); vriendJa(); return; }
-  try { MP.ecdh = await ecdhStart(); } catch (e) { showToast('Dat lukt hier niet 😕'); return; }
+  try { MP.ecdh = await ecdhStart(); } catch (e) { say('Dat lukt hier niet 😕'); vriendKnopTerug(); return; }
   mpSend({ t: 'vriend?', pub: MP.ecdh.pub });
-  showToast('Gevraagd! Wachten op ' + mpNaam() + '… 🤝', true);
+  say('Gevraagd! Wachten op ' + mpNaam() + '… 🤝');
 }
 async function vriendJa() {
   if (!MP || MP.viaFriend || !MP.hunVraag) return;
@@ -1363,7 +1373,7 @@ async function vriendJa() {
     mpSend({ t: 'vriend', pub: e.pub });
     await bewaarVriend(k, false);
     vriendKlaar(k);
-  } catch (err) { showToast('Dat lukte niet 😕'); }
+  } catch (err) { say('Dat lukte niet 😕'); vriendKnopTerug(); }
 }
 function mpOnVriendVraag(m) {
   if (!MP || MP.viaFriend || !geldigePub(m.pub)) return;
@@ -1398,14 +1408,21 @@ function mpOnVriendVraag(m) {
 }
 async function mpOnVriend(m) {
   if (!MP || !MP.ecdh) return;
-  if (m.nee === true) { MP.ecdh = null; showToast(mpNaam() + ' wil nu even niet 🙂'); return; }
+  if (m.nee === true) { MP.ecdh = null; say(mpNaam() + ' wil nu even niet 🙂'); vriendKnopTerug(); return; }
   if (!geldigePub(m.pub)) return;
   try {
     const k = await ecdhFinish(MP.ecdh.kp, m.pub);
     MP.ecdh = null;
     await bewaarVriend(k, true);
     vriendKlaar(k);
-  } catch (err) { MP.ecdh = null; }
+  } catch (err) { MP.ecdh = null; say('Dat lukte niet 😕'); vriendKnopTerug(); }
+}
+/* na een nee of een fout kan het kind het opnieuw vragen; op het speelscherm staat geen melding, dus de zin staat in de strook */
+function vriendKnopTerug() {
+  const b = $('mpVriend');
+  if (!b) return;
+  b.disabled = false;
+  b.textContent = '🤝 Vrienden worden';
 }
 async function bewaarVriend(k, host) {
   const id = (await sha256hex(k)).slice(0, 16);
@@ -2123,7 +2140,7 @@ function spin(show, txt) {
    Met cancelable=true krijgt de modal een ✕ en sluit hij ook via een tik
    naast de kaart of Escape. Zonder die vlag sluit alleen een eigen knop,
    zodat keuzes met gevolgen (wissen, level-up, verbinden) bewust blijven. */
-let modalQueue = [], modalOpen = false, modalCancelable = false, modalKey = null;
+let modalQueue = [], modalOpen = false, modalCancelable = false, modalKey = null, naVensterFn = null;
 function renderModal(html, setup, cancelable, key) {
   modalCancelable = !!cancelable;
   modalKey = key || null;
@@ -2152,7 +2169,10 @@ function closeModal() {
   modalKey = null;
   $('overlay').classList.add('hidden');
   modalQueue = [];
+  if (naVensterFn) { const f = naVensterFn; naVensterFn = null; f(); }
 }
+/* een melding die pas komt als het kind de vensters heeft weggetikt: een venster verbergt hem anders meteen */
+function naVensters(fn) { if (modalOpen) naVensterFn = fn; else fn(); }
 /* Een vraag waarvan het antwoord niet meer telt mag niet alsnog gesteld
    worden: wachtte hij in de rij, dan verdwijnt hij hier. */
 function dropModal(key) {
@@ -2209,7 +2229,7 @@ function showScreen(name) {
   $('scr-play').classList.toggle('hidden', name !== 'play');
   document.body.classList.toggle('speelt', name === 'play');
   sluitEindkaart();
-  $('play').classList.toggle('task', name === 'play' && !!session && session.kind !== 'game');
+  $('play').classList.toggle('oefening', name === 'play' && !!session && session.kind !== 'game');
   setAppH();
   try { window.scrollTo(0, 0); } catch (e) {}
   if (name === 'play') {
@@ -2326,10 +2346,10 @@ function renderPatBook() {
 /* ---------- session ---------- */
 let session = null;
 
-function goHome(tab) {
+function goHome(tab, daarna) {
   if (INV) inviteClear(); /* wie wegloopt laat geen briefje liggen */
-  /* een level dat op het speelscherm als badge kwam, krijgt thuis zijn venster met het nieuwe bord */
-  setTimeout(checkLevelUp, 0);
+  /* een level of trofee die op het speelscherm wachtte, krijgt thuis zijn venster; een melding komt daarna */
+  setTimeout(() => { thuisVieren(); if (daarna) naVensters(daarna); }, 0);
   if (MP) mpStop(); /* weglopen uit een online potje = netjes gedag zeggen */
   session = null;
   clearBD();
@@ -2481,8 +2501,7 @@ function pauze() {
       r ? '✔ Bewaard. Je kunt later verder bij opdracht ' + (r.round + 1) + '.' :
       'Nog geen opdracht af, dus er is nog niets bewaard. Volgende keer begin je bij opdracht 1.';
   }
-  goHome(terugTab);
-  if (melding) showToast(melding, false, 6000);
+  goHome(terugTab, melding ? () => showToast(melding, false, 6000) : null);
 }
 
 /* De Verder-kaart: wat er bezig is, het bewaarde potje eerst */
@@ -2694,7 +2713,8 @@ function puzzleAttempt(m) {
       awardRound(0, 'Zo zit het', co ? '<b>' + name + '</b>: ' + co.what : 'Dit was mat: <b>' + name + '</b>.');
     });
   } else {
-    hulpZin(near || 'Nog niet de ' + PATTERNS[type].n.toLowerCase() + '. Kijk naar alle stukken van Turbo, en probeer nog een zet.');
+    hulpZin(near || (type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + PATTERNS[type].n.toLowerCase() + '.') +
+      ' Kijk naar alle stukken van Turbo, en probeer nog een zet.');
   }
 }
 
@@ -2982,6 +3002,9 @@ function buildBest3() {
     b.addEventListener('click', () => pickOption(+b.dataset.i));
   });
   setActions([{ label: 'Deze kies ik! 🎯', cls: 'sun', fn: best3Confirm, id: 'confirm', disabled: true }]);
+  /* na veilig of valstrik staan de keuzes waar Volgende stond: een tweede tik op Volgende kiest zo niets (D34) */
+  session.keuzeOpen = false;
+  later(() => { if (session.task === task) session.keuzeOpen = true; }, 350);
   return true;
 }
 
@@ -3032,7 +3055,7 @@ function best3Explanations(task) {
 }
 
 function pickOption(i) {
-  if (!session || session.phase !== 'choose') return;
+  if (!session || session.phase !== 'choose' || !session.keuzeOpen) return;
   const b = document.querySelector('.opt[data-i="' + i + '"]');
   if (!b || b.classList.contains('wrong')) return;
   snd.select();
@@ -3655,14 +3678,13 @@ function gameActions() {
 const MIN_PLIES_TELT = 20;
 function resignAsk() {
   if (!session || session.kind !== 'game' || session.over) return;
-  const wacht = sluitVoorspelvraag();
   const naam = session.online ? escHtml(mpNaam()) : 'Turbo';
   showModal('<div class="m-emoji">🏳️</div><h2>Opgeven?</h2>' +
     '<p>Dan heeft ' + naam + ' dit potje gewonnen.' +
     (session.online ? '<br>Jullie kunnen daarna wel revanche spelen.' : '<br>Vechten tot het eind is vaak slimmer: Turbo maakt ook fouten!') + '</p>' +
     '<div class="m-btns"><button class="btn sun" id="rsNee">↩️ Nee, doorspelen</button>' +
     '<button class="btn plain" id="rsJa">🏳️ Ja, ik geef op</button></div>', () => {
-      $('rsNee').addEventListener('click', () => { closeModal(); if (wacht) doTurboMove(wacht); });
+      $('rsNee').addEventListener('click', closeModal);
       $('rsJa').addEventListener('click', () => { closeModal(); resignNow(); });
     }, true);
 }
@@ -3889,7 +3911,7 @@ function onCell(sq) {
   if (BD.mode === 'predict') {
     const p = session.S.board[sq];
     if (p && colorOf(p) === 'b') resolvePredict(sq);
-    else if (p) say('Welk stuk zet Turbo? Tik het aan. Dat is jouw stuk: kies er een van Turbo.');
+    else if (p) say('Dat is jouw stuk. Welk stuk zet Turbo? Tik het aan.');
     return;
   }
   if (BD.mode === 'puzzle') {
@@ -4032,11 +4054,7 @@ function commitKid(m) {
         addXP(10, 'Truc: ' + PATTERNS[co.key].n + '! ' + PATTERNS[co.key].e);
       }
       say('Dat is een ' + co.what + ' Goed gezien!');
-      BD.spy = new Set(co.squares);
-      renderBoard();
-      later(() => {
-        if (session && session.kind === 'game') { BD.spy.clear(); renderBoard(); }
-      }, 3500);
+      trucRandjes(co.squares);
       later(turboTurn, 1100);
     } else {
       say('Hmm… nu ik! 💭');
@@ -4070,7 +4088,7 @@ function askPredict(m) {
 function hulpjesAan(aan) {
   for (const id of ['cloudBtn', 'tip', 'undo']) if (actionBtns[id]) actionBtns[id].disabled = !aan || (id === 'tip' && session.tips <= 0);
 }
-/* Remise aanbieden en Opgeven sluiten een open voorspelvraag; Turbo's zet wacht dan */
+/* Remise aanbieden sluit een open voorspelvraag; Turbo antwoordt eerst en doet daarna de zet die wachtte */
 function sluitVoorspelvraag() {
   if (!session || !session.pending || BD.mode !== 'predict') return null;
   const m = session.pending;
@@ -4114,11 +4132,7 @@ function doTurboMove(m, stil) {
     if (co) {
       countPattern(co.key);
       say('Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢');
-      BD.spy = new Set(co.squares);
-      renderBoard();
-      later(() => {
-        if (session && session.kind === 'game') { BD.spy.clear(); renderBoard(); }
-      }, 3500);
+      trucRandjes(co.squares);
       kidTurn(true);
     } else kidTurn(stil);
   });
@@ -4158,6 +4172,15 @@ function undoMove() {
   updateTrays();
   say('Oké! Kijk nog eens goed. Wat is hier slim? 🐢');
   startPatience();
+}
+
+/* de randjes van een truc gaan na even vanzelf weg; alleen die van de truc, niet die van een Speurbril erna */
+function trucRandjes(velden) {
+  const eigen = BD.spy = new Set(velden);
+  renderBoard();
+  later(() => {
+    if (session && session.kind === 'game') { eigen.clear(); renderBoard(); }
+  }, 3500);
 }
 
 function useTip() {
@@ -4290,12 +4313,12 @@ function endGameOnline(st, drawTxt) {
     p = st.reason === 'opgave' ? 'Je gaf op. Netjes afgesloten. Revanche?' : 'Schaakmat… maar goed gespeeld! Pak je revanche!';
     snd.bad();
   }
-  const nieuw = checkBadges(true);
+  checkBadges();
   const vriendKnop = MP && !MP.viaFriend ? '<button class="btn plain" id="mpVriend">🤝 Vrienden worden</button>' : '';
   say(h);
   toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p><!--trofeeen-->' +
     '<div class="ek-btns"><button class="btn sun" id="mpRev">🔁 Revanche!</button>' + vriendKnop +
-    '<button class="btn plain" id="mpEind">🏠 Stoppen</button></div>', nieuw, () => {
+    '<button class="btn plain" id="mpEind">🏠 Stoppen</button></div>', () => {
       $('mpRev').addEventListener('click', () => {
         $('mpRev').disabled = true;
         $('mpRev').textContent = '🔁 Wachten op ' + mpNaam() + '…';
@@ -4317,6 +4340,9 @@ function endGame(st, stil) {
   session.over = true;
   if (!session.online) opslag(POTJE_KEY, null);
   BD.mode = 'off';
+  /* opgeven kan terwijl de voorspelvraag openstaat */
+  session.pending = null;
+  strookModus(null);
   stopPatience();
   renderBoard();
   /* een afgelopen potje staat niet meer bewaard en heeft geen hulpjes meer: alleen de eindkaart telt */
@@ -4355,7 +4381,7 @@ function endGame(st, stil) {
     xp = telt ? 30 : 0; snd.good();
   }
   if (xp) addXP(xp, st.result === 'w' ? 'Gewonnen! 🏆' : 'Goed gespeeld!');
-  const nieuw = checkBadges(!stil);
+  checkBadges();
   saveP();
   if (stil) return;
   const lvl = session.level;
@@ -4364,7 +4390,7 @@ function endGame(st, stil) {
     toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p>' +
       (xp ? '<p class="ek-xp">+' + xp + ' XP</p>' : '<p>Dit potje telt niet mee: het was korter dan tien zetten.</p>') + '<!--trofeeen-->' +
       '<div class="ek-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
-      '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', nieuw, () => {
+      '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', () => {
         $('mAgain').addEventListener('click', () => startGame(lvl));
         $('mHome').addEventListener('click', goHome);
       });
@@ -4435,43 +4461,49 @@ const BADGES = [
   { id: 'koning', e: '👑', n: 'Koningskind', d: 'Bereik level Koning', chk: () => levelIdx(P.xp) >= 5 }
 ];
 
-/* aan het einde van een potje staan nieuwe trofeeën in de eindkaart, niet in een melding */
-/* op een speelscherm wacht een trofee, een level of een gehaald weekdoel op de eindkaart */
+/* Een trofee, een level of een gehaald weekdoel wacht op de eindkaart van het potje of rondje. Wat dit
+   apparaat aan trofeeën liet zien, staat per apparaat in P.shownBadges, zodat een trofee die nog wachtte als
+   het kind pauzeerde of herlaadde thuis komt, en nooit twee keer (D34). */
 function bewaarVoorKaart(b) { if (session) (session.voorKaart = session.voorKaart || []).push(b); }
+function nogTeTonen() { return BADGES.filter(b => P.badges[b.id] && !P.shownBadges.includes(b.id)); }
+function alsGetoond(lijst) {
+  for (const b of lijst) if (!P.shownBadges.includes(b.id)) P.shownBadges.push(b.id);
+  saveP();
+}
 function voorKaart() {
-  const l = (session && session.voorKaart) || [];
-  if (session) session.voorKaart = [];
+  const l = nogTeTonen();
+  alsGetoond(l);
+  if (session) { l.push(...(session.voorKaart || [])); session.voorKaart = []; }
   const cur = levelIdx(P.xp);
   if (P.lastLevel != null && cur > P.lastLevel) l.push({ e: LEVELS[cur].g, n: 'Level ' + LEVELS[cur].n });
   return l;
 }
-function checkBadges(inKaart) {
+function checkBadges() {
   checkLevelUp();
-  const nieuw = [];
-  for (const b of BADGES) {
-    if (!P.badges[b.id] && b.chk()) {
-      addBadge(b.id);
-      nieuw.push(b);
-      if (inKaart) continue;
-      if (speelschermOpen()) { bewaarVoorKaart(b); continue; }
-      snd.win();
-      burstCenter();
-      showToast('🏆 Trofee verdiend: ' + b.e + ' ' + b.n + '!', true);
-    }
-  }
-  return nieuw;
+  for (const b of BADGES) if (!P.badges[b.id] && b.chk()) addBadge(b.id);
+}
+/* thuis: wat op een speelscherm verdiend is en nog niet te zien was */
+function thuisVieren() {
+  checkLevelUp();
+  const lijst = nogTeTonen();
+  if (!lijst.length) return;
+  alsGetoond(lijst);
+  snd.win();
+  burstCenter();
+  showModal('<div class="m-emoji">🏆</div><h2>' + (lijst.length > 1 ? 'Trofeeën verdiend!' : 'Trofee verdiend!') + '</h2>' +
+    trofeeRij(lijst) + '<div class="m-btns"><button class="btn sun" id="trofOk">Super! 🎉</button></div>',
+    () => $('trofOk').addEventListener('click', closeModal));
 }
 /* het einde van een potje is een kaart over het bord, geen venster */
 function trofeeRij(lijst) {
   return lijst.length ? '<div class="ek-trofee">' +
     lijst.map(b => '<span class="ek-badge"><span class="ek-be">' + b.e + '</span>' + b.n + '</span>').join('') + '</div>' : '';
 }
-function toonEindkaart(html, nieuw, setup) {
+function toonEindkaart(html, setup) {
   const k = $('eindkaart');
-  k.innerHTML = html.replace('<!--trofeeen-->', trofeeRij(voorKaart().concat(nieuw)));
+  k.innerHTML = html.replace('<!--trofeeen-->', trofeeRij(voorKaart()));
   /* de kaart ligt op het bord; onder 400 px past de volle kaart daar niet in (de opmaak kan het bord niet meten) */
-  const bord = $('board').getBoundingClientRect ? $('board').getBoundingClientRect().height : 0;
-  k.classList.toggle('klein', bord > 0 && bord < 400);
+  k.classList.toggle('klein', $('board').getBoundingClientRect().height < 400);
   k.classList.remove('hidden');
   if (setup) setup();
 }
@@ -4899,6 +4931,8 @@ function askName() {
     });
 }
 
+/* een profiel dat zijn level nooit bewaarde: het level van nu telt als gevierd */
+if (P.lastLevel == null) { P.lastLevel = levelIdx(P.xp); saveP(); }
 applyTheme();
 renderHome();
 $('homeBubble').textContent = pick(HOME_LINES);
@@ -4906,7 +4940,7 @@ showScreen('home');
 if (!checkPlayFragment() && !checkLinkFragment()) {
   if (!P.name && !ACC) askWelcome();
   else if (!P.name) askName();
-  else checkNewWeek();
+  else { checkNewWeek(); thuisVieren(); }
 }
 if (ACC) syncNow();
 friendPollSoon(1500);

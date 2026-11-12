@@ -405,6 +405,31 @@ for (const [W, H] of KLEIN) {
         const hint = await page.evaluate(() => { const b = [...document.querySelectorAll('#onder button')].find(x => /Hint/.test(x.textContent) && x.getClientRects().length);
           if (!b) return null; const r = b.getBoundingClientRect(), o = document.getElementById('onder').getBoundingClientRect(); return { w: r.width, ow: o.width, left: r.left - o.left }; });
         if (hint) check(n, 'Hint houdt zijn eigen breedte, links', hint.w < hint.ow * 0.6 && hint.left < 24);
+        if (soorten[i] !== 'best3') continue;
+        /* van opdracht 2 (veilig of valstrik) naar 3: de drie keuzes vullen het vak en kunnen niet opzij, dus daar
+           mag een keuze op de plek van Volgende staan; een tik in de eerste 350 ms telt dan niet (D34) */
+        await page.evaluate(() => { session.phase = 'review'; BD.mode = 'off'; awardRound(0, 'Zo zit het', 'Een reden.'); });
+        await page.waitForTimeout(300);
+        const vroeg = await page.evaluate(async () => {
+          const b = [...document.querySelectorAll('#onder button')].find(x => /Volgende/.test(x.textContent));
+          if (!b) return null;
+          const r = b.getBoundingClientRect(), v = { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+          b.click();
+          const t0 = performance.now();
+          while (!document.querySelector('.opt[data-i]') && performance.now() - t0 < 8000) await new Promise(k => requestAnimationFrame(k));
+          const e = document.elementFromPoint((v.left + v.right) / 2, (v.top + v.bottom) / 2), knop = e && e.closest('button');
+          if (knop) knop.click();
+          return { v, ronde: session.round, gekozen: session.picked };
+        });
+        check(n, 'testopzet: van opdracht 2 naar 3, en dan De Beste Zet', !!vroeg && vroeg.ronde === 3);
+        if (!vroeg) continue;
+        check(n, 'van opdracht 2 naar 3: een tik op de plek van Volgende meteen daarna kiest niets', vroeg.gekozen == null);
+        await page.waitForTimeout(1500);
+        const raak3 = await page.evaluate(v => [...document.querySelectorAll('#onder button')].filter(b => b.getClientRects().length)
+          .filter(b => { const r = b.getBoundingClientRect(); return r.left < v.right && r.right > v.left && r.top < v.bottom && r.bottom > v.top; })
+          .map(b => (b.classList.contains('opt') ? 'keuze ' : '') + b.textContent.trim()), vroeg.v);
+        check(n, 'van opdracht 2 naar 3: op de plek van Volgende staat hoogstens een keuze' + (raak3.length ? ': ' + raak3.join(', ') : ''),
+          raak3.every(t => t.indexOf('keuze ') === 0));
       }`
   });
 
@@ -470,6 +495,53 @@ for (const [W, H] of KLEIN) {
         if (naam === 'winst') check(n, 'winst: met een trofee', !!k && /Winnaar|Eerste potje/.test(k.t));
       }`
   });
+}
+
+/* het speelscherm van een oefening is precies zo hoog als het venster, en het vak onder het bord past precies om
+   een uitleg van drie regels met de knoppen eronder (visual.md 8.6: op een kort scherm 120) */
+for (const [W, H] of KLEIN) {
+  const n = '[2.1] ' + W + 'x' + H + ': een oefening: het speelscherm en het vak onder het bord passen precies, ook met drie regels uitleg';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      await startOefening('scan');
+      const uit = await page.evaluate(async () => {
+        const fout = [], o = document.getElementById('onder'), p = document.getElementById('play'), h = document.getElementById('hulpZin');
+        const zinnen = Object.keys(OPDRACHTEN).filter(k => k.startsWith('scan')).map(k => OPDRACHTEN[k]);
+        zinnen.push([zinnen[0][0], 'Een zin van drie regels: tik elk stuk aan dat Turbo kan slaan, en kijk ook naar de stukken die al gedekt lijken.']);
+        let drie = false;
+        for (const [vraag, zin] of zinnen) {
+          opdracht(vraag, zin);
+          await new Promise(r => setTimeout(r, 30));
+          const regels = Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight));
+          drie = drie || regels >= 3;
+          if (o.scrollHeight > o.clientHeight + 0.5) fout.push('het vak onder het bord: ' + o.scrollHeight + ' in ' + o.clientHeight + ' (' + regels + ' regels)');
+          if (p.scrollHeight > p.clientHeight + 0.5) fout.push('het speelscherm: ' + p.scrollHeight + ' in ' + p.clientHeight);
+        }
+        return { fout, drie };
+      });
+      check(n, 'testopzet: een uitleg van drie regels gemeten', uit.drie);
+      for (const f of uit.fout) check(n, f, false);` });
+}
+
+/* naast "Speel maar" is de strook smaller; de zin bij een tik op een eigen stuk past daar ook, op de lage telefoons */
+for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
+  const n = '[2.2] ' + W + 'x' + H + ': een tik op een eigen stuk bij de voorspelvraag: de zin past in de strook naast Speel maar';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      await page.evaluate(() => { Math.random = () => 0.1; });
+      await startPotje();
+      await zet('e2e4');
+      await page.waitForTimeout(1500);
+      check(n, 'testopzet: de voorspelvraag staat er', await page.evaluate(() => BD.mode === 'predict'));
+      await veld('e4');
+      await page.waitForTimeout(300);
+      const uit = await page.evaluate(() => { const st = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble');
+        return { t: b.textContent, knop: !document.getElementById('predictBar').classList.contains('hidden'),
+          past: st.scrollHeight <= st.clientHeight + 1 && b.getBoundingClientRect().bottom <= st.getBoundingClientRect().bottom + 0.5 }; });
+      check(n, 'testopzet: de zin over het eigen stuk, met Speel maar ernaast', /Dat is jouw stuk/.test(uit.t) && uit.knop);
+      check(n, 'de zin past: ' + uit.t, uit.past);` });
 }
 
 /* het rondje bouwt zijn eerste opdracht pas na een tik van de klok: de soort wordt daarna klaargezet */

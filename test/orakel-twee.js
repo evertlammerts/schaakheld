@@ -36,6 +36,45 @@ async function nodigUit(van) {
 }
 
 async function orakelTwee() {
+  /* ================= increment 2 ================= */
+
+  /* regel 2.5: op een speelscherm staat geen melding; een antwoord of een fout na een vriendenpotje staat in de strook */
+  await regel('[2.5] na een vriendenpotje: "Nu niet" op de vriendschapsvraag staat in de strook van wie vroeg, en zijn knop is weer als eerst', async function (check) {
+    const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
+    await samenSpelen(daan, fien);
+    await geefOp(aanZet(daan, fien));
+    tikTekst(daan, 'Vrienden worden');
+    await wacht();
+    check('testopzet: Fien kan "Nu niet" zeggen', kanTikken(fien, 'Nu niet'));
+    tikTekst(fien, 'Nu niet');
+    await wacht();
+    check('Daan leest het antwoord in de strook', /Fien wil nu even niet/.test(tekstVan(daan, 'bubble')));
+    check('de knop van Daan is weer als eerst', kanTikken(daan, 'Vrienden worden') && !/Gevraagd/.test(tekstVan(daan, 'eindkaart')));
+  });
+
+  await regel('[2.5] na een vriendenpotje: lukt de vraag of het ja niet, dan staat dat in de strook en is de knop weer als eerst', async function (check) {
+    const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
+    await samenSpelen(daan, fien);
+    await geefOp(aanZet(daan, fien));
+    const echt = crypto.subtle.generateKey;
+    const kapot = function () { return Promise.reject(new Error('geen sleutel')); };
+    try {
+      crypto.subtle.generateKey = kapot;
+      tikTekst(daan, 'Vrienden worden');
+      await wacht();
+      check('Daan leest in de strook dat het hier niet lukt', /Dat lukt hier niet/.test(tekstVan(daan, 'bubble')));
+      check('de knop van Daan is weer als eerst', kanTikken(daan, 'Vrienden worden') && !/Gevraagd/.test(tekstVan(daan, 'eindkaart')));
+      crypto.subtle.generateKey = echt;
+      tikTekst(fien, 'Vrienden worden');
+      await wacht();
+      check('testopzet: Daan krijgt de vraag van Fien', kanTikken(daan, 'Ja'));
+      crypto.subtle.generateKey = kapot;
+      tikTekst(daan, 'Ja');
+      await wacht();
+      check('Daan leest in de strook dat het niet lukte', /Dat lukte niet/.test(tekstVan(daan, 'bubble')));
+    } finally { crypto.subtle.generateKey = echt; }
+  });
+
   /* ================= increment 4 ================= */
 
   /* regel 1.4: niets anders haalt het bewaarde potje tegen Turbo weg, ook niet

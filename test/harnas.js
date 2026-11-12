@@ -117,6 +117,9 @@ function zetDatum(iso) {
 }
 function echteDatum() { Date = __EchteDate; __datumBasis = null; }
 
+/* een test die Math.random vastzet, laat dat niet na voor de tests erna */
+var __echteRandom = Math.random;
+
 /* ---------- handelingen zoals een kind ze doet ----------
    Een kind tikt alleen wat het ziet: een element dat zelf of via een ouder
    verborgen is, of dat achter een open venster ligt, laat de test falen. */
@@ -298,6 +301,7 @@ async function orakelBlok(naam, blok, gebouwd) {
   } finally {
     ORAKEL.apps.splice(voor).forEach(stopApparaat);
     echteDatum();
+    Math.random = __echteRandom;
   }
   if (gebouwd) {
     if (fouten.length) { fails++; ORAKEL.uit('FAIL  ' + naam + '  (' + fouten.join('; ') + ')'); }

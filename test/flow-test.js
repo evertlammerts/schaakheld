@@ -13,10 +13,14 @@ P.name = 'Testkind'; closeModal();
 ok('apparaat-id: zonder randomUUID 32 hex-tekens', typeof crypto.randomUUID === 'undefined' && /^[0-9a-f]{32}$/.test(DEV));
 
 /* close any queued LEVEL OMHOOG modals so later modal assertions see past them */
+/* thuis komt een venster voor een nieuw level of een trofee die nog niet te zien was; een kind tikt het weg */
 function closeLevelUps() {
   var guard = 0;
-  while (guard++ < 8 && !__els.overlay.classList.contains('hidden') &&
-    __els.modalBox.innerHTML.indexOf('LEVEL OMHOOG') >= 0) fire(__els.lvlOk, 'click');
+  while (guard++ < 8 && !__els.overlay.classList.contains('hidden')) {
+    if (__els.modalBox.innerHTML.indexOf('LEVEL OMHOOG') >= 0) fire(__els.lvlOk, 'click');
+    else if (__els.modalBox.innerHTML.indexOf('id="trofOk"') >= 0) fire(__els.trofOk, 'click');
+    else break;
+  }
 }
 /* geen weekdoel gezet: zo kan doel-XP de exacte XP-checks hieronder niet vertroebelen */
 ok('init: geen weekdoel bij een vers profiel', P.weekGoal === null);
@@ -817,6 +821,16 @@ ok('modal zonder cancel: eigen knop sluit', modalOpen === false &&
     v.wins === 3 && v.c.winsL2 === 1 && v.c.safeCorrect === 7 && v.c.pat.vork === 4 &&
     v.badges.winst === true && v.badges.detective === true && v.name === 'Oscar' && v.theme === 'oceaan' &&
     v.best === 6 && v.streak === 2 && v.weekGoal === null && v.day.winsByLvl[1] === 1);
+  /* per apparaat: welke trofeeën dit apparaat al liet zien. De vorige release
+     kent dat veld niet; daar telt elke trofee die er al is als getoond. */
+  var d = normDoc(JSON.parse(JSON.stringify(oud)));
+  ok('compat: de trofeeën van de vorige release tellen als getoond', JSON.stringify((d.loc.shownBadges || []).slice().sort()) === '["detective","winst"]');
+  var metLijst = JSON.parse(JSON.stringify(oud));
+  metLijst.loc.shownBadges = ['winst', 'raket', 7];
+  ok('compat: een doc van nu houdt zijn lijst, alleen met trofeeën die er zijn', JSON.stringify(normDoc(metLijst).loc.shownBadges) === '["winst"]');
+  ok('compat: de lijst gaat mee door bewaren en laden', JSON.stringify(normDoc(JSON.parse(JSON.stringify(normDoc(metLijst)))).loc.shownBadges) === '["winst"]');
+  ok('compat: een oud plat profiel: elke trofee telt als getoond', JSON.stringify(migrateLegacy({ badges: { winst: true } }, 'd1').loc.shownBadges || null) === '["winst"]');
+  ok('een nieuw profiel: niets getoond, en het kent zijn level', (emptyDoc().loc.shownBadges || [1]).length === 0 && emptyDoc().loc.lastLevel === 0);
 })();
 /* doc en weergave lopen gelijk (predictHits niet: die is hierboven met opzet
    rechtstreeks in P gezet en dus alleen weergave) */
@@ -898,6 +912,7 @@ remote.set.badges.raket = true;
 ok('sync: remote doc toegepast', applyRemoteDoc(remote) === true);
 ok('sync: xp van het andere apparaat erbij', P.xp === xpNow + 100);
 ok('sync: trofee van het andere apparaat erbij', P.badges.raket === true);
+ok('sync: een trofee van het andere apparaat telt hier als getoond', (P.shownBadges || []).indexOf('raket') >= 0);
 ok('sync: lastLevel herberekend, geen feestmodal', P.lastLevel === levelIdx(P.xp) &&
   __els.overlay.classList.contains('hidden'));
 applyRemoteDoc(remote);
@@ -2000,6 +2015,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('turbo: remise meteen aan het begin wordt afgewimpeld', session.over !== true &&
     __els.bubble.innerHTML.indexOf('net begonnen') >= 0);
   fire(__els.backBtn, 'click');
+  /* de melding van Pauze komt thuis na een eventueel venster voor een level of trofee */
+  drainTimers();
   ok('[1.1] turbo: Pauze voor de eerste zet vraagt niets, bewaart niets en zegt dat het potje nog niet begonnen was',
     session === null && __els.overlay.classList.contains('hidden') && leesPotje() === null &&
     document.getElementById('toast').textContent.indexOf('nog niet begonnen') >= 0);
