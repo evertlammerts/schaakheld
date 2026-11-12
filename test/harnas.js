@@ -399,4 +399,13 @@ function harnasZelftest() {
   const namen = onder.querySelectorAll('button').map(function (b) { return b.textContent; }).join(' ');
   ok('shim: aangehangen knoppen tellen mee, in de volgorde van de pagina', namen === 'Hint Klaar Tussen Volgende Laatste');
   ok('shim: ook in het hele document en op hun data', d2.querySelectorAll('[data-stap="2"]')[0] === volgende);
+  /* het document is de pagina zoals hij nu is */
+  const zwevend = d2.createElement('div');
+  zwevend.className = 'zweef';
+  d2.body.appendChild(zwevend);
+  d2.getElementById('rij').innerHTML = '<span id="weg">x</span>';
+  d2.getElementById('rij').innerHTML = '';
+  ok('shim: het document vindt wat aan body hangt, niet wat weggehaald is, en null zonder treffer',
+    d2.querySelectorAll('.zweef')[0] === zwevend && d2.querySelectorAll('#weg').length === 0 &&
+    d2.querySelector('.bestaat-niet') === null);
 }

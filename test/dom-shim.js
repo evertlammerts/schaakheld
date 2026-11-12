@@ -352,10 +352,9 @@ function maakDocument(vast) {
     __ouderTekst: ouderTekst,
     getElementById(id) { return els[id] || (els[id] = makeEl(id)); },
     createElement(tag) { const e = makeEl('_c' + (elc++)); e._tag = String(tag || '').toLowerCase(); return e; },
-    querySelectorAll(sel) { return zoekIn(Object.keys(els).map(k => els[k]).filter(e => e._html || e.children.length), sel); },
-    /* zonder treffer een los element, zoals de shim altijd deed: de app leest
-       vaak .board-frame uit de vaste opmaak, die de shim niet kent */
-    querySelector(sel) { return this.querySelectorAll(sel)[0] || makeEl('_q' + (elc++)); },
+    /* de pagina zoals hij nu is, vanaf body: wat weggehaald is telt niet mee */
+    querySelectorAll(sel) { return zoekIn([body], sel); },
+    querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
     body,
     documentElement: makeEl('documentElement'),
     /* document-brede handlers echt bewaren, zodat fire(document, 'keydown', ...)
