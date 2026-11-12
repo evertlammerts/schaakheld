@@ -147,7 +147,7 @@ function maakDocument(vast) {
       const attrs = __attrs(m[3]);
       if (attrs.id) {
         if (!els[attrs.id]) bouw(m[0]);
-        items.push({ id: attrs.id });
+        items.push({ id: attrs.id, pos: m.index });
         if (!leeg) overslaan = { tag, diepte: 1 };
         continue;
       }
@@ -163,21 +163,42 @@ function maakDocument(vast) {
       if ('disabled' in attrs) k.disabled = true;
       if ('value' in attrs) k.value = attrs.value;
       if (!leeg) k._html = __binnenVan(host._html, tag, re.lastIndex);
-      items.push({ k });
+      k._eind = re.lastIndex + k._html.length;
+      items.push({ k, pos: m.index });
     }
     host._qsa = { html: host._html, items };
     return items;
   }
+  /* alle elementen in het element, in de volgorde van de pagina: wat de app
+     met appendChild toevoegde, staat achter wat er al in stond */
   function knopen(host, diepte) {
+    diepte = diepte || 0;
     const lijst = [];
-    if ((diepte || 0) > 40) return lijst;
+    if (diepte > 40) return lijst;
+    const open = [];
+    const sluit = function (tot) {
+      while (open.length && open[open.length - 1]._eind <= tot) aangehangen(open.pop(), lijst, diepte);
+    };
     for (const it of eigen(host)) {
-      if (it.k) { lijst.push(it.k); continue; }
+      sluit(it.pos);
+      if (it.k) {
+        lijst.push(it.k);
+        if (it.k.children.length) open.push(it.k);
+        continue;
+      }
       const k = els[it.id];
       lijst.push(k);
-      if (k._html) for (const x of knopen(k, (diepte || 0) + 1)) lijst.push(x);
+      for (const x of knopen(k, diepte + 1)) lijst.push(x);
     }
+    sluit(Infinity);
+    aangehangen(host, lijst, diepte);
     return lijst;
+  }
+  function aangehangen(el, lijst, diepte) {
+    for (const c of el.children || []) {
+      lijst.push(c);
+      for (const x of knopen(c, diepte + 1)) lijst.push(x);
+    }
   }
   /* Waar een element hangt: de keten van ouders tot de pagina, en of iets op
      die weg verborgen is. Een element met een id hangt in het binnenste
@@ -276,16 +297,29 @@ function maakDocument(vast) {
     for (const c of el.children || []) if (!verborgenZelf(c)) delen.push(' ' + zichtbareTekst(c) + ' ');
     return __ontsnap(delen.join(' ')).replace(/\s+/g, ' ').trim();
   }
+  /* een element dat de app zelf maakte, heeft geen opmaak: dan tellen zijn id
+     en zijn data zoals de app ze zette */
+  function attrVan(k, naam) {
+    if (k._attrs && naam in k._attrs) return k._attrs[naam];
+    if (!k._attrs && naam === 'id') return k.id;
+    if (naam.indexOf('data-') === 0) {
+      const d = naam.slice(5).replace(/-([a-z])/g, (x, c) => c.toUpperCase());
+      if (d in k.dataset) return String(k.dataset[d]);
+    }
+    return undefined;
+  }
   function past(k, enkel) {
     const t = enkel.match(/^[a-zA-Z][\w-]*/);
     if (t && k._tag !== t[0].toLowerCase()) return false;
     const id = enkel.match(/#([\w-]+)/);
-    if (id && k._attrs.id !== id[1]) return false;
+    if (id && attrVan(k, 'id') !== id[1]) return false;
     for (const c of enkel.match(/\.[\w-]+/g) || []) if (!k._cls.has(c.slice(1))) return false;
     for (const a of enkel.match(/\[[^\]]+\]/g) || []) {
       const am = a.match(/^\[\s*([\w-]+)\s*(?:=\s*["']?([^"'\]]*)["']?)?\s*\]$/);
-      if (!am || !(am[1] in k._attrs)) return false;
-      if (am[2] !== undefined && k._attrs[am[1]] !== am[2]) return false;
+      if (!am) return false;
+      const v = attrVan(k, am[1].toLowerCase());
+      if (v === undefined) return false;
+      if (am[2] !== undefined && v !== am[2]) return false;
     }
     return true;
   }
@@ -318,7 +352,7 @@ function maakDocument(vast) {
     __ouderTekst: ouderTekst,
     getElementById(id) { return els[id] || (els[id] = makeEl(id)); },
     createElement(tag) { const e = makeEl('_c' + (elc++)); e._tag = String(tag || '').toLowerCase(); return e; },
-    querySelectorAll(sel) { return zoekIn(Object.keys(els).map(k => els[k]).filter(e => e._html), sel); },
+    querySelectorAll(sel) { return zoekIn(Object.keys(els).map(k => els[k]).filter(e => e._html || e.children.length), sel); },
     /* zonder treffer een los element, zoals de shim altijd deed: de app leest
        vaak .board-frame uit de vaste opmaak, die de shim niet kent */
     querySelector(sel) { return this.querySelectorAll(sel)[0] || makeEl('_q' + (elc++)); },

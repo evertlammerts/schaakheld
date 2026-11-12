@@ -940,7 +940,7 @@ async function orakelFlow() {
     tikTekst(a, 'Klaar');
     await wacht();
     const onder = a.el('onder');
-    const eerste = onder.querySelectorAll('button').concat(onder.children || []).filter(function (k) { return !tikbaar(a, k); })[0];
+    const eerste = onder.querySelectorAll('button').filter(function (k) { return !tikbaar(a, k); })[0];
     check('Volgende is de eerste knop onder het bord', !!eerste && /Volgende/.test(knopTekst(a, eerste)));
     check('de strook zegt wat er gemist is', /Gemist/.test(tekstVan(a, 'strook')));
   });
