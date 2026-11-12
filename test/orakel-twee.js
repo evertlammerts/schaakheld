@@ -310,7 +310,8 @@ async function orakelTwee() {
     check('testopzet: nog geen vraag bij Fien', !/wil vrienden worden/.test(zegt(fien)));
     tikTekst(daan, 'Vrienden worden');
     await wacht();
-    check('Fien ziet de vraag van Daan in haar eindkaart', /Daan wil vrienden worden/.test(zegt(fien)));
+    check('Fien ziet de vraag van Daan in haar eindkaart, zonder venster erover', !fien.open() && zichtbaar(fien, 'eindkaart') &&
+      /Daan wil vrienden worden/.test(tekstVan(fien, 'eindkaart')));
     /* "Ja" in de kaart maakt ze vrienden: de vraag staat er niet alleen, hij werkt ook */
     tikTekst(fien, 'Ja');
     await wacht();

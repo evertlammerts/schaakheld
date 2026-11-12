@@ -163,7 +163,7 @@ async function orakelFlow() {
     check('en de speurbril is nog steeds gebruikt', b.get('session.tips') === 2);
   });
 
-  await nogNiet('[1.1] de trucbonus telt per potje, ook over Pauze en herladen heen', async function (check) {
+  await nogNiet('[1.1] de trucbonus telt per potje en staat in het bewaarde potje: wie er al drie kreeg, krijgt er geen meer', async function (check) {
     const zetten = ['b1c3', 'e7e6', 'c3b5', 'd8e7'];
     const metDrie = nieuwKind({ opslag: opslagMetPotje(1, zetten, { patXP: 3 }) });
     await wacht();
@@ -365,7 +365,7 @@ async function orakelFlow() {
     check('rondje: Pauze zegt bij welke opdracht het verder gaat', /opdracht 2\b/.test(toastTekst(b)) && !/Bewaard\./.test(toastTekst(b)));
   });
 
-  await nogNiet('[1.2] een rondje zonder antwoord zegt bij Pauze dat het nog niet begonnen was', async function (check) {
+  await nogNiet('[1.2] een rondje zonder afgemaakte opdracht zegt bij Pauze dat er nog niets bewaard is', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'scan');
     a.tik('backBtn');
@@ -1330,7 +1330,7 @@ async function orakelFlow() {
     await wacht();
     const opgeslagen1 = opgeslagen(a, 'schaakheld1');
     check('de nieuwe teller c.drie staat in het document', !!opgeslagen1.cnt['c.drie']);
-    check('lastKind en lastSeen per apparaat', !!opgeslagen1.loc && 'lastSeen' in opgeslagen1.loc);
+    check('lastSeen per apparaat in het document', !!opgeslagen1.loc && 'lastSeen' in opgeslagen1.loc);
     check('de oude tellers staan er nog', !!opgeslagen1.cnt['c.pat.penning'] && !!opgeslagen1.cnt['c.winsL3']);
   });
 
