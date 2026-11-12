@@ -87,7 +87,7 @@
 
   /* ---------- 5.4: het blunderalarm ziet mat in één ---------- */
 
-  nogNiet('[5.4] het blunderalarm ziet een zet die mat in één toelaat (1.f3 e5 2.g4)', function (check) {
+  regel('[5.4] het blunderalarm ziet een zet die mat in één toelaat (1.f3 e5 2.g4)', function (check) {
     const S = speel(E.newGame(), ['f2f3', 'e7e5']);
     const r = E.blunderCheck(S, zet(S, 'g2g4'));
     check('2.g4 geeft alarm', !!r);
@@ -98,7 +98,7 @@
 
   /* ---------- 5.3: veilig of valstrik, gecontroleerd bij het kiezen ---------- */
 
-  nogNiet('[5.3] Veilig of valstrik: een "veilige" zet die een stuk verliest, wordt bij het kiezen afgekeurd', function (check) {
+  regel('[5.3] Veilig of valstrik: een "veilige" zet die een stuk verliest, wordt bij het kiezen afgekeurd', function (check) {
     /* Coach 3: na Dd3-c3 geeft Pf6-e4+ een vork op koning en dame */
     const S = E.parseFEN('r2qkb1r/pppb1ppp/4pn2/3p4/1n1P1B2/3QP3/PPPKNPPP/RN3B1R w kq - 2 7');
     const fen = E.toFEN(S);
@@ -114,7 +114,7 @@
     check('maar geen valstrik', E.checkSafeTask({ S: B, move: zet(B, 'g1f3'), trap: true }) === null);
   });
 
-  nogNiet('[5.3] Red je stuk: een redding die bij dieper kijken veel slechter is dan de beste, wordt bij het kiezen afgekeurd', function (check) {
+  regel('[5.3] Red je stuk: een redding die bij dieper kijken veel slechter is dan de beste, wordt bij het kiezen afgekeurd', function (check) {
     /* vandaag gemaakt door genPieceTask: c3b5 houdt alles, e4xd5 kost ruim 3 punten */
     const S = E.parseFEN('1r2k2r/ppp1n1bp/2nq1pp1/3pp1N1/4P3/2NP1Q2/PP1P1PPP/1RB3KR w k - 0 12');
     const fen = E.toFEN(S);

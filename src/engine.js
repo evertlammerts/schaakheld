@@ -637,12 +637,15 @@ function pickMove(S, level, rng, budgetMs) {
   return top[Math.floor(rng() * top.length)].m;
 }
 
-/* Blunder guard: does move m lose >=250cp of material by force, while a clearly
-   better option exists? Returns null or {loss, punish} (punish = opponent's reply). */
+/* Blunder guard: does move m allow mate in one, or lose >=250cp of material by
+   force while a clearly better option exists? Returns null or {loss, punish}
+   (punish = opponent's reply), with mate: true when that reply mates. */
 function blunderCheck(S, m) {
   makeMove(S, m);
-  const afterMine = forcedMaterial(S);
+  const mates = matingMoves(S, 1);
+  const afterMine = mates.length ? 0 : forcedMaterial(S);
   unmakeMove(S);
+  if (mates.length) return { loss: MATE, punish: mates[0], mate: true };
   const mySign = S.turn === 'w' ? 1 : -1;
   let bestAlt = -Infinity;
   for (const alt of legalMoves(S)) {
@@ -846,10 +849,51 @@ function genScanTask(type, rng) {
   return null;
 }
 
-/* Safe-or-trap: a quiet white move that either holds (loss<=60) or drops >=250 by force. */
+/* The checks when a task is picked look deeper than forcedMaterial, which
+   sees captures only: a quiet fork or a mate threat counts too. */
+const CHECK_NODES = 40000;
+/* White's score after move m, by the search with the check budget. */
+function scoreAfter(S, m) {
+  makeMove(S, m);
+  const st = gameStatus(S);
+  const r = st.over ? { score: st.reason === 'mat' ? -MATE : 0, m: null } : think(S, 60000, 8, { nodes: CHECK_NODES });
+  const mateNext = !st.over && matingMoves(S, 1).length > 0;
+  unmakeMove(S);
+  return { white: -r.score, reply: r.m, mateNext };
+}
+/* Veilig of valstrik: a "veilig" move loses at most a pawn against the best
+   move and allows no mate in one; a "valstrik" loses at least 2.5 pawns, and
+   its punishment is Black's real best reply. Returns the task or null. */
+function checkSafeTask(task) {
+  const S = task.S;
+  const best = think(S, 60000, 8, { nodes: CHECK_NODES }).score;
+  const after = scoreAfter(S, task.move);
+  const loss = best - after.white;
+  if (!task.trap) return loss <= 100 && !after.mateNext ? task : null;
+  if (loss < 250 || !after.reply) return null;
+  return Object.assign({}, task, { punish: after.reply });
+}
+/* Red je stuk: every accepted save is within a pawn of the best save. */
+function checkPieceTask(task) {
+  const scores = task.answers.map(a => scoreAfter(task.S, a.m).white);
+  const best = Math.max(...scores);
+  return scores.every(v => best - v <= 100) ? task : null;
+}
+
+/* Safe-or-trap: a quiet white move that either holds (loss<=60) or drops >=250
+   by force, confirmed by checkSafeTask. After three candidates that the check
+   rejects it gives up, so the child never waits long. A trap's punishment is
+   a capture, so the explanation can say what is taken. */
 function genSafeTask(wantTrap, rng) {
   rng = rng || Math.random;
-  for (let tries = 0; tries < 90; tries++) {
+  let rejected = 0;
+  const confirm = t => {
+    const c = checkSafeTask(t);
+    if (c && (!t.trap || isCaptureAfter(t.S, t.move, c.punish))) return c;
+    rejected++;
+    return null;
+  };
+  for (let tries = 0; tries < 90 && rejected < 3; tries++) {
     const S = randomPosition({ noise: 150, minPlies: 8, maxPlies: 22 }, rng);
     if (inCheck(S)) continue;
     const base = forcedMaterial(S);
@@ -866,12 +910,19 @@ function genSafeTask(wantTrap, rng) {
         const reply = rootScores(S, 2);
         unmakeMove(S);
         const punish = reply.length ? reply[0].m : null;
-        if (punish && isCaptureAfter(S, m, punish))
-          return { S, move: m, trap: true, punish, loss };
+        if (punish && isCaptureAfter(S, m, punish)) {
+          const c = confirm({ S, move: m, trap: true, punish, loss });
+          if (c) return c;
+          break;
+        }
         continue;
       }
       unmakeMove(S);
-      if (!wantTrap && loss <= 60 && loss >= -60) return { S, move: m, trap: false, loss };
+      if (!wantTrap && loss <= 60 && loss >= -60) {
+        const c = confirm({ S, move: m, trap: false, loss });
+        if (c) return c;
+        break;
+      }
     }
   }
   return null;
@@ -1260,10 +1311,12 @@ function genKingTask(rng, attempts) {
 
 /* A white piece hangs (SEE loss) and white can save it: move it, defend it, or
    counter-attack. Every move after which black no longer wins material by force
-   counts, as long as it does not hang something else. */
+   counts, as long as it does not hang something else, and checkPieceTask
+   confirms that no accepted save is clearly worse than the best one. */
 function genPieceTask(rng) {
   rng = rng || Math.random;
-  for (let tries = 0; tries < 120; tries++) {
+  let rejected = 0;
+  for (let tries = 0; tries < 120 && rejected < 3; tries++) {
     const S = randomPosition({ noise: 260, minPlies: 8, maxPlies: 24, maxImbalance: 600 }, rng);
     if (inCheck(S)) continue;
     const th = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250);
@@ -1278,7 +1331,9 @@ function genPieceTask(rng) {
       if (after - base >= -60) saves.push({ m, info: null });
     }
     if (!saves.length || saves.length > 4) continue;
-    return { S, type: 'stuk', hang: th[0], answers: saves };
+    const task = { S, type: 'stuk', hang: th[0], answers: saves };
+    if (checkPieceTask(task)) return task;
+    rejected++;
   }
   return null;
 }
@@ -1310,5 +1365,5 @@ if (typeof module !== 'undefined') {
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
     winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
-    repetitions, positionKey, SUPER_NODES };
+    repetitions, positionKey, SUPER_NODES, CHECK_NODES, checkSafeTask, checkPieceTask };
 }
