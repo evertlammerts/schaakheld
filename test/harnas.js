@@ -385,4 +385,27 @@ function harnasZelftest() {
   ok('harnas: de tekst naast een element', doc.__ouderTekst(app.els.num) === '5 XP');
   const balk = gedeeldeOuder(app, 'skip', 'zie');
   ok('harnas: het binnenste element om twee elementen heen', !!balk && doc.__tekst(balk) === 'Speel maar Zie mij');
+  /* querySelectorAll ziet ook wat de app met appendChild toevoegde, in de volgorde van de pagina */
+  const d2 = maakDocument('<div id="onder"><button>Hint</button><div class="rij"><button>Klaar</button></div>' +
+    '<div id="rij"></div><button>Laatste</button></div>');
+  const onder = d2.getElementById('onder');
+  const volgende = d2.createElement('button');
+  volgende.textContent = 'Volgende';
+  volgende.dataset.stap = '2';
+  d2.getElementById('rij').appendChild(volgende);
+  const tussen = d2.createElement('button');
+  tussen.textContent = 'Tussen';
+  onder.querySelectorAll('.rij')[0].appendChild(tussen);
+  const namen = onder.querySelectorAll('button').map(function (b) { return b.textContent; }).join(' ');
+  ok('shim: aangehangen knoppen tellen mee, in de volgorde van de pagina', namen === 'Hint Klaar Tussen Volgende Laatste');
+  ok('shim: ook in het hele document en op hun data', d2.querySelectorAll('[data-stap="2"]')[0] === volgende);
+  /* het document is de pagina zoals hij nu is */
+  const zwevend = d2.createElement('div');
+  zwevend.className = 'zweef';
+  d2.body.appendChild(zwevend);
+  d2.getElementById('rij').innerHTML = '<span id="weg">x</span>';
+  d2.getElementById('rij').innerHTML = '';
+  ok('shim: het document vindt wat aan body hangt, niet wat weggehaald is, en null zonder treffer',
+    d2.querySelectorAll('.zweef')[0] === zwevend && d2.querySelectorAll('#weg').length === 0 &&
+    d2.querySelector('.bestaat-niet') === null);
 }

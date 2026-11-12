@@ -163,7 +163,7 @@ async function orakelFlow() {
     check('en de speurbril is nog steeds gebruikt', b.get('session.tips') === 2);
   });
 
-  await regel('[1.1] de trucbonus telt per potje, ook over Pauze en herladen heen', async function (check) {
+  await regel('[1.1] de trucbonus telt per potje en staat in het bewaarde potje: wie er al drie kreeg, krijgt er geen meer', async function (check) {
     const zetten = ['b1c3', 'e7e6', 'c3b5', 'd8e7'];
     const metDrie = nieuwKind({ opslag: opslagMetPotje(1, zetten, { patXP: 3 }) });
     await wacht();
@@ -203,6 +203,53 @@ async function orakelFlow() {
     await zetEnWacht(b, 'b5c7');
     check('en geeft geen trucbonus', b.get('P.c.pat.vork') === 1 && b.get('P.xp') === xp);
   });
+
+  /* de app gaat direct na de hulp of het aanbod dicht, zonder zet ertussen */
+  await regel('[1.1] de Speurbril gebruiken en meteen dichtdoen: na het openen is hij nog steeds gebruikt', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5', 'g1f3', 'b8c6']) });
+    await wacht();
+    a.tik('verderKaart');
+    await wacht();
+    tikTekst(a, 'Speurbril');
+    await wacht();
+    check('testopzet: de speurbril is gebruikt', a.get('session.tips') === 2);
+    const b = herlaad(a);
+    await wacht();
+    b.tik('verderKaart');
+    await wacht();
+    check('na het openen nog 2 over', b.get('session.tips') === 2 &&
+      knopTeksten(b).some(function (t) { return /Speurbril\D*2/.test(t); }));
+  });
+
+  await regel('[1.1] remise aanbieden en meteen dichtdoen: na het openen staat het aanbod er nog', async function (check) {
+    const zetten = ['e2e4', 'e7e5', 'g1f3', 'b8c6'];
+    const a = nieuwKind({ opslag: opslagMetPotje(1, zetten) });
+    await wacht();
+    a.tik('verderKaart');
+    await wacht();
+    await biedRemise(a);
+    check('testopzet: Turbo wil nog geen remise, het aanbod staat', !a.get('session.over') && a.get('session.drawAsked') === zetten.length);
+    const b = herlaad(a);
+    await wacht();
+    const r = opgeslagen(b, POTJE);
+    check('het aanbod staat bewaard', !!r && r.drawAsked === zetten.length);
+    b.tik('verderKaart');
+    await wacht();
+    check('en het potje gaat verder met dat aanbod', opSpeelscherm(b) && b.get('session.drawAsked') === zetten.length);
+  });
+
+  for (const niveau of [7, 0]) {
+    await regel('[1.1] een bewaard potje op niveau ' + niveau + ', dat niet bestaat, gaat niet open maar staat op de kaart om weg te halen', async function (check) {
+      const o = opslagMetPotje(niveau, ['e2e4', 'e7e5']), ruw = o.getItem(POTJE);
+      const a = nieuwKind({ opslag: o });
+      await wacht();
+      check('de Verder-kaart zegt dat het niet open kan', zichtbaar(a, 'verder') && tekstVan(a, 'verder').indexOf('kan ik niet meer openen') >= 0 &&
+        !/Verder:/.test(tekstVan(a, 'verder')));
+      const b = herlaad(a);
+      await wacht();
+      check('het staat er na herladen nog, onveranderd', b.opslag.getItem(POTJE) === ruw);
+    });
+  }
 
   await regel('[1.1] een potje zonder zet wordt niet bewaard: Pauze vraagt niets en zegt dat het nog niet begonnen was', async function (check) {
     const a = nieuwKind();
@@ -318,7 +365,7 @@ async function orakelFlow() {
     check('rondje: Pauze zegt bij welke opdracht het verder gaat', /opdracht 2\b/.test(toastTekst(b)) && !/Bewaard\./.test(toastTekst(b)));
   });
 
-  await regel('[1.2] een rondje zonder antwoord zegt bij Pauze dat het nog niet begonnen was', async function (check) {
+  await regel('[1.2] een rondje zonder afgemaakte opdracht zegt bij Pauze dat er nog niets bewaard is', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'scan');
     a.tik('backBtn');
@@ -893,7 +940,7 @@ async function orakelFlow() {
     tikTekst(a, 'Klaar');
     await wacht();
     const onder = a.el('onder');
-    const eerste = onder.querySelectorAll('button').concat(onder.children || []).filter(function (k) { return !tikbaar(a, k); })[0];
+    const eerste = onder.querySelectorAll('button').filter(function (k) { return !tikbaar(a, k); })[0];
     check('Volgende is de eerste knop onder het bord', !!eerste && /Volgende/.test(knopTekst(a, eerste)));
     check('de strook zegt wat er gemist is', /Gemist/.test(tekstVan(a, 'strook')));
   });
@@ -1283,7 +1330,7 @@ async function orakelFlow() {
     await wacht();
     const opgeslagen1 = opgeslagen(a, 'schaakheld1');
     check('de nieuwe teller c.drie staat in het document', !!opgeslagen1.cnt['c.drie']);
-    check('lastKind en lastSeen per apparaat', !!opgeslagen1.loc && 'lastSeen' in opgeslagen1.loc);
+    check('lastSeen per apparaat in het document', !!opgeslagen1.loc && 'lastSeen' in opgeslagen1.loc);
     check('de oude tellers staan er nog', !!opgeslagen1.cnt['c.pat.penning'] && !!opgeslagen1.cnt['c.winsL3']);
   });
 
