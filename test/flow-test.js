@@ -1825,6 +1825,45 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     rVerv.status === 204 && __server.buses[mijnBus.bus].blob === briefje);
   __server.buses = {};
 
+  /* de kamertabel uit room.go: een volle tabel maakt plaats met een kamer
+     zonder iemand erin, eerst een zonder potje, dan het langst stille potje;
+     zit er in elke kamer iemand, dan weigert de server */
+  var kamersVoor = __server.wsrooms, nuK = __busNu();
+  __server.wsrooms = {};
+  var nepKamer = function (id, potje, bezet, stil) {
+    var rm = { seats: {}, order: [id + '-a', id + '-b'], joined: {}, created: nuK, touched: nuK - stil };
+    rm.seats[id + '-a'] = bezet ? { readyState: 1 } : null;
+    rm.seats[id + '-b'] = null;
+    if (potje) { rm.joined[id + '-a'] = true; rm.joined[id + '-b'] = true; }
+    __server.wsrooms[id] = rm;
+  };
+  var nieuwBezet = async function () {
+    var r = await fetch(SYNC_URL + '/v1/room', { method: 'POST', headers: {} });
+    if (r.status === 200) {
+      var k = __server.wsrooms[(await r.json()).room];
+      k.seats[k.order[0]] = { readyState: 1 };
+    }
+    return r.status;
+  };
+  nepKamer('wacht', true, true, 9000);
+  nepKamer('oudPotje', true, false, 3000);
+  nepKamer('leeg', false, false, 2000);
+  nepKamer('jongPotje', true, false, 1000);
+  for (var j = 0; Object.keys(__server.wsrooms).length < MAX_KAMERS; j++) nepKamer('vol' + j, false, true, 0);
+  var stK1 = await nieuwBezet();
+  ok('kamers: vol, dan wijkt eerst de kamer zonder potje, ook voor een ouder potje',
+    stK1 === 200 && !('leeg' in __server.wsrooms) && ('oudPotje' in __server.wsrooms));
+  var stK2 = await nieuwBezet();
+  ok('kamers: daarna het potje dat het langst stil ligt',
+    stK2 === 200 && !('oudPotje' in __server.wsrooms) && ('jongPotje' in __server.wsrooms));
+  var stK3 = await nieuwBezet();
+  ok('kamers: een kamer waar iemand in zit wijkt nooit, ook de stilste niet',
+    stK3 === 200 && !('jongPotje' in __server.wsrooms) && ('wacht' in __server.wsrooms));
+  var stK4 = await nieuwBezet();
+  ok('kamers: in elke kamer iemand, dan weigert de server en blijft het bij de grens',
+    stK4 === 429 && Object.keys(__server.wsrooms).length === MAX_KAMERS);
+  __server.wsrooms = kamersVoor;
+
   /* wie zelf op iemand wacht moet een uitnodiging van een ander nog steeds
      te zien krijgen: met twee vermeldingen van hetzelfde kind (een kapotte
      en een goede) bleven anders allebei de kanten eeuwig wachten */

@@ -482,26 +482,41 @@ var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, k
 /* grenzen en TTL uit bus.go en room.go; __server.klok schuift de klok van de
    nep-server vooruit zodat een test een bus of een kamer kan laten verlopen */
 var BUS_TTL = 10 * 60000, MAX_BUSES = 512, MAX_BUS_BLOB = 4 << 10, MAX_BUS_CHECK = 64;
-var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000;
+var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000, MAX_KAMERS = 64;
 function __busNu() { return Date.now() + __server.klok; }
 function __veegBussen() {
   for (var id in __server.buses) if (__server.buses[id].tot <= __busNu()) delete __server.buses[id];
 }
-/* zoals sweepRoomsLocked: een kamer heeft een potje zodra beide stoeltjes
-   ooit verbonden waren; stil is pas stil als er niemand verbonden is */
+/* zoals room.go: een kamer heeft een potje zodra beide stoeltjes ooit
+   verbonden waren; stil is pas stil als er niemand verbonden is */
+function __heeftPotje(rm) { return rm.order.every(tok => rm.joined[tok]); }
+function __kamerBezet(rm) { return rm.order.some(tok => rm.seats[tok] && rm.seats[tok].readyState === 1); }
 function __veegKamers() {
   const nu = __busNu();
   for (const id in __server.wsrooms) {
     const rm = __server.wsrooms[id];
-    const potje = rm.order.every(tok => rm.joined[tok]);
+    const potje = __heeftPotje(rm);
     if (nu - rm.created >= (potje ? POTJE_MAX : KAMER_MAX)) { delete __server.wsrooms[id]; continue; }
     if (nu - rm.touched < (potje ? POTJE_STIL : KAMER_STIL)) continue;
-    if (!rm.order.some(tok => rm.seats[tok] && rm.seats[tok].readyState === 1)) delete __server.wsrooms[id];
+    if (!__kamerBezet(rm)) delete __server.wsrooms[id];
   }
+}
+/* zoals evictRoomLocked: alleen een kamer zonder iemand erin wijkt, eerst
+   een zonder potje, dan de langst stille */
+function __maakPlaats() {
+  let weg = null;
+  for (const id in __server.wsrooms) {
+    const rm = __server.wsrooms[id], w = weg && __server.wsrooms[weg];
+    if (__kamerBezet(rm)) continue;
+    if (!w || (__heeftPotje(rm) !== __heeftPotje(w) ? !__heeftPotje(rm) : rm.touched < w.touched)) weg = id;
+  }
+  if (weg) delete __server.wsrooms[weg];
+  return !!weg;
 }
 function __nieuwToken() { return 'tok' + (++__server.teller) + 'x'.repeat(16); }
 function __nieuweKamer() {
   __veegKamers();
+  if (Object.keys(__server.wsrooms).length >= MAX_KAMERS && !__maakPlaats()) return null;
   const id = 'kamer' + (++__server.teller) + 'k'.repeat(12);
   const host = __nieuwToken(), gast = __nieuwToken(), nu = __busNu();
   __server.wsrooms[id] = { seats: {}, order: [host, gast], joined: {}, created: nu, touched: nu };
@@ -553,6 +568,7 @@ var fetch = function (url, opts) {
     }
     else if (m === 'POST' && path === '/v1/room') {
       const k = __nieuweKamer();
+      if (!k) { res(429); return; }
       res(200, { room: k.id, seat: k.host, guest: k.gast });
     }
     else if (m === 'POST' && path === '/v1/pair') {
@@ -572,6 +588,7 @@ var fetch = function (url, opts) {
       else if (p.dirA === body.mine) res(204);
       else {
         const k = __nieuweKamer();
+        if (!k) { res(429); return; }
         p.room = k.id;
         p.seatA = k.host;
         p.seatB = k.gast;

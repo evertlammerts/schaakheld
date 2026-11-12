@@ -101,6 +101,10 @@ type room struct {
 
 func (r *room) hasGame() bool { return r.joined[0] && r.joined[1] }
 
+// live lockvrij lezen: seat.mu onder s.mu nemen zou een trage schrijver de
+// hele server laten bevriezen
+func (r *room) occupied() bool { return r.seats[0].live.Load() || r.seats[1].live.Load() }
+
 func (r *room) lifetimes() (idle, maxAge time.Duration) {
 	if r.hasGame() {
 		return gameIdle, gameMaxAge
@@ -124,13 +128,40 @@ func newSeat() *seat { return &seat{token: newToken()} }
 
 func (s *server) newRoomLocked() (*room, bool) {
 	s.sweepRoomsLocked()
-	if len(s.rooms) >= maxRooms {
+	if len(s.rooms) >= maxRooms && !s.evictRoomLocked() {
 		return nil, false
 	}
 	now := s.cfg.now()
 	r := &room{id: newToken(), seats: [2]*seat{newSeat(), newSeat()}, created: now, touched: now}
 	s.rooms[r.id] = r
 	return r, true
+}
+
+// evictRoomLocked maakt plaats in een volle tabel. Weigeren zou bij kamers
+// met een potje een halve dag geen nieuw potje betekenen, voor iedereen. Een
+// kamer waar iemand in zit wijkt nooit; wie zijn kamer zo kwijt is, krijgt
+// bij terugkomen hetzelfde antwoord als bij een verlopen kamer.
+func (s *server) evictRoomLocked() bool {
+	var weg *room
+	for _, r := range s.rooms {
+		if !r.occupied() && (weg == nil || wijktEerder(r, weg)) {
+			weg = r
+		}
+	}
+	if weg == nil {
+		return false
+	}
+	delete(s.rooms, weg.id)
+	return true
+}
+
+// een kamer zonder potje (die leeft toch maar een kwartier) voor een
+// gepauzeerd potje, en daarbinnen de langst stille
+func wijktEerder(a, b *room) bool {
+	if a.hasGame() != b.hasGame() {
+		return !a.hasGame()
+	}
+	return a.touched.Before(b.touched)
 }
 
 func (s *server) sweepRoomsLocked() {
@@ -147,9 +178,7 @@ func (s *server) sweepRoomsLocked() {
 		if now.Sub(r.touched) < idle {
 			continue
 		}
-		// live lockvrij lezen: seat.mu onder s.mu nemen zou een trage
-		// schrijver de hele server laten bevriezen
-		if !r.seats[0].live.Load() && !r.seats[1].live.Load() {
+		if !r.occupied() {
 			delete(s.rooms, id)
 		}
 	}
