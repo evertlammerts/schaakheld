@@ -1290,7 +1290,7 @@ async function orakelFlow() {
       /blijft op dit apparaat/.test(tekstVan(a, 'ikBewaard')));
   });
 
-  await nogNiet('[3.6] het getal dat het level bepaalt heet XP, zonder ster', async function (check) {
+  await regel('[3.6] het getal dat het level bepaalt heet XP, zonder ster', async function (check) {
     const a = nieuwKind();
     const kop = a.doc.__ouderTekst(a.els.xpNum);
     check('in de kop staat XP bij het getal, zonder ster', /XP/.test(kop) && !/⭐/.test(kop));
@@ -1305,7 +1305,7 @@ async function orakelFlow() {
     check('de trofee voor 100 sterren telt sterren', /100 sterren/.test(a.get('BADGES.find(function (b) { return b.id === "sterren"; }).d')));
   });
 
-  await nogNiet('[3.7] geen reeks in een rondje en geen reeksbonus meer: drie goede antwoorden geven 90 XP', async function (check) {
+  await regel('[3.7] geen reeks in een rondje en geen reeksbonus meer: drie goede antwoorden geven 90 XP', async function (check) {
     const a = nieuwKind();
     const xp = a.get('P.xp');
     await startOefening(a, 'scan');
@@ -1315,7 +1315,7 @@ async function orakelFlow() {
     check('90 XP zonder bonus', a.get('P.xp') - xp === 90);
   });
 
-  await nogNiet('[3.7] Vuurpijl: 25 opdrachten met drie sterren, in de nieuwe teller c.drie', async function (check) {
+  await regel('[3.7] Vuurpijl: 25 opdrachten met drie sterren, in de nieuwe teller c.drie', async function (check) {
     const a = nieuwKind();
     a.ev('bump("c.drie", 24)');
     await startOefening(a, 'scan');
@@ -1374,7 +1374,7 @@ async function orakelFlow() {
     check('de zin', /Vorige week: doel gehaald!/.test(b.scherm()));
   });
 
-  await nogNiet('[3.10] compat: een document van nu laadt met alles, krijgt geen vraag, en de nieuwe velden komen erbij', async function (check) {
+  await regel('[3.10] compat: een document van nu laadt met alles, krijgt geen vraag, en de nieuwe velden komen erbij', async function (check) {
     const doc = docVan('Daan', { xp: 2710, stars: 70, wins: 12, 'c.winsL2': 4, 'c.winsL3': 1, 'c.pat.penning': 3, 'c.gamesPlayed': 40 },
       { set: { badges: { vlam: true, winst: true } }, lww: { name: { v: 'Daan', t: 1 }, theme: { v: 'lava', t: 1 } },
         max: { best: 6, goal: {} }, loc: { streak: 4, lastLevel: 3, weekSeen: '2026-W46' } });

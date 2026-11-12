@@ -39,9 +39,9 @@ while (session && session.kind === 'scan' && session.round <= 5 && rounds < 10) 
 closeLevelUps();
 ok('scan: summary modal', __els.modalBox.innerHTML.indexOf('Rondje klaar') >= 0);
 ok('scan: 15 stars earned', P.stars - stars0 === 15);
-ok('scan: xp 150 + streak bonuses 15', P.xp - xp0 === 165);
+ok('[3.7] scan: 150 XP, zonder reeksbonus', P.xp - xp0 === 150);
 ok('scan: perfect rounds counted', P.c.perfectScans === 5);
-ok('badge: vuurpijl bij 5 op een rij', !!P.badges.vlam);
+ok('[3.7] badge: geen Vuurpijl meer voor 5 op een rij', !P.badges.vlam && P.c.drie === 5);
 closeModal();
 
 /* ---------- scan explanations: Oscar's screenshot scenario ---------- */
@@ -660,11 +660,16 @@ P.log = DOC.log;
 var vk = vormInfo('koning');
 ok('vorm: sterk recent venster scoort hoog', vk && vk.n === 10 && vk.score >= 75 && vk.score <= 100);
 ok('vorm: stijging t.o.v. vorige 14 dagen', vk.delta > 20);
-ok('vorm: tekst met pijl', vormTxt('koning').indexOf('↑') >= 0);
+renderVorm();
+ok('vorm: op Ik een pijl omhoog', __els.vormList.innerHTML.indexOf('↑') >= 0);
 DOC.log.koning = {};
 for (vi = 0; vi < 10; vi++) DOC.log.koning['c' + vi] = [nu - vi * 3600000, 0.8, 200000, 0];
 var vk0 = vormInfo('koning');
 ok('vorm: alles fout en traag scoort laag', vk0.score < 25);
+for (vi = 0; vi < 10; vi++) DOC.log.koning['d' + vi] = [nu - 20 * 86400000 - vi * 3600000, 0.8, 20000, 3];
+renderVorm();
+ok('[3.7] vorm: op Ik nooit een pijl omlaag', vormInfo('koning').delta < 0 &&
+  __els.vormList.innerHTML.indexOf('↓') < 0 && __els.vormList.innerHTML.indexOf('vorm-d') < 0);
 ok('vorm: normDoc gooit oude en kapotte regels weg', (function () {
   var d = JSON.parse(JSON.stringify(DOC));
   d.log.koning.oud = [nu - 40 * 86400000, 0.5, 1000, 3];
@@ -695,7 +700,7 @@ session.task.targets.forEach(function (sq) { BD.marks.add(sq); });
 scanCheck();
 ok('vorm: opdracht gelogd na awardRound', Object.keys(DOC.log.scan || {}).length === 1 &&
   Object.values(DOC.log.scan)[0][3] === 3 && !!vormInfo('scan'));
-ok('vorm: zichtbaar in de sterrenbalk', __els.drillStars.innerHTML.indexOf('Vorm') >= 0);
+ok('[3.7] vorm: niet in de sterrenbalk', __els.drillStars.innerHTML.indexOf('Vorm') < 0);
 goHome();
 renderVorm();
 ok('vorm: kaart op Ik toont Speurogen met score', __els.vormList.innerHTML.indexOf('Speurogen') >= 0 &&

@@ -4264,7 +4264,7 @@ function floatXP(txt) {
 
 function addXP(n, label) {
   bump('xp', n);
-  floatXP('+' + n + ' ⭐ ' + (label || ''));
+  floatXP('+' + n + ' XP ' + (label || ''));
   updateHud();
   checkLevelUp();
 }
@@ -5026,9 +5026,8 @@ function startDrill(kind) {
 
 function updateDrillStars() {
   if (!session || session.kind === 'game') return;
-  const vorm = vormTxt(session.kind);
-  $('drillStars').innerHTML = '⭐ ' + session.earned + (P.streak >= 2 ? ' · 🔥 ' + P.streak + ' op een rij' : '') +
-    (vorm ? ' · ' + vorm : '');
+  /* tijdens het oefenen alleen de sterren: de vorm staat op Ik */
+  $('drillStars').innerHTML = '⭐ ' + session.earned;
 }
 
 function nextRound() {
@@ -5758,16 +5757,11 @@ function koningAttempt(m) {
 }
 
 /* --- shared drill scoring --- */
-/* de boekhouding van één opdracht: sterren, reeks, XP, vorm-log, weekteller */
+/* de boekhouding van één opdracht: sterren, XP, vorm-log, weekteller */
 function scoreTask(stars) {
   session.earned += stars;
-  if (stars >= 2) {
-    P.streak++;
-    if (P.streak > P.best) P.best = P.streak;
-    if (P.streak === 3) addXP(5, '🔥 3 op een rij!');
-    else if (P.streak === 5) addXP(10, '🔥 5 op een rij!');
-    else if (P.streak === 8) addXP(20, '🔥 ON FIRE!');
-  } else P.streak = 0;
+  /* geen reeks meer die kapot kan: drie sterren tellen gewoon op */
+  if (stars === 3) bump('c.drie', 1);
   bump('stars', stars);
   saveP();
   logResult(session.kind, session.diff, Date.now() - (session.t0 || Date.now()), stars);
@@ -6914,7 +6908,7 @@ const BADGES = [
   { id: 'wolk', e: '☁️', n: 'Dromer', d: 'Denk vooruit in de denkwolk', chk: () => (P.c.cloudUsed || 0) >= 1 },
   { id: 'trucs', e: '🎒', n: 'Trucenmeester', d: 'Spot 10 trucs (vork, penning, spies…)', chk: () => Object.values(P.c.pat || {}).reduce((a, b) => a + b, 0) >= 10 },
   { id: 'sterren', e: '🌟', n: 'Sterrenregen', d: 'Verzamel 100 sterren', chk: () => P.stars >= 100 },
-  { id: 'vlam', e: '🔥', n: 'Vuurpijl', d: '5 goede antwoorden op een rij', chk: () => P.best >= 5 },
+  { id: 'vlam', e: '🔥', n: 'Vuurpijl', d: '25 opdrachten met 3 sterren', chk: () => P.c.drie >= 25 },
   { id: 'koning', e: '👑', n: 'Koningskind', d: 'Bereik level Koning', chk: () => levelIdx(P.xp) >= 5 }
 ];
 
@@ -7011,7 +7005,7 @@ function checkGoal() {
     syncSoon();
     celebrate();
     showToast('🎯 Weekdoel gehaald!', true);
-    floatXP('+' + GOAL_XP + ' ⭐ Weekdoel gehaald! 🎯');
+    floatXP('+' + GOAL_XP + ' XP Weekdoel gehaald! 🎯');
     updateHud();
     checkLevelUp();
   }
@@ -7195,12 +7189,6 @@ function vormInfo(kind) {
   const prev = vormWindow(kind, now - 2 * d14, now - d14);
   return { score: cur.score, n: cur.n, delta: prev ? cur.score - prev.score : null };
 }
-function vormTxt(kind) {
-  const v = vormInfo(kind);
-  if (!v) return '';
-  return '📈 Vorm <b>' + v.score + '</b>' + (v.delta == null || v.delta === 0 ? '' :
-    ' <span class="vorm-d">' + (v.delta > 0 ? '↑' : '↓') + Math.abs(v.delta) + '</span>');
-}
 function renderVorm() {
   const el = $('vormList');
   if (!el) return;
@@ -7209,8 +7197,7 @@ function renderVorm() {
     return '<div class="vorm-row"><span class="vorm-e">' + DRILLS[k].e + '</span><span class="vorm-n">' + DRILLS[k].naam +
       (v ? '<span class="vorm-sub">' + v.n + (v.n === 1 ? ' opdracht' : ' opdrachten') + ' in 14 dagen</span>' :
         '<span class="vorm-sub">nog geen vorm: speel een rondje!</span>') + '</span>' +
-      (v ? '<span class="vorm-s">' + v.score + (v.delta == null || v.delta === 0 ? '' :
-        ' <span class="vorm-d">' + (v.delta > 0 ? '↑' : '↓') + Math.abs(v.delta) + '</span>') + '</span>' : '') + '</div>';
+      (v ? '<span class="vorm-s">' + v.score + (v.delta > 0 ? ' <span class="vorm-d">↑' + v.delta + '</span>' : '') + '</span>' : '') + '</div>';
   }).join('');
 }
 
