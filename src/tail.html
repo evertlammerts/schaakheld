@@ -2404,7 +2404,8 @@ function pauze() {
     const r = leesRondjes()[session.kind];
     melding = session.af ? 'Rondje klaar! Je sterren zijn bewaard.' :
       session.nietBewaard ? (r ? RONDJE_DEELS_BEWAARD(r.round + 1) : RONDJE_NIET_BEWAARD) :
-      r ? '✔ Bewaard. Je kunt later verder bij opdracht ' + (r.round + 1) + '.' : 'Dit rondje was nog niet begonnen.';
+      r ? '✔ Bewaard. Je kunt later verder bij opdracht ' + (r.round + 1) + '.' :
+      'Nog geen opdracht af, dus er is nog niets bewaard. Volgende keer begin je bij opdracht 1.';
   }
   goHome(terugTab);
   if (melding) showToast(melding, false, 6000);
