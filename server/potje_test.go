@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -90,6 +91,30 @@ func TestPotjeAlleenEenJSONObject(t *testing.T) {
 	}
 	if c := do(t, s, "POST", "/v1/potje", "", []byte(goed+" \n")).Code; c != 204 {
 		t.Fatalf("met alleen witruimte erachter: %d, wil 204", c)
+	}
+}
+
+func TestBusEnPotjeGrensInBytes(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	bewijs, bus := potjeBus("a")
+	vol, teVeel := strings.Repeat("é", 2048), strings.Repeat("é", 2049)
+	if c := schrijfPotje(s, bewijs, bus, teVeel); c != 400 {
+		t.Errorf("potje, 2049 keer é (4098 bytes): %d, wil 400", c)
+	}
+	if c := schrijfPotje(s, bewijs, bus, vol); c != 204 {
+		t.Errorf("potje, 2048 keer é (4096 bytes): %d, wil 204", c)
+	}
+	if c := busPost(t, s, bus, bewijs, teVeel); c != 400 {
+		t.Errorf("uitnodiging, 2049 keer é: %d, wil 400", c)
+	}
+	if c := busPost(t, s, bus, bewijs, vol); c != 204 {
+		t.Errorf("uitnodiging, 2048 keer é: %d, wil 204", c)
+	}
+	getal := []byte(`{"bus":"` + bus + `","bewijs":"` + bewijs + `","blob":42}`)
+	for _, pad := range []string{"/v1/potje", "/v1/bus"} {
+		if c := do(t, s, "POST", pad, "", getal).Code; c != 400 {
+			t.Errorf("%s met een getal als blob: %d, wil 400", pad, c)
+		}
 	}
 }
 

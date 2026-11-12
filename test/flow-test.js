@@ -1988,6 +1988,24 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     await pSchrijf(pb, 'x', { naam: 'Fien' }) === 400 && await pSchrijf({ bus: pa.bus, bewijs: pb.bewijs }, 'x') === 400 &&
     await pSchrijf(pb, 'a'.repeat(4097)) === 400 && !(pb.bus in (await pLees([pb.bus])).blobs) &&
     await pSchrijf(pb, 'a'.repeat(4096)) === 204);
+  var pRauw = async function (pad, tekst) {
+    return (await fetch(SYNC_URL + pad, { method: 'POST', headers: {}, body: tekst })).status;
+  };
+  var eeVol = 'é'.repeat(2048), eeTeVeel = 'é'.repeat(2049);
+  var pGetal = JSON.stringify({ bus: pb.bus, bewijs: pb.bewijs, blob: 42 });
+  ok('potje en uitnodiging: de grens is 4096 bytes en niet 4096 tekens, en een blob is tekst',
+    await pSchrijf(pb, eeTeVeel) === 400 && await pSchrijf(pb, eeVol) === 204 &&
+    await pRauw('/v1/bus', JSON.stringify({ bus: pb.bus, bewijs: pb.bewijs, blob: eeTeVeel })) === 400 &&
+    await pRauw('/v1/potje', pGetal) === 400 && await pRauw('/v1/bus', pGetal) === 400 &&
+    (await pLees([pb.bus])).blobs[pb.bus] === eeVol);
+  var pStaart = JSON.stringify({ bus: pb.bus, bewijs: pb.bewijs, blob: 'staart' });
+  ok('potje en uitnodiging: tekst na het json-object weigert de server, ook een losse }, witruimte niet',
+    await pRauw('/v1/potje', pStaart + '}') === 400 && await pRauw('/v1/potje', pStaart + ']{"naam":"Fien"}') === 400 &&
+    await pRauw('/v1/bus', pStaart + '}') === 400 && (await pLees([pb.bus])).blobs[pb.bus] === eeVol &&
+    await pRauw('/v1/potje', pStaart + ' \n') === 204);
+  var rKamer = await fetch(SYNC_URL + '/v1/room', { method: 'POST', headers: {}, body: 'geen json' });
+  if (rKamer.status === 200) delete __server.wsrooms[(await rKamer.json()).room];
+  ok('kamer: POST /v1/room leest geen body, dus een kapotte body maakt niets uit', rKamer.status === 200);
 
   __server.potjes = {};
   await pSchrijf(pa, 'x');

@@ -500,9 +500,13 @@ function __sha256hex(tekst) {
     return hex;
   });
 }
+/* zoals busGeldig na readJSON: de velden zijn tekst (null of weg telt als
+   leeg) en de grens telt bytes, zoals len in Go */
 function __busGeldig(body, hex) {
-  return /^[a-f0-9]{64}$/.test(body.bus) && hex === body.bus && /^[A-Za-z0-9_-]{8,64}$/.test(body.bewijs) &&
-    String(body.blob == null ? '' : body.blob).length <= MAX_BUS_BLOB;
+  const tekst = v => v == null || typeof v === 'string';
+  return tekst(body.bus) && tekst(body.bewijs) && tekst(body.blob) &&
+    /^[a-f0-9]{64}$/.test(body.bus) && hex === body.bus && /^[A-Za-z0-9_-]{8,64}$/.test(body.bewijs) &&
+    new TextEncoder().encode(body.blob == null ? '' : body.blob).length <= MAX_BUS_BLOB;
 }
 /* een herstart van de server: alles wat alleen in het geheugen staat is weg
    en elke open lijn breekt; de profielen op schijf blijven */
@@ -563,12 +567,17 @@ var fetch = function (url, opts) {
     const hdrs = opts.headers || {};
     const auth = hdrs.Authorization || hdrs.authorization || '';
     const secret = auth.indexOf('Bearer ') === 0 ? auth.slice(7) : '';
-    const body = typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body;
     const res = (status, data) => resolve({
       status,
       json: () => Promise.resolve(data),
       arrayBuffer: () => Promise.resolve(data instanceof Uint8Array ? data.buffer.slice(0) : new ArrayBuffer(0))
     });
+    /* zoals readJSON: een json-body die niet parseert (ook tekst na het
+       object) is 400; POST /v1/room leest geen body */
+    let body = opts.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch (e) { if (!(m === 'POST' && path === '/v1/room')) { res(400); return; } }
+    }
     if (m === 'POST' && path === '/v1/link') {
       /* zoals server.go: vol is vol, ook voor een code die er al staat */
       for (const c in __server.links) if (__server.links[c].tot <= __busNu()) delete __server.links[c];
