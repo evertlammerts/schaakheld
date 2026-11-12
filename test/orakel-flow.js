@@ -323,7 +323,7 @@ async function orakelFlow() {
     await startOefening(a, 'scan');
     a.tik('backBtn');
     await wacht(500);
-    check('melding "nog niet begonnen"', toastTekst(a).indexOf('Dit rondje was nog niet begonnen') >= 0);
+    check('melding "nog niets bewaard", opnieuw bij opdracht 1', /nog niets bewaard/.test(toastTekst(a)) && /opdracht 1\b/.test(toastTekst(a)));
   });
 
   await nogNiet('[1.2] de denkwolk gaat eerst dicht en zijn droombord blijft niet bewaard', async function (check) {
