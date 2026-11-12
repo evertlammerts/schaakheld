@@ -57,7 +57,9 @@ haken: `src/head.html:37:3: ... [css-focus-visible]`.
     `setAttribute('style')`, `insertRule` en `matchMedia` door de
     CSS-controle (ook als de waarde geen tekst is, telt de eigenschap); een
     gat in een template is nooit een syntaxfout, de vaste delen worden
-    gelezen; overige strings op een paar valkuilen (`:has(`, `@container`,
+    gelezen, ook in een handler uit `setAttribute('onclick', ...)`; tekst
+    voor `style` of `cssText` die geen CSS is, slaat een browser over, dus
+    de poort ook (`knop.style = 'zon'` op een eigen object); overige strings op een paar valkuilen (`:has(`, `@container`,
     `dvh` en verwanten, `color-mix(`). Een onbekende tag in een string is
     tekst, geen opmaak.
 - CSS, in `<style>`-blokken en `style`-attributen: doiuse (caniuse), plus

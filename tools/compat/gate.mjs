@@ -448,13 +448,22 @@ function checkSelector(selector, rep, at, skip, metGaten) {
    een 1 erin; leest dat niet, dan alleen de vaste declaraties. Een gat zelf
    is nooit een syntaxfout. */
 const GAT = '\u0001';
+const leestCss = (t, kind) => { try { postcss.parse(kind === 'decls' ? `*{${t}}` : t); return true; } catch (e) { return false; } };
 function checkCssMetGaten(text, kind, rep) {
   if (text.indexOf(GAT) < 0) return checkCssText(text, kind, rep);
-  const leest = t => { try { postcss.parse(kind === 'decls' ? `*{${t}}` : t); return true; } catch (e) { return false; } };
   const met1 = text.split(GAT).join('1');
-  if (leest(met1)) return checkCssText(met1, kind, rep);
+  if (leestCss(met1, kind)) return checkCssText(met1, kind, rep);
   const vast = text.split(/[;{}]/).filter(x => x.indexOf(GAT) < 0).join(';');
-  if (kind === 'decls' && leest(vast)) checkCssText(vast, kind, rep);
+  if (kind === 'decls' && leestCss(vast, kind)) checkCssText(vast, kind, rep);
+}
+
+/* Een veld style of cssText kan ook van een eigen object zijn (`knop.style =
+   'zon'`), en stijltekst die geen CSS is, negeert een browser. Alleen wat als
+   declaratie te lezen is, telt dus. */
+function checkStijlTekst(text, rep) {
+  if (leestCss(text.split(GAT).join('1'), 'decls')) return checkCssMetGaten(text, 'decls', rep);
+  const delen = text.split(/[;{}]/).filter(d => d.indexOf(GAT) < 0 && d.trim() && leestCss(d, 'decls'));
+  if (delen.length) checkCssText(delen.join(';'), 'decls', pinned(rep, 0));
 }
 
 function checkCssText(text, kind, rep, top = false) {
@@ -589,7 +598,7 @@ function stringOf(node, rep) {
 const kebab = s => s.replace(/[A-Z]/g, c => '-' + c.toLowerCase()).replace(/^(webkit|moz|ms)-/, '-$1-');
 
 function localPlugin(rep, apiFindings) {
-  const api = (offset, p, miss, what = p.slice(4).replace(/_static$/, '')) => apiFindings.push({ offset, id: p, msg: `${what} ontbreekt in ${names(miss)}` });
+  const api = (offset, p, miss, what = p.replace(/^(api|javascript\.builtins)\./, '').replace(/_static$/, '')) => apiFindings.push({ offset, id: p, msg: `${what} ontbreekt in ${names(miss)}` });
   const apiMembers = {
     create: context => {
       /* Een naam die de app zelf definieert, is van de app (`snd.move()`): een
@@ -700,7 +709,10 @@ function localPlugin(rep, apiFindings) {
               const miss = c ? missing(id, c) : [];
               if (miss.length) s.rep.find(0, id, `attribuut ${name} ontbreekt in ${names(miss)}`);
               if (m === 'setAttribute' && name === 'style') sinkArg(a1, v => checkCssMetGaten(v.text, 'decls', v.rep));
-              if (m === 'setAttribute' && name.startsWith('on')) sinkArg(a1, v => checkScript(v.text, { globalReturn: true, rep: pinned(v.rep, 0) }));
+              /* een gat wordt een 1; leest de handler dan nog niet, dan ligt dat aan het gat */
+              if (m === 'setAttribute' && name.startsWith('on')) {
+                sinkArg(a1, v => checkScript(v.text.split(GAT).join('1'), { globalReturn: true, rep: pinned(v.rep, 0), gaten: v.text.indexOf(GAT) >= 0 }));
+              }
             });
           } else if (['querySelector', 'querySelectorAll', 'matches', 'closest', 'webkitMatchesSelector'].includes(m)) {
             sinkArg(a0, s => { if (s.text.indexOf(GAT) < 0) checkSelector(s.text, s.rep, i => i); else checkSelector(s.text.split(GAT).join('x'), s.rep, i => i, null, true); });
@@ -724,7 +736,7 @@ function localPlugin(rep, apiFindings) {
           const left = n.left;
           if (left.type !== 'MemberExpression') return;
           const m = memberName(left);
-          if (m === 'cssText' || (m === 'style' && stringOf(n.right, rep))) sinkArg(n.right, s => checkCssMetGaten(s.text, 'decls', s.rep));
+          if (m === 'cssText' || (m === 'style' && stringOf(n.right, rep))) sinkArg(n.right, s => checkStijlTekst(s.text, s.rep));
           else if (memberName(left.object) === 'style' && m) {
             if (stringOf(n.right, rep)) sinkArg(n.right, s => checkCssMetGaten(`${kebab(m)}:${s.text}`, 'decls', pinned(s.rep, 0)));
             else checkCssText(`${kebab(m)}:inherit`, 'decls', pinned(rep, left.range[0]));
@@ -781,10 +793,23 @@ function lineIndex(starts, offset) {
 
 const apiKey = s => s.replace(/^api\.(?:Window\.)?/, '').replace(/_static$/, '').replace(/\(\)$/, '');
 
-function checkScript(text, { sourceType = 'script', globalReturn = false, rep, top = false }) {
-  const linter = new Linter({ configType: 'flat' });
+/* Een handler in een string wordt midden in een scriptcontrole zelf
+   gecontroleerd; elke controle heeft daarom een eigen lijst syntaxknopen. */
+function verifyMetSyntax(text, config) {
+  const buiten = SYNTAX_KNOPEN;
+  SYNTAX_KNOPEN = [];
+  try {
+    const linter = new Linter({ configType: 'flat' });
+    const messages = linter.verify(text, config, { filename: 'script.js' });
+    return { messages, syntax: SYNTAX_KNOPEN, source: linter.getSourceCode() };
+  } finally {
+    SYNTAX_KNOPEN = buiten;
+  }
+}
+
+function checkScript(text, { sourceType = 'script', globalReturn = false, rep, top = false, gaten = false }) {
   const apiFindings = [];
-  const messages = linter.verify(text, [{
+  const { messages, syntax, source } = verifyMetSyntax(text, [{
     files: ['**/*.js'],
     plugins: { 'es-x': ESX_PLUGIN, compat, poort: localPlugin(rep, apiFindings) },
     languageOptions: { ecmaVersion: 'latest', sourceType, parserOptions: { ecmaFeatures: { globalReturn } } },
@@ -793,20 +818,18 @@ function checkScript(text, { sourceType = 'script', globalReturn = false, rep, t
     // laat ze alleen liggen als ze 'gepolyfild' heten.
     settings: { browsers: QUERY, ignoreConditionalChecks: true, polyfills: ['es:all', 'RegExp'] },
     rules: { ...ESX_RULES, 'compat/compat': 'error', 'poort/api-leden': 'error', 'poort/strings': 'error' },
-  }], { filename: 'script.js' });
+  }]);
   const starts = jsLineStarts(text);
   const offset = m => starts[m.line - 1] + m.column - 1;
   const done = new Set();
   const compatSeen = new Set();
   /* es-x meldt een regex-onderdeel soms binnen de literal: dan telt de knoop eromheen */
-  const syntax = SYNTAX_KNOPEN;
-  SYNTAX_KNOPEN = [];
   const inSyntax = (van, tot) => syntax.some(r => r[0] <= van && tot <= r[1]);
   const esxAt = new Set();
   for (const m of messages) {
     const at = offset(m);
     if (m.fatal) {
-      rep.find(at, 'syntax', `syntaxfout: ${m.message}`);
+      if (!gaten) rep.find(at, 'syntax', `syntaxfout: ${m.message}`);
     } else if (!m.ruleId) {
       rep.find(at, 'eslint-comment', 'eslint-opmerkingen werken hier niet; gebruik compat-allow');
     } else if (m.ruleId.startsWith('es-x/')) {
@@ -830,7 +853,6 @@ function checkScript(text, { sourceType = 'script', globalReturn = false, rep, t
     if (f.id.startsWith('javascript.') && esxAt.has(f.offset)) continue;
     if (!compatSeen.has(`${lineIndex(starts, f.offset) + 1}:${apiKey(f.id)}`)) rep.find(f.offset, f.id, f.msg);
   }
-  const source = linter.getSourceCode();
   if (top && source) for (const c of source.getAllComments()) rep.comment(c.range[0], c.range[1]);
 }
 
