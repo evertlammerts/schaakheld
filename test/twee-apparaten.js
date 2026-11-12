@@ -172,8 +172,9 @@ async function alles() {
   ok('herkennen: het eindscherm biedt geen tweede vriendschap aan',
     eindziet(evert, 'Revanche') && eindziet(oscar, 'Revanche') && !eindziet(evert, 'Vrienden worden') && !eindziet(oscar, 'Vrienden worden') &&
     evert.get('Object.keys(P.friends).length') === 1 && oscar.get('Object.keys(P.friends).length') === 1);
-  evert.ev('mpVerlaat()');
-  oscar.ev('mpVerlaat()');
+  /* een potje vanaf een FEN heeft geen zettenlijst vanaf de start: de uitslag kan niet over en weer, dus allebei gewoon weg */
+  evert.ev('mpStop(); goHome()');
+  oscar.ev('mpStop(); goHome()');
   await tik();
 
   /* ---------- 5. gekruiste uitnodigingen ---------- */

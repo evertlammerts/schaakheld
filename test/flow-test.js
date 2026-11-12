@@ -1499,10 +1499,14 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('[4.2] mp: Verder brengt hetzelfde potje terug', !!session && session.online === true && session.S === MP.S);
   resignNow();
   await tikje();
-  ok('mp: na opgeven is het potje over en niet meer bewaard', session.over === true && leesSamen() === null);
+  /* D35: de uitslag blijft bewaard tot de ander hem kent; hier is er geen ander die antwoordt */
+  var naOpgave = leesSamen();
+  ok('mp: na opgeven is het potje over, en de uitslag staat bewaard tot de ander hem kent', session.over === true &&
+    !!naOpgave && !naOpgave.kapot && naOpgave.r.result.kind === 'opgave' && naOpgave.r.shown === true);
   closeModal();
   fire(__els.backBtn, 'click');
-  ok('mp: na afloop gaat ← Home gewoon naar huis', MP === null && session === null);
+  ok('mp: na afloop gaat ← Home gewoon naar huis, zonder kaart voor dit potje', session === null && !/Verder: je potje met Fien/.test(__els.verder.innerHTML || ''));
+  mpStop(true);
   /* een tweede vriendenpotje zou het bewaarde overschrijven: dat kan pas als het eerste klaar is */
   MP = { room: 'kamer-test-2', seat: 'stoel-test-2', host: true, myColor: 'w', gameNo: 1, revMine: false,
     revTheirs: false, peerName: 'Fien', open: false, weg: false, gameId: 'potje-test-2' };
@@ -1552,6 +1556,10 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('mp: afgewezen aanbod = doorspelen', session.over !== true && __els.bubble.innerHTML.indexOf('doorspelen') >= 0);
   offerDraw();
   ok('mp: niet meteen nog eens vragen', __els.bubble.innerHTML.indexOf('net al') >= 0);
+  mpMsg({ t: 'remise', ok: true, gameNo: 1 });
+  ok('mp: een ja op een aanbod dat al nee kreeg, eindigt niets', session.over !== true);
+  session.drawAsked = null;
+  offerDraw();
   mpMsg({ t: 'remise', ok: true, gameNo: 1 });
   ok('mp: aangenomen aanbod = gelijkspel', session.over === true && __els.modalBox.innerHTML.indexOf('Gelijkspel') >= 0);
   closeModal();
