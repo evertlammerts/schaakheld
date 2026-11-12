@@ -4724,9 +4724,12 @@ function checkNewWeek() {
   if (!vorige || !g) return;
   const cur = goalProgress(g, weekBefore(1));
   const gehaald = cur >= g.n;
-  showModal('<div class="m-emoji">' + (gehaald ? '🎉' : '🌱') + '</div><h2>Nieuwe week!</h2>' +
-    '<p>Vorige week: <b>' + Math.min(cur, g.n) + ' van ' + g.n + '</b> (' + goalText(g) + ').<br>' +
-    (gehaald ? 'Doel gehaald, kampioen!' : (cur > 0 ? 'Mooi geoefend. Deze week weer een frisse start!' : 'Geeft niks. Deze week een frisse start!')) + '</p>' +
+  /* een week zonder iets begint niet met een nul */
+  showModal('<div class="m-emoji">' + (gehaald ? '🎉' : '🌱') + '</div>' +
+    (gehaald ? '<h2>Nieuwe week!</h2><p>Vorige week: doel gehaald! <b>' + g.n + ' van ' + g.n + '</b>.</p>' :
+      cur > 0 ? '<h2>Nieuwe week!</h2><p>Vorige week: <b>' + cur + ' van ' + g.n + '</b> (' + goalText(g) + ').<br>' +
+        'Mooi geoefend. Deze week weer een frisse start!</p>' :
+      '<h2>Nieuwe week, nieuwe kansen</h2><p>Je doel: ' + goalText(g) + '.</p>') +
     '<div class="m-btns"><button class="btn sun" id="wkKeep">Zelfde doel houden 👍</button>' +
     '<button class="btn plain" id="wkNew">Ander doel kiezen</button></div>', () => {
       $('wkKeep').addEventListener('click', closeModal);

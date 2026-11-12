@@ -632,12 +632,18 @@ closeLevelUps();
 closeModal();
 P.weekSeen = '2020-W01';
 checkNewWeek();
-ok('nieuwe week: terugblik met vorige stand', __els.modalBox.innerHTML.indexOf('Nieuwe week') >= 0 &&
-  __els.modalBox.innerHTML.indexOf('0 van ' + (potjesNu + 2)) >= 0 && P.weekSeen === curWeek());
+ok('[3.9] nieuwe week: zonder iets vorige week geen nul, wel het doel', __els.modalBox.innerHTML.indexOf('Nieuwe week, nieuwe kansen') >= 0 &&
+  __els.modalBox.innerHTML.indexOf('0 van ') < 0 && __els.modalBox.innerHTML.indexOf(goalText(P.weekGoal)) >= 0 && P.weekSeen === curWeek());
 fire(__els.wkKeep, 'click');
 ok('nieuwe week: doel blijft', P.weekGoal && P.weekGoal.n === potjesNu + 2);
 checkNewWeek();
 ok('nieuwe week: maar één keer per week', __els.overlay.classList.contains('hidden'));
+P.weekSeen = '2020-W01';
+bump('wk.' + weekBefore(1) + '.' + GOAL_KINDS[P.weekGoal.kind].key(P.weekGoal), 1);
+checkNewWeek();
+ok('[3.9] nieuwe week: een deel gehaald noemt wat er wel was', __els.modalBox.innerHTML.indexOf('1 van ' + P.weekGoal.n) >= 0 &&
+  __els.modalBox.innerHTML.indexOf('Mooi geoefend') >= 0);
+fire(__els.wkKeep, 'click');
 /* vorige weken: overzicht zonder verwijt */
 fire(__els.weeksBtn, 'click');
 ok('weken: overzicht toont deze week met potjes', __els.modalBox.innerHTML.indexOf('Deze week') >= 0 &&
@@ -815,6 +821,29 @@ ok('modal zonder cancel: eigen knop sluit', modalOpen === false &&
     v.wins === 3 && v.c.winsL2 === 1 && v.c.safeCorrect === 7 && v.c.pat.vork === 4 &&
     v.badges.winst === true && v.badges.detective === true && v.name === 'Oscar' && v.theme === 'oceaan' &&
     v.best === 6 && v.streak === 2 && v.weekGoal === null && v.day.winsByLvl[1] === 1);
+  ok('[3.10] compat: een doc van de vorige release krijgt de nieuwe velden leeg', v.start === '' &&
+    v.lastKind === null && v.lastSeen === null && v.c.drie === 0);
+})();
+/* de velden van het startadvies: start (LWW), lastKind en lastSeen (per apparaat) en de teller c.drie */
+(function () {
+  var nieuw = { v: 2, epoch: 0, cnt: { 'c.drie': { d1: 4, d2: 3 } }, set: { badges: {} },
+    lww: { start: { v: 'sterk', t: 5 } }, max: { best: 0 },
+    loc: { streak: 0, lastLevel: 2, lastKind: 'koning', lastSeen: '2026-11-01' } };
+  var v = viewFromDoc(normDoc(JSON.parse(JSON.stringify(nieuw))));
+  ok('[3.10] start, lastKind, lastSeen en c.drie laden terug', v.start === 'sterk' && v.lastKind === 'koning' &&
+    v.lastSeen === '2026-11-01' && v.c.drie === 7);
+  var raar = JSON.parse(JSON.stringify(nieuw));
+  raar.lww.start = { v: 'heel goed', t: 6 };
+  raar.loc.lastKind = 'onzin';
+  raar.loc.lastSeen = 'gisteren';
+  var w = viewFromDoc(normDoc(raar));
+  ok('[3.10] onzin in start, lastKind of lastSeen valt terug op leeg', w.start === '' && w.lastKind === null &&
+    w.lastSeen === null && w.c.drie === 7);
+  var ander = JSON.parse(JSON.stringify(nieuw));
+  ander.cnt['c.drie'] = { d3: 2 };
+  ander.lww.start = { v: 'speelt', t: 9 };
+  var m = viewFromDoc(mergeDoc(normDoc(JSON.parse(JSON.stringify(nieuw))), normDoc(ander)));
+  ok('[3.10] samenvoegen: c.drie telt per apparaat op en de nieuwste start wint', m.c.drie === 9 && m.start === 'speelt');
 })();
 /* doc en weergave lopen gelijk (predictHits niet: die is hierboven met opzet
    rechtstreeks in P gezet en dus alleen weergave) */

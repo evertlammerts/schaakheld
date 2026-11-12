@@ -1346,7 +1346,7 @@ async function orakelFlow() {
     check('de naam is te veranderen', a.get('P.name') === 'Mees de Grote');
   });
 
-  await nogNiet('[3.9] de kaart van een nieuwe week begint nooit met een nul', async function (check) {
+  await regel('[3.9] de kaart van een nieuwe week begint nooit met een nul', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('setPref("weekGoal", { kind: "opdr", n: 10 })');
@@ -1361,7 +1361,7 @@ async function orakelFlow() {
     check('nieuwe week, nieuwe kansen', /Nieuwe week, nieuwe kansen/.test(b.scherm()) && !/\b0 van 10\b/.test(b.scherm()));
   });
 
-  await nogNiet('[3.9] een gehaald doel: "Vorige week: doel gehaald!"', async function (check) {
+  await regel('[3.9] een gehaald doel: "Vorige week: doel gehaald!"', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('setPref("weekGoal", { kind: "opdr", n: 2 }); bumpWeek("opdr", 2)');
