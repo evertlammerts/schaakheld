@@ -251,6 +251,28 @@ async function orakelFlow() {
     });
   }
 
+  await regel('[1.1] na herladen zonder Speurbril over staat de Speurbril uit', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5'], { tips: 0 }) });
+    await wacht();
+    a.tik('verderKaart');
+    await wacht();
+    check('testopzet: in het potje', opSpeelscherm(a) && a.get('session.tips') === 0);
+    check('de knop staat uit', a.get('actionBtns.tip.disabled') === true && !kanTikken(a, 'Speurbril'));
+  });
+
+  await regel('[1.2] hervatten terwijl bewaren niet lukt: alles staat er al, dus ✔ bewaard, en Pauze meteen erna zegt Bewaard', async function (check) {
+    const o = opslagMetPotje(1, ['e2e4', 'e7e5']), schrijf = o.setItem;
+    o.setItem = function (k, v) { if (k === POTJE) throw new Error('vol'); return schrijf.call(this, k, v); };
+    const a = nieuwKind({ opslag: o });
+    await wacht();
+    a.tik('verderKaart');
+    await wacht();
+    check('na hervatten ✔ bewaard', zichtbaar(a, 'bewaard') && /✔ bewaard/.test(tekstVan(a, 'bewaard')));
+    a.tik('backBtn');
+    await wacht(500);
+    check('Pauze zonder zet zegt gewoon Bewaard bij zet 2', /✔ Bewaard\. Je kunt later verder bij zet 2\b/.test(toastTekst(a)));
+  });
+
   await regel('[1.1] een potje zonder zet wordt niet bewaard: Pauze vraagt niets en zegt dat het nog niet begonnen was', async function (check) {
     const a = nieuwKind();
     await startPotje(a, 1);
@@ -485,7 +507,9 @@ async function orakelFlow() {
     await startPotje(a, 1);
     await zetEnWacht(a, 'e2e4');
     check('testopzet: het potje staat bewaard', !!opgeslagen(a, POTJE));
-    a.tik('setBtn');
+    a.tik('meerBtn');
+    await wacht();
+    tikTekst(a, 'Hulp aan of uit');
     await wacht();
     a.tik('setReset');
     await wacht();
@@ -497,14 +521,16 @@ async function orakelFlow() {
     await startOefening(b, 'scan');
     await scanGoed(b);
     check('testopzet: het rondje staat bewaard', !!opgeslagen(b, RONDJES));
+    /* tijdens een rondje staat Instellingen niet op het speelscherm: eerst Pauze, dan thuis Alles wissen */
+    b.tik('backBtn');
+    await wacht();
     b.tik('setBtn');
     await wacht();
     b.tik('setReset');
     await wacht();
     b.tik('rstGo');
     await wacht(3000);
-    check('geen rondje meer bezig en niet meer op het speelscherm', b.get('session') === null && !opSpeelscherm(b));
-    check('en geen rondje in de opslag', opgeslagen(b, RONDJES) === null);
+    check('en het bewaarde rondje is weg', b.get('session') === null && opgeslagen(b, RONDJES) === null);
   });
 
   await regel('[1.4] niets anders haalt het bewaarde potje weg', async function (check) {
@@ -548,6 +574,24 @@ async function orakelFlow() {
   }
 
   /* een rondje is een telling: de sterren staan al in het profiel, dus weghalen kost niets */
+  await regel('[1.5] een rondje onder de openingsles bestaat niet: het gaat stil weg', async function (check) {
+    const o = maakOpslag();
+    o.setItem(RONDJES, JSON.stringify({ opening: { round: 2, earned: 3 } }));
+    const a = nieuwKind({ opslag: o });
+    await wacht();
+    check('geen Verder-kaart voor een les', !/Verder:/.test(tekstVan(a, 'verder')));
+    check('en het record is weg', opgeslagen(a, RONDJES) === null);
+  });
+
+  await regel('[1.5] een potje dat niet te lezen is: een nieuw potje haalt het weg', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e2']) });
+    await wacht();
+    check('testopzet: de kaart zegt dat het niet open kan', /kan ik niet meer openen/.test(tekstVan(a, 'verder')));
+    await startPotje(a, 2);
+    check('een nieuw potje, zonder vraag', opSpeelscherm(a) && !a.open() && a.get('session.level') === 2);
+    check('het kapotte potje is weg', opgeslagen(a, POTJE) === null);
+  });
+
   await regel('[1.5] rondjes die niet te lezen zijn (kapotte tekst) worden stil weggehaald, en het rondje begint opnieuw', async function (check) {
     const o = maakOpslag();
     o.setItem(RONDJES, 'kapot{');
@@ -937,6 +981,10 @@ async function orakelFlow() {
   await regel('[2.4] na een antwoord staat de uitleg onder het bord met Volgende bovenaan, en de eerste reden in de strook', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'scan');
+    /* een vaste opdracht: de toren op a1 wordt aangevallen, dus de eerste reden is een gemist stuk */
+    a.ev('(function () { var S = parseFEN("6k1/8/8/8/8/2b5/8/R5K1 w - - 0 1"); session.S = S;' +
+      'session.task = { S: S, type: "attacked", targets: attackedPieces(S, "w"), extra: null, details: null };' +
+      'session.phase = "marking"; BD.marks.clear(); BD.mode = "mark"; renderBoard(); })()');
     tikTekst(a, 'Klaar');
     await wacht();
     const onder = a.el('onder');

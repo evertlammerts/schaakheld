@@ -4789,13 +4789,20 @@ function leesPotje() {
   } catch (e) { return { kapot: true }; }
 }
 /* een potje zonder zet is er nog niet: dan staat er ook niets */
+function potjeInhoud() {
+  const S = session.cloud ? session.cloud.realS : session.S;
+  return { level: session.level, moves: S.hist.map(h => moveKey(h.m)), tips: session.tips,
+    drawAsked: session.drawAsked == null ? null : session.drawAsked, started: session.started, patXP: session.patXP || 0 };
+}
 function bewaarPotje() {
   if (!session || session.kind !== 'game' || session.online || session.over) return;
-  const S = session.cloud ? session.cloud.realS : session.S;
-  if (!S.hist.length) { opslag(POTJE_KEY, null); $('bewaard').classList.add('hidden'); return; }
-  const gelukt = opslag(POTJE_KEY, JSON.stringify({ v: 1, level: session.level, moves: S.hist.map(h => moveKey(h.m)),
-    tips: session.tips, drawAsked: session.drawAsked == null ? null : session.drawAsked,
-    started: session.started, updated: Date.now(), patXP: session.patXP || 0 }));
+  const inhoud = potjeInhoud();
+  if (!inhoud.moves.length) { opslag(POTJE_KEY, null); session.laatstBewaard = null; $('bewaard').classList.add('hidden'); return; }
+  /* wat al zo bewaard staat, hoeft niet nog eens: een mislukte herhaling zou een verlies melden dat er niet is */
+  const sleutel = JSON.stringify(inhoud);
+  if (sleutel === session.laatstBewaard) { toonBewaard(true); return; }
+  const gelukt = opslag(POTJE_KEY, JSON.stringify(Object.assign({ v: 1 }, inhoud, { updated: Date.now() })));
+  if (gelukt) session.laatstBewaard = sleutel;
   toonBewaard(gelukt);
 }
 /* De sterren van een rondje staan al in het profiel; een rondje dat niet te
@@ -6061,7 +6068,7 @@ function startGame(level, bewaard) {
   BD.check = inCheck(session.S) ? session.S.kings[session.S.turn] : null;
   renderBoard();
   /* een hervat potje staat al precies zo bewaard; een nieuw potje haalt een oud record weg */
-  if (bewaard) toonBewaard(true); else bewaarPotje();
+  if (bewaard) { session.laatstBewaard = JSON.stringify(potjeInhoud()); toonBewaard(true); } else bewaarPotje();
   if (session.S.turn === 'w') kidTurn(); else { BD.mode = 'off'; turboTurn(); }
   if (bewaard) say('Welkom terug! Je potje staat nog precies zo. ' +
     (session.S.turn !== 'w' ? 'Ik ben aan zet.' : inCheck(session.S) ? 'Je staat schaak!' : 'Jij bent aan zet.'));
