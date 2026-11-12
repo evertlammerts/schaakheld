@@ -49,10 +49,17 @@ function wekelijks(app) {
   return tekstVan(app, 'weekCard');
 }
 
+/* een level omhoog legt een venster over Volgende; een kind tikt dat eerst weg */
+async function volgende(app) {
+  for (let i = 0; i < 8 && app.ziet('LEVEL OMHOOG'); i++) app.tik('lvlOk');
+  tikTekst(app, 'Volgende');
+  await wacht();
+}
+
 async function rondjeGoed(app, n) {
   for (let i = 0; i < n; i++) {
     await scanGoed(app);
-    if (i < n - 1) { tikTekst(app, 'Volgende'); await wacht(); }
+    if (i < n - 1) await volgende(app);
   }
 }
 
@@ -257,7 +264,7 @@ async function orakelFlow() {
     await wacht();
     a.tik('setReset');
     await wacht();
-    check('de vraag noemt het potje dat bezig is', /potje dat bezig is/.test(a.scherm()));
+    check('de vraag noemt het potje dat bezig is', a.ziet('potje dat bezig is'));
     a.tik('rstGo');
     await wacht();
     check('het potje is weg', opgeslagen(a, POTJE) === null);
@@ -331,11 +338,9 @@ async function orakelFlow() {
     await wacht();
     b.ev('closeModal()');
     await startOefening(b, 'scan');
-    tikTekst(b, 'Volgende');
-    await wacht();
+    await volgende(b);
     await rondjeGoed(b, 3);
-    tikTekst(b, 'Volgende');
-    await wacht();
+    await volgende(b);
     b.ev('closeModal()');
     check('telt in de nieuwe week: 1 van 2', /1\s*(\/|van)\s*2/.test(wekelijks(b)));
   });
@@ -430,7 +435,7 @@ async function orakelFlow() {
     check('de eerste zet gaat', gelukt && a.get('session.S.hist.length') === 2 && a.get('session.S.turn') === 'w');
   }
 
-  await nogNiet('[1.9] een mat in twee verlaten na de eerste zet raakt het nieuwe potje niet', async function (check) {
+  await regel('[1.9] een mat in twee verlaten na de eerste zet raakt het nieuwe potje niet', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
     zetOpdracht(a, 'k7/8/2K5/8/8/8/8/7R w - - 0 1', 'mat2', ['c6b6']);
@@ -439,7 +444,7 @@ async function orakelFlow() {
     await nieuwPotjeIsSchoon(check, a);
   });
 
-  await nogNiet('[1.9] De Beste Zet verlaten na een foute keus raakt het nieuwe potje niet', async function (check) {
+  await regel('[1.9] De Beste Zet verlaten na een foute keus raakt het nieuwe potje niet', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'best3');
     const fout = a.get('session.task.options.findIndex(function (o) { return o !== session.task.best; })');
@@ -452,7 +457,7 @@ async function orakelFlow() {
     await nieuwPotjeIsSchoon(check, a);
   });
 
-  await nogNiet('[1.9] Koning ontsnapt verlaten na een foute zet raakt het nieuwe potje niet', async function (check) {
+  await regel('[1.9] Koning ontsnapt verlaten na een foute zet raakt het nieuwe potje niet', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'koning');
     zetOpdracht(a, '1r4k1/8/8/8/8/8/r6P/6K1 w - - 0 1', 'mat1', ['h2h3', 'h2h4']);
@@ -461,7 +466,7 @@ async function orakelFlow() {
     await nieuwPotjeIsSchoon(check, a);
   });
 
-  await nogNiet('[1.10] in een mat in twee gaat de tweede zet met tikken', async function (check) {
+  await regel('[1.10] in een mat in twee gaat de tweede zet met tikken', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
     zetOpdracht(a, 'k7/8/2K5/8/8/8/8/7R w - - 0 1', 'mat2', ['c6b6']);
@@ -509,7 +514,7 @@ async function orakelFlow() {
     ['een hangend stuk, Turbo slaat', 'stuk', STUK_FEN, STUK_REDDING, 'g1h1', '{ hang: threatDetails(S)[0] }']
   ];
   for (const geval of koningGevallen) {
-    await nogNiet('[1.11] Koning ontsnapt, ' + geval[0] + ': niets bevriest en Turbo zegt welke zet hij speelt', async function (check) {
+    await regel('[1.11] Koning ontsnapt, ' + geval[0] + ': niets bevriest en Turbo zegt welke zet hij speelt', async function (check) {
       const a = nieuwKind();
       await startOefening(a, 'koning');
       zetOpdracht(a, geval[2], geval[1], geval[3], geval[5]);
@@ -523,18 +528,17 @@ async function orakelFlow() {
     });
   }
 
-  await nogNiet('[1.12] een topronde telt voor het weekdoel toprondes', async function (check) {
+  await regel('[1.12] een topronde telt voor het weekdoel toprondes', async function (check) {
     const a = nieuwKind();
     a.ev('setPref("weekGoal", { kind: "top", n: 2, game: "scan" })');
     await startOefening(a, 'scan');
     await rondjeGoed(a, 5);
-    tikTekst(a, 'Volgende');
-    await wacht();
+    await volgende(a);
     a.ev('closeModal()');
     check('het doel staat op 1 van 2', /1\s*(\/|van)\s*2/.test(wekelijks(a)));
   });
 
-  await nogNiet('[1.12] compat: de toprondes die Lotte al haalde, tellen meteen (1 van 2)', async function (check) {
+  await regel('[1.12] compat: de toprondes die Lotte al haalde, tellen meteen (1 van 2)', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const dev = '8b5e441a-6545-4b80-9242-b3db318e11af', een = function (n) { const o = {}; o[dev] = n; return o; };
     const doc = { v: 2, epoch: 0,

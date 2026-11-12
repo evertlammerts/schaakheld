@@ -4386,11 +4386,19 @@ function animateMove(m, done) {
   setTimeout(() => { g.remove(); done(); }, 245);
 }
 
+/* Een timer van een opdracht of potje hoort bij die sessie: is het kind
+   intussen weg of met iets anders bezig, dan doet hij niets (B24). */
+function later(fn, ms) {
+  const mine = session;
+  return setTimeout(() => { if (session === mine) fn(); }, ms);
+}
+
 /* Animate + apply a move on session.S, update highlights and sound. */
 function playMove(m, cb) {
-  const S = session.S;
+  const mine = session, S = session.S;
   const wasCap = isCapture(S, m);
   animateMove(m, () => {
+    if (session !== mine) return;
     if (wasCap) snd.cap(); else snd.move();
     makeMove(S, m);
     BD.last = [m.from, m.to];
@@ -4665,7 +4673,7 @@ function nextRound() {
   $('roundChip').textContent = 'Opdracht ' + session.round + ' van 5';
   setActions([]);
   spin(true, pick(SPIN_LINES));
-  setTimeout(() => {
+  later(() => {
     if (!session || session.kind === 'game') { spin(false); return; }
     let ok = false;
     session.diff = 0.5;
@@ -4759,7 +4767,7 @@ function puzzleAttempt(m) {
       const S = session.S;
       const reply = rootScores(S, 2)[0];
       say('Goed! Turbo probeert nog te ontsnappen met <b>' + moveNameNL(S, reply.m) + '</b>… 🐢');
-      setTimeout(() => {
+      later(() => {
         playMove(reply.m, () => {
           session.mate2Answers = matingMoves(S, 1);
           session.phase = 'puzzle2';
@@ -4854,13 +4862,13 @@ function revealMate2(first) {
   playMove(first, () => {
     if (!session || session.kind !== 'trucs') return;
     const reply = rootScores(S, 2)[0];
-    setTimeout(() => {
+    later(() => {
       if (!session || session.kind !== 'trucs') return;
       BD.arrows = [];
       playMove(reply.m, () => {
         if (!session || session.kind !== 'trucs') return;
         const mate = matingMoves(S, 1)[0];
-        setTimeout(() => {
+        later(() => {
           if (!session || session.kind !== 'trucs' || !mate) return;
           BD.arrows = [{ from: mate.from, to: mate.to, cls: 'a-leaf' }];
           playMove(mate, () => {
@@ -5078,10 +5086,10 @@ function safeAnswer(saidTrap) {
   if (t.trap) {
     const pn = moveNameNL2After(t);
     playMove(t.move, () => {
-      setTimeout(() => {
+      later(() => {
         BD.arrows = [{ from: t.punish.from, to: t.punish.to, cls: 'a-coral' }];
         renderBoard();
-        setTimeout(() => {
+        later(() => {
           playMove(t.punish, () => {
             awardRound(correct ? 3 : 0, correct ?
               'Goed gezien, detective! 🕵️ Het wás een valstrik: <b>' + pn + '</b>.' :
@@ -5229,12 +5237,12 @@ function best3Confirm() {
     playMove(o.m, () => {
       const reply = rootScores(S, 2)[0];
       const pn = moveNameNL(S, reply.m);
-      setTimeout(() => {
+      later(() => {
         BD.arrows = [{ from: reply.m.from, to: reply.m.to, cls: 'a-coral' }];
         renderBoard();
-        setTimeout(() => {
+        later(() => {
           playMove(reply.m, () => {
-            setTimeout(() => {
+            later(() => {
               unmakeMove(S); unmakeMove(S);
               BD.arrows = []; BD.last = null; BD.check = null;
               renderBoard();
@@ -5374,14 +5382,16 @@ function koningAttempt(m) {
     const reply = rootScores(S, 2)[0];
     BD.arrows = [{ from: reply.m.from, to: reply.m.to, cls: 'a-coral' }];
     renderBoard();
-    setTimeout(() => {
+    /* de naam van de zet kan alleen voordat hij gespeeld is (B01) */
+    const replyName = moveNameNL(S, reply.m);
+    later(() => {
       playMove(reply.m, () => {
         const st2 = gameStatus(S);
         const cap = S.hist[S.hist.length - 1].cap;
-        const txt = st2.over && st2.reason === 'mat' ? 'Schaakmat! 😱 Dat was dus niet de redding.' :
-          (t.type === 'stuk' && cap ? 'Turbo pakt je ' + NAME_NL[cap.toLowerCase()] + ' gewoon af. 😬' :
-            'Turbo speelt <b>' + moveNameNL(S, reply.m) + '</b> en het gevaar is er nog. 😬');
-        setTimeout(() => {
+        const txt = 'Turbo speelt <b>' + replyName + '</b>. ' + (st2.over && st2.reason === 'mat' ? 'Schaakmat! 😱 Dat was dus niet de redding.' :
+          (t.type === 'stuk' && cap ? 'Zo pakt hij je ' + NAME_NL[cap.toLowerCase()] + ' gewoon af. 😬' :
+            'Het gevaar is er nog. 😬'));
+        later(() => {
           unmakeMove(S); unmakeMove(S);
           BD.arrows = []; BD.last = null;
           BD.check = t.type === 'stuk' ? null : S.kings.w;
@@ -5544,7 +5554,7 @@ function startOpening(mode, pad) {
   renderBoard();
   updateDrillStars();
   setActions(mode === 'pad' ? [{ label: '💡 Hint', cls: 'plain small', fn: openingHint, id: 'hint' }] : []);
-  if (color === 'b') { BD.mode = 'off'; say('Jij speelt met zwart. Wit begint… ⏳'); setTimeout(openingTurbo, 500); }
+  if (color === 'b') { BD.mode = 'off'; say('Jij speelt met zwart. Wit begint… ⏳'); later(openingTurbo, 500); }
   else kidOpeningTurn();
 }
 function renderMeters() {
@@ -5670,8 +5680,8 @@ function finishOpeningMove(m, stars, msg, castled) {
     renderMeters();
     const st = gameStatus(session.S);
     if (st.over) { openingEnd(); return; }
-    if (session.kidMoves >= session.maxMoves) { setTimeout(openingEnd, 900); return; }
-    setTimeout(openingTurbo, 900);
+    if (session.kidMoves >= session.maxMoves) { later(openingEnd, 900); return; }
+    later(openingTurbo, 900);
   });
 }
 /* Turbo antwoordt uit het pad zolang de partij het pad volgt, anders uit het
@@ -6010,7 +6020,7 @@ function onCell(sq) {
     return;
   }
   if (BD.mode === 'puzzle') {
-    if (session.phase !== 'puzzle') return;
+    if (session.phase !== 'puzzle' && session.phase !== 'puzzle2') return;
     const S = session.S;
     const p = S.board[sq];
     if (BD.sel == null) {
@@ -6149,13 +6159,13 @@ function commitKid(m) {
       say('Dat is een ' + co.what + ' Goed gezien van jou! 🌟');
       BD.spy = new Set(co.squares);
       renderBoard();
-      setTimeout(() => {
+      later(() => {
         if (session && session.kind === 'game') { BD.spy.clear(); renderBoard(); }
       }, 3500);
-      setTimeout(turboTurn, 1100);
+      later(turboTurn, 1100);
     } else {
       say('Hmm… nu ik! 💭');
-      setTimeout(turboTurn, 450);
+      later(turboTurn, 450);
     }
   });
 }
@@ -6163,7 +6173,7 @@ function commitKid(m) {
 function turboTurn() {
   if (!session || session.kind !== 'game' || session.over) return;
   const S = session.S;
-  setTimeout(() => {
+  later(() => {
     if (!session || session.kind !== 'game' || session.over) return;
     const m = pickMove(S, session.level);
     if (!m) { const st = gameStatus(S); if (st.over) endGame(st); return; }
@@ -6186,7 +6196,7 @@ function askPredict(m) {
   void t.offsetWidth;
   t.style.transition = 'width ' + PREDICT_MS + 'ms linear';
   t.style.width = '0%';
-  session.predictTimer = setTimeout(() => resolvePredict(null), PREDICT_MS + 100);
+  session.predictTimer = later(() => resolvePredict(null), PREDICT_MS + 100);
 }
 
 function resolvePredict(sq) {
@@ -6222,7 +6232,7 @@ function doTurboMove(m) {
       say('Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢');
       BD.spy = new Set(co.squares);
       renderBoard();
-      setTimeout(() => {
+      later(() => {
         if (session && session.kind === 'game') { BD.spy.clear(); renderBoard(); }
       }, 3500);
       kidTurn(true);
@@ -6280,7 +6290,7 @@ function useTip() {
   BD.spy = spy;
   renderBoard();
   say('Paarse randjes = die stukken worden aangevallen! Kijk snel, hij werkt maar even! 👀');
-  setTimeout(() => { BD.spy.clear(); if (session && session.kind === 'game') renderBoard(); }, 4500);
+  later(() => { BD.spy.clear(); if (session && session.kind === 'game') renderBoard(); }, 4500);
 }
 
 const PTS = { p: 1, n: 3, b: 3, r: 5, q: 9 };
@@ -6404,7 +6414,7 @@ function endGame(st) {
   checkBadges();
   saveP();
   const lvl = session.level;
-  setTimeout(() => {
+  later(() => {
     showModal('<div class="m-emoji">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p>' +
       '<div class="m-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
       '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', () => {
@@ -6523,7 +6533,7 @@ const DAG_NAMEN = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
 const GOAL_XP = 60;
 function curWeek() { return isoWeek(); }
 function dagIdx() { return (new Date().getDay() + 6) % 7; }
-function wkGet(week, key) { return (P.wk && P.wk[week] && +P.wk[week][key]) || 0; }
+function wkGet(week, key) { return (P.wk && P.wk[week] && +getPath(P.wk[week], key)) || 0; }
 function bumpWeek(key, n) {
   const W = curWeek();
   bump('wk.' + W + '.' + key, n);
