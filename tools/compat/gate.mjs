@@ -119,7 +119,7 @@ function bcdAt(p) {
   return node.__compat;
 }
 
-function supportsAt(statements, release, prefix, strict) {
+export function supportsAt(statements, release, prefix, strict) {
   return [].concat(statements || []).some(s => {
     if (s.flags || s.alternative_name || (strict && s.partial_implementation)) return false;
     if ((s.prefix || '') !== prefix) return false;
@@ -220,9 +220,10 @@ const CSS_FUNCTIONS = new Map();
 (function indexTypes(node, p) {
   for (const [k, v] of Object.entries(node)) {
     if (k === '__compat' || !v || typeof v !== 'object') continue;
-    if (v.__compat && (v.__compat.description || '').includes(`<code>${k}()</code>`)) {
-      if (!CSS_FUNCTIONS.has(k)) CSS_FUNCTIONS.set(k, []);
-      CSS_FUNCTIONS.get(k).push({ path: `${p}.${k}`, compat: v.__compat });
+    const fn = v.__compat && ((v.__compat.description || '').match(/^<code>([\w-]+)\(\)<\/code>/) || [])[1];
+    if (fn) {
+      if (!CSS_FUNCTIONS.has(fn)) CSS_FUNCTIONS.set(fn, []);
+      CSS_FUNCTIONS.get(fn).push({ path: `${p}.${k}`, compat: v.__compat });
     }
     indexTypes(v, `${p}.${k}`);
   }
@@ -263,6 +264,31 @@ function withoutOldNames(rule) {
   };
 }
 
+/* Nieuwe syntax stopt het hele script al bij het inlezen op een browser die
+   hem niet kent; daar helpt geen feature-test, dus compat-allow mag hem nooit
+   doorlaten. Een gebruik van een functie of object (ook een RegExp uit een
+   string) gooit pas bij het draaien en kan wel bewaakt worden. */
+const API_KNOPEN = new Set(['Identifier', 'MemberExpression', 'CallExpression', 'NewExpression', 'ChainExpression']);
+/* klassevelden leest de ondergrens wel; het gat zit pas in het draaien */
+const LEESBARE_SYNTAX = new Set(['no-class-instance-fields']);
+let SYNTAX_KNOPEN = [];
+function isSyntax(node, rule) {
+  if (LEESBARE_SYNTAX.has(rule)) return false;
+  if (node.type === 'Literal') return !!node.regex || !/^(?:New|Call)Expression$/.test(node.parent && node.parent.type);
+  return !API_KNOPEN.has(node.type);
+}
+function markeerSyntax(rule, name) {
+  return {
+    meta: rule.meta,
+    create(context) {
+      const merk = Object.create(context, {
+        report: { value: d => { if (d.node && isSyntax(d.node, name)) SYNTAX_KNOPEN.push(d.node.range); context.report(d); } },
+      });
+      return rule.create(merk);
+    },
+  };
+}
+
 // De onderdelen die een es-x-regel in zijn beschrijving noemt
 // (`Array.prototype.{flat,flatMap}`), als paden in de MDN-gegevens.
 function esxPaths(rule) {
@@ -295,13 +321,15 @@ for (const cfg of Object.keys(esx.configs)) {
 for (const id of Object.keys(ESX_RULES)) {
   const name = id.slice('es-x/'.length);
   if (esx.rules[name].meta.schema?.[0]?.properties?.aggressive) {
-    ESX_PLUGIN.rules[name] = withoutOldNames(esx.rules[name]);
+    ESX_PLUGIN.rules[name] = markeerSyntax(withoutOldNames(esx.rules[name]), name);
     ESX_RULES[id] = ['error', { aggressive: true }];
+  } else {
+    ESX_PLUGIN.rules[name] = markeerSyntax(esx.rules[name], name);
   }
 }
 
-const shifted = (rep, base) => ({ find: (o, id, msg) => rep.find(base + o, id, msg), comment: () => {} });
-const pinned = (rep, at) => ({ find: (o, id, msg) => rep.find(at, id, msg), comment: () => {} });
+const shifted = (rep, base) => ({ find: (o, id, msg, vast) => rep.find(base + o, id, msg, vast), comment: () => {} });
+const pinned = (rep, at) => ({ find: (o, id, msg, vast) => rep.find(at, id, msg, vast), comment: () => {} });
 
 function offsetOf(text, line, column) {
   let o = 0;
@@ -317,6 +345,8 @@ function checkElement(el, rep, inString) {
   const html = el.namespaceURI === HTML_NS;
   const tag = el.tagName;
   const ec = html ? own(bcd.html.elements, tag) : undefined;
+  /* een onbekende tag in een string is tekst, geen opmaak ("1 < 2 en <dit is geen tag>") */
+  if (inString && html && !ec && tag.indexOf('-') < 0) return;
   if (ec && ec.__compat) {
     const miss = missing(`html.elements.${tag}`, ec.__compat);
     if (miss.length) return rep.find(loc.startOffset, `html.elements.${tag}`, `<${tag}> ontbreekt in ${names(miss)}`);
@@ -330,6 +360,13 @@ function checkElement(el, rep, inString) {
       const id = ownEntry ? `html.elements.${tag}.${a.name}` : `html.global_attributes.${a.name}`;
       const miss = missing(id, c);
       if (miss.length) rep.find(at.startOffset, id, `attribuut ${a.name} ontbreekt in ${names(miss)}`);
+      /* ook de waarde: <input type="date">, hidden="until-found"; niet bij meta
+         en link, hints die een browser zonder ze stil overslaat */
+      const waarde = /^(?:meta|link)$/.test(tag) ? '' : a.value.trim().toLowerCase();
+      const wid = own(own(ec, `${a.name}_${waarde}`), '__compat') ? `html.elements.${tag}.${a.name}_${waarde}` : `${id}.${waarde}`;
+      const wc = own(own(ec, `${a.name}_${waarde}`), '__compat') || own(own(ownEntry ? own(ec, a.name) : own(bcd.html.global_attributes, a.name), waarde), '__compat');
+      const wmiss = waarde && !miss.length && wc ? missing(wid, wc) : [];
+      if (wmiss.length) rep.find(at.startOffset, wid, `${a.name}="${waarde}" ontbreekt in ${names(wmiss)}`);
     }
     const sub = pinned(rep, at.startOffset);
     if (a.name === 'style') {
@@ -382,11 +419,12 @@ function probe(css) {
   return probeCache.get(css);
 }
 
-function checkSelector(selector, rep, at, skip) {
+function checkSelector(selector, rep, at, skip, metGaten) {
   let root;
   try {
     root = selectorParser().astSync(selector);
   } catch (e) {
+    if (metGaten) return;
     return rep.find(at(0), 'css-syntax', `selector niet te lezen: ${selector}`);
   }
   const bad = [];
@@ -404,6 +442,19 @@ function checkSelector(selector, rep, at, skip) {
   if (root.nodes.length > 1 && bad.length) {
     rep.find(at(0), 'css-selector-list', `${bad.map(b => ':' + b.name).join(', ')} in een selectorlijst laat de hele regel vallen op ${names(bad.flatMap(b => b.miss))}`);
   }
+}
+
+/* Een gat in een template (`${base};color:red`) kan van alles zijn. Eerst met
+   een 1 erin; leest dat niet, dan alleen de vaste declaraties. Een gat zelf
+   is nooit een syntaxfout. */
+const GAT = '\u0001';
+function checkCssMetGaten(text, kind, rep) {
+  if (text.indexOf(GAT) < 0) return checkCssText(text, kind, rep);
+  const leest = t => { try { postcss.parse(kind === 'decls' ? `*{${t}}` : t); return true; } catch (e) { return false; } };
+  const met1 = text.split(GAT).join('1');
+  if (leest(met1)) return checkCssText(met1, kind, rep);
+  const vast = text.split(/[;{}]/).filter(x => x.indexOf(GAT) < 0).join(';');
+  if (kind === 'decls' && leest(vast)) checkCssText(vast, kind, rep);
 }
 
 function checkCssText(text, kind, rep, top = false) {
@@ -451,9 +502,11 @@ function checkCss(root, rep, top) {
   };
   root.walkDecls(d => {
     const prop = d.prop.toLowerCase();
-    if (prop.startsWith('--') || VENDOR.test(prop)) return;
+    if (VENDOR.test(prop)) return;
     const at = d.source.start.offset;
-    const entry = own(bcd.css.properties, prop);
+    /* een eigen variabele heeft geen eigen gegevens, maar zijn waarde (een kleur
+       met color-mix() of oklch()) komt overal terecht waar hij gebruikt wordt */
+    const entry = prop.startsWith('--') ? null : own(bcd.css.properties, prop);
     if (entry && entry.__compat) {
       const prefixed = d.parent.nodes.filter(s => s.type === 'decl' && VENDOR.test(s.prop) && s.prop.toLowerCase().replace(VENDOR, '') === prop);
       const miss = missing(`css.properties.${prop}`, entry.__compat).filter(f => !prefixed.some(s =>
@@ -473,6 +526,13 @@ function checkCss(root, rep, top) {
         const defs = CSS_FUNCTIONS.get(word);
         const miss = defs.map(x => missing(x.path, x.compat));
         if (miss.every(m => m.length)) report(d, at, defs[0].path, `${word}()`, miss[0], `.x{${prop}:${word}(1)}`);
+      }
+      const maat = v.type === 'word' && valueParser.unit(v.value);
+      const eenheid = maat && maat.unit && own(own(bcd.css.types.length, maat.unit.toLowerCase()), '__compat');
+      if (eenheid) {
+        const id = `css.types.length.${maat.unit.toLowerCase()}`;
+        const miss = missing(id, eenheid);
+        if (miss.length) report(d, at, id, `de eenheid ${maat.unit}`, miss, `.x{width:1${maat.unit}}`);
       }
     });
   });
@@ -519,7 +579,7 @@ function stringOf(node, rep) {
     return { text: node.value, rep: raw === node.value ? shifted(rep, node.range[0] + 1) : pinned(rep, node.range[0]) };
   }
   if (node && node.type === 'TemplateLiteral') {
-    const text = node.quasis.map(q => q.value.cooked ?? q.value.raw).join('1');
+    const text = node.quasis.map(q => q.value.cooked ?? q.value.raw).join(GAT);
     const exact = node.expressions.length === 0 && node.quasis[0].value.raw === text;
     return { text, rep: exact ? shifted(rep, node.range[0] + 1) : pinned(rep, node.range[0]) };
   }
@@ -532,27 +592,38 @@ function localPlugin(rep, apiFindings) {
   const api = (offset, p, miss, what = p.slice(4).replace(/_static$/, '')) => apiFindings.push({ offset, id: p, msg: `${what} ontbreekt in ${names(miss)}` });
   const apiMembers = {
     create: context => {
-      const ownNames = new Set();
+      /* Een naam die de app zelf definieert, is van de app (`snd.move()`): een
+         eigen methode verklaart een aanroep, een eigen veld alleen het lezen.
+         Een destructurering leest een lid en definieert niets. */
+      const eigenVelden = new Set(), eigenMethoden = new Set();
       const candidates = [];
       const keyName = k => k.type === 'Identifier' ? k.name : k.type === 'Literal' ? String(k.value) : null;
-      const define = n => { if (!n.computed) ownNames.add(keyName(n.key)); };
+      const isFn = v => !!v && /Function|Class/.test(v.type);
+      const define = n => {
+        if (n.computed || (n.parent && n.parent.type === 'ObjectPattern') || n.kind === 'constructor') return;
+        ((n.type === 'MethodDefinition' ? n.kind === 'method' : n.method || isFn(n.value)) ? eigenMethoden : eigenVelden).add(keyName(n.key));
+      };
       return {
       Property: define,
       MethodDefinition: define,
       PropertyDefinition: define,
       AssignmentExpression(n) {
-        if (n.left.type === 'MemberExpression' && /Function|Class/.test(n.right.type)) ownNames.add(memberName(n.left));
+        if (n.left.type === 'MemberExpression' && isFn(n.right)) eigenMethoden.add(memberName(n.left));
       },
-      // Een naam die de app zelf als veld of methode gebruikt, is van de app (`snd.move()`).
       'Program:exit'() {
         for (const c of candidates) {
-          if (!ownNames.has(c.name)) api(c.offset, c.member.paths[0], c.member.miss, `${c.name} bestaat alleen in ${c.member.paths.slice(0, 3).join(', ')}`);
+          const eigen = eigenMethoden.has(c.name) || (!c.aanroep && eigenVelden.has(c.name));
+          if (!eigen) api(c.offset, c.member.paths[0], c.member.miss, `${c.name} (alleen in ${c.member.paths.slice(0, 3).join(', ')})`);
         }
       },
       MemberExpression(n) {
         const name = memberName(n);
         if (!name) return;
         const obj = n.object;
+        if (/^on[a-z]+$/.test(name)) {
+          const g = gebeurtenis(name.slice(2));
+          if (g) api(n.property.range[0], g.path, g.miss, `de gebeurtenis ${name.slice(2)}`);
+        }
         if (obj.type === 'Identifier' && GLOBAL_OBJECTS.has(obj.name) && isGlobal(obj, context)) {
           const c = own(own(bcd.api, name), '__compat');
           if (c && /^[A-Za-z]/.test(name) && !own(bcd.api.Window, name)) {
@@ -564,6 +635,13 @@ function localPlugin(rep, apiFindings) {
         if (obj.type === 'Identifier' && isGlobal(obj, context)) g = obj.name;
         else if (obj.type === 'MemberExpression' && !obj.computed && obj.object.type === 'Identifier'
           && GLOBAL_OBJECTS.has(obj.object.name) && isGlobal(obj.object, context)) g = obj.property.name;
+        /* statische leden van ingebouwde JavaScript-functies waar es-x geen regel voor heeft */
+        if (g && obj.type === 'Identifier' && own(bcd.javascript.builtins, g)) {
+          const c = own(own(bcd.javascript.builtins[g], name), '__compat');
+          const miss = c ? missing(`javascript.builtins.${g}.${name}`, c) : [];
+          if (miss.length) api(n.range[0], `javascript.builtins.${g}.${name}`, miss);
+          if (c) return;
+        }
         if (g) {
           const isInterface = !!own(bcd.api, g) && /^[A-Z]/.test(g);
           const iface = isInterface ? g : own(GLOBAL_INSTANCES, g);
@@ -579,16 +657,19 @@ function localPlugin(rep, apiFindings) {
         // Leden van `style` zijn CSS-eigenschappen en die van `dataset` kiest de app zelf.
         if (['style', 'dataset'].includes(memberName(obj))) return;
         const member = NEW_MEMBERS.get(name);
-        if (member) candidates.push({ offset: n.property.range[0], name, member });
+        if (member) candidates.push({ offset: n.property.range[0], name, member, aanroep: isCalled(n) });
       },
       Identifier(n) {
         const parent = n.parent;
         if (parent.type === 'MemberExpression' && parent.property === n && !parent.computed) return;
         if ((parent.type === 'Property' || parent.type === 'MethodDefinition' || parent.type === 'PropertyDefinition') && parent.key === n && !parent.computed) return;
+        if (!isGlobal(n, context)) return;
         const c = own(own(bcd.api, n.name), '__compat');
-        if (!c || !isGlobal(n, context)) return;
-        const miss = missing(`api.${n.name}`, c);
-        if (miss.length) api(n.range[0], `api.${n.name}`, miss);
+        /* zonder window. ervoor is een lid van Window net zo goed een lid van Window */
+        const p = c ? `api.${n.name}` : `api.Window.${n.name}`;
+        const cc = c || own(own(bcd.api.Window, n.name), '__compat');
+        const miss = cc ? missing(p, cc) : [];
+        if (miss.length) api(n.range[0], p, miss);
       },
       };
     },
@@ -618,23 +699,36 @@ function localPlugin(rep, apiFindings) {
               const id = `html.global_attributes.${name}`;
               const miss = c ? missing(id, c) : [];
               if (miss.length) s.rep.find(0, id, `attribuut ${name} ontbreekt in ${names(miss)}`);
-              if (m === 'setAttribute' && name === 'style') sinkArg(a1, v => checkCssText(v.text, 'decls', v.rep));
+              if (m === 'setAttribute' && name === 'style') sinkArg(a1, v => checkCssMetGaten(v.text, 'decls', v.rep));
               if (m === 'setAttribute' && name.startsWith('on')) sinkArg(a1, v => checkScript(v.text, { globalReturn: true, rep: pinned(v.rep, 0) }));
             });
           } else if (['querySelector', 'querySelectorAll', 'matches', 'closest', 'webkitMatchesSelector'].includes(m)) {
-            sinkArg(a0, s => checkSelector(s.text, s.rep, i => i));
+            sinkArg(a0, s => { if (s.text.indexOf(GAT) < 0) checkSelector(s.text, s.rep, i => i); else checkSelector(s.text.split(GAT).join('x'), s.rep, i => i, null, true); });
           } else if (m === 'setProperty') {
-            sinkArg(a0, p => sinkArg(a1, v => checkCssText(`${p.text}:${v.text}`, 'decls', pinned(v.rep, 0))));
+            sinkArg(a0, p => {
+              if (!stringOf(a1, rep)) return checkCssText(`${p.text}:inherit`, 'decls', p.rep);
+              sinkArg(a1, v => checkCssMetGaten(`${p.text}:${v.text}`, 'decls', pinned(v.rep, 0)));
+            });
           } else if (m === 'insertRule') {
-            sinkArg(a0, s => checkCssText(s.text, 'sheet', s.rep));
+            sinkArg(a0, s => checkCssMetGaten(s.text, 'sheet', s.rep));
+          } else if (m === 'matchMedia') {
+            sinkArg(a0, s => checkCssMetGaten(`@media ${s.text}{}`, 'sheet', pinned(s.rep, 0)));
+          } else if (m === 'addEventListener') {
+            sinkArg(a0, s => {
+              const g = gebeurtenis(s.text.toLowerCase());
+              if (g) s.rep.find(0, g.path, `de gebeurtenis ${s.text} ontbreekt in ${names(g.miss)}`);
+            });
           }
         },
         AssignmentExpression(n) {
           const left = n.left;
           if (left.type !== 'MemberExpression') return;
           const m = memberName(left);
-          if (m === 'cssText') sinkArg(n.right, s => checkCssText(s.text, 'decls', s.rep));
-          else if (memberName(left.object) === 'style' && m) sinkArg(n.right, s => checkCssText(`${kebab(m)}:${s.text}`, 'decls', pinned(s.rep, 0)));
+          if (m === 'cssText' || (m === 'style' && stringOf(n.right, rep))) sinkArg(n.right, s => checkCssMetGaten(s.text, 'decls', s.rep));
+          else if (memberName(left.object) === 'style' && m) {
+            if (stringOf(n.right, rep)) sinkArg(n.right, s => checkCssMetGaten(`${kebab(m)}:${s.text}`, 'decls', pinned(s.rep, 0)));
+            else checkCssText(`${kebab(m)}:inherit`, 'decls', pinned(rep, left.range[0]));
+          }
         },
         Literal(n) {
           if (typeof n.value !== 'string' || consumed.has(n)) return;
@@ -649,6 +743,17 @@ function localPlugin(rep, apiFindings) {
     },
   };
   return { rules: { 'api-leden': apiMembers, 'strings': strings } };
+}
+
+/* een gebeurtenis die alleen bestaat op interfaces die ergens op de ondergrens ontbreken */
+function gebeurtenis(naam) {
+  const defs = [];
+  for (const [iface, leden] of Object.entries(bcd.api)) {
+    const c = own(own(leden, naam + '_event'), '__compat');
+    if (c) defs.push({ path: `api.${iface}.${naam}_event`, miss: missing(`api.${iface}.${naam}_event`, c) });
+  }
+  defs.sort((x, y) => (x.path < y.path ? -1 : 1));
+  return defs.length && defs.every(x => x.miss.length) ? defs[0] : null;
 }
 
 function scanString(raw, rep) {
@@ -674,7 +779,7 @@ function lineIndex(starts, offset) {
   return lo;
 }
 
-const apiKey = s => s.replace(/^api\./, '').replace(/_static$/, '').replace(/\(\)$/, '');
+const apiKey = s => s.replace(/^api\.(?:Window\.)?/, '').replace(/_static$/, '').replace(/\(\)$/, '');
 
 function checkScript(text, { sourceType = 'script', globalReturn = false, rep, top = false }) {
   const linter = new Linter({ configType: 'flat' });
@@ -693,6 +798,11 @@ function checkScript(text, { sourceType = 'script', globalReturn = false, rep, t
   const offset = m => starts[m.line - 1] + m.column - 1;
   const done = new Set();
   const compatSeen = new Set();
+  /* es-x meldt een regex-onderdeel soms binnen de literal: dan telt de knoop eromheen */
+  const syntax = SYNTAX_KNOPEN;
+  SYNTAX_KNOPEN = [];
+  const inSyntax = (van, tot) => syntax.some(r => r[0] <= van && tot <= r[1]);
+  const esxAt = new Set();
   for (const m of messages) {
     const at = offset(m);
     if (m.fatal) {
@@ -705,7 +815,9 @@ function checkScript(text, { sourceType = 'script', globalReturn = false, rep, t
       const key = `${at}:${m.endLine}:${m.endColumn}:${method}`;
       if (done.has(key)) continue;
       done.add(key);
-      rep.find(at, m.ruleId.slice('es-x/no-'.length), m.message);
+      esxAt.add(at);
+      const eind = m.endLine ? starts[m.endLine - 1] + m.endColumn - 1 : at;
+      rep.find(at, m.ruleId.slice('es-x/no-'.length), m.message, inSyntax(at, eind));
     } else if (m.ruleId === 'compat/compat') {
       const name = m.message.replace(/ is not supported in [^]*$/, '').replace(/\(\)$/, '');
       compatSeen.add(`${m.line}:${apiKey(name)}`);
@@ -715,6 +827,7 @@ function checkScript(text, { sourceType = 'script', globalReturn = false, rep, t
     }
   }
   for (const f of apiFindings) {
+    if (f.id.startsWith('javascript.') && esxAt.has(f.offset)) continue;
     if (!compatSeen.has(`${lineIndex(starts, f.offset) + 1}:${apiKey(f.id)}`)) rep.find(f.offset, f.id, f.msg);
   }
   const source = linter.getSourceCode();
@@ -777,7 +890,7 @@ function applyAllows(findings, text, comments, lineOf) {
     const m = list[0].rest.match(/^\s+([^\s:]+)\s*(?::\s*(.*?))?\s*$/);
     if (!m) { keep('allow-malformed', 'schrijf: compat-allow <kenmerk>: <reden>'); continue; }
     const [, id, reason = ''] = m;
-    if (UNALLOWABLE.has(id)) keep('allow-malformed', `${id} kan niet met compat-allow weg`);
+    if (UNALLOWABLE.has(id) || here.some(f => f.id === id && f.vast)) keep('allow-malformed', `${id} is syntax die een oude browser niet kan lezen, of een fout die het hele bestand raakt: dat kan niet met compat-allow weg`);
     else if (reason.split(/\s+/).filter(Boolean).length < 3) keep('allow-without-reason', `compat-allow ${id} heeft een reden van minstens drie woorden nodig`);
     else if (!here.some(f => f.id === id)) keep('allow-unused', `compat-allow ${id}: geen bevinding met dit kenmerk op deze regel`);
     else out.push(...here.filter(f => f.id !== id));
@@ -808,7 +921,7 @@ export async function checkBuild(root) {
     const lineOf = o => lineIndex(starts, o);
     const raw = [];
     const comments = [];
-    const rep = { find: (o, id, msg) => raw.push({ offset: o, line: lineOf(o), id, msg }), comment: (s, e) => comments.push([s, e]), source: text };
+    const rep = { find: (o, id, msg, vast) => raw.push({ offset: o, line: lineOf(o), id, msg, vast: !!vast }), comment: (s, e) => comments.push([s, e]), source: text };
     if (kind === 'script') {
       checkScript(text, { rep, top: true });
     } else {
@@ -831,11 +944,14 @@ export async function checkBuild(root) {
       });
       if (styles.length) checkCssText(blankExcept(text, styles), 'sheet', rep, true);
     }
-    const seen = new Set();
-    const unique = raw.filter(f => {
+    const seen = new Map();
+    const unique = [];
+    for (const f of raw) {
       const k = `${f.line}\u0000${f.id}`;
-      return !seen.has(k) && seen.add(k);
-    });
+      if (seen.has(k)) { seen.get(k).vast = seen.get(k).vast || f.vast; continue; }
+      seen.set(k, f);
+      unique.push(f);
+    }
     const origin = traceLines(text.split('\n'), srcs);
     for (const f of applyAllows(unique, text, comments, lineOf)) {
       const o = origin[f.line];
