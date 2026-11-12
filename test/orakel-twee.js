@@ -1,5 +1,5 @@
-/* Orakel, tweeapparatentests: de regels van plan.md voor increment 4, die
-   pas te zien zijn als beide kanten echt draaien. Elke testnaam begint met
+/* Orakel, tweeapparatentests: de regels van plan.md die pas te zien zijn
+   als beide kanten echt draaien. Elke testnaam begint met
    zijn regelnummer. Gebruikt de helpers van test/harnas.js en de
    tweeapparatensuite (samenSpelen, speel, scanQR). */
 
@@ -101,11 +101,11 @@ async function orakelTwee() {
     tikTekst(tablet, 'Volgende');
     await wacht();
     const kaart = tablet.scherm();
-    check('de kaart van het rondje toont het level en de trofee van de tablet', /Level Paard/.test(kaart) && /Sterrenregen/.test(kaart));
+    check('de kaart van het rondje toont het level en de trofee van de tablet', /Level Paard/.test(kaart) && /Sterrenregen/.test(zonderZacht(kaart)));
     check('en niet de trofee van de telefoon', !/Orakel/.test(kaart));
     tikTekst(tablet, 'Naar huis');
     await wacht();
-    check('thuis het level', tablet.ziet('LEVEL OMHOOG'));
+    check('thuis het level', tablet.ziet('Level omhoog'));
     tablet.tik('lvlOk');
     check('thuis geen trofee van de telefoon', !tablet.ziet('Orakel'));
     await tablet.ev('syncNow()');
@@ -115,7 +115,46 @@ async function orakelTwee() {
     telefoon = herlaad(telefoon);
     await wacht();
     check('de telefoon toont bij het openen zijn eigen Orakel', telefoon.ziet('Orakel'));
-    check('en niet de Sterrenregen van de tablet', !telefoon.ziet('Sterrenregen'));
+    check('en niet de Sterrenregen van de tablet', !/Sterrenregen/.test(zonderZacht(telefoon.scherm())));
+  });
+
+  /* ================= increment 3 ================= */
+
+  await regel('[3.2] een potje met een vriend telt als gezien, op beide apparaten', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    for (const x of [a, b]) x.ev('P.lastSeen = "2026-11-07"; saveP()');
+    await samenSpelen(a, b);
+    check('testopzet: samen in een potje', a.get('!!(session && session.online)') && b.get('!!(session && session.online)'));
+    for (const x of [a, b]) {
+      const d = opgeslagen(x, 'schaakheld1');
+      check('vandaag gezien bij ' + x.naam, !!d && d.loc.lastSeen === '2026-11-12');
+    }
+  });
+
+  await regel('[3.5] na echt koppelen zegt Ik op beide apparaten dat alles ook op het andere staat', async function (check) {
+    /* Mees heeft nog niets verdiend: de iPad weet het dan alleen doordat hij overnam */
+    const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    const code = (mees.modal().match(/<b>([a-z]+-[a-z]+-[a-z]+-[a-z]+)<\/b>/) || [])[1];
+    check('testopzet: vier woorden', !!code);
+    mees.tik('linkDone');
+    ipad.ev('linkEntryFlow()');
+    typ(ipad, 'wordInp', code.split('-'));
+    ipad.tik('linkGo');
+    await wacht();
+    ipad.tik('linkYes');
+    await wacht();
+    ipad.tik('tabIk');
+    check('de iPad nam het profiel over', ipad.get('P.name') === 'Mees' && /andere apparaat/.test(tekstVan(ipad, 'ikBewaard')));
+    ipad.ev('bump("xp", 10)');
+    await ipad.ev('syncNow()');
+    await wacht();
+    await mees.ev('syncNow()');
+    await wacht();
+    mees.tik('tabIk');
+    check('Mees kreeg iets van de iPad en zegt het ook', mees.get('P.xp') === 10 && /andere apparaat/.test(tekstVan(mees, 'ikBewaard')));
   });
 
   /* ================= increment 4 ================= */

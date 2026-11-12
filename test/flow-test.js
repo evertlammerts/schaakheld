@@ -12,12 +12,12 @@ P.name = 'Testkind'; closeModal();
 /* iOS 15.0 kent crypto.randomUUID niet (de shim ook niet): dan maakt de terugval het apparaat-id */
 ok('apparaat-id: zonder randomUUID 32 hex-tekens', typeof crypto.randomUUID === 'undefined' && /^[0-9a-f]{32}$/.test(DEV));
 
-/* close any queued LEVEL OMHOOG modals so later modal assertions see past them */
+/* close any queued level-up modals so later modal assertions see past them */
 /* thuis komt een venster voor een nieuw level of een trofee die nog niet te zien was; een kind tikt het weg */
 function closeLevelUps() {
   var guard = 0;
   while (guard++ < 8 && !__els.overlay.classList.contains('hidden')) {
-    if (__els.modalBox.innerHTML.indexOf('LEVEL OMHOOG') >= 0) fire(__els.lvlOk, 'click');
+    if (__els.modalBox.innerHTML.indexOf('Level omhoog') >= 0) fire(__els.lvlOk, 'click');
     else if (__els.modalBox.innerHTML.indexOf('id="trofOk"') >= 0) fire(__els.trofOk, 'click');
     else break;
   }
@@ -43,9 +43,9 @@ while (session && session.kind === 'scan' && session.round <= 5 && rounds < 10) 
 closeLevelUps();
 ok('scan: summary modal', __els.modalBox.innerHTML.indexOf('Rondje klaar') >= 0);
 ok('scan: 15 stars earned', P.stars - stars0 === 15);
-ok('scan: xp 150 + streak bonuses 15', P.xp - xp0 === 165);
+ok('[3.7] scan: 150 XP, zonder reeksbonus', P.xp - xp0 === 150);
 ok('scan: perfect rounds counted', P.c.perfectScans === 5);
-ok('badge: vuurpijl bij 5 op een rij', !!P.badges.vlam);
+ok('[3.7] badge: geen Vuurpijl meer voor 5 op een rij', !P.badges.vlam && P.c.drie === 5);
 closeModal();
 
 /* ---------- scan explanations: Oscar's screenshot scenario ---------- */
@@ -577,7 +577,15 @@ goHome();
 showHomeTab('ik');
 fire(__els.goalBtn, 'click');
 ok('weekdoel: kiezer open met sjablonen en aantallen', __els.modalBox.innerHTML.indexOf('Wat wordt je doel') >= 0 &&
-  __els.goalKinds.innerHTML.indexOf('Opdrachten') >= 0 && __els.goalNs.innerHTML.indexOf('data-n="20"') >= 0);
+  __els.goalKinds.innerHTML.indexOf('Opdrachten') >= 0 && __els.goalNs.innerHTML.indexOf('data-n="3"') >= 0);
+ok('tekst: de kiezer begint bij 3 potjes tegen de Turbo die bij je past', __els.goalKinds.innerHTML.indexOf('chip on" data-kind="potjes"') >= 0 &&
+  __els.goalNs.innerHTML.indexOf('chip on big" data-n="3"') >= 0 &&
+  __els.goalSub.innerHTML.indexOf('chip on" data-lvl="' + turboVoorstel(P, stadium(P)) + '"') >= 0);
+ok('tekst: de soorten zeggen wat telt', __els.goalKinds.innerHTML.indexOf('Potjes uitspelen tegen Turbo') >= 0 &&
+  __els.goalKinds.innerHTML.indexOf('Toprondes (12 sterren of meer)') >= 0);
+fire(__els.goalKinds, 'click', { target: { dataset: { kind: 'opdr' } } });
+ok('tekst: opdrachten zonder schooldag', __els.goalPreview.innerHTML.indexOf('Een paar rondjes per week en je bent er.') >= 0 &&
+  __els.goalPreview.innerHTML.indexOf('schooldag') < 0);
 fire(__els.goalKinds, 'click', { target: { dataset: { kind: 'potjes' } } });
 ok('weekdoel: potjes-sjabloon toont de drie Turbo\'s', __els.goalSub.innerHTML.indexOf('Super Turbo') >= 0);
 fire(__els.goalSub, 'click', { target: { dataset: { lvl: '1' } } });
@@ -643,12 +651,18 @@ closeLevelUps();
 closeModal();
 P.weekSeen = '2020-W01';
 checkNewWeek();
-ok('nieuwe week: terugblik met vorige stand', __els.modalBox.innerHTML.indexOf('Nieuwe week') >= 0 &&
-  __els.modalBox.innerHTML.indexOf('0 van ' + (potjesNu + 2)) >= 0 && P.weekSeen === curWeek());
+ok('[3.9] nieuwe week: zonder iets vorige week geen nul, wel het doel', __els.modalBox.innerHTML.indexOf('Nieuwe week, nieuwe kansen') >= 0 &&
+  __els.modalBox.innerHTML.indexOf('0 van ') < 0 && __els.modalBox.innerHTML.indexOf(goalText(P.weekGoal)) >= 0 && P.weekSeen === curWeek());
 fire(__els.wkKeep, 'click');
 ok('nieuwe week: doel blijft', P.weekGoal && P.weekGoal.n === potjesNu + 2);
 checkNewWeek();
 ok('nieuwe week: maar één keer per week', __els.overlay.classList.contains('hidden'));
+P.weekSeen = '2020-W01';
+bump('wk.' + weekBefore(1) + '.' + GOAL_KINDS[P.weekGoal.kind].key(P.weekGoal), 1);
+checkNewWeek();
+ok('[3.9] nieuwe week: een deel gehaald noemt wat er wel was', __els.modalBox.innerHTML.indexOf('1 van ' + P.weekGoal.n) >= 0 &&
+  __els.modalBox.innerHTML.indexOf('Mooi geoefend') >= 0);
+fire(__els.wkKeep, 'click');
 /* vorige weken: overzicht zonder verwijt */
 fire(__els.weeksBtn, 'click');
 ok('weken: overzicht toont deze week met potjes', __els.modalBox.innerHTML.indexOf('Deze week') >= 0 &&
@@ -671,11 +685,16 @@ P.log = DOC.log;
 var vk = vormInfo('koning');
 ok('vorm: sterk recent venster scoort hoog', vk && vk.n === 10 && vk.score >= 75 && vk.score <= 100);
 ok('vorm: stijging t.o.v. vorige 14 dagen', vk.delta > 20);
-ok('vorm: tekst met pijl', vormTxt('koning').indexOf('↑') >= 0);
+renderVorm();
+ok('vorm: op Ik een pijl omhoog', __els.vormList.innerHTML.indexOf('↑') >= 0);
 DOC.log.koning = {};
 for (vi = 0; vi < 10; vi++) DOC.log.koning['c' + vi] = [nu - vi * 3600000, 0.8, 200000, 0];
 var vk0 = vormInfo('koning');
 ok('vorm: alles fout en traag scoort laag', vk0.score < 25);
+for (vi = 0; vi < 10; vi++) DOC.log.koning['d' + vi] = [nu - 20 * 86400000 - vi * 3600000, 0.8, 20000, 3];
+renderVorm();
+ok('[3.7] vorm: op Ik nooit een pijl omlaag', vormInfo('koning').delta < 0 &&
+  __els.vormList.innerHTML.indexOf('↓') < 0 && __els.vormList.innerHTML.indexOf('vorm-d') < 0);
 ok('vorm: normDoc gooit oude en kapotte regels weg', (function () {
   var d = JSON.parse(JSON.stringify(DOC));
   d.log.koning.oud = [nu - 40 * 86400000, 0.5, 1000, 3];
@@ -710,11 +729,15 @@ ok('[3.7] vorm: niet in de sterrenbalk', __els.drillStars.innerHTML.indexOf('Vor
 goHome();
 renderVorm();
 ok('vorm: kaart op Ik toont Speurogen met score', __els.vormList.innerHTML.indexOf('Speurogen') >= 0 &&
-  __els.vormList.innerHTML.indexOf('vorm-s') >= 0 && __els.vormList.innerHTML.indexOf('nog geen vorm') >= 0);
+  __els.vormList.innerHTML.indexOf('vorm-s') >= 0 && __els.vormList.innerHTML.indexOf('nog niet gespeeld de laatste twee weken') >= 0 &&
+  __els.vormList.innerHTML.indexOf('nog geen vorm') < 0);
+ok('tekst: onder de vormkaart wat het getal is', __els.vormUitleg.textContent === 'Hoe vaak, hoe goed en hoe moeilijk, de laatste 14 dagen. 100 is het hoogst.');
 /* gates: meesterproeven remmen pure XP-farm */
 var gSave = { xp: P.xp, ps: P.c.perfectScans, w2: P.c.winsL2, w3: P.c.winsL3 };
 P.xp = 10000; P.c.perfectScans = 0; P.c.winsL2 = 0; P.c.winsL3 = 0;
 ok('gate: zonder proeven blijf je Paard', levelIdx(P.xp) === 1);
+ok('[3.5] gate: de stand van elke meesterproef heet "a van b", op Ik en op de kaart', LEVELS.filter(function (L) { return L.gate; })
+  .every(function (L) { return /^0 van \d$/.test(L.gate.prog(P)); }));
 P.c.perfectScans = 5;
 ok('gate: Loper na 5 perfecte rondes', levelIdx(P.xp) === 2);
 P.c.winsL2 = 1;
@@ -821,6 +844,8 @@ ok('modal zonder cancel: eigen knop sluit', modalOpen === false &&
     v.wins === 3 && v.c.winsL2 === 1 && v.c.safeCorrect === 7 && v.c.pat.vork === 4 &&
     v.badges.winst === true && v.badges.detective === true && v.name === 'Oscar' && v.theme === 'oceaan' &&
     v.best === 6 && v.streak === 2 && v.weekGoal === null && v.day.winsByLvl[1] === 1);
+  ok('[3.10] compat: een doc van de vorige release krijgt de nieuwe velden leeg', v.start === '' &&
+    v.lastKind === null && v.lastSeen === null && v.c.drie === 0);
   /* per apparaat: welke trofeeën dit apparaat al liet zien. De vorige release
      kent dat veld niet; daar telt elke trofee die er al is als getoond. */
   var d = normDoc(JSON.parse(JSON.stringify(oud)));
@@ -831,6 +856,27 @@ ok('modal zonder cancel: eigen knop sluit', modalOpen === false &&
   ok('compat: de lijst gaat mee door bewaren en laden', JSON.stringify(normDoc(JSON.parse(JSON.stringify(normDoc(metLijst)))).loc.shownBadges) === '["winst"]');
   ok('compat: een oud plat profiel: elke trofee telt als getoond', JSON.stringify(migrateLegacy({ badges: { winst: true } }, 'd1').loc.shownBadges || null) === '["winst"]');
   ok('een nieuw profiel: niets getoond, en het kent zijn level', (emptyDoc().loc.shownBadges || [1]).length === 0 && emptyDoc().loc.lastLevel === 0);
+})();
+/* de velden van het startadvies: start (LWW), lastKind en lastSeen (per apparaat) en de teller c.drie */
+(function () {
+  var nieuw = { v: 2, epoch: 0, cnt: { 'c.drie': { d1: 4, d2: 3 } }, set: { badges: {} },
+    lww: { start: { v: 'sterk', t: 5 } }, max: { best: 0 },
+    loc: { streak: 0, lastLevel: 2, lastKind: 'koning', lastSeen: '2026-11-01' } };
+  var v = viewFromDoc(normDoc(JSON.parse(JSON.stringify(nieuw))));
+  ok('[3.10] start, lastKind, lastSeen en c.drie laden terug', v.start === 'sterk' && v.lastKind === 'koning' &&
+    v.lastSeen === '2026-11-01' && v.c.drie === 7);
+  var raar = JSON.parse(JSON.stringify(nieuw));
+  raar.lww.start = { v: 'heel goed', t: 6 };
+  raar.loc.lastKind = 'onzin';
+  raar.loc.lastSeen = 'gisteren';
+  var w = viewFromDoc(normDoc(raar));
+  ok('[3.10] onzin in start, lastKind of lastSeen valt terug op leeg', w.start === '' && w.lastKind === null &&
+    w.lastSeen === null && w.c.drie === 7);
+  var ander = JSON.parse(JSON.stringify(nieuw));
+  ander.cnt['c.drie'] = { d3: 2 };
+  ander.lww.start = { v: 'speelt', t: 9 };
+  var m = viewFromDoc(mergeDoc(normDoc(JSON.parse(JSON.stringify(nieuw))), normDoc(ander)));
+  ok('[3.10] samenvoegen: c.drie telt per apparaat op en de nieuwste start wint', m.c.drie === 9 && m.start === 'speelt');
 })();
 /* doc en weergave lopen gelijk (predictHits niet: die is hierboven met opzet
    rechtstreeks in P gezet en dus alleen weergave) */
@@ -986,6 +1032,36 @@ ACC = { id: 'testaccountid123', secret: 'testsecret-1234567890' };
 saveAcc();
 saveP();
 var preResetDoc = localStorage.getItem('schaakheld1');
+/* Instellingen: elke keuze werkt meteen, er is geen Klaar en ✕ sluit */
+fire(__els.setBtn, 'click');
+ok('[3.8] instellingen: geen Klaar-knop, wel een kruisje', __els.modalBox.innerHTML.indexOf('Klaar') < 0 && !!__els.mClose);
+var geluid0 = P.sound;
+fire(__els.tglSound, 'click');
+ok('[3.8] instellingen: geluid uit en weer aan', P.sound === !geluid0 && __els.tglSoundSw.textContent === (P.sound ? 'aan' : 'uit') &&
+  DOC.lww.sound.v === P.sound);
+fire(__els.tglSound, 'click');
+ok('[3.8] instellingen: geluid weer zoals het was', P.sound === geluid0);
+var naam0 = P.name;
+__els.setName.value = '   ';
+fire(__els.setName, 'change', { target: __els.setName });
+ok('[3.8] instellingen: een lege naam laat de oude staan', P.name === naam0 && __els.setName.value === naam0);
+var vrij = THEMES.filter(function (t) { return t.lvl <= levelIdx(P.xp) && t.id !== P.theme; })[0];
+var kleurKnop = __els.setThemes.querySelectorAll('.theme-sw').filter(function (b) { return b.dataset.th === (vrij && vrij.id); })[0];
+ok('[3.8] instellingen: testopzet, een andere vrije bordkleur in de lijst', !!vrij && !!kleurKnop &&
+  __els.setThemes.querySelectorAll('.theme-sw').length === THEMES.length);
+fire(kleurKnop, 'click');
+ok('[3.8] instellingen: de bordkleur werkt meteen, hier en bij Ik', P.theme === vrij.id &&
+  __els.setThemes.innerHTML.indexOf('theme-sw sel" data-th="' + vrij.id) >= 0 &&
+  __els.themeRow.innerHTML.indexOf('theme-sw sel" data-th="' + vrij.id) >= 0);
+fire(__els.mClose, 'click');
+ok('[3.8] instellingen: het kruisje sluit', __els.overlay.classList.contains('hidden'));
+var lvlNu = levelIdx(P.xp);
+ok('[3.8] level omhoog: testopzet, een level met een nieuw bord', lvlNu >= 1);
+P.lastLevel = lvlNu - 1;
+checkLevelUp();
+ok('[3.8] level omhoog zegt waar het nieuwe bord staat', __els.modalBox.innerHTML.indexOf('Kies het bij Ik, onder Bordkleuren') >= 0);
+ok('tekst: "Level omhoog!" zonder hoofdletters', __els.modalBox.innerHTML.indexOf('<h2>Level omhoog!</h2>') >= 0);
+closeLevelUps();
 /* wissen zit nu achter het tandwiel (⚙️ Instellingen) */
 fire(__els.setBtn, 'click');
 ok('instellingen: koppelen en wissen achter het tandwiel',

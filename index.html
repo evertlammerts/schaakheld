@@ -64,32 +64,35 @@
   }
 
   /* ---------- header ---------- */
+  /* een rij van 56, vast bovenin en dicht, zodat er niets doorheen schijnt */
   header.top {
-    position: relative; z-index: 2;
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 4px;
-    max-width: 1020px; margin: 0 auto;
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    height: calc(56px + env(safe-area-inset-top, 0px));
+    /* de achtergrond loopt over de hele breedte, de inhoud staat in dezelfde kolom als main */
+    padding: env(safe-area-inset-top, 0px) max(14px, calc((100% - 1020px) / 2 + 14px), env(safe-area-inset-right, 0px)) 0
+      max(14px, calc((100% - 1020px) / 2 + 14px), env(safe-area-inset-left, 0px));
+    background: var(--sky-hi);
   }
+  html { scroll-padding-top: calc(64px + env(safe-area-inset-top, 0px)); scroll-padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
   .logo { display: flex; align-items: center; gap: 10px; }
   .logo-turtle {
-    display: grid; place-items: center; width: 46px; height: 46px; font-size: 27px;
+    display: grid; place-items: center; width: 32px; height: 32px; font-size: 20px;
     background: var(--sun); border-radius: 50%;
     box-shadow: 0 3px 0 var(--sun-deep);
   }
-  .logo-txt { font-size: 25px; font-weight: bold; letter-spacing: .3px; }
+  .logo-txt { font-family: var(--font-display); font-size: 20px; font-weight: 700; }
+  @media (max-width: 399px) { .logo-txt { display: none; } }
   .logo-txt em { font-style: normal; color: var(--sun-deep); }
-  .hud { display: flex; align-items: center; gap: 10px; }
-  .icon-btn {
-    width: 42px; height: 42px; border-radius: 50%; border: none; cursor: pointer;
-    background: var(--card); box-shadow: var(--shadow); font-size: 19px;
+  .hud { display: flex; align-items: center; gap: 8px; }
+  .icon-btn, .xp-chip {
+    min-height: 44px; border-radius: 999px; cursor: pointer; font: inherit; color: var(--text);
+    background: var(--surface); border: 1.5px solid rgba(23, 69, 111, .25); box-shadow: var(--elev-1);
   }
-  .xp-chip {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--card); border-radius: 999px; padding: 6px 14px 6px 8px;
-    box-shadow: var(--shadow);
-  }
+  .icon-btn { width: 44px; font-size: 19px; }
+  .xp-chip { display: flex; align-items: center; gap: 8px; padding: 2px 12px 2px 8px; text-align: left; }
   .xp-glyph { font-size: 24px; line-height: 1; }
-  .xp-mid { min-width: 76px; }
+  .xp-mid { min-width: 64px; }
   .xp-mid b { font-size: 13px; display: block; line-height: 1.1; }
   .xp-bar { height: 7px; background: #E4EEF6; border-radius: 99px; overflow: hidden; margin-top: 3px; }
   .xp-bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--sun), var(--sun-deep)); border-radius: 99px; transition: width .6s ease; }
@@ -100,20 +103,11 @@
   .screen.hidden { display: none; }
 
   /* ---------- home ---------- */
-  .hero {
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    background: var(--card); border-radius: 26px; padding: 18px 22px;
-    box-shadow: var(--shadow); margin: 10px 0 18px;
-  }
-  .hero-turtle {
-    flex: 0 0 auto; width: 88px; height: 88px; font-size: 54px;
-    display: grid; place-items: center;
-    background: var(--leaf-soft); border-radius: 50%;
-    animation: bob 3s ease-in-out infinite;
-  }
+  .groet { display: flex; align-items: center; gap: 8px; min-height: 40px; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); }
+  #groet { min-width: 0; line-height: 1.2; overflow-wrap: break-word; }
+  @media (max-width: 399px) { #groet { font-size: var(--fs-md); } }
+  .groet-turtle { width: 28px; height: 28px; display: grid; place-items: center; font-size: 18px; background: var(--leaf-soft); border-radius: 50%; }
   @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
-  .hero-txt { flex: 1 1 260px; }
-  .hero-txt h1 { margin: 0 0 6px; font-size: clamp(22px, 4vw, 30px); text-wrap: balance; } /* compat-allow css.properties.text-wrap: voor Safari 17.4 breekt de kop gewoon af */
   .bubble {
     position: relative; background: var(--cream); border-radius: 16px;
     padding: 10px 14px; font-size: 15.5px; line-height: 1.45; color: var(--ink);
@@ -126,28 +120,37 @@
   .mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
   /* de twee potjes zijn de hoofdactie: iets groter en altijd twee-op-een-rij
      tot het echt smal wordt */
-  .mode-grid.games { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-  .mode-grid.games .mode-card { padding: 22px; }
-  .mode-grid.games .mode-card .mc-emoji { font-size: 46px; }
-  .grid-label { font-size: 14px; font-weight: bold; color: var(--ink-soft);
-    letter-spacing: .3px; margin: 20px 2px 10px; }
+  /* de twee spelknoppen naast elkaar; de oefeningen als rijen in een kaart */
+  .mode-grid.games { grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .mode-grid.games .mode-card { flex-direction: row; align-items: center; gap: 8px; min-height: 64px; padding: 8px 12px;
+    border: 1.5px solid rgba(23, 69, 111, .25); box-shadow: var(--elev-1); }
+  .mode-grid.games .mode-card .mc-emoji { font-size: 28px; }
+  .mode-grid.games .mode-card .mc-title { font-size: var(--fs-md); }
+  .mode-grid.drills { grid-template-columns: 1fr; gap: 0; background: var(--surface); border: var(--border); border-radius: 16px; overflow: hidden; }
+  .mode-grid.drills .mode-card { border-radius: 0; box-shadow: none; background: var(--surface); min-height: 56px; }
+  .mode-grid.drills .mode-card + .mode-card { border-top: var(--border); }
+  .mode-grid.drills .mode-card::after { content: '›'; font-size: 22px; color: var(--text-quiet); }
+  @media (min-width: 900px) { .mode-grid.drills { grid-template-columns: 1fr 1fr; } }
+  .grid-label { font-size: var(--fs-sm); font-weight: 700; color: var(--text-quiet); margin: 16px 2px 8px; }
   #view-spelen .grid-label:first-of-type { margin-top: 8px; }
-  /* onderbalk met de twee tabs (Spelen / Ik), duim-bereikbaar op de telefoon */
-  #scr-home { padding-bottom: 96px; }
+  /* onderbalk met drie tabs, duim-bereikbaar; de inhoud houdt de balk plus 24 vrij */
+  #scr-home { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
   .tabbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-    display: flex; gap: 10px; justify-content: center;
-    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    display: flex; justify-content: center;
+    height: calc(64px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px);
     background: rgba(255, 249, 236, .94); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-    border-top: 2px solid rgba(23, 69, 111, .07);
+    border-top: 1px solid var(--line);
   }
   .tab {
-    flex: 1 1 0; max-width: 200px; padding: 13px 8px; border: none; cursor: pointer;
-    border-radius: 18px; font: inherit; font-weight: 800; font-size: 17px;
-    background: transparent; color: var(--ink-soft); transition: transform .1s ease, background .15s ease;
+    flex: 1 1 0; max-width: 160px; min-width: 0; padding: 0; border: none; background: none; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    font-weight: 700; font-size: var(--fs-cap); line-height: 1.2; white-space: nowrap; color: var(--text-quiet);
   }
-  .tab.on { background: var(--sun); color: var(--ink); box-shadow: 0 4px 14px rgba(232, 147, 12, .3); }
-  .tab:active { transform: translateY(1px); }
+  .tab .pill { display: grid; place-items: center; width: 56px; height: 30px; border-radius: var(--r-pill); font-size: 24px; line-height: 1; }
+  .tab.on { color: var(--text); }
+  .tab.on .pill { background: var(--selected-soft); }
+  .tab:active .pill { transform: translateY(1px); }
   .home-view { animation: fadeUp .18s ease; }
   .home-view.hidden { display: none; }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
@@ -158,7 +161,6 @@
     box-shadow: var(--shadow);
     transition: transform .12s ease, box-shadow .12s ease;
   }
-  .mode-card:hover { transform: translateY(-3px) scale(1.01); }
   .mode-card:active { transform: translateY(1px); }
   .mode-card .mc-emoji { font-size: 38px; line-height: 1; }
   .mode-card .mc-title { font-size: 19px; font-weight: bold; }
@@ -183,9 +185,20 @@
   .pat-row .pat-mid { flex: 1; font-size: 13.5px; line-height: 1.3; }
   .pat-row .pat-les { display: block; font-size: 11.5px; color: var(--ink-soft); }
   .pat-row .pat-count { font-size: 12px; font-weight: bold; color: var(--leaf-deep); white-space: nowrap; }
-  .pat-row.pat-locked { opacity: .6; }
-  .pat-row.pat-locked .pat-count { color: var(--ink-soft); font-weight: normal; }
-  .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  /* wat nog op slot zit blijft leesbaar: alleen het plaatje vervaagt, nooit de tekst */
+  .pat-row.pat-locked { background: var(--surface-sunk); color: var(--text-quiet); }
+  .pat-row.pat-locked .pat-e { filter: grayscale(1); opacity: .55; }
+  .pat-row.pat-locked .pat-count { color: var(--text-quiet); font-weight: normal; }
+  .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .ik-uitleg { margin: 8px 4px 0; font-size: var(--fs-cap); line-height: 1.35; color: var(--text-quiet); }
+  .ik-bewaard { margin: 12px 4px 0; font-size: var(--fs-sm); line-height: 1.4; }
+  .ik-bewaard small { display: block; margin-top: 4px; font-size: var(--fs-cap); color: var(--text-quiet); }
+  .ik-bewaard .btn { margin-top: 6px; }
+  .lp-kop { font-family: var(--font-display); font-size: var(--fs-md); margin: 4px 0; }
+  .lp-eis { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); margin: 4px 0; }
+  .lp-eis.klaar { color: var(--success); font-weight: 700; }
+  .lp-balk { flex: 1; height: 8px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .lp-balk i { display: block; height: 100%; background: var(--sun); }
   .stat-chip {
     background: var(--card); border-radius: 999px; padding: 8px 16px;
     box-shadow: var(--shadow); font-size: 14.5px;
@@ -198,12 +211,14 @@
   }
   .card-title { font-size: 15px; font-weight: bold; color: var(--ink-soft); margin-bottom: 10px; letter-spacing: .3px; }
   .card-sub { font-weight: normal; font-size: 12px; }
+  .card-uitleg { margin: -4px 0 10px; font-size: var(--fs-cap); line-height: 1.35; color: var(--text-quiet); }
 
   .level-path { display: flex; align-items: flex-start; }
   .lp-node {
-    display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; min-width: 0;
     position: relative; font-size: 11px; color: var(--ink-soft); text-align: center;
   }
+  .lp-node .lp-n { max-width: 100%; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
   .lp-node .lp-g {
     width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
     font-size: 22px; background: #E4EEF6; position: relative; z-index: 1;
@@ -215,8 +230,8 @@
   .lp-node:first-child::before { display: none; }
   .lp-node.done .lp-g { background: var(--leaf-soft); }
   .lp-node.done::before, .lp-node.current::before { background: var(--leaf); }
-  .lp-node.current .lp-g { background: var(--sun); box-shadow: 0 3px 0 var(--sun-deep); animation: bob 2s ease-in-out infinite; }
-  .lp-node.locked { opacity: .55; }
+  .lp-node.current .lp-g { background: var(--sun); box-shadow: 0 3px 0 var(--sun-deep); animation: bob 2s ease-in-out 3; }
+  .lp-node.locked .lp-g { filter: grayscale(1); opacity: .55; }
   .lp-node .lp-xp { font-size: 10px; font-variant-numeric: tabular-nums; }
   .lp-next {
     margin-top: 12px; font-size: 13.5px; line-height: 1.4; color: var(--ink-soft);
@@ -225,23 +240,36 @@
 
   .theme-row { display: flex; gap: 10px; flex-wrap: wrap; }
   .theme-sw {
-    border: none; cursor: pointer; width: 66px; border-radius: 14px; padding: 7px 4px;
+    position: relative; border: 2px solid transparent; cursor: pointer; width: 72px; border-radius: 14px; padding: 5px 2px;
     background: var(--cream); display: flex; flex-direction: column; align-items: center;
-    gap: 4px; font-size: 11px; color: var(--ink); font-weight: bold;
+    gap: 4px; font-size: 12px; line-height: 1.2; color: var(--ink); font-weight: 400; text-align: center;
   }
+  .theme-sw > span:last-child { max-width: 100%; }
+  .theme-sw .b-slot { position: absolute; top: 2px; right: 3px; font-size: 11px; }
   .theme-sw .sw { width: 46px; height: 30px; border-radius: 8px; box-shadow: inset 0 0 0 2px rgba(23,69,111,.15); }
-  .theme-sw.sel { box-shadow: 0 0 0 3px var(--sun); }
-  .theme-sw.locked { opacity: .45; }
-
-  .badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
-  .badge {
-    background: var(--cream); border-radius: 14px; padding: 10px 12px;
-    display: flex; gap: 10px; align-items: center;
+  .theme-sw.sel { border-color: var(--ink); font-weight: 700; }
+  .theme-sw.sel::after {
+    content: '✓'; position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--ink); color: var(--white); font-size: 13px; font-weight: 700; display: grid; place-items: center;
   }
-  .badge .b-e { font-size: 26px; }
-  .badge .b-n { font-size: 13px; font-weight: bold; }
-  .badge .b-d { font-size: 11.5px; color: var(--ink-soft); line-height: 1.3; }
-  .badge.locked { opacity: .5; filter: grayscale(1); }
+  .theme-sw.locked { background: var(--surface-sunk); color: var(--text-quiet); }
+  .theme-sw.locked .sw { filter: grayscale(1); opacity: .55; }
+  .theme-sw .lvl { display: block; }
+  /* een levelnaam breekt nooit midden in een woord, behalve met een afbreekstreepje als hij alleen niet past */
+  .theme-sw .lvl-n { display: inline-block; max-width: 100%; overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; }
+
+  .badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; }
+  .badge-tile {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; min-height: 88px;
+    padding: 10px 4px 8px; border: none; border-radius: var(--r-sm); background: var(--surface-quiet); cursor: pointer;
+    font: inherit; font-size: 13px; font-weight: 700; line-height: 1.2; text-align: center; color: var(--text);
+    /* alleen afbreken waar een zacht afbreekstreepje staat: automatisch maakte het "met-een" van "meteen" */
+    overflow-wrap: break-word; -webkit-hyphens: manual; hyphens: manual;
+  }
+  .badge-tile .b-e { font-size: 28px; line-height: 1; }
+  .badge-tile .b-slot { position: absolute; top: 4px; right: 5px; font-size: 12px; }
+  .badge-tile.locked { background: var(--surface-sunk); color: var(--text-quiet); }
+  .badge-tile.locked .b-e { filter: grayscale(1); opacity: .55; }
 
   .home-foot { margin-top: 26px; text-align: center; }
   .reset-btn {
@@ -252,11 +280,11 @@
   .reset-btn:hover { color: var(--coral); }
 
   /* compacte rij-kaarten voor de vijf oefenspellen: emoji links, tekst rechts */
-  .mode-card.row { flex-direction: row; align-items: center; gap: 14px; padding: 14px 16px; }
-  .mode-card.row .mc-emoji { font-size: 34px; width: 44px; text-align: center; }
+  .mode-card.row { flex-direction: row; align-items: center; gap: 12px; padding: 8px 14px; }
+  .mode-card.row .mc-emoji { font-size: 28px; width: 32px; text-align: center; }
   .mode-card.row .mc-txt { display: flex; flex-direction: column; gap: 3px; flex: 1; }
   .mode-card.row .mc-title { font-size: 17px; }
-  .mode-card.row .mc-sub { font-size: 13px; }
+  .mode-card.row .mc-sub { font-size: var(--fs-cap); }
   .mc-king { background: var(--coral-soft); }
   .mc-open { background: #E7F6EE; }
   .note { font-size: 12.5px; color: var(--ink-soft); line-height: 1.4; margin-top: 8px; }
@@ -264,18 +292,18 @@
   #view-vrienden .m-btns { display: flex; flex-direction: column; gap: 10px; }
 
   /* weekdoel: zeven bolletjes, een doel, vriendelijke voortgang */
+  /* een platte rij op de pagina, geen kaart: zo houden de spelknoppen hun plek boven de tabbalk */
   .weekstrip {
-    width: 100%; border: none; cursor: pointer; text-align: left; font: inherit; color: var(--ink);
-    display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 18px;
-    padding: 10px 14px; box-shadow: var(--shadow); margin: -6px 0 4px; font-size: 14px;
+    width: 100%; border: none; background: none; box-shadow: none; cursor: pointer; text-align: left; font: inherit; color: var(--text);
+    display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 2px; margin: 0; font-size: 15px; line-height: 1.2;
   }
-  .weekstrip .dots { display: flex; gap: 4px; }
-  .weekstrip .dots i { width: 12px; height: 12px; border-radius: 50%; background: #E4EEF6; display: block; }
-  .weekstrip .dots i.on { background: var(--leaf); }
+  /* zo krap dat ook het langste weekdoel in twee regels past op 360 breed */
+  .weekstrip .dots { display: flex; gap: 3px; flex: none; }
+  .weekstrip .dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 1.5px solid rgba(23, 69, 111, .3); display: block; }
+  .weekstrip .dots i.on { background: var(--leaf-deep); border-color: var(--leaf-deep); }
   .weekstrip .dots i.today { box-shadow: 0 0 0 2px var(--sun); }
-  .weekstrip .ws-txt { flex: 1; line-height: 1.3; }
-  .weekstrip .ws-sub { display: block; font-size: 12px; color: var(--ink-soft); }
-  .weekstrip .ws-arrow { font-size: 22px; color: var(--ink-soft); }
+  .weekstrip .ws-txt { flex: 1; min-width: 0; }
+  .weekstrip .ws-arrow { font-size: 22px; color: var(--text-quiet); }
   .week { display: flex; justify-content: space-between; gap: 6px; margin: 4px 0 12px; }
   .day { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ink-soft); flex: 1; }
   .day i { width: 34px; height: 34px; border-radius: 50%; background: #E4EEF6; display: grid; place-items: center; font-style: normal; font-size: 16px; }
@@ -715,7 +743,7 @@
   /* Zichtbare knop, niet alleen een zwevend kruisje: een gevulde cirkel met
      een rand die ook op wit opvalt (3:1), zoals de andere knoppen. */
   .m-close {
-    position: absolute; top: 10px; right: 10px; width: 42px; height: 42px;
+    position: absolute; top: 10px; right: 10px; width: 44px; height: 44px;
     border: 2px solid var(--sky-deep); border-radius: 50%; background: var(--sky);
     color: var(--ink); font-size: 19px; line-height: 1;
     display: grid; place-items: center; cursor: pointer;
@@ -726,6 +754,25 @@
   .modal h2 { margin: 10px 0 8px; font-size: 23px; text-wrap: balance; } /* compat-allow css.properties.text-wrap: voor Safari 17.4 breekt de kop gewoon af */
   .modal p { margin: 0 0 16px; font-size: 15.5px; color: var(--ink-soft); line-height: 1.45; }
   .modal .m-btns { display: flex; flex-direction: column; gap: 10px; }
+  .set-lijst { text-align: left; margin-top: 8px; }
+  .set-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
+    min-height: 48px; padding: 4px 0; border: 0; border-top: var(--border); background: none;
+    font: inherit; font-size: var(--fs-md); color: var(--text); text-align: left; cursor: pointer;
+  }
+  .set-row:first-child { border-top: 0; }
+  .modal .set-row input { width: 60%; min-height: 44px; margin: 0; padding: 8px 10px; text-align: left; font-size: 17px; }
+  .set-kleur { padding: 10px 0; border-top: var(--border); font-size: var(--fs-md); }
+  .set-kleur .theme-row { margin-top: 8px; }
+  .switch {
+    min-width: 56px; padding: 6px 12px; border-radius: var(--r-pill); border: 1.5px solid var(--line);
+    background: var(--surface-sunk); font-family: var(--font-display); font-weight: var(--fw-bold); text-align: center;
+  }
+  .switch.on { background: var(--success); border-color: var(--success); color: var(--on-success); }
+  .set-pijl { font-size: 24px; color: var(--text-quiet); }
+  .set-msg { font-size: var(--fs-cap); font-weight: 700; color: var(--success); }
+  .danger-zone { margin-top: var(--sp-6); padding-top: var(--sp-3); border-top: var(--border); }
+  .danger-zone .btn { color: var(--danger); }
   .modal input {
     font-family: var(--font); font-size: 18px; text-align: center;
     border: 3px solid var(--sky); border-radius: 14px; padding: 11px; width: 100%;
@@ -768,7 +815,6 @@
   #fx { position: fixed; inset: 0; z-index: 99; pointer-events: none; }
 
   @media (max-width: 760px) {
-    header.top { flex-wrap: wrap; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -790,16 +836,12 @@
     <span class="logo-txt">Schaak<em>Held</em></span>
   </div>
   <div class="hud">
-    <button id="setBtn" class="icon-btn" title="Instellingen">⚙️</button>
-    <button id="sndBtn" class="icon-btn" title="Geluid aan/uit">🔊</button>
-    <div class="xp-chip">
+    <button id="lvlChip" class="xp-chip" aria-label="Jouw level en XP">
       <span class="xp-glyph" id="lvlGlyph">♟︎</span>
-      <div class="xp-mid">
-        <b id="lvlName">Pion</b>
-        <div class="xp-bar"><i id="xpFill"></i></div>
-      </div>
-      <span class="xp-num"><b id="xpNum">0</b> ⭐</span>
-    </div>
+      <span class="xp-mid"><b id="lvlName">Pion</b><span class="xp-bar"><i id="xpFill"></i></span></span>
+      <span class="xp-num"><b id="xpNum">0</b> XP</span>
+    </button>
+    <button id="setBtn" class="icon-btn" title="Instellingen">⚙️</button>
   </div>
 </header>
 
@@ -807,51 +849,36 @@
   <section id="scr-home" class="screen">
     <!-- Tab 1: Spelen — alleen kiezen wat je gaat doen -->
     <div id="view-spelen" class="home-view">
+      <div class="groet"><span class="groet-turtle">🐢</span><span id="groet">Hoi! 👋</span></div>
       <div id="verder" class="verder hidden"></div>
-      <div class="hero">
-        <div class="hero-turtle">🐢</div>
-        <div class="hero-txt">
-          <h1>Hoi <span id="heyName">kampioen</span>! 👋</h1>
-          <div class="bubble" id="homeBubble">Ik ben Turbo. Ik ben langzaam… en daarom win ik bijna altijd! 🐢 Eerst kijken, dan denken, dan pas doen!</div>
-        </div>
-      </div>
       <button id="weekStrip" class="weekstrip" title="Jouw week"></button>
-      <div class="grid-label">🏆 Een potje spelen</div>
       <div class="mode-grid games">
-        <button class="mode-card mc-game" data-mode="game">
-          <span class="mc-emoji">🏆</span>
-          <span class="mc-title">Potje tegen Turbo</span>
-          <span class="mc-sub">Een echte partij! Met denk-meter en voorspel-bonus.</span>
-        </button>
-        <button class="mode-card mc-online" data-mode="online">
-          <span class="mc-emoji">🤝</span>
-          <span class="mc-title">Potje met een vriend</span>
-          <span class="mc-sub">Nodig een vriend uit, of maak een nieuwe vriend.</span>
-        </button>
+        <button id="spelTurbo" class="mode-card mc-game" data-mode="game"><span class="mc-emoji">🐢</span><span class="mc-title">Tegen Turbo</span></button>
+        <button id="spelVriend" class="mode-card mc-online" data-mode="online"><span class="mc-emoji">🤝</span><span class="mc-title">Met een vriend</span></button>
       </div>
-      <div class="grid-label">🎯 Oefenen</div>
+      <div class="grid-label">Oefenen</div>
       <div class="mode-grid drills">
-        <button class="mode-card mc-scan row" data-mode="scan">
+        <button id="oefen-scan" class="mode-card mc-scan row" data-mode="scan">
           <span class="mc-emoji">🔍</span>
           <span class="mc-txt"><span class="mc-title">Speurogen</span>
           <span class="mc-sub">Zie jij álles? Vind wat aangevallen wordt en wat er dreigt.</span></span>
         </button>
-        <button class="mode-card mc-best row" data-mode="best3">
+        <button id="oefen-best3" class="mode-card mc-best row" data-mode="best3">
           <span class="mc-emoji">🥇</span>
           <span class="mc-txt"><span class="mc-title">De Beste Zet</span>
           <span class="mc-sub">Kies uit drie zetten, of ontmasker de valstrik.</span></span>
         </button>
-        <button class="mode-card mc-trucs row" data-mode="trucs">
+        <button id="oefen-trucs" class="mode-card mc-trucs row" data-mode="trucs">
           <span class="mc-emoji">🎒</span>
           <span class="mc-txt"><span class="mc-title">Turbo’s Trucendoos</span>
           <span class="mc-sub">Vork, penning, spies, aftrekaanval, mat in 1 én in 2.</span></span>
         </button>
-        <button class="mode-card mc-king row" data-mode="koning">
+        <button id="oefen-koning" class="mode-card mc-king row" data-mode="koning">
           <span class="mc-emoji">🛡️</span>
           <span class="mc-txt"><span class="mc-title">Koning ontsnapt</span>
           <span class="mc-sub">Turbo dreigt mat of pakt je stuk. Vind de reddende zet!</span></span>
         </button>
-        <button class="mode-card mc-open row" data-mode="opening">
+        <button id="oefen-opening" class="mode-card mc-open row" data-mode="opening">
           <span class="mc-emoji">📖</span>
           <span class="mc-txt"><span class="mc-title">Openingsschool</span>
           <span class="mc-sub">Leer hoe een partij goed begint: centrum, stukken, koning.</span></span>
@@ -879,41 +906,44 @@
 
     <!-- Tab 3: Ik — week, vorm, voortgang, trofeeën -->
     <div id="view-ik" class="home-view hidden">
+      <div class="home-card">
+        <div class="card-title">🗺️ Jouw level</div>
+        <div id="levelPath" class="level-path"></div>
+        <div id="lpNext" class="lp-next"></div>
+      </div>
+      <div id="xpUitleg" class="ik-uitleg">Een level haal je met XP en soms een meesterproef. Sterren (0 tot 3) zeggen hoe goed een opdracht ging.</div>
+      <div id="ikBewaard" class="ik-bewaard"></div>
       <div class="stats-row">
         <span class="stat-chip">⭐ Sterren: <b id="statStars">0</b></span>
         <span class="stat-chip">🏆 Potjes gewonnen: <b id="statWins">0</b></span>
       </div>
       <div class="home-card">
-        <div class="card-title">📅 Deze week</div>
-        <div id="weekCard"></div>
-      </div>
-      <div class="home-card">
-        <div class="card-title">📈 Jouw vorm <span class="card-sub">(de laatste 14 dagen)</span></div>
-        <div id="vormList"></div>
-      </div>
-      <div class="home-card">
-        <div class="card-title">🗺️ Jouw weg naar Grootmeester</div>
-        <div id="levelPath" class="level-path"></div>
-        <div id="lpNext" class="lp-next"></div>
-      </div>
-      <div class="home-card">
-        <div class="card-title">🏆 Trofeeënkast</div>
+        <div class="card-title" id="badgeKop">🏆 Trofeeën</div>
         <div id="badgeGrid" class="badge-grid"></div>
-      </div>
-      <div class="home-card">
-        <div class="card-title">📖 Trucenboekje <span class="card-sub">(spot ze in het echt!)</span></div>
-        <div id="patBook"></div>
       </div>
       <div class="home-card">
         <div class="card-title">🎨 Bordkleuren <span class="card-sub">(nieuw bord bij elk level!)</span></div>
         <div id="themeRow" class="theme-row"></div>
       </div>
+      <div class="home-card" id="ikWeek">
+        <div class="card-title">📅 Deze week</div>
+        <div id="weekCard"></div>
+      </div>
+      <div class="home-card">
+        <div class="card-title">📈 Jouw vorm</div>
+        <div class="card-uitleg" id="vormUitleg">Hoe vaak, hoe goed en hoe moeilijk, de laatste 14 dagen. 100 is het hoogst.</div>
+        <div id="vormList"></div>
+      </div>
+      <div class="home-card">
+        <div class="card-title">📖 Trucenboekje <span class="card-sub">(spot ze in het echt!)</span></div>
+        <div id="patBook"></div>
+      </div>
     </div>
 
     <nav class="tabbar">
-      <button id="tabSpelen" class="tab on" data-tab="spelen">▶ Spelen</button>
-      <button id="tabVrienden" class="tab" data-tab="vrienden">🤝 Vrienden</button>
-      <button id="tabIk" class="tab" data-tab="ik">🏆 Ik</button>
+      <button id="tabSpelen" class="tab on" data-tab="spelen"><span class="pill">▶</span><span class="tab-woord">Spelen</span></button>
+      <button id="tabVrienden" class="tab" data-tab="vrienden"><span class="pill">🤝</span><span class="tab-woord">Vrienden</span></button>
+      <button id="tabIk" class="tab" data-tab="ik"><span class="pill">🏆</span><span class="tab-woord">Ik</span></button>
     </nav>
   </section>
 
@@ -2498,7 +2528,7 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
    profiel van een ander apparaat (tweede iPad, straks de server). P is de
    platte weergave die de rest van de UI leest. Schrijven gaat via bump,
    setPref en addBadge, nooit rechtstreeks in P. Alleen de lokale velden
-   (streak, lastLevel, day, shownBadges) schrijft de UI direct; die neemt saveP mee.
+   (streak, lastLevel, day, shownBadges, lastKind, lastSeen) schrijft de UI direct; die neemt saveP mee.
    - Tellers (xp, sterren, wins, c.*): G-Counter, per teller een map
      {apparaatId: bijdrage}. Weergave is de som, merge is per apparaat max.
      Zo telt +50 op de ene iPad en +30 op de andere op tot +80.
@@ -2509,20 +2539,20 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
    - De vorm-log (log.<spel>.<id>): G-Set van opdrachtresultaten, alleen de
      laatste 28 dagen; daar komt de vorm-score uit.
    - Vrienden (friends.<id>): per vriend een LWW-register.
-   - Streak, lastLevel, dag, weekSeen en shownBadges (de trofeeën die dit
-     apparaat liet zien) zijn per apparaat en mergen niet. */
+   - Streak, lastLevel, dag, weekSeen, lastKind, lastSeen en shownBadges (de
+     trofeeën die dit apparaat liet zien) zijn per apparaat en mergen niet. */
 function defaultP() {
-  return { name: '', xp: 0, sound: true, guard: true, predict: true, weekGoal: null,
-    wins: 0, stars: 0, streak: 0, best: 0, lastLevel: 0, shownBadges: [],
-    theme: 'munt', badges: {}, day: null, weekSeen: null, wk: {}, log: {}, friends: {},
+  return { name: '', xp: 0, sound: true, guard: true, predict: true, weekGoal: null, start: '',
+    wins: 0, stars: 0, streak: 0, best: 0, lastLevel: 0, shownBadges: [], lastKind: null, lastSeen: null,
+    theme: 'munt', badges: {}, day: null, weekSeen: null, wk: {}, log: {}, friends: {}, goalDone: {},
     c: { gamesPlayed: 0, winsL2: 0, winsL3: 0, winsOnline: 0, perfectScans: 0,
       safeCorrect: 0, best3Gold: 0, predictHits: 0, patienceBonus: 0,
-      cloudUsed: 0, pat: {}, pad: {} } };
+      cloudUsed: 0, drie: 0, pat: {}, pad: {} } };
 }
 const COUNTERS = ['xp', 'wins', 'stars', 'c.gamesPlayed', 'c.winsL2', 'c.winsL3',
   'c.winsOnline', 'c.perfectScans', 'c.safeCorrect', 'c.best3Gold',
-  'c.predictHits', 'c.patienceBonus', 'c.cloudUsed'];
-const PREFS = ['name', 'sound', 'guard', 'predict', 'theme', 'weekGoal'];
+  'c.predictHits', 'c.patienceBonus', 'c.cloudUsed', 'c.drie'];
+const PREFS = ['name', 'sound', 'guard', 'predict', 'theme', 'weekGoal', 'start'];
 const DRILL_KINDS = ['scan', 'best3', 'trucs', 'koning', 'opening'];
 const LOG_DAYS = 28, WEEKS_KEPT = 16, MAX_LOG = 400, MAX_FRIENDS = 64;
 /* de vijf oefenspellen; ref is de richttijd (ms) per opdracht voor de vorm-score */
@@ -2533,18 +2563,20 @@ const DRILLS = {
   koning: { e: '🛡️', naam: 'Koning ontsnapt', ref: 30000 },
   opening: { e: '📖', naam: 'Openingsschool', ref: 40000 }
 };
+/* "topronde" staat nergens anders uitgelegd waar een kind het woord leest */
+const TOP_UITLEG = ' (12 sterren of meer)';
 /* weekdoel-sjablonen: sleutel in de weektellers, tekst voor het kind */
 const GOAL_KINDS = {
   opdr: { e: '🎯', naam: 'Opdrachten', ns: [10, 20, 40], key: () => 'opdr',
     txt: g => g.n + ' opdrachten' },
-  potjes: { e: '🏆', naam: 'Potjes tegen Turbo', ns: [2, 3, 5], lvl: true,
+  potjes: { e: '🏆', naam: 'Potjes uitspelen tegen Turbo', ns: [2, 3, 5], lvl: true,
     key: g => 'potjes' + g.lvl, txt: g => g.n + ' potjes tegen ' + TURBO_NAMES[g.lvl] + (g.lvl < 3 ? ' of sterker' : '') },
   wins: { e: '🥇', naam: 'Winnen van Turbo', ns: [1, 2, 3], lvl: true,
     key: g => 'wins' + g.lvl, txt: g => g.n + ' keer winnen van ' + TURBO_NAMES[g.lvl] + (g.lvl < 3 ? ' of sterker' : '') },
   vriend: { e: '🤝', naam: 'Potjes met een vriend', ns: [1, 2, 3], key: () => 'online',
     txt: g => g.n + (g.n === 1 ? ' potje' : ' potjes') + ' met een vriend' },
-  top: { e: '🌟', naam: 'Toprondes', ns: [1, 2, 3], game: true, key: g => 'top.' + g.game,
-    txt: g => g.n + (g.n === 1 ? ' topronde' : ' toprondes') + ' bij ' + DRILLS[g.game].naam }
+  top: { e: '🌟', naam: 'Toprondes' + TOP_UITLEG, ns: [1, 2, 3], game: true, key: g => 'top.' + g.game,
+    txt: (g, kort) => g.n + (g.n === 1 ? ' topronde' : ' toprondes') + ' bij ' + DRILLS[g.game].naam + (kort ? '' : TOP_UITLEG) }
 };
 
 function newDevId() {
@@ -2565,7 +2597,7 @@ const DEV = (() => {
 function emptyDoc() {
   return { v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: {}, max: { best: 0, goal: {} },
     log: {}, friends: {},
-    loc: { streak: 0, lastLevel: 0, day: null, weekSeen: null, shownBadges: [] } };
+    loc: { streak: 0, lastLevel: 0, day: null, weekSeen: null, shownBadges: [], lastKind: null, lastSeen: null } };
 }
 
 /* ISO-week als 'YYYY-Www', maandag als eerste dag: de week is de eenheid
@@ -2659,6 +2691,7 @@ function normDoc(raw) {
       const e = raw.lww[f];
       if (!e || typeof e !== 'object') continue;
       if (f === 'weekGoal') { if (e.v !== null && !normGoal(e.v)) continue; }
+      else if (f === 'start') { if (!['', 'nieuw', 'speelt', 'sterk'].includes(e.v)) continue; }
       else if (typeof e.v !== typeof defs[f]) continue;
       const t = +e.t;
       if (!isFinite(t) || t < 0) continue;
@@ -2713,6 +2746,8 @@ function normDoc(raw) {
     d.loc.lastLevel = raw.loc.lastLevel == null ? null : +raw.loc.lastLevel || 0;
     d.loc.day = raw.loc.day && typeof raw.loc.day === 'object' ? raw.loc.day : null;
     d.loc.weekSeen = typeof raw.loc.weekSeen === 'string' ? raw.loc.weekSeen.slice(0, 8) : null;
+    d.loc.lastKind = raw.loc.lastKind === 'game' || DRILL_KINDS.includes(raw.loc.lastKind) ? raw.loc.lastKind : null;
+    d.loc.lastSeen = /^\d{4}-\d{2}-\d{2}$/.test(raw.loc.lastSeen) ? raw.loc.lastSeen : null;
   } else d.loc.lastLevel = null;
   /* een doc van voor deze lijst heeft elke trofee die het heeft al laten zien */
   const getoond = (raw.loc && Array.isArray(raw.loc.shownBadges) ? raw.loc.shownBadges : Object.keys(d.set.badges)).slice(0, MAX_BADGES);
@@ -2758,7 +2793,7 @@ function migrateLegacy(o, dev) {
   for (const f of PREFS) d.lww[f] = { v: o[f], t: o[f] === defs[f] ? 0 : t };
   d.max.best = +o.best || 0;
   d.loc = { streak: +o.streak || 0, lastLevel: o.lastLevel == null ? null : o.lastLevel,
-    day: o.day || null, weekSeen: null, shownBadges: Object.keys(d.set.badges) };
+    day: o.day || null, weekSeen: null, lastKind: null, lastSeen: null, shownBadges: Object.keys(d.set.badges) };
   return d;
 }
 
@@ -2775,12 +2810,15 @@ function viewFromDoc(d) {
   p.log = d.log;
   p.friends = d.friends;
   p.best = +d.max.best || 0;
+  p.goalDone = d.max.goal;
   for (const wk in d.max.goal) p.xp += d.max.goal[wk];
   p.streak = +d.loc.streak || 0;
   p.lastLevel = d.loc.lastLevel == null ? null : d.loc.lastLevel;
   p.shownBadges = d.loc.shownBadges.slice();
   p.day = d.loc.day || null;
   p.weekSeen = d.loc.weekSeen || null;
+  p.lastKind = d.loc.lastKind || null;
+  p.lastSeen = d.loc.lastSeen || null;
   return p;
 }
 
@@ -2805,6 +2843,8 @@ function saveP() {
   DOC.loc.shownBadges = P.shownBadges.slice();
   DOC.loc.day = P.day;
   DOC.loc.weekSeen = P.weekSeen;
+  DOC.loc.lastKind = P.lastKind;
+  DOC.loc.lastSeen = P.lastSeen;
   if (P.best > DOC.max.best) DOC.max.best = P.best;
   try { localStorage.setItem('schaakheld1', JSON.stringify(DOC)); } catch (e) {}
 }
@@ -3104,8 +3144,14 @@ async function fetchRemoteProfile(acc) {
     return await openJSON(acc.secret, 'profiel', new Uint8Array(await r.arrayBuffer()));
   } catch (e) { return null; }
 }
+/* een account bestaat al zodra de koppelcode open stond; een ander apparaat pas als
+   dit apparaat een profiel overnam, of een sync iets binnenbracht dat een ander schreef */
+function anderApparaat() {
+  return !!ACC && (ACC.overgenomen === true ||
+    Object.keys(DOC.cnt).some(pad => Object.keys(DOC.cnt[pad]).some(d => d !== DEV)));
+}
 function finishLink(acc, remote) {
-  ACC = { id: acc.id, secret: acc.secret };
+  ACC = { id: acc.id, secret: acc.secret, overgenomen: true };
   saveAcc();
   if (remote) applyRemoteDoc(remote);
   refreshAfterSync();
@@ -3163,7 +3209,7 @@ function checkLinkFragment() {
 function linkEntryFlow() {
   const gekozen = [];
   showModal('<div class="m-emoji">🔑</div><h2>Profiel ophalen</h2>' +
-    '<p>Vraag op het andere apparaat een koppelcode (🔑 onderaan het startscherm).</p>' +
+    '<p>Vraag op het andere apparaat een koppelcode: tik daar op ⚙️ bovenaan, dan op Speel op een ander apparaat.</p>' +
     '<div class="m-btns"><button class="btn sun" id="linkScan">📷 Scan de QR</button></div>' +
     '<p>…of typ hier de vier woorden:</p>' +
     '<div id="wordChips" style="min-height:1.5em;font-weight:700"></div>' +
@@ -3498,6 +3544,7 @@ function mpOnStart(m) {
 }
 
 function mpBeginGame() {
+  gezien();
   MP.revMine = MP.revTheirs = false;
   session = { kind: 'game', online: true, S: newGame(), level: 0, tips: 0,
     over: false, pending: null, myColor: MP.myColor };
@@ -4256,29 +4303,34 @@ const LEVELS = [
   { n: 'Pion', g: '♟︎', xp: 0 },
   { n: 'Paard', g: '♞︎', xp: 150 },
   { n: 'Loper', g: '♝︎', xp: 400,
-    gate: { txt: '5 perfecte speurrondes', done: () => P.c.perfectScans >= 5,
-      prog: () => Math.min(P.c.perfectScans, 5) + '/5' } },
+    gate: { oef: 'scan', txt: '5 perfecte speurrondes', done: p => p.c.perfectScans >= 5,
+      prog: p => Math.min(p.c.perfectScans, 5) + ' van 5' } },
   { n: 'Toren', g: '♜︎', xp: 900,
-    gate: { txt: 'versla Turbo 🐢', done: () => P.c.winsL2 >= 1,
-      prog: () => Math.min(P.c.winsL2, 1) + '/1' } },
+    gate: { lvl: 2, txt: 'versla Turbo 🐢', done: p => p.c.winsL2 >= 1,
+      prog: p => Math.min(p.c.winsL2, 1) + ' van 1' } },
   { n: 'Dame', g: '♛︎', xp: 1800,
-    gate: { txt: 'versla Turbo 🐢 3 keer', done: () => P.c.winsL2 >= 3,
-      prog: () => Math.min(P.c.winsL2, 3) + '/3' } },
+    gate: { lvl: 2, txt: 'versla Turbo 🐢 3 keer', done: p => p.c.winsL2 >= 3,
+      prog: p => Math.min(p.c.winsL2, 3) + ' van 3' } },
   { n: 'Koning', g: '♚︎', xp: 3200,
-    gate: { txt: 'versla Super Turbo 🚀', done: () => P.c.winsL3 >= 1,
-      prog: () => Math.min(P.c.winsL3, 1) + '/1' } },
+    gate: { lvl: 3, txt: 'versla Super Turbo 🚀', done: p => p.c.winsL3 >= 1,
+      prog: p => Math.min(p.c.winsL3, 1) + ' van 1' } },
   { n: 'Grootmeester', g: '🏆', xp: 5500,
-    gate: { txt: 'versla Super Turbo 🚀 5 keer', done: () => P.c.winsL3 >= 5,
-      prog: () => Math.min(P.c.winsL3, 5) + '/5' } }
+    gate: { lvl: 3, txt: 'versla Super Turbo 🚀 5 keer', done: p => p.c.winsL3 >= 5,
+      prog: p => Math.min(p.c.winsL3, 5) + ' van 5' } }
 ];
-function levelIdx(xp) {
+function levelIdx(xp, p = P) {
   let i = 0;
   for (let k = 1; k < LEVELS.length; k++) {
     const L = LEVELS[k];
-    if (xp >= L.xp && (!L.gate || L.gate.done())) i = k;
+    if (xp >= L.xp && (!L.gate || L.gate.done(p))) i = k;
     else break;
   }
   return i;
+}
+/* een balk staat nooit vol zolang het volgende level er nog niet is: niet bij de laatste XP en niet bij een open meesterproef */
+function levelBalk(p) {
+  const i = levelIdx(p.xp, p), L = LEVELS[i], N = LEVELS[i + 1];
+  return N ? Math.min(95, (p.xp - L.xp) / (N.xp - L.xp) * 100) : 100;
 }
 
 /* Level-up kan ook zonder XP-verandering (een meesterproef halen), dus we
@@ -4294,23 +4346,21 @@ function checkLevelUp() {
   const L = LEVELS[cur];
   const th = THEMES.find(t => t.lvl === cur);
   snd.level(); celebrate();
-  showModal('<div class="m-emoji">' + L.g + '</div><h2>LEVEL OMHOOG!</h2>' +
+  showModal('<div class="m-emoji">' + L.g + '</div><h2>Level omhoog!</h2>' +
     '<p>Je bent nu een echte <b>' + L.n + '</b>!' +
-    (th ? '<br><br>🎨 Nieuw bord ontgrendeld: <b>' + th.naam + '</b>!<br>Kies hem op het startscherm.' : '') +
+    (th ? '<br><br>🎨 Nieuw bord ontgrendeld: <b>' + th.naam + '</b>!<br>Kies het bij Ik, onder Bordkleuren.' : '') +
     '</p><div class="m-btns"><button class="btn sun" id="lvlOk">Super! 🎉</button></div>',
     () => $('lvlOk').addEventListener('click', closeModal));
 }
 
 function updateHud() {
   $('xpNum').textContent = P.xp;
-  const li = levelIdx(P.xp), L = LEVELS[li], next = LEVELS[li + 1];
+  const L = LEVELS[levelIdx(P.xp)];
   $('lvlGlyph').textContent = L.g;
   $('lvlName').textContent = L.n;
-  $('xpFill').style.width = (next ? (P.xp - L.xp) / (next.xp - L.xp) * 100 : 100) + '%';
+  $('xpFill').style.width = levelBalk(P) + '%';
   $('statStars').textContent = P.stars;
   $('statWins').textContent = P.wins;
-  $('heyName').textContent = P.name || 'kampioen';
-  $('sndBtn').textContent = P.sound ? '🔊' : '🔇';
 }
 
 function floatXP(txt) {
@@ -4326,7 +4376,7 @@ function floatXP(txt) {
 
 function addXP(n, label) {
   bump('xp', n);
-  floatXP('+' + n + ' ⭐ ' + (label || ''));
+  floatXP('+' + n + ' XP ' + (label || ''));
   updateHud();
   checkLevelUp();
 }
@@ -4722,13 +4772,6 @@ function showScreen(name) {
 }
 
 /* ---------- copy ---------- */
-const HOME_LINES = [
-  'Ik ben Turbo. Ik ben langzaam… en daarom win ik bijna altijd! Eerst kijken, dan denken, dan doen! 🐢',
-  'Wist je dat? Grootmeesters kijken éérst naar het hele bord. Net als schildpadden. 🐢',
-  'Snelle zetten zijn vaak foute zetten. Doe maar lekker rustig aan!',
-  'Vandaag weer wat sterren verdienen? Kies maar een spel!',
-  'Mijn geheim: bij elke zet denk ik "wat kan mijn tegenstander hierna doen?" 🤫'
-];
 const THINK_LINES = [
   'Neem je tijd… kijk éérst het hele bord rond! 👀',
   'Stop – kijk – denk – doe! 🐢',
@@ -4845,7 +4888,6 @@ function goHome(tab, daarna) {
   stopPatience();
   showScreen('home');
   showHomeTab(typeof tab === 'string' ? tab : 'spelen');
-  $('homeBubble').textContent = pick(HOME_LINES);
   renderHome();
   friendPollSoon(800); /* thuis: snel kijken of er een uitnodiging ligt */
 }
@@ -4932,6 +4974,7 @@ function bewaarRondje() {
   if (!session || session.kind === 'game' || session.kind === 'opening') return;
   if (session.round >= 5) {
     session.af = true;
+    afgemaakt(session.kind);
     wisRondje(session.kind);
     if (session.earned >= 12) bumpWeek('top.' + session.kind, 1);
     toonBewaard(true);
@@ -4986,43 +5029,156 @@ function pauze() {
   goHome(terugTab, melding ? () => showToast(melding, false, 6000) : null);
 }
 
-/* De Verder-kaart: wat er bezig is, het bewaarde potje eerst */
+/* Wat een kind nu het best kan doen: eerst wat bezig is, dan een voorstel.
+   Puur: alles komt uit het meegegeven profiel en ctx (ook de tijd, ctx.now),
+   nooit uit het profiel of de klok van de app, zodat elke regel te toetsen is. */
+const LEERVOLGORDE = ['scan', 'koning', 'best3', 'trucs', 'opening'];
+const OEFENZIN = {
+  scan: 'Kijk of jij alles ziet wat er aangevallen wordt.',
+  best3: 'Kies de beste van drie zetten. Kijk bij elke zet wat Turbo terug kan doen.',
+  trucs: 'Zoek de matzet, de vork of de penning.',
+  koning: 'Turbo valt aan. Jij vindt de redding.',
+  opening: 'Speel een opening na en leer waarom elke zet goed is.'
+};
+const turboNaam = l => TURBO_NAMES[l].replace(/^\S+\s/, '');
+function dagenSinds(datum, now) { return Math.floor((now - Date.parse(datum + 'T00:00:00Z')) / 86400000); }
+/* een profiel van voor lastSeen weet toch wanneer het kind er was: de laatste dag met een dagteller */
+function laatsteDag(P) {
+  let laatst = null;
+  for (const W in P.wk || {}) {
+    const m = /^(\d{4})-W(\d{2})$/.exec(W);
+    const i = m ? [6, 5, 4, 3, 2, 1, 0].find(d => +P.wk[W]['d' + d] > 0) : undefined;
+    if (i === undefined) continue;
+    const jan4 = Date.UTC(+m[1], 0, 4), maandag1 = jan4 - ((new Date(jan4).getUTCDay() || 7) - 1) * 86400000;
+    const dag = new Date(maandag1 + ((+m[2] - 1) * 7 + i) * 86400000).toISOString().slice(0, 10);
+    if (!laatst || dag > laatst) laatst = dag;
+  }
+  return laatst;
+}
+function stadium(P) {
+  if (P.c.winsL2 >= 1 || P.start === 'sterk') return 'sterk';
+  if (P.start === 'nieuw' ? P.xp < 400 && P.wins === 0 : !P.start && P.xp < 150 && P.c.gamesPlayed < 3) return 'nieuw';
+  return 'speelt';
+}
+function turboVoorstel(P, st) {
+  const winsL1 = P.wins - P.c.winsL2 - P.c.winsL3;
+  if (P.c.winsL3 >= 1 || P.c.winsL2 >= 3) return 3;
+  return P.c.winsL2 >= 1 || winsL1 >= 2 || st !== 'nieuw' ? 2 : 1;
+}
+/* de oefening die het langst niet gedaan is en het minst goed gaat; nooit de laatste */
+function kiesOefening(P, st, now) {
+  const volgend = LEVELS[levelIdx(P.xp, P) + 1], poort = volgend && volgend.gate;
+  if (poort && poort.oef && !poort.done(P) && P.lastKind !== poort.oef) return { kind: poort.oef, reden: null };
+  let beste = null;
+  for (const k of LEERVOLGORDE) {
+    if (k === P.lastKind || (st === 'nieuw' && !['scan', 'koning', 'opening'].includes(k))) continue;
+    const rows = Object.values((P.log && P.log[k]) || {});
+    const laatst = rows.length ? Math.max.apply(null, rows.map(r => r[0])) : null;
+    const dagen = laatst == null ? 14 : Math.min(14, Math.floor((now - laatst) / 86400000));
+    const v = vormInfo(k, P, now), vorm = v ? v.score : 50;
+    const score = dagen + (100 - vorm) / 10;
+    if (!beste || score > beste.score) beste = { kind: k, score, nooit: laatst == null, dagen, vorm };
+  }
+  beste.reden = beste.nooit ? 'Nieuw voor jou.' : beste.dagen >= 7 ? 'Die heb je een tijdje niet gedaan.' :
+    beste.vorm < 50 ? 'Daar word je snel beter in.' : 'Goed om bij te houden.';
+  return beste;
+}
+function nextStep(P, ctx) {
+  const bezig = [];
+  if (ctx.samen) {
+    const n = (ctx.samen.moves || []).length, ikWit = ctx.samen.myColor !== 'b';
+    bezig.push({ rule: 'R1', title: 'Verder: je potje met ' + ctx.samen.peerName, button: 'Speel verder',
+      text: (n % 2 === 0) === ikWit ? 'Jij bent aan zet.' : ctx.samen.peerName + ' is aan zet.',
+      ook: 'je potje met ' + ctx.samen.peerName, action: { go: 'samen' } });
+  }
+  if (ctx.uitnodiging) bezig.push({ rule: 'R1i', title: ctx.uitnodiging.naam + ' wil spelen', button: 'Ja, spelen!',
+    text: 'De uitnodiging is nog ' + ctx.uitnodiging.minuten + ' minuten geldig.', ook: ctx.uitnodiging.naam + ' wil spelen', action: { go: 'uitnodiging' } });
+  if (ctx.potje) {
+    const n = ctx.potje.moves.length, zet = Math.floor(n / 2) + 1, naam = TURBO_NAMES[ctx.potje.level];
+    bezig.push({ rule: 'R2', title: 'Verder: je potje tegen ' + naam, button: 'Speel verder', wat: 'potje',
+      text: 'Zet ' + zet + '. ' + (n % 2 === 0 ? 'Jij bent aan zet.' : 'Turbo is aan zet.'),
+      ook: 'je potje tegen ' + naam + ', zet ' + zet, action: { go: 'verder' } });
+  }
+  for (const k of DRILL_KINDS) {
+    const r = ctx.rondjes && ctx.rondjes[k];
+    if (r) bezig.push({ rule: 'R2b', title: 'Verder: ' + DRILLS[k].naam, button: 'Ga verder', wat: 'rondje',
+      text: 'Opdracht ' + (r.round + 1) + ' van 5. Je sterren van dit rondje staan er nog.',
+      ook: 'je rondje ' + DRILLS[k].naam + ', opdracht ' + (r.round + 1) + ' van 5', action: { go: 'rondje', kind: k } });
+  }
+  if (bezig.length) return Object.assign({}, bezig[0], { ook: bezig.slice(1).map(b => b.ook), bezig });
+  const st = stadium(P), ls = turboVoorstel(P, st), li = levelIdx(P.xp, P), lvl = LEVELS[li];
+  const uit = (rule, title, text, button, action) => ({ rule, title, text, button, action, ook: [], bezig });
+  /* lastSeen is per apparaat, de dagtellers komen ook van het andere apparaat: de laatste dag van de twee telt */
+  const gezienOp = [P.lastSeen, laatsteDag(P)].filter(Boolean).sort().pop() || null;
+  if (gezienOp && dagenSinds(gezienOp, ctx.now) >= 3) {
+    return uit('R3', 'Speel een potje', 'Je bent nog steeds ' + lvl.n + ' ' + lvl.g + '. Zin in een potje tegen ' +
+      turboNaam(ls) + '?', 'Speel een potje', { go: 'game', level: ls });
+  }
+  const g = P.weekGoal, W = isoWeek(ctx.now);
+  if (g && !goalDoneWeek(W, P)) {
+    const gedaan = goalProgress(g, W, P), rest = g.n - gedaan, meer = rest > 1;
+    if (rest >= 1 && rest <= 2 && (g.kind !== 'vriend' || Object.keys(P.friends || {}).some(id => !P.friends[id].weg))) {
+      const oef = g.kind === 'opdr' ? kiesOefening(P, st, ctx.now).kind : g.game;
+      const R4 = {
+        opdr: () => [meer ? 'opdrachten' : 'opdracht', 'Begin', { go: 'oefening', kind: oef }],
+        potjes: () => [(meer ? 'potjes' : 'potje') + ' tegen ' + turboNaam(g.lvl), 'Potje tegen ' + turboNaam(g.lvl), { go: 'game', level: g.lvl }],
+        wins: () => ['keer winnen van ' + turboNaam(g.lvl), 'Potje tegen ' + turboNaam(g.lvl), { go: 'game', level: g.lvl }],
+        vriend: () => [(meer ? 'potjes' : 'potje') + ' met een vriend', 'Naar Vrienden', { go: 'vrienden' }],
+        top: () => [(meer ? 'toprondes' : 'topronde') + ' bij ' + DRILLS[oef].naam + TOP_UITLEG, DRILLS[oef].naam, { go: 'oefening', kind: oef }]
+      }[g.kind]();
+      /* "bijna" alleen als het kind er zelf dichtbij kwam: iets gedaan en precies één te gaan */
+      const titel = gedaan >= 1 && rest === 1 ? 'Bijna je weekdoel!' : 'Je weekdoel';
+      return uit('R4', titel, 'Nog ' + rest + ' ' + R4[0] + ' en je weekdoel is gehaald.', R4[1], R4[2]);
+    }
+  }
+  if (ctx.moment) return uit('R5', 'Oefen wat er misging', 'In je potje ' + ctx.moment.zin + ' In ' + DRILLS[ctx.moment.kind].naam +
+    ' oefen je precies dat.', DRILLS[ctx.moment.kind].naam, { go: 'oefening', kind: ctx.moment.kind });
+  if (P.lastKind === 'game' || (st === 'nieuw' && P.c.gamesPlayed < 3 && !DRILL_KINDS.includes(P.lastKind))) {
+    const o = kiesOefening(P, st, ctx.now);
+    return uit('R6', DRILLS[o.kind].naam, (o.reden ? o.reden + ' ' : '') + OEFENZIN[o.kind], 'Begin', { go: 'oefening', kind: o.kind });
+  }
+  const volgend = LEVELS[li + 1], poort = volgend && volgend.gate && !volgend.gate.done(P) ? volgend.gate : null;
+  const level = poort && poort.lvl ? poort.lvl : ls;
+  const gewonnen = level === 1 ? P.wins - P.c.winsL2 - P.c.winsL3 : level === 2 ? P.c.winsL2 : P.c.winsL3;
+  const zin = poort && poort.lvl && P.xp >= volgend.xp ? 'Win je, dan word je ' + volgend.n + ' ' + volgend.g + '!' :
+    poort && poort.lvl ? 'Dat is je volgende meesterproef: ' + poort.txt + ' (' + poort.prog(P) + ').' :
+    P.start === 'sterk' && P.c.winsL2 === 0 ? 'Win je van Turbo, dan wacht Super Turbo.' :
+    gewonnen > 0 ? 'Je hebt ' + turboNaam(level) + ' al ' + gewonnen + ' keer verslagen. Lukt het nog een keer?' : 'Die past nu bij jou.';
+  return uit('R7', 'Speel een potje', zin, 'Potje tegen ' + turboNaam(level), { go: 'game', level });
+}
+function doeActie(a) {
+  if (a.go === 'verder') hervatPotje();
+  else if (a.go === 'rondje' || a.go === 'oefening') startDrill(a.kind);
+  else if (a.go === 'game') { if (leesPotje()) startGameFlow(); else startGame(a.level); }
+  else showHomeTab('vrienden');
+}
+
+/* De Verder-kaart: wat er bezig is, het bewaarde potje eerst; anders het voorstel */
 function renderVerder() {
   const el = $('verder');
-  const items = [];
-  const b = leesPotje();
-  if (b && b.kapot) items.push({ kapot: true });
-  else if (b) {
-    const naam = TURBO_NAMES[b.r.level];
-    items.push({ titel: 'Verder: je potje tegen ' + naam, wat: 'potje', knop: 'Speel verder',
-      zin: 'Zet ' + zetNummer(b.S) + '. ' + (b.S.turn === 'w' ? 'Jij bent aan zet.' : 'Turbo is aan zet.'),
-      ook: 'je potje tegen ' + naam + ', zet ' + zetNummer(b.S), doe: hervatPotje });
-  }
-  const rj = leesRondjes();
-  for (const k of DRILL_KINDS) {
-    if (!rj[k]) continue;
-    items.push({ titel: 'Verder: ' + DRILLS[k].naam, wat: 'rondje', knop: 'Ga verder',
-      zin: 'Opdracht ' + (rj[k].round + 1) + ' van 5. Je sterren van dit rondje staan er nog.',
-      ook: 'je rondje ' + DRILLS[k].naam + ', opdracht ' + (rj[k].round + 1) + ' van 5', doe: () => startDrill(k) });
-  }
-  el.classList.toggle('hidden', !items.length);
-  if (!items.length) { el.innerHTML = ''; return; }
-  const eerste = items[0];
-  let h = eerste.kapot ?
+  const b = leesPotje(), rj = leesRondjes();
+  const r = nextStep(P, { now: Date.now(), potje: b && !b.kapot ? b.r : null, rondjes: Object.keys(rj).length ? rj : null,
+    samen: null, uitnodiging: null, moment: null });
+  const ook = b && b.kapot ? r.bezig : r.bezig.slice(1);
+  let h = b && b.kapot ?
     '<div class="verder-kaart kapot"><span class="vk-titel">Dit potje kan ik niet meer openen. Sorry!</span>' +
     '<span class="vk-zin">Je XP, sterren en trofeeën zijn niet kwijt.</span>' +
     '<button class="btn plain small" id="verderWeg">Weghalen</button></div>' :
-    '<button class="verder-kaart" id="verderKaart"><span class="vk-titel">' + eerste.titel + '</span>' +
-    '<span class="vk-zin">' + eerste.zin + '</span><span class="vk-knop">▶ ' + eerste.knop + '</span></button>';
-  items.slice(1).forEach((it, i) => {
-    h += '<button class="verder-ook" data-ook="' + (i + 1) + '"><span>Ook nog: ' + it.ook + '</span><span class="vo-pijl">›</span></button>';
+    '<button class="verder-kaart" id="verderKaart"><span class="vk-titel">' + escHtml(r.title) + '</span>' +
+    '<span class="vk-zin">' + escHtml(r.text) + '</span><span class="vk-knop">▶ ' + escHtml(r.button) + '</span></button>';
+  ook.forEach((it, i) => {
+    h += '<button class="verder-ook" data-ook="' + i + '"><span>Ook nog: ' + escHtml(it.ook) + '</span><span class="vo-pijl">›</span></button>';
   });
-  if (!eerste.kapot) h += '<div class="verder-bewaard">✔ Je ' + eerste.wat + ' blijft staan op ' + ditApparaat() +
+  if (!(b && b.kapot) && r.wat) h += '<div class="verder-bewaard">✔ Je ' + r.wat + ' blijft staan op ' + ditApparaat() +
     ', ook als je de app dichtdoet.</div>';
   el.innerHTML = h;
-  if (eerste.kapot) $('verderWeg').addEventListener('click', () => { opslag(POTJE_KEY, null); renderVerder(); });
-  else $('verderKaart').addEventListener('click', eerste.doe);
-  el.querySelectorAll('.verder-ook').forEach(o => o.addEventListener('click', () => items[+o.dataset.ook].doe()));
+  el.classList.remove('hidden');
+  /* het welkom hoort bij de groet, zodat de naam niet twee keer onder elkaar staat */
+  const welkom = !(b && b.kapot) && r.rule === 'R3', naam = P.name ? (welkom ? ', ' : ' ') + P.name : '';
+  $('groet').textContent = (welkom ? 'Welkom terug' : 'Hoi') + naam + '! 👋';
+  if (b && b.kapot) $('verderWeg').addEventListener('click', () => { opslag(POTJE_KEY, null); renderVerder(); });
+  else $('verderKaart').addEventListener('click', () => doeActie(r.action));
+  el.querySelectorAll('.verder-ook').forEach(o => o.addEventListener('click', () => doeActie(ook[+o.dataset.ook].action)));
 }
 
 function hervatPotje() {
@@ -5031,8 +5187,13 @@ function hervatPotje() {
 }
 
 /* ---------- drills ---------- */
+/* de dag waarop het kind voor het laatst iets begon: daaraan ziet de kaart wie terugkomt */
+function gezien() { P.lastSeen = new Date().toISOString().slice(0, 10); saveP(); }
+/* wat het kind net afmaakte: daaraan wisselt de kaart tussen een potje en oefenen */
+function afgemaakt(kind) { P.lastKind = kind; saveP(); }
 function startDrill(kind) {
   if (kind === 'opening') { openingChooser(); return; }
+  gezien();
   const verder = leesRondjes()[kind];
   session = { kind, S: null, round: verder ? verder.round : 0, earned: verder ? verder.earned : 0, task: null, phase: 'idle', lastType: null };
   showScreen('play');
@@ -5738,16 +5899,11 @@ function koningAttempt(m) {
 }
 
 /* --- shared drill scoring --- */
-/* de boekhouding van één opdracht: sterren, reeks, XP, vorm-log, weekteller */
+/* de boekhouding van één opdracht: sterren, XP, vorm-log, weekteller */
 function scoreTask(stars) {
   session.earned += stars;
-  if (stars >= 2) {
-    P.streak++;
-    if (P.streak > P.best) P.best = P.streak;
-    if (P.streak === 3) addXP(5, '🔥 3 op een rij!');
-    else if (P.streak === 5) addXP(10, '🔥 5 op een rij!');
-    else if (P.streak === 8) addXP(20, '🔥 ON FIRE!');
-  } else P.streak = 0;
+  /* geen reeks meer die kapot kan: drie sterren tellen gewoon op */
+  if (stars === 3) bump('c.drie', 1);
   bump('stars', stars);
   saveP();
   logResult(session.kind, session.diff, Date.now() - (session.t0 || Date.now()), stars);
@@ -5872,6 +6028,7 @@ function openingChooser() {
     }, true);
 }
 function startOpening(mode, pad) {
+  gezien();
   const color = pad ? pad.kleur : 'w';
   const maxMoves = pad ? Math.floor((pad.moves.length + (color === 'w' ? 1 : 0)) / 2) : COACH_MOVES;
   session = { kind: 'opening', mode, pad, S: newGame(), color, kidMoves: 0, maxMoves, earned: 0, round: 0,
@@ -6044,6 +6201,7 @@ function openingTurbo() {
 }
 function openingEnd() {
   if (!session || session.kind !== 'opening') return;
+  afgemaakt('opening');
   BD.mode = 'off';
   const e = session.earned, max = session.maxMoves * 3;
   const top = e >= Math.round(max * .8);
@@ -6114,6 +6272,7 @@ function geefBewaardOp() {
 }
 
 function startGame(level, bewaard) {
+  gezien();
   session = { kind: 'game', S: bewaard ? bewaard.S : newGame(), level, tips: bewaard ? bewaard.r.tips : 3, over: false,
     pending: null, drawAsked: bewaard ? bewaard.r.drawAsked : null, started: bewaard ? bewaard.r.started : Date.now(),
     patXP: bewaard ? bewaard.r.patXP || 0 : 0 };
@@ -6837,6 +6996,7 @@ function endGame(st, stil) {
   /* opgeven of remise vlak na het begin telt nergens voor mee */
   const telt = (st.reason !== 'opgave' && st.reason !== 'remise') || session.S.hist.length >= MIN_PLIES_TELT;
   if (telt) bump('c.gamesPlayed', 1);
+  if (!stil) afgemaakt('game');
   if (session.online) { if (telt) bumpWeek('online', 1); endGameOnline(st, drawTxt); return; }
   if (telt) bumpWeek('potjes' + session.level, 1);
   let h, p, xp;
@@ -6897,32 +7057,37 @@ function applyTheme() {
   document.documentElement.style.setProperty('--board-dark', th.dark);
 }
 
-function pickTheme(id) {
+function pickTheme(id, melding) {
   const th = THEMES.find(t => t.id === id);
   if (!th) return;
   if (levelIdx(P.xp) < th.lvl) {
-    showToast('🔒 Vanaf level ' + LEVELS[th.lvl].n + '!');
+    showToast(th.naam + ' krijg je als je ' + LEVELS[th.lvl].n + ' bent. Kijk bij Jouw level hoe.');
     return;
   }
   setPref('theme', id);
   applyTheme();
   renderThemes();
   snd.select();
+  /* in Instellingen staat de bevestiging in het venster zelf, niet in een melding erover */
+  if (melding) melding.textContent = '✔ ' + th.naam + ' gekozen';
+  else showToast('✔ ' + th.naam + ' gekozen');
 }
 
 function renderThemes() {
-  const row = $('themeRow');
-  if (!row) return;
+  ['themeRow', 'setThemes'].forEach(id => { if ($(id)) renderThemeRow($(id)); });
+}
+function renderThemeRow(row) {
   const lvl = levelIdx(P.xp);
   row.innerHTML = THEMES.map(t => {
     const locked = lvl < t.lvl;
     return '<button class="theme-sw' + (P.theme === t.id ? ' sel' : '') + (locked ? ' locked' : '') +
       '" data-th="' + t.id + '" title="' + (locked ? 'Vanaf level ' + LEVELS[t.lvl].n : t.naam) + '">' +
       '<span class="sw" style="background:linear-gradient(110deg,' + t.light + ' 50%,' + t.dark + ' 50%)"></span>' +
-      '<span>' + (locked ? '🔒 ' : '') + t.naam + '</span></button>';
+      (locked ? '<span class="b-slot">🔒</span>' : '') +
+      '<span>' + t.naam + (locked ? '<span class="lvl">vanaf <span class="lvl-n">' + LEVELS[t.lvl].n + '</span></span>' : '') + '</span></button>';
   }).join('');
   row.querySelectorAll('.theme-sw').forEach(b => {
-    b.addEventListener('click', () => pickTheme(b.dataset.th));
+    b.addEventListener('click', () => pickTheme(b.dataset.th, row.id === 'setThemes' ? $('setKleurMsg') : null));
   });
 }
 
@@ -6931,15 +7096,15 @@ const BADGES = [
   { id: 'winst', e: '🏆', n: 'Winnaar', d: 'Win een potje van Turbo', chk: () => P.wins >= 1 },
   { id: 'turbo2', e: '🐢', n: 'Turbo-temmer', d: 'Versla de echte Turbo', chk: () => P.c.winsL2 >= 1 },
   { id: 'raket', e: '🚀', n: 'Raket-temmer', d: 'Versla Super Turbo', chk: () => P.c.winsL3 >= 1 },
-  { id: 'speurneus', e: '🔍', n: 'Superspeurneus', d: '10 perfecte speurrondes', chk: () => P.c.perfectScans >= 10 },
-  { id: 'detective', e: '🕵️', n: 'Meesterdetective', d: 'Raad 10 valstrikken goed', chk: () => P.c.safeCorrect >= 10 },
+  { id: 'speurneus', e: '🔍', n: 'Super\u00adspeurneus', d: '10 perfecte speurrondes', chk: () => P.c.perfectScans >= 10 },
+  { id: 'detective', e: '🕵️', n: 'Meester\u00addetective', d: 'Raad 10 valstrikken goed', chk: () => P.c.safeCorrect >= 10 },
   { id: 'goudzoeker', e: '🥇', n: 'Goudzoeker', d: '10 keer meteen de beste zet', chk: () => P.c.best3Gold >= 10 },
   { id: 'orakel', e: '🔮', n: 'Orakel', d: 'Voorspel 5 zetten van Turbo', chk: () => P.c.predictHits >= 5 },
-  { id: 'zen', e: '🧘', n: 'Denkmeester', d: 'Verdien 20 denk-bonussen', chk: () => P.c.patienceBonus >= 20 },
+  { id: 'zen', e: '🧘', n: 'Denk\u00admeester', d: 'Verdien 20 denk-bonussen', chk: () => P.c.patienceBonus >= 20 },
   { id: 'wolk', e: '☁️', n: 'Dromer', d: 'Denk vooruit in de denkwolk', chk: () => (P.c.cloudUsed || 0) >= 1 },
-  { id: 'trucs', e: '🎒', n: 'Trucenmeester', d: 'Spot 10 trucs (vork, penning, spies…)', chk: () => Object.values(P.c.pat || {}).reduce((a, b) => a + b, 0) >= 10 },
-  { id: 'sterren', e: '🌟', n: 'Sterrenregen', d: 'Verzamel 100 sterren', chk: () => P.stars >= 100 },
-  { id: 'vlam', e: '🔥', n: 'Vuurpijl', d: '5 goede antwoorden op een rij', chk: () => P.best >= 5 },
+  { id: 'trucs', e: '🎒', n: 'Trucen\u00admeester', d: 'Spot 10 trucs, zoals een vork of een penning', chk: () => Object.values(P.c.pat || {}).reduce((a, b) => a + b, 0) >= 10 },
+  { id: 'sterren', e: '🌟', n: 'Sterren\u00adregen', d: 'Verzamel 100 sterren', chk: () => P.stars >= 100 },
+  { id: 'vlam', e: '🔥', n: 'Vuurpijl', d: '25 opdrachten met 3 sterren', chk: () => P.c.drie >= 25 },
   { id: 'koning', e: '👑', n: 'Koningskind', d: 'Bereik level Koning', chk: () => levelIdx(P.xp) >= 5 }
 ];
 
@@ -6993,15 +7158,24 @@ function toonEindkaart(html, setup) {
 }
 function sluitEindkaart() { $('eindkaart').classList.add('hidden'); $('eindkaart').innerHTML = ''; }
 
+/* verdiende trofeeën eerst; een tegel op slot zegt wat hij vraagt, een tik vertelt het hele verhaal */
 function renderBadges() {
   const grid = $('badgeGrid');
   if (!grid) return;
-  grid.innerHTML = BADGES.map(b => {
-    const got = !!P.badges[b.id];
-    return '<div class="badge' + (got ? '' : ' locked') + '"><span class="b-e">' + b.e + '</span>' +
-      '<span><span class="b-n">' + b.n + (got ? ' ✔' : '') + '</span><br>' +
-      '<span class="b-d">' + b.d + '</span></span></div>';
-  }).join('');
+  const got = BADGES.filter(b => P.badges[b.id]), rest = BADGES.filter(b => !P.badges[b.id]);
+  $('badgeKop').textContent = '🏆 Trofeeën ' + got.length + ' van ' + BADGES.length;
+  grid.innerHTML = got.map(b => '<button class="badge-tile verdiend" data-badge="' + b.id + '"><span class="b-e">' + b.e + '</span>' + b.n + '</button>')
+    .concat(rest.map(b => '<button class="badge-tile locked" data-badge="' + b.id + '"><span class="b-slot">🔒</span>' +
+      '<span class="b-e">' + b.e + '</span>' + b.d + '</button>')).join('');
+  grid.querySelectorAll('.badge-tile').forEach(t => t.addEventListener('click', () => toonTrofee(t.dataset.badge)));
+}
+function toonTrofee(id) {
+  const b = BADGES.find(x => x.id === id);
+  /* de trofeeteksten zijn opdrachten; met een hoofdletter na "Verdiend!" leest het alsof het kind ze nog moet doen */
+  const wat = b.d.charAt(0).toLowerCase() + b.d.slice(1);
+  showModal('<div class="m-emoji">' + b.e + '</div><h2>' + b.n + '</h2><p>' +
+    (P.badges[id] ? '✔ Verdiend! De opdracht was: ' + wat + '.' : 'Nog niet verdiend. Zo krijg je hem: ' + wat + '.') + '</p>' +
+    '<div class="m-btns"><button class="btn sun" id="trofeeOk">Oké</button></div>', () => $('trofeeOk').addEventListener('click', closeModal), true);
 }
 
 /* ---------- weekdoel en vorm ----------
@@ -7026,7 +7200,7 @@ const DAG_NAMEN = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
 const GOAL_XP = 60;
 function curWeek() { return isoWeek(); }
 function dagIdx() { return (new Date().getDay() + 6) % 7; }
-function wkGet(week, key) { return (P.wk && P.wk[week] && +getPath(P.wk[week], key)) || 0; }
+function wkGet(week, key, p = P) { return (p.wk && p.wk[week] && +getPath(p.wk[week], key)) || 0; }
 function bumpWeek(key, n) {
   const W = curWeek();
   bump('wk.' + W + '.' + key, n);
@@ -7035,18 +7209,17 @@ function bumpWeek(key, n) {
 }
 /* "op niveau L" telt L en sterker mee: wie Super Turbo verslaat heeft het
    doel "versla Turbo" ook gehaald */
-function goalProgress(g, week) {
-  week = week || curWeek();
+function goalProgress(g, week = curWeek(), p = P) {
   const K = GOAL_KINDS[g.kind];
   if (K.lvl) {
     let s = 0;
-    for (let l = g.lvl; l <= 3; l++) s += wkGet(week, (g.kind === 'potjes' ? 'potjes' : 'wins') + l);
+    for (let l = g.lvl; l <= 3; l++) s += wkGet(week, (g.kind === 'potjes' ? 'potjes' : 'wins') + l, p);
     return s;
   }
-  return wkGet(week, K.key(g));
+  return wkGet(week, K.key(g), p);
 }
-function goalText(g) { return GOAL_KINDS[g.kind].txt(g); }
-function goalDoneWeek(W) { return !!(DOC.max.goal && DOC.max.goal[W]); }
+function goalText(g, kort) { return GOAL_KINDS[g.kind].txt(g, kort); }
+function goalDoneWeek(W, p = P) { return !!(p.goalDone && p.goalDone[W]); }
 function checkGoal() {
   const g = P.weekGoal;
   if (!g) return;
@@ -7061,7 +7234,7 @@ function checkGoal() {
     celebrate();
     if (speelschermOpen()) bewaarVoorKaart({ e: '🎯', n: 'Weekdoel gehaald!' });
     showToast('🎯 Weekdoel gehaald!', true);
-    floatXP('+' + GOAL_XP + ' ⭐ Weekdoel gehaald! 🎯');
+    floatXP('+' + GOAL_XP + ' XP Weekdoel gehaald! 🎯');
     updateHud();
     checkLevelUp();
   }
@@ -7110,23 +7283,14 @@ function renderWeekStrip() {
   const W = curWeek(), g = P.weekGoal;
   const dots = DAG_NAMEN.map((d, i) => '<i class="' + (wkGet(W, 'd' + i) > 0 ? 'on' : '') +
     (i === dagIdx() ? ' today' : '') + '"></i>').join('');
-  let txt, sub;
-  if (g) {
-    const cur = goalProgress(g, W);
-    txt = Math.min(cur, g.n) + ' van ' + g.n + ': ' + goalText(g);
-    sub = goalLine(cur, g.n);
-  } else {
-    const actief = DAG_NAMEN.filter((d, i) => wkGet(W, 'd' + i) > 0).length;
-    txt = actief ? 'Deze week al ' + actief + (actief === 1 ? ' dag' : ' dagen') + ' geoefend' : 'Nieuwe week, nieuwe kansen!';
-    sub = 'Tik hier om een weekdoel te kiezen.';
-  }
-  el.innerHTML = '<span class="dots">' + dots + '</span><span class="ws-txt">' + txt +
-    '<span class="ws-sub">' + sub + '</span></span><span class="ws-arrow">›</span>';
+  const txt = g ? Math.min(goalProgress(g, W), g.n) + ' van ' + goalText(g, true) : 'Kies een doel voor deze week';
+  el.innerHTML = '<span class="dots">' + dots + '</span><span class="ws-txt">' + txt + '</span><span class="ws-arrow">›</span>';
 }
 
 function goalFlow() {
   const g = P.weekGoal;
-  const st = { kind: g ? g.kind : 'opdr', n: g ? g.n : null, lvl: g ? (g.lvl || 2) : 2, game: g ? (g.game || 'scan') : 'scan' };
+  /* de kinderen kwamen voor de potjes: zonder doel begint de kiezer bij potjes tegen de Turbo die bij je past */
+  const st = { kind: g ? g.kind : 'potjes', n: g ? g.n : null, lvl: g ? (g.lvl || 2) : turboVoorstel(P, stadium(P)), game: g ? (g.game || 'scan') : 'scan' };
   const chip = (cls, id, val, label, on) => '<button class="chip' + (on ? ' on' : '') + (cls ? ' ' + cls : '') +
     '" data-' + id + '="' + val + '">' + label + '</button>';
   const render = () => {
@@ -7137,7 +7301,7 @@ function goalFlow() {
     $('goalSub').innerHTML = K.lvl ? [1, 2, 3].map(l => chip('', 'lvl', l, TURBO_NAMES[l], l === st.lvl)).join('') :
       (K.game ? DRILL_KINDS.map(d => chip('', 'game', d, DRILLS[d].e + ' ' + DRILLS[d].naam, d === st.game)).join('') : '');
     $('goalNs').innerHTML = K.ns.map(n => chip('big', 'n', n, n, n === st.n)).join('');
-    $('goalPreview').innerHTML = 'Elke week ' + goalText(normGoal(st)) + '. ' + goalMotto(st);
+    $('goalPreview').innerHTML = 'Elke week ' + goalText(normGoal(st), true) + '. ' + goalMotto(st);
   };
   showModal('<div class="m-emoji">🎯</div><h2>Wat wordt je doel deze week?</h2>' +
     '<p>Kies iets wat je leuk vindt. Je mag het altijd veranderen.</p>' +
@@ -7174,8 +7338,7 @@ function goalFlow() {
     }, true);
 }
 function goalMotto(g) {
-  const per = g.kind === 'opdr' ? Math.ceil(g.n / 5) : null;
-  if (per) return 'Dat is er ' + per + ' per schooldag. Goed te doen! 🐢';
+  if (g.kind === 'opdr') return 'Een paar rondjes per week en je bent er.';
   if (g.kind === 'top') return 'Een topronde is 12 sterren of meer in één rondje. 🌟';
   if (g.kind === 'wins') return 'Langzaam denken is snel winnen! 🐢';
   if (g.kind === 'vriend') return 'Nodig een vriend uit via 🤝 Vrienden.';
@@ -7210,9 +7373,12 @@ function checkNewWeek() {
   if (!vorige || !g) return;
   const cur = goalProgress(g, weekBefore(1));
   const gehaald = cur >= g.n;
-  showModal('<div class="m-emoji">' + (gehaald ? '🎉' : '🌱') + '</div><h2>Nieuwe week!</h2>' +
-    '<p>Vorige week: <b>' + Math.min(cur, g.n) + ' van ' + g.n + '</b> (' + goalText(g) + ').<br>' +
-    (gehaald ? 'Doel gehaald, kampioen!' : (cur > 0 ? 'Mooi geoefend. Deze week weer een frisse start!' : 'Geeft niks. Deze week een frisse start!')) + '</p>' +
+  /* een week zonder iets begint niet met een nul */
+  showModal('<div class="m-emoji">' + (gehaald ? '🎉' : '🌱') + '</div>' +
+    (gehaald ? '<h2>Nieuwe week!</h2><p>Vorige week: doel gehaald! <b>' + g.n + ' van ' + g.n + '</b>.</p>' :
+      cur > 0 ? '<h2>Nieuwe week!</h2><p>Vorige week: <b>' + cur + ' van ' + g.n + '</b> (' + goalText(g, true) + ').<br>' +
+        'Mooi geoefend. Deze week weer een frisse start!</p>' :
+      '<h2>Nieuwe week, nieuwe kansen</h2><p>Je doel: ' + goalText(g) + '.</p>') +
     '<div class="m-btns"><button class="btn sun" id="wkKeep">Zelfde doel houden 👍</button>' +
     '<button class="btn plain" id="wkNew">Ander doel kiezen</button></div>', () => {
       $('wkKeep').addEventListener('click', closeModal);
@@ -7224,8 +7390,8 @@ function checkNewWeek() {
    oefent, over de laatste 14 dagen, met de 14 dagen ervoor als vergelijking.
    Tempo telt zacht mee: binnen de richttijd is vol, drie keer zo lang is
    nog 0,3. Langzaam denken blijft dus lonen, alleen eindeloos treuzelen niet. */
-function vormWindow(kind, from, to) {
-  const rows = Object.values((P.log && P.log[kind]) || {}).filter(r => r[0] >= from && r[0] < to);
+function vormWindow(kind, from, to, p) {
+  const rows = Object.values((p.log && p.log[kind]) || {}).filter(r => r[0] >= from && r[0] < to);
   if (!rows.length) return null;
   const ref = DRILLS[kind].ref;
   let hit = 0, diff = 0, tempo = 0, nd = 0;
@@ -7238,18 +7404,12 @@ function vormWindow(kind, from, to) {
   const score = 100 * (0.45 * hit / n + 0.25 * (nd ? diff / nd : 0) + 0.15 * tempo / n + 0.15 * Math.min(1, n / 20));
   return { score: Math.round(score), n };
 }
-function vormInfo(kind) {
-  const now = Date.now(), d14 = 14 * 86400000;
-  const cur = vormWindow(kind, now - d14, now + 1);
+function vormInfo(kind, p = P, now = Date.now()) {
+  const d14 = 14 * 86400000;
+  const cur = vormWindow(kind, now - d14, now + 1, p);
   if (!cur) return null;
-  const prev = vormWindow(kind, now - 2 * d14, now - d14);
+  const prev = vormWindow(kind, now - 2 * d14, now - d14, p);
   return { score: cur.score, n: cur.n, delta: prev ? cur.score - prev.score : null };
-}
-function vormTxt(kind) {
-  const v = vormInfo(kind);
-  if (!v) return '';
-  return '📈 Vorm <b>' + v.score + '</b>' + (v.delta == null || v.delta === 0 ? '' :
-    ' <span class="vorm-d">' + (v.delta > 0 ? '↑' : '↓') + Math.abs(v.delta) + '</span>');
 }
 function renderVorm() {
   const el = $('vormList');
@@ -7258,9 +7418,8 @@ function renderVorm() {
     const v = vormInfo(k);
     return '<div class="vorm-row"><span class="vorm-e">' + DRILLS[k].e + '</span><span class="vorm-n">' + DRILLS[k].naam +
       (v ? '<span class="vorm-sub">' + v.n + (v.n === 1 ? ' opdracht' : ' opdrachten') + ' in 14 dagen</span>' :
-        '<span class="vorm-sub">nog geen vorm: speel een rondje!</span>') + '</span>' +
-      (v ? '<span class="vorm-s">' + v.score + (v.delta == null || v.delta === 0 ? '' :
-        ' <span class="vorm-d">' + (v.delta > 0 ? '↑' : '↓') + Math.abs(v.delta) + '</span>') + '</span>' : '') + '</div>';
+        '<span class="vorm-sub">nog niet gespeeld de laatste twee weken</span>') + '</span>' +
+      (v ? '<span class="vorm-s">' + v.score + (v.delta > 0 ? ' <span class="vorm-d">↑' + v.delta + '</span>' : '') + '</span>' : '') + '</div>';
   }).join('');
 }
 
@@ -7271,7 +7430,7 @@ function renderLevelPath() {
   path.innerHTML = LEVELS.map((L, i) => {
     const cls = i < cur ? 'done' : (i === cur ? 'current' : 'locked');
     return '<div class="lp-node ' + cls + '"><span class="lp-g">' + L.g + '</span>' +
-      '<span>' + L.n + '</span><span class="lp-xp">' + (i <= cur ? '✔' : L.xp + ' ⭐') + '</span></div>';
+      '<span class="lp-n">' + L.n + '</span><span class="lp-xp">' + (i <= cur ? '✔' : L.xp + ' <br>XP') + '</span></div>';
   }).join('');
   const nxt = $('lpNext');
   if (!nxt) return;
@@ -7279,12 +7438,21 @@ function renderLevelPath() {
     nxt.innerHTML = '🏆 Jij bent Grootmeester. Hoger bestaat niet!';
     return;
   }
+  /* elke eis een eigen regel met een eigen vinkje: nooit een balk die vol staat terwijl er nog iets open is */
   const N = LEVELS[cur + 1];
-  const parts = [];
-  if (P.xp < N.xp) parts.push('nog <b>' + (N.xp - P.xp) + '</b> ⭐');
-  if (N.gate && !N.gate.done()) parts.push('meesterproef: <b>' + N.gate.txt + '</b> (' + N.gate.prog() + ')');
-  nxt.innerHTML = 'Volgende: ' + N.g + ' <b>' + N.n + '</b>. ' +
-    (parts.length ? 'Daarvoor moet je: ' + parts.join(' én ') + '.' : 'Je bent er bijna!');
+  nxt.innerHTML = '<div class="lp-kop">Volgende: ' + N.g + ' <b>' + N.n + '</b></div>' +
+    (P.xp >= N.xp ? '<div class="lp-eis klaar">✔ ' + N.xp + ' XP</div>' :
+      '<div class="lp-eis">Nog ' + (N.xp - P.xp) + ' XP <span class="lp-balk"><i style="width:' +
+      Math.round(levelBalk(P)) + '%"></i></span></div>') +
+    (!N.gate ? '' : N.gate.done(P) ? '<div class="lp-eis klaar">✔ ' + N.gate.txt + '</div>' :
+      '<div class="lp-eis">Nog te doen: ' + N.gate.txt + ' (' + N.gate.prog(P) + ')</div>');
+}
+function renderIkBewaard() {
+  $('ikBewaard').innerHTML = (anderApparaat() ? '✔ Bewaard op dit apparaat en je andere apparaat.' :
+    'Alles staat op ' + ditApparaat() + '. Speel je ook ergens anders? Koppel het, dan is alles dubbel bewaard.' +
+    '<br><button class="btn plain small" id="ikKoppel">🔑 Speel op een ander apparaat</button>') +
+    '<small>Een potje blijft hier staan vanaf de eerste zet, een rondje vanaf het eerste antwoord.</small>';
+  if ($('ikKoppel')) $('ikKoppel').addEventListener('click', linkShareFlow);
 }
 
 function renderHome() {
@@ -7295,6 +7463,7 @@ function renderHome() {
   renderWeekStrip();
   renderVorm();
   renderLevelPath();
+  renderIkBewaard();
   renderThemes();
   renderBadges();
 }
@@ -7315,26 +7484,39 @@ function showHomeTab(name) {
   try { window.scrollTo(0, 0); } catch (e) {}
 }
 
-/* instellingen achter het tandwiel: koppelen en wissen stonden eerst los
-   op het startscherm en maakten het druk */
+/* geen Klaar-knop: elke keuze werkt meteen en ✕ sluit, want Alles wissen
+   naast Klaar liet kinderen schrikken */
 function openSettings() {
-  showModal('<div class="m-emoji">⚙️</div><h2>Instellingen</h2>' +
-    '<div class="m-btns"><button class="btn plain tgl" id="tglGuard">🛡️ Blunder-alarm</button>' +
-    '<button class="btn plain tgl" id="tglPredict">🔮 Voorspellen</button>' +
-    '<button class="btn sun" id="setLink">🔑 Speel op een ander apparaat</button>' +
-    '<button class="btn plain" id="setReset">🗑️ Alles wissen</button>' +
-    '<button class="btn plain" id="setClose">Klaar</button></div>', () => {
-      const schakel = () => {
-        $('tglGuard').classList.toggle('on', P.guard);
-        $('tglPredict').classList.toggle('on', P.predict);
-      };
+  const SCHAKELS = [['tglSound', 'sound'], ['tglGuard', 'guard'], ['tglPredict', 'predict']];
+  const rij = (id, txt, rechts) => '<button class="set-row" id="' + id + '"><span>' + txt + '</span>' + rechts + '</button>';
+  const schakelRij = (id, txt) => rij(id, txt, '<span class="switch" id="' + id + 'Sw"></span>');
+  showModal('<h2>Instellingen</h2><div class="set-lijst">' +
+    '<label class="set-row"><span>Naam <span id="setNaamOk" class="set-msg"></span></span><input id="setName" maxlength="14" autocomplete="off" value="' + escHtml(P.name) + '"></label>' +
+    '<div class="set-kleur"><span>Bordkleur</span> <span id="setKleurMsg" class="set-msg"></span><div id="setThemes" class="theme-row"></div></div>' +
+    schakelRij('tglSound', '🔊 Geluid') +
+    schakelRij('tglGuard', '🛡️ Blunder-alarm in een potje') +
+    schakelRij('tglPredict', '🔮 Voorspellen in een potje') +
+    rij('setLink', '🔑 Speel op een ander apparaat', '<span class="set-pijl">›</span>') +
+    '</div><div class="danger-zone"><button class="btn plain" id="setReset">Alles wissen</button></div>', () => {
+      const schakel = () => SCHAKELS.forEach(([id, f]) => {
+        $(id + 'Sw').classList.toggle('on', !!P[f]);
+        $(id + 'Sw').textContent = P[f] ? 'aan' : 'uit';
+      });
       schakel();
-      $('tglGuard').addEventListener('click', () => { setPref('guard', !P.guard); schakel(); });
-      $('tglPredict').addEventListener('click', () => { setPref('predict', !P.predict); schakel(); });
+      SCHAKELS.forEach(([id, f]) => $(id).addEventListener('click', () => { setPref(f, !P[f]); schakel(); }));
+      const naam = $('setName');
+      naam.addEventListener('change', () => {
+        const v = naam.value.trim().slice(0, 14);
+        if (!v) { naam.value = P.name; return; }
+        if (v !== P.name) { setPref('name', v); renderHome(); $('setNaamOk').textContent = '✔ bewaard'; }
+      });
+      /* WebKit zet bij een tik de cursor pas na de focus neer en wist dan een selectie in de focus zelf */
+      naam.addEventListener('focus', () => setTimeout(() => naam.select(), 0));
+      naam.addEventListener('keydown', e => { if (e.key === 'Enter') naam.blur(); });
+      renderThemes();
       $('setLink').addEventListener('click', () => { closeModal(); linkShareFlow(); });
       $('setReset').addEventListener('click', () => { closeModal(); confirmReset(); });
-      $('setClose').addEventListener('click', closeModal);
-    });
+    }, true);
 }
 
 /* ---------- init & wiring ---------- */
@@ -7346,7 +7528,11 @@ document.querySelectorAll('.mode-card').forEach(b => {
     else startDrill(mode);
   });
 });
-$('weekStrip').addEventListener('click', () => { showHomeTab('ik'); if (!P.weekGoal) goalFlow(); });
+$('weekStrip').addEventListener('click', () => {
+  showHomeTab('ik');
+  $('ikWeek').scrollIntoView({ block: 'start' });
+  if (!P.weekGoal) goalFlow();
+});
 $('vrScan').addEventListener('click', () => openScanner('play'));
 $('vrToon').addEventListener('click', mpHostQR);
 $('vrWoord').addEventListener('click', mpWordFlow);
@@ -7368,7 +7554,7 @@ for (const t in HOME_TABS) $(HOME_TABS[t]).addEventListener('click', () => showH
 function confirmReset() {
   showModal('<div class="m-emoji">🗑️</div><h2>Alles wissen?</h2>' +
     '<p>Je naam, je XP, je sterren, je level, je trofeeën en een potje dat bezig is gaan weg van dit apparaat.' +
-    (ACC ? '<br>Op je andere apparaat blijft alles staan.' : '') + '<br>Weet je het heel zeker?</p>' +
+    (anderApparaat() ? '<br>Op je andere apparaat blijft alles staan.' : '') + '<br>Weet je het heel zeker?</p>' +
     '<div class="m-btns"><button class="btn coral" id="rstGo">Ja, wis alles</button>' +
     '<button class="btn plain" id="rstNo">Nee, bewaren!</button></div>', () => {
       $('rstNo').addEventListener('click', closeModal);
@@ -7393,7 +7579,7 @@ function confirmReset() {
       });
     });
 }
-$('sndBtn').addEventListener('click', () => { setPref('sound', !P.sound); updateHud(); if (P.sound) snd.select(); });
+$('lvlChip').addEventListener('click', () => showHomeTab('ik'));
 $('predictSkip').addEventListener('click', () => resolvePredict(null));
 $('meerBtn').addEventListener('click', openMeer);
 $('materiaal').addEventListener('click', openMateriaal);
@@ -7406,7 +7592,7 @@ function askName() {
       const go = () => {
         const v = $('nameInp').value.trim();
         setPref('name', v || 'kampioen');
-        updateHud();
+        renderHome();
         closeModal();
       };
       $('nameGo').addEventListener('click', go);
@@ -7419,7 +7605,6 @@ function askName() {
 if (P.lastLevel == null) { P.lastLevel = levelIdx(P.xp); saveP(); }
 applyTheme();
 renderHome();
-$('homeBubble').textContent = pick(HOME_LINES);
 showScreen('home');
 if (!checkPlayFragment() && !checkLinkFragment()) {
   if (!P.name && !ACC) askWelcome();

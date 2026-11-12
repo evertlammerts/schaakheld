@@ -52,7 +52,7 @@ function wekelijks(app) {
 /* een level of trofee die tijdens het spelen kwam, krijgt thuis een venster; een kind tikt dat weg */
 function thuisVenstersWeg(app) {
   for (let i = 0; i < 8 && app.open(); i++) {
-    if (app.ziet('LEVEL OMHOOG')) app.tik('lvlOk');
+    if (app.ziet('Level omhoog')) app.tik('lvlOk');
     else if (app.ziet('id="trofOk"')) app.tik('trofOk');
     else break;
   }
@@ -67,7 +67,7 @@ async function naarHuis(app) {
 
 /* een level omhoog legt een venster over Volgende; een kind tikt dat eerst weg */
 async function volgende(app) {
-  for (let i = 0; i < 8 && app.ziet('LEVEL OMHOOG'); i++) app.tik('lvlOk');
+  for (let i = 0; i < 8 && app.ziet('Level omhoog'); i++) app.tik('lvlOk');
   tikTekst(app, 'Volgende');
   await wacht();
 }
@@ -610,7 +610,7 @@ async function orakelFlow() {
     const a = nieuwKind({ opslag: o });
     await wacht();
     check('geen venster en geen melding', !a.open() && toastTekst(a) === '');
-    check('niets op de Verder-kaart', !/kan ik niet|Speurogen/.test(tekstVan(a, 'verder')));
+    check('niets op de Verder-kaart', !/kan ik niet|Verder: |Opdracht \d van 5/.test(tekstVan(a, 'verder')));
     await startOefening(a, 'scan');
     check('Speurogen begint bij opdracht 1', opSpeelscherm(a) && /\b1 van 5/.test(tekstVan(a, 'roundChip')));
     check('de kapotte tekst is weg', a.opslag.getItem(RONDJES) !== 'kapot{');
@@ -639,7 +639,7 @@ async function orakelFlow() {
       o.setItem(RONDJES, ruw);
       const a = nieuwKind({ opslag: o });
       await wacht();
-      check(ruw + ': niets op de Verder-kaart', !/Speurogen|Opdracht/.test(tekstVan(a, 'verder')));
+      check(ruw + ': niets op de Verder-kaart', !/Verder: |Opdracht \d van 5/.test(tekstVan(a, 'verder')));
       await startOefening(a, 'scan');
       check(ruw + ': Speurogen begint bij opdracht 1', /\b1 van 5/.test(tekstVan(a, 'roundChip')));
       await scanGoed(a);
@@ -691,7 +691,7 @@ async function orakelFlow() {
     await wacht();
     thuisVenstersWeg(a);
     check('Pauze zegt dat het rondje klaar is', /Rondje klaar/.test(toastTekst(a)));
-    check('er blijft geen rondje staan', opgeslagen(a, RONDJES) === null && tekstVan(a, 'verder') === '');
+    check('er blijft geen rondje staan', opgeslagen(a, RONDJES) === null && !/Verder: |Opdracht \d van 5/.test(tekstVan(a, 'verder')));
     check('de topronde telt meteen', /1\s*(\/|van)\s*2/.test(wekelijks(a)));
     await startOefening(a, 'scan');
     check('een nieuw rondje begint bij opdracht 1', /\b1 van 5/.test(tekstVan(a, 'roundChip')));
@@ -947,10 +947,10 @@ async function orakelFlow() {
       a.get('!!P.badges.sterren && !!P.badges.speurneus'));
     a.tik('backBtn');
     await wacht();
-    check('eerst het level, zonder melding', a.ziet('LEVEL OMHOOG') && toastTekst(a) === '');
+    check('eerst het level, zonder melding', a.ziet('Level omhoog') && toastTekst(a) === '');
     a.tik('lvlOk');
-    check('dan de trofeeën samen, zonder melding', a.ziet('Trofeeën verdiend!') && /Sterrenregen/.test(a.scherm()) &&
-      /Superspeurneus/.test(a.scherm()) && /Je verdiende ze tijdens het spelen\./.test(a.scherm()) && toastTekst(a) === '');
+    check('dan de trofeeën samen, zonder melding', a.ziet('Trofeeën verdiend!') && /Sterrenregen/.test(zonderZacht(a.scherm())) &&
+      /Superspeurneus/.test(zonderZacht(a.scherm())) && /Je verdiende ze tijdens het spelen\./.test(a.scherm()) && toastTekst(a) === '');
     tikTekst(a, 'Super');
     check('daarna de melding van Pauze', !a.open() && /Bewaard/.test(toastTekst(a)));
   });
@@ -1434,7 +1434,7 @@ async function orakelFlow() {
     check('de trofee en het weekdoel zijn wel verdiend', a.get('!!P.badges.sterren') && a.get('goalDoneWeek(curWeek())'));
     for (let i = 0; i < 4; i++) { await volgende(a); await scanGoed(a); }
     await volgende(a);
-    check('de eindkaart van het rondje toont de trofee en het weekdoel', /Sterrenregen/.test(a.scherm()) && /Weekdoel gehaald/.test(a.scherm()));
+    check('de eindkaart van het rondje toont de trofee en het weekdoel', /Sterrenregen/.test(zonderZacht(a.scherm())) && /Weekdoel gehaald/.test(a.scherm()));
   });
 
   await regel('[2.5] een level in een rondje: geen venster tijdens het spelen, een badge op de eindkaart, en thuis het venster', async function (check) {
@@ -1442,14 +1442,14 @@ async function orakelFlow() {
     a.ev('bump("xp", 140); checkLevelUp()');
     await startOefening(a, 'scan');
     await scanGoed(a);
-    check('geen venster over de opdracht', !a.ziet('LEVEL OMHOOG') && kanTikken(a, 'Volgende'));
+    check('geen venster over de opdracht', !a.ziet('Level omhoog') && kanTikken(a, 'Volgende'));
     for (let i = 0; i < 4; i++) { await volgende(a); await scanGoed(a); }
     tikTekst(a, 'Volgende');
     await wacht();
     check('de eindkaart van het rondje toont het level', /Level Paard/.test(a.scherm()));
     tikTekst(a, 'Naar huis');
     await wacht();
-    check('thuis het venster met het nieuwe level', a.ziet('LEVEL OMHOOG') && opThuis(a));
+    check('thuis het venster met het nieuwe level', a.ziet('Level omhoog') && opThuis(a));
   });
 
   await regel('[2.5] een oefening: de kop zegt "1 van 5 · ⭐ 2 · ✔ bewaard" en geen reeks of vorm', async function (check) {
@@ -1549,12 +1549,12 @@ async function orakelFlow() {
     check('de kaart van het rondje toont het level', /Rondje klaar/.test(a.scherm()) && /Level Paard/.test(a.scherm()));
     tikTekst(a, 'Naar huis');
     await wacht();
-    check('thuis het venster met het level en het nieuwe bord', opThuis(a) && a.ziet('LEVEL OMHOOG') && /Paard/.test(a.scherm()) && /Oceaan/.test(a.scherm()));
+    check('thuis het venster met het level en het nieuwe bord', opThuis(a) && a.ziet('Level omhoog') && /Paard/.test(a.scherm()) && /Oceaan/.test(a.scherm()));
     a.tik('lvlOk');
     await startOefening(a, 'scan');
     a.tik('backBtn');
     await wacht();
-    check('het venster komt geen tweede keer', opThuis(a) && !a.ziet('LEVEL OMHOOG'));
+    check('het venster komt geen tweede keer', opThuis(a) && !a.ziet('Level omhoog'));
   }
 
   await regel('[2.5] een nieuw kind en zijn eerste level: een badge op de kaart van het rondje en thuis eenmaal het venster', async function (check) {
@@ -1635,13 +1635,13 @@ async function orakelFlow() {
     check('testopzet: Sterrenregen', a.get('!!P.badges.sterren'));
     a.tik('backBtn');
     await wacht();
-    check('thuis de trofee', opThuis(a) && a.ziet('Trofee verdiend') && /Sterrenregen/.test(a.scherm()));
+    check('thuis de trofee', opThuis(a) && a.ziet('Trofee verdiend') && /Sterrenregen/.test(zonderZacht(a.scherm())));
     tikTekst(a, 'Super');
     a.tik('verderKaart');
     await wacht();
     for (let i = 0; i < 4; i++) { await scanGoed(a); await volgende(a); }
     check('testopzet: de kaart van het rondje', /Rondje klaar/.test(a.scherm()));
-    check('die toont hem niet nog eens', !/Sterrenregen/.test(a.scherm()));
+    check('die toont hem niet nog eens', !/Sterrenregen/.test(zonderZacht(a.scherm())));
   });
 
   await regel('[2.5] een profiel van nu met trofeeën: na de update telt elke trofee als getoond en komt alleen een nieuwe', async function (check) {
@@ -1674,11 +1674,11 @@ async function orakelFlow() {
     tikTekst(a, 'Volgende');
     await wacht();
     const kaart = a.scherm();
-    check('de kaart van het rondje toont wat hier verdiend is', /Sterrenregen/.test(kaart) && /Level Paard/.test(kaart));
+    check('de kaart van het rondje toont wat hier verdiend is', /Sterrenregen/.test(zonderZacht(kaart)) && /Level Paard/.test(kaart));
     check('en niet de trofee van het andere apparaat', !/Orakel/.test(kaart));
     tikTekst(a, 'Naar huis');
     await wacht();
-    check('thuis het level', a.ziet('LEVEL OMHOOG'));
+    check('thuis het level', a.ziet('Level omhoog'));
     a.tik('lvlOk');
     await wacht();
     check('thuis geen trofee van het andere apparaat', !a.ziet('Orakel'));
@@ -1814,8 +1814,14 @@ async function orakelFlow() {
   async function stap(a, ctx) {
     return a.get('nextStep(P, ' + JSON.stringify(Object.assign({ now: NU, potje: null, rondjes: null, samen: null, uitnodiging: null, moment: null }, ctx || {})) + ')');
   }
+  /* nextStep met een profiel als JSON-tekst, los van het profiel van de app zelf */
+  async function stapMet(a, profiel, ctx) {
+    return a.get('nextStep(JSON.parse(' + JSON.stringify(profiel) + '), ' +
+      JSON.stringify(Object.assign({ now: NU, potje: null, rondjes: null, samen: null, uitnodiging: null, moment: null }, ctx || {})) + ')');
+  }
+  const kaartVan = function (r) { return JSON.stringify([r.rule, r.title, r.text, r.button, r.action]); };
 
-  await nogNiet('[3.1] geval 1: nieuw, antwoord "nieuw": R6, Speurogen, "Nieuw voor jou."', async function (check) {
+  await regel('[3.1] geval 1: nieuw, antwoord "nieuw": R6, Speurogen, "Nieuw voor jou."', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('setPref("start", "nieuw")');
@@ -1824,7 +1830,7 @@ async function orakelFlow() {
     check('de reden', /Nieuw voor jou\./.test(r.text));
   });
 
-  await nogNiet('[3.1] geval 2: nieuw, antwoord "sterk": R7 tegen Turbo, niet Super Turbo', async function (check) {
+  await regel('[3.1] geval 2: nieuw, antwoord "sterk": R7 tegen Turbo, niet Super Turbo', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('setPref("start", "sterk")');
@@ -1833,7 +1839,7 @@ async function orakelFlow() {
     check('de zin', /Win je van Turbo, dan wacht Super Turbo\./.test(r.text) && !/Super Turbo/.test(r.button));
   });
 
-  await nogNiet('[3.1] geval 3: een bestaand profiel zonder start en twee keer Turbo verslagen: sterk, nooit gevraagd', async function (check) {
+  await regel('[3.1] geval 3: een bestaand profiel zonder start en twee keer Turbo verslagen: sterk, nooit gevraagd', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 1200); bump("wins", 2); bump("c.winsL2", 2); bump("c.gamesPlayed", 9)');
@@ -1844,7 +1850,7 @@ async function orakelFlow() {
     check('geen vraag hoe goed je schaakt', !/Hoe goed ken je schaken/.test(b.modal()));
   });
 
-  await nogNiet('[3.1] geval 4: wat bezig is gaat voor, in de volgorde van de kaart', async function (check) {
+  await regel('[3.1] geval 4: wat bezig is gaat voor, in de volgorde van de kaart', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(5)));
@@ -1861,16 +1867,16 @@ async function orakelFlow() {
     check('R2b bij opdracht 3', r.rule === 'R2b' && /Opdracht 3 van 5/.test(r.text));
   });
 
-  await nogNiet('[3.1] geval 5: vier dagen weg: R3 met het level', async function (check) {
+  await regel('[3.1] geval 5: vier dagen weg: R3 met het level', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.perfectScans", 5)');
     a.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(4)));
     const r = await stap(a);
-    check('R3 welkom terug met Loper', r.rule === 'R3' && /Welkom terug, Mees!/.test(r.title) && /Loper/.test(r.text));
+    check('R3 met Loper; het welkom staat in de groet', r.rule === 'R3' && r.title === 'Speel een potje' && /Loper/.test(r.text));
   });
 
-  await nogNiet('[3.1] geval 6: weekdoel potjes 3, er staan er 2: R4 "Nog 1 potje tegen ..."', async function (check) {
+  await regel('[3.1] geval 6: weekdoel potjes 3, er staan er 2: R4 "Nog 1 potje tegen ..."', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); setPref("weekGoal", { kind: "potjes", n: 3, lvl: 2 }); bumpWeek("potjes2", 2)');
@@ -1878,7 +1884,7 @@ async function orakelFlow() {
     check('R4', r.rule === 'R4' && /Nog 1 potje tegen/.test(r.text));
   });
 
-  await nogNiet('[3.1] geval 7: na een potje zonder sleutelmoment: R6, niet de laatst geoefende', async function (check) {
+  await regel('[3.1] geval 7: na een potje zonder sleutelmoment: R6, niet de laatst geoefende', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); logResult("scan", 0.5, 20000, 3); P.lastKind = "game"');
@@ -1886,7 +1892,7 @@ async function orakelFlow() {
     check('R6, niet Speurogen', r.rule === 'R6' && r.action.kind !== 'scan');
   });
 
-  await nogNiet('[3.1] geval 8: na Speurogen: R7, nooit R6 Speurogen', async function (check) {
+  await regel('[3.1] geval 8: na Speurogen: R7, nooit R6 Speurogen', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.gamesPlayed", 5); P.lastKind = "scan"');
@@ -1894,7 +1900,7 @@ async function orakelFlow() {
     check('R7', r.rule === 'R7');
   });
 
-  await nogNiet('[3.1] geval 9: genoeg XP voor Toren maar Turbo niet verslagen: R7 op niveau 2, "Win je, dan word je Toren"', async function (check) {
+  await regel('[3.1] geval 9: genoeg XP voor Toren maar Turbo niet verslagen: R7 op niveau 2, "Win je, dan word je Toren"', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 950); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "scan"');
@@ -1902,7 +1908,7 @@ async function orakelFlow() {
     check('R7, niveau 2, de zin', r.rule === 'R7' && r.action.level === 2 && /Win je, dan word je Toren/.test(r.text));
   });
 
-  await nogNiet('[3.1] geval 10: twee oefeningen gelijk: de eerste in de leervolgorde', async function (check) {
+  await regel('[3.1] geval 10: twee oefeningen gelijk: de eerste in de leervolgorde', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game";' +
@@ -1913,7 +1919,7 @@ async function orakelFlow() {
 
   /* learning.md 1.7: zolang de poort "5 perfecte speurrondes" open is, kiest R6
      eerst Speurogen, ook als dat de laatst geoefende is; R7 speelt dan L* */
-  await nogNiet('[3.1] de poort "5 perfecte speurrondes" staat open: R6 kiest Speurogen, R7 speelt tegen Turbo', async function (check) {
+  await regel('[3.1] de poort "5 perfecte speurrondes" staat open: R6 kiest Speurogen, R7 speelt tegen Turbo', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.gamesPlayed", 5); logResult("scan", 0.5, 20000, 3); P.lastKind = "game"');
@@ -1941,18 +1947,18 @@ async function orakelFlow() {
     return b;
   }
 
-  await nogNiet('[3.1] de Verder-kaart met een potje als suggestie: één tik start het potje', async function (check) {
+  await regel('[3.1] de Verder-kaart met een potje als suggestie: één tik start het potje', async function (check) {
     const b = await kaartMetSuggestie(check, 'sterk');
     check('een potje tegen Turbo op niveau 2', opSpeelscherm(b) && b.get('session.kind') === 'game' && b.get('session.level') === 2);
   });
 
-  await nogNiet('[3.1] de Verder-kaart met een oefening als suggestie: één tik start Speurogen', async function (check) {
+  await regel('[3.1] de Verder-kaart met een oefening als suggestie: één tik start Speurogen', async function (check) {
     const b = await kaartMetSuggestie(check, 'nieuw');
     check('Speurogen begint', opSpeelscherm(b) && b.get('session.kind') === 'scan' && /\b1 van 5/.test(tekstVan(b, 'roundChip')));
   });
 
   /* learning.md 1.4: lastKind wordt gezet als een rondje af is, of het kind de kaart volgde of niet */
-  await nogNiet('[3.2] na een rondje Speurogen stelt de kaart een potje voor, niet weer Speurogen', async function (check) {
+  await regel('[3.2] na een rondje Speurogen stelt de kaart een potje voor, niet weer Speurogen', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5)');
@@ -1966,7 +1972,7 @@ async function orakelFlow() {
     check('en de kaart zegt het', opThuis(a) && tekstVan(a, 'verder').indexOf(r.title) >= 0 && !/Speurogen/.test(tekstVan(a, 'verder')));
   });
 
-  await nogNiet('[3.2] alle vijf oefeningen en beide spelknoppen staan op Spelen, wat de kaart ook zegt', async function (check) {
+  await regel('[3.2] alle vijf oefeningen en beide spelknoppen staan op Spelen, wat de kaart ook zegt', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5']) });
     const ids = ['spelTurbo', 'spelVriend', 'oefen-scan', 'oefen-best3', 'oefen-trucs', 'oefen-koning', 'oefen-opening'];
     check('elk een knop die werkt', ids.every(function (id) { return heeftKlik(a, id) && zichtbaar(a, id); }));
@@ -1975,7 +1981,7 @@ async function orakelFlow() {
     check('Speurogen begint', opSpeelscherm(a) && /\b1 van 5/.test(tekstVan(a, 'roundChip')));
   });
 
-  await nogNiet('[3.4] de levelchip in de kop opent Ik', async function (check) {
+  await regel('[3.4] de levelchip in de kop opent Ik', async function (check) {
     const a = nieuwKind();
     a.tik('lvlChip');
     check('Ik staat open', zichtbaar(a, 'view-ik') && !zichtbaar(a, 'view-spelen'));
@@ -1997,7 +2003,7 @@ async function orakelFlow() {
     return a;
   }
 
-  await nogNiet('[3.5] Ik: XP en de meesterproef als twee aparte controles (Mees)', async function (check) {
+  await regel('[3.5] Ik: XP en de meesterproef als twee aparte controles (Mees)', async function (check) {
     const a = await kindUitDoc(docVan('Mees', { xp: 1800, stars: 69, wins: 6, 'c.winsL2': 2, 'c.perfectScans': 8, 'c.gamesPlayed': 25 },
       { max: { best: 10, goal: { '2026-W42': 60, '2026-W43': 60, '2026-W44': 60, '2026-W45': 60 } } }));
     a.tik('tabIk');
@@ -2006,7 +2012,7 @@ async function orakelFlow() {
     check('de proef staat nog open, 2 van 3', /Nog te doen[^]*versla Turbo[^]*2 van 3/.test(t));
   });
 
-  await nogNiet('[3.5] Ik: XP en de meesterproef als twee aparte controles (Lotte)', async function (check) {
+  await regel('[3.5] Ik: XP en de meesterproef als twee aparte controles (Lotte)', async function (check) {
     const a = await kindUitDoc(docVan('Lotte', { xp: 2565, stars: 230, wins: 1, 'c.perfectScans': 13, 'c.gamesPlayed': 7 }));
     a.tik('tabIk');
     const t = tekstVan(a, 'levelPath') + ' ' + tekstVan(a, 'lpNext');
@@ -2014,14 +2020,14 @@ async function orakelFlow() {
     check('de proef staat nog open, 0 van 1', /Nog te doen[^]*versla Turbo[^]*0 van 1/.test(t));
   });
 
-  await nogNiet('[3.5] Ik zegt wat er bewaard is en waar', async function (check) {
+  await regel('[3.5] Ik zegt wat er bewaard is en waar', async function (check) {
     const a = nieuwKind();
     a.tik('tabIk');
     check('de bewaard-regel', /bewaard|staat op deze/i.test(tekstVan(a, 'ikBewaard')) &&
-      /blijft op dit apparaat/.test(tekstVan(a, 'ikBewaard')));
+      /Een potje blijft hier staan vanaf de eerste zet, een rondje vanaf het eerste antwoord\./.test(tekstVan(a, 'ikBewaard')));
   });
 
-  await nogNiet('[3.6] het getal dat het level bepaalt heet XP, zonder ster', async function (check) {
+  await regel('[3.6] het getal dat het level bepaalt heet XP, zonder ster', async function (check) {
     const a = nieuwKind();
     const kop = a.doc.__ouderTekst(a.els.xpNum);
     check('in de kop staat XP bij het getal, zonder ster', /XP/.test(kop) && !/⭐/.test(kop));
@@ -2036,7 +2042,7 @@ async function orakelFlow() {
     check('de trofee voor 100 sterren telt sterren', /100 sterren/.test(a.get('BADGES.find(function (b) { return b.id === "sterren"; }).d')));
   });
 
-  await nogNiet('[3.7] geen reeks in een rondje en geen reeksbonus meer: drie goede antwoorden geven 90 XP', async function (check) {
+  await regel('[3.7] geen reeks in een rondje en geen reeksbonus meer: drie goede antwoorden geven 90 XP', async function (check) {
     const a = nieuwKind();
     const xp = a.get('P.xp');
     await startOefening(a, 'scan');
@@ -2046,7 +2052,7 @@ async function orakelFlow() {
     check('90 XP zonder bonus', a.get('P.xp') - xp === 90);
   });
 
-  await nogNiet('[3.7] Vuurpijl: 25 opdrachten met drie sterren, in de nieuwe teller c.drie', async function (check) {
+  await regel('[3.7] Vuurpijl: 25 opdrachten met drie sterren, in de nieuwe teller c.drie', async function (check) {
     const a = nieuwKind();
     a.ev('bump("c.drie", 24)');
     await startOefening(a, 'scan');
@@ -2056,14 +2062,14 @@ async function orakelFlow() {
     check('de tekst', /25 opdrachten met 3 sterren/.test(a.get('BADGES.find(function (b) { return b.id === "vlam"; }).d')));
   });
 
-  await nogNiet('[3.7] compat: een document van nu met best 6 houdt Vuurpijl', async function (check) {
+  await regel('[3.7] compat: een document van nu met best 6 houdt Vuurpijl', async function (check) {
     const a = await kindUitDoc(docVan('Daan', { xp: 2710, stars: 70, 'c.pat.penning': 3 },
       { set: { badges: { vlam: true } }, max: { best: 6, goal: {} }, loc: { streak: 4, lastLevel: 3, weekSeen: '2026-W46' } }));
     check('Vuurpijl blijft', a.get('!!P.badges.vlam') && a.get('P.best') === 6);
     check('en de nieuwe teller bestaat', a.get('P.c.drie') === 0);
   });
 
-  await nogNiet('[3.8] Instellingen: naam, bordkleur, geluid, de twee hulpjes, ander apparaat, en Alles wissen als laatste', async function (check) {
+  await regel('[3.8] Instellingen: naam, bordkleur, geluid, de twee hulpjes, ander apparaat, en Alles wissen als laatste', async function (check) {
     const a = nieuwKind();
     a.tik('setBtn');
     await wacht();
@@ -2077,7 +2083,7 @@ async function orakelFlow() {
     check('de naam is te veranderen', a.get('P.name') === 'Mees de Grote');
   });
 
-  await nogNiet('[3.9] de kaart van een nieuwe week begint nooit met een nul', async function (check) {
+  await regel('[3.9] de kaart van een nieuwe week begint nooit met een nul', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('setPref("weekGoal", { kind: "opdr", n: 10 })');
@@ -2092,7 +2098,7 @@ async function orakelFlow() {
     check('nieuwe week, nieuwe kansen', /Nieuwe week, nieuwe kansen/.test(b.scherm()) && !/\b0 van 10\b/.test(b.scherm()));
   });
 
-  await nogNiet('[3.9] een gehaald doel: "Vorige week: doel gehaald!"', async function (check) {
+  await regel('[3.9] een gehaald doel: "Vorige week: doel gehaald!"', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('setPref("weekGoal", { kind: "opdr", n: 2 }); bumpWeek("opdr", 2)');
@@ -2105,7 +2111,7 @@ async function orakelFlow() {
     check('de zin', /Vorige week: doel gehaald!/.test(b.scherm()));
   });
 
-  await nogNiet('[3.10] compat: een document van nu laadt met alles, krijgt geen vraag, en de nieuwe velden komen erbij', async function (check) {
+  await regel('[3.10] compat: een document van nu laadt met alles, krijgt geen vraag, en de nieuwe velden komen erbij', async function (check) {
     const doc = docVan('Daan', { xp: 2710, stars: 70, wins: 12, 'c.winsL2': 4, 'c.winsL3': 1, 'c.pat.penning': 3, 'c.gamesPlayed': 40 },
       { set: { badges: { vlam: true, winst: true } }, lww: { name: { v: 'Daan', t: 1 }, theme: { v: 'lava', t: 1 } },
         max: { best: 6, goal: {} }, loc: { streak: 4, lastLevel: 3, weekSeen: '2026-W46' } });
@@ -2123,6 +2129,434 @@ async function orakelFlow() {
     check('de nieuwe teller c.drie staat in het document', !!opgeslagen1.cnt['c.drie']);
     check('lastSeen per apparaat in het document', !!opgeslagen1.loc && 'lastSeen' in opgeslagen1.loc);
     check('de oude tellers staan er nog', !!opgeslagen1.cnt['c.pat.penning'] && !!opgeslagen1.cnt['c.winsL3']);
+  });
+
+  /* ---------- increment 3, na de review: spelen, herladen, de kaart lezen ---------- */
+
+  const opgeslagenLoc = function (a) { const d = opgeslagen(a, 'schaakheld1'); return (d && d.loc) || {}; };
+
+  await regel('[3.2] een rondje met minder dan 12 sterren: lastKind staat meteen in de opslag, en na herladen stelt de kaart een potje voor', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game"; saveP()');
+    await startOefening(a, 'scan');
+    for (let i = 0; i < 5; i++) {
+      tikTekst(a, 'Klaar');
+      await wacht();
+      if (i < 4) await volgende(a);
+    }
+    check('testopzet: minder dan 12 sterren', a.get('session.earned') < 12);
+    check('na het vijfde antwoord staat "scan" in de opslag', opgeslagenLoc(a).lastKind === 'scan');
+    const b = herlaad(a);
+    await wacht();
+    const r = await stap(b);
+    check('na herladen: een potje, geen oefening', b.get('P.lastKind') === 'scan' && r.rule === 'R7' &&
+      tekstVan(b, 'verder').indexOf(r.title) >= 0);
+  });
+
+  await regel('[3.2] een openingsles: lastKind staat meteen in de opslag, en zonder les verandert er niets', async function (check) {
+    const a = nieuwKind();
+    a.ev('startOpening("coach", null)');
+    await wacht();
+    a.ev('openingEnd()');
+    await wacht();
+    check('"opening" in de opslag', opgeslagenLoc(a).lastKind === 'opening');
+    const b = nieuwKind();
+    b.ev('openingEnd()');
+    check('openingEnd zonder les zet niets', b.get('P.lastKind') === null && !opgeslagenLoc(b).lastKind);
+  });
+
+  await regel('[3.2] een potje: lastKind "game" staat in de opslag, gewonnen of meteen opgegeven', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
+    a.ev('P.lastKind = "scan"; saveP()');
+    a.tik('verderKaart');
+    await wacht();
+    await zetEnWacht(a, 'd1h5');
+    await wacht(2000);
+    check('testopzet: gewonnen', a.get('session.over') === true && a.get('P.wins') === 1);
+    check('na een gewonnen potje "game" in de opslag', opgeslagenLoc(a).lastKind === 'game');
+    const b = nieuwKind();
+    b.ev('P.lastKind = "scan"; saveP()');
+    await startPotje(b, 1);
+    await geefOp(b);
+    check('testopzet: opgegeven', b.get('session.over') === true);
+    check('na meteen opgeven ook "game" in de opslag', opgeslagenLoc(b).lastKind === 'game');
+  });
+
+  await regel('[3.2] een potje beginnen zet lastSeen in de opslag', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(5)) + '; saveP()');
+    await startPotje(a, 1);
+    check('vandaag in de opslag', opgeslagenLoc(a).lastSeen === '2026-11-12');
+  });
+
+  await regel('[3.1] nextStep is puur: de meesterproeven komen uit het profiel dat het krijgt', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind(), leeg = nieuwKind();
+    a.ev('bump("xp", 950); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "scan"');
+    const p = a.get('JSON.stringify(P)');
+    const zelf = await stap(a);
+    check('testopzet: de app zelf zegt "Win je, dan word je Toren"', zelf.rule === 'R7' && /Win je, dan word je Toren/.test(zelf.text));
+    check('hetzelfde profiel op een lege app geeft dezelfde kaart', kaartVan(await stapMet(leeg, p)) === kaartVan(zelf));
+  });
+
+  await regel('[3.1] nextStep is puur: de vorm en de dagen komen uit het profiel en ctx.now, niet uit de app en haar klok', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game";' +
+      '["scan", "koning", "best3", "opening"].forEach(function (k) { logResult(k, 0.5, 20000, 3); }); logResult("trucs", 0.5, 20000, 0)');
+    const p = a.get('JSON.stringify(P)');
+    const zelf = await stap(a);
+    check('testopzet: de app zelf kiest de Trucendoos, die gaat het minst goed', zelf.rule === 'R6' && zelf.action.kind === 'trucs');
+    const leeg = nieuwKind();
+    check('op een app zonder log dezelfde kaart', kaartVan(await stapMet(leeg, p)) === kaartVan(zelf));
+    zetDatum('2026-12-02T16:00:00');
+    check('en ook als de klok van de app drie weken verder staat', kaartVan(await stapMet(leeg, p)) === kaartVan(zelf));
+  });
+
+  await regel('[3.1] nextStep is puur: het weekdoel telt in de week van ctx.now, en gehaald is wat het profiel zegt', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "scan";' +
+      'setPref("weekGoal", { kind: "potjes", n: 3, lvl: 1 }); bumpWeek("potjes1", 2)');
+    const p = a.get('JSON.stringify(P)');
+    const zelf = await stap(a);
+    check('testopzet: R4, nog 1 potje', zelf.rule === 'R4' && /^Nog 1 potje /.test(zelf.text));
+    const week = await stapMet(a, p, { now: NU + 8 * 86400000 });
+    check('met ctx.now een week later telt die week, en daar staat nog niets', week.rule !== 'R4');
+    zetDatum('2026-11-20T16:00:00');
+    check('met de klok van de app een week later en ctx.now van nu: dezelfde kaart', kaartVan(await stapMet(a, p)) === kaartVan(zelf));
+    zetDatum('2026-11-12T16:00:00');
+    const b = nieuwKind();
+    b.ev('setPref("weekGoal", { kind: "opdr", n: 1 }); bumpWeek("opdr", 1)');
+    check('testopzet: de app zelf heeft haar weekdoel gehaald', b.get('goalDoneWeek(curWeek())') === true);
+    check('het profiel zegt niet gehaald: dezelfde kaart', kaartVan(await stapMet(b, p)) === kaartVan(zelf));
+  });
+
+  await regel('[3.5] Ik: "Speel op een ander apparaat" openen en sluiten maakt nog geen ander apparaat', async function (check) {
+    const a = nieuwKind();
+    a.tik('tabIk');
+    check('testopzet: alles staat op dit apparaat', /Alles staat op/.test(tekstVan(a, 'ikBewaard')));
+    a.tik('ikKoppel');
+    await wacht();
+    check('testopzet: de koppelcode staat open', a.open() && /koppelen/i.test(a.scherm()));
+    a.tik('linkDone');
+    await wacht();
+    const b = herlaad(a);
+    await wacht();
+    b.tik('tabIk');
+    check('na sluiten en herladen nog steeds alleen dit apparaat', /Alles staat op/.test(tekstVan(b, 'ikBewaard')) &&
+      !/andere apparaat/.test(tekstVan(b, 'ikBewaard')));
+  });
+
+  await regel('[3.10] compat: een gekoppeld apparaat van nu zegt na de update nog dat alles ook op het andere apparaat staat', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const o = maakOpslag();
+    o.setItem('schaakheld-dev', '11112222-3333-4444-5555-666677778888');
+    o.setItem('schaakheld1', JSON.stringify(docVan('Daan', { xp: 2710, stars: 70 })));
+    o.setItem('schaakheld-acc', JSON.stringify({ id: 'abcdefgh12345678', secret: 'geheim-geheim-geheim' }));
+    const a = maakApparaat(null, { opslag: o, herstart: true });
+    await wacht();
+    a.ev('closeModal()');
+    a.tik('tabIk');
+    check('het account en alles van vroeger blijft', a.get('ACC.id') === 'abcdefgh12345678' && a.get('P.xp') === 2710);
+    check('Ik zegt: ook op het andere apparaat', /andere apparaat/.test(tekstVan(a, 'ikBewaard')));
+  });
+
+  await regel('[3.5] Ik: met XP te gaan "Nog N XP" met een balk, en die balk staat nooit vol', async function (check) {
+    const a = nieuwKind();
+    const balk = function () { return +((a.el('lpNext').innerHTML.match(/width:\s*([\d.]+)%/) || [])[1]); };
+    a.ev('bump("xp", 300); renderHome()');
+    a.tik('tabIk');
+    check('300 XP: "Nog 100 XP" en de balk op 60%', /Nog 100 XP/.test(tekstVan(a, 'lpNext')) && balk() === 60);
+    a.ev('bump("xp", 99); renderHome()');
+    check('399 XP: "Nog 1 XP" en de balk niet vol', /Nog 1 XP/.test(tekstVan(a, 'lpNext')) && balk() <= 95);
+  });
+
+  await regel('[3.5] de balk in de kop staat nooit vol zolang er iets te doen is', async function (check) {
+    const a = nieuwKind();
+    const kop = function () { return parseFloat(a.get('$("xpFill").style.width')); };
+    a.ev('bump("xp", 399); updateHud()');
+    check('399 van 400 XP, de proef open: 95%', kop() === 95);
+    a.ev('bump("xp", 551); bump("c.perfectScans", 5); updateHud()');
+    check('genoeg XP voor Toren maar Turbo niet verslagen: 95%', a.get('P.xp') === 950 && kop() === 95);
+  });
+
+  await regel('[3.2] het weekdoel is de uitzondering: toprondes Speurogen, net een rondje Speurogen, de kaart zegt Speurogen', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 950); setPref("weekGoal", { kind: "top", n: 2, game: "scan" }); bumpWeek("top.scan", 1); P.lastKind = "scan"');
+    const r = await stap(a);
+    check('R4 met Speurogen', r.rule === 'R4' && r.action.kind === 'scan' && /Speurogen/.test(r.button));
+  });
+
+  await regel('[3.2] een weekdoel opdrachten stelt nooit de oefening voor die net af is', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "scan";' +
+      'setPref("weekGoal", { kind: "opdr", n: 10 }); bumpWeek("opdr", 9)');
+    const r = await stap(a);
+    check('R4 met een andere oefening dan Speurogen', r.rule === 'R4' && r.action.go === 'oefening' && r.action.kind !== 'scan');
+  });
+
+  await regel('[3.1] het stadium "nieuw" eindigt bij 150 XP', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 149)');
+    let r = await stap(a);
+    check('149 XP: nog nieuw, een oefening', r.rule === 'R6');
+    a.ev('bump("xp", 1)');
+    r = await stap(a);
+    check('150 XP: een potje', r.rule === 'R7');
+  });
+
+  await regel('[3.1] twee keer winnen op niveau 1 maakt het voorgestelde niveau 2', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 40); bump("wins", 1); bump("c.gamesPlayed", 1); P.lastKind = "scan"');
+    let r = await stap(a);
+    check('een keer gewonnen: niveau 1', r.rule === 'R7' && r.action.level === 1);
+    a.ev('bump("xp", 40); bump("wins", 1); bump("c.gamesPlayed", 1)');
+    r = await stap(a);
+    check('twee keer: niveau 2', r.rule === 'R7' && r.action.level === 2);
+  });
+
+  /* de kaart voor een weekdoel, met `gedaan` al gehaald deze week */
+  async function doelKaart(doel, sleutel, gedaan, extra) {
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game"; setPref("weekGoal", ' +
+      JSON.stringify(doel) + ')' + (gedaan ? '; bumpWeek(' + JSON.stringify(sleutel) + ', ' + gedaan + ')' : '') + (extra || ''));
+    return stap(a);
+  }
+  const VRIEND = '; setFriend("v1", { k: "' + 'a'.repeat(43) + '", naam: "Fien", since: 1 })';
+
+  await regel('[3.11] "Bijna je weekdoel!" alleen met iets gedaan en precies één te gaan', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    let r = await doelKaart({ kind: 'potjes', n: 3, lvl: 2 }, 'potjes2', 2);
+    check('2 van 3: Bijna', r.rule === 'R4' && r.title === 'Bijna je weekdoel!' && r.text === 'Nog 1 potje tegen Turbo en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'potjes', n: 2, lvl: 2 }, 'potjes2', 1);
+    check('1 van 2: Bijna', r.rule === 'R4' && r.title === 'Bijna je weekdoel!');
+    r = await doelKaart({ kind: 'potjes', n: 3, lvl: 2 }, 'potjes2', 1);
+    check('1 van 3: het doel, zonder bijna', r.rule === 'R4' && r.title === 'Je weekdoel' && r.text === 'Nog 2 potjes tegen Turbo en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'wins', n: 1, lvl: 3 }, 'wins3', 0);
+    check('0 van 1: het doel, zonder bijna', r.rule === 'R4' && r.title === 'Je weekdoel' &&
+      r.text === 'Nog 1 keer winnen van Super Turbo en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'potjes', n: 5, lvl: 2 }, 'potjes2', 2);
+    check('3 te gaan: geen weekdoelkaart', r.rule !== 'R4');
+    r = await doelKaart({ kind: 'vriend', n: 2 }, 'online', 1);
+    check('een vriendendoel zonder vriend: geen weekdoelkaart', r.rule !== 'R4');
+    r = await doelKaart({ kind: 'vriend', n: 2 }, 'online', 1, VRIEND);
+    check('met een vriend wel', r.rule === 'R4' && r.text === 'Nog 1 potje met een vriend en je weekdoel is gehaald.');
+  });
+
+  await regel('[3.11] op maandag staat achter de kaart van de nieuwe week de stand van de nieuwe week', async function (check) {
+    /* zaterdag nog gespeeld: maandag is geen welkom terug, zodat de kaart het weekdoel laat zien */
+    zetDatum('2026-11-14T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game";' +
+      'setPref("weekGoal", { kind: "top", n: 2, game: "scan" }); bumpWeek("top.scan", 1)');
+    const a2 = herlaad(a);
+    await wacht();
+    zetDatum('2026-11-16T08:00:00');
+    const b = herlaad(a2);
+    await wacht();
+    check('testopzet: de kaart van de nieuwe week staat open', b.open() && /Nieuwe week/.test(b.scherm()));
+    const kaart = tekstVan(b, 'verder');
+    check('erachter: het doel met 2 te gaan, zonder bijna', /Je weekdoel/.test(kaart) && /Nog 2 toprondes/.test(kaart) && !/Bijna/.test(kaart));
+  });
+
+  await regel('[3.9] wie terugkomt: de groet zegt "Welkom terug, Mees!", de kaart "Speel een potje", de naam staat er één keer', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); P.lastSeen = ' + JSON.stringify(dagenTerug(5)) + '; saveP()');
+    const b = herlaad(a);
+    await wacht();
+    check('de groet', tekstVan(b, 'groet') === 'Welkom terug, Mees! 👋');
+    check('de kaart', /^Speel een potje/.test(tekstVan(b, 'verder')) && /Je bent nog steeds Loper/.test(tekstVan(b, 'verder')));
+    check('de naam één keer', (tekstVan(b, 'view-spelen').match(/Mees/g) || []).length === 1);
+  });
+
+  /* decision D32: een document van voor lastSeen neemt de laatste dag met iets erop uit de dagtellers */
+  await regel('[3.9] compat: een document van nu zonder lastSeen, laatst geteld vijf dagen geleden: welkom terug', async function (check) {
+    const a = await kindUitDoc(docVan('Daan', { xp: 2710, stars: 70, 'wk.2026-W45.d5': 1, 'wk.2026-W45.opdr': 4, 'wk.2026-W44.d1': 2 }));
+    check('testopzet: geen lastSeen', a.get('P.lastSeen') === null);
+    const r = await stap(a);
+    check('R3', r.rule === 'R3');
+    check('de groet', tekstVan(a, 'groet') === 'Welkom terug, Daan! 👋');
+  });
+
+  await regel('[3.9] compat: een document van nu zonder lastSeen, laatst geteld gisteren: geen welkom terug', async function (check) {
+    const a = await kindUitDoc(docVan('Daan', { xp: 2710, stars: 70, 'wk.2026-W45.d5': 1, 'wk.2026-W46.d2': 3, 'wk.2026-W46.opdr': 3 }));
+    const r = await stap(a);
+    check('geen R3', r.rule !== 'R3');
+    check('de groet', tekstVan(a, 'groet') === 'Hoi Daan! 👋');
+  });
+
+  /* twee apparaten: lastSeen is van dit apparaat, de dagtellers komen ook van het andere; de laatste dag telt */
+  for (const g of [['lastSeen vijf dagen oud, een dagteller van gisteren', dagenTerug(5), { 'wk.2026-W46.d2': 1 }],
+    ['lastSeen van gisteren, een dagteller van vijf dagen geleden', dagenTerug(1), { 'wk.2026-W45.d5': 1 }]]) {
+    await regel('[3.9] ' + g[0] + ': geen welkom terug', async function (check) {
+      const a = await kindUitDoc(docVan('Daan', Object.assign({ xp: 2710, stars: 70 }, g[2]),
+        { loc: { streak: 0, lastLevel: null, weekSeen: '2026-W46', lastSeen: g[1] } }));
+      check('testopzet: lastSeen uit het document', a.get('P.lastSeen') === g[1]);
+      const r = await stap(a);
+      check('geen R3 (' + r.rule + ')', r.rule !== 'R3');
+      check('de groet', tekstVan(a, 'groet') === 'Hoi Daan! 👋');
+    });
+  }
+
+  /* twee getelde dagen in een week: de laatste telt, niet de eerste (maandag was drie dagen geleden) */
+  await regel('[3.9] compat: zonder lastSeen, maandag en gisteren geteld in dezelfde week: geen welkom terug', async function (check) {
+    const a = await kindUitDoc(docVan('Daan', { xp: 2710, stars: 70, 'wk.2026-W46.d0': 2, 'wk.2026-W46.d2': 1 }));
+    check('testopzet: geen lastSeen', a.get('P.lastSeen') === null);
+    const r = await stap(a);
+    check('geen R3 (' + r.rule + ')', r.rule !== 'R3');
+    check('de groet', tekstVan(a, 'groet') === 'Hoi Daan! 👋');
+  });
+
+  await regel('[3.9] de groet: "Hoi Mees! 👋", zonder naam "Hoi! 👋", en welkom terug zonder naam zonder komma', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('renderHome()');
+    check('met naam', tekstVan(a, 'groet') === 'Hoi Mees! 👋');
+    const b = maakApparaat(null);
+    b.ev('renderHome()');
+    check('zonder naam', tekstVan(b, 'groet') === 'Hoi! 👋');
+    b.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(5)) + '; renderHome()');
+    check('welkom terug zonder naam', tekstVan(b, 'groet') === 'Welkom terug! 👋');
+  });
+
+  await regel('[3.1] een naam met opmaak staat als tekst op Spelen', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('setPref("name", "<b>Mees</b>"); P.lastSeen = ' + JSON.stringify(dagenTerug(5)) + '; renderHome()');
+    const ontsnapt = function (t) { return t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'); };
+    check('de groet toont de tekens', ontsnapt(a.get('$("groet").textContent')).indexOf('<b>Mees</b>') >= 0);
+    check('de kaart maakt er geen opmaak van', a.el('verder').innerHTML.indexOf('<b>') < 0);
+  });
+
+  await regel('[3.9] maandag na vijf dagen weg: eerst de kaart van de nieuwe week, en erachter en erna zegt de groet welkom terug', async function (check) {
+    zetDatum('2026-11-11T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); setPref("weekGoal", { kind: "potjes", n: 3, lvl: 2 }); bumpWeek("potjes2", 1);' +
+      'P.lastSeen = "2026-11-11"; saveP()');
+    const a2 = herlaad(a);
+    await wacht();
+    zetDatum('2026-11-16T08:00:00');
+    const b = herlaad(a2);
+    await wacht();
+    check('eerst de kaart van de nieuwe week', b.open() && /Nieuwe week/.test(b.scherm()));
+    check('erachter zegt de groet welkom terug', tekstVan(b, 'groet') === 'Welkom terug, Mees! 👋');
+    tikTekst(b, 'Zelfde doel houden');
+    await wacht();
+    check('en erna ook, met een potje op de kaart', !b.open() && tekstVan(b, 'groet') === 'Welkom terug, Mees! 👋' &&
+      /^Speel een potje/.test(tekstVan(b, 'verder')));
+  });
+
+  await regel('[3.11] Ik zegt onder het level wat XP en sterren zijn', async function (check) {
+    const a = nieuwKind();
+    a.tik('tabIk');
+    check('de regel', tekstVan(a, 'xpUitleg') === 'Een level haal je met XP en soms een meesterproef. Sterren (0 tot 3) zeggen hoe goed een opdracht ging.');
+  });
+
+  await regel('[3.11] Instellingen: een nieuwe naam zegt "✔ bewaard", en het veld selecteert alles als je erop tikt', async function (check) {
+    const a = nieuwKind();
+    a.tik('setBtn');
+    await wacht();
+    const veld = a.el('setName');
+    check('testopzet: nog geen teken', !/bewaard/.test(a.scherm()));
+    fire(veld, 'focus', { target: veld });
+    await wacht();
+    check('alles geselecteerd', veld.selectionStart === 0 && veld.selectionEnd === 'Mees'.length);
+    vulIn(a, veld, 'Mees de Grote');
+    fire(veld, 'change', { target: veld });
+    await wacht();
+    check('bewaard en gezegd', a.get('P.name') === 'Mees de Grote' && /✔ bewaard/.test(a.scherm()));
+  });
+
+  await regel('[3.11] elke zin over wat er nog moet telt goed: "Nog 1 opdracht", "Nog 1 topronde", en een topronde zegt wat hij is', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const zin = function (r) { return r.rule === 'R4' ? r.text : '(geen R4) ' + r.rule; };
+    let r = await doelKaart({ kind: 'opdr', n: 10 }, 'opdr', 9);
+    check('opdrachten', zin(r) === 'Nog 1 opdracht en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'potjes', n: 2, lvl: 1 }, 'potjes1', 1);
+    check('potjes', zin(r) === 'Nog 1 potje tegen Slaapkop Turbo en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'wins', n: 2, lvl: 2 }, 'wins2', 1);
+    check('winnen', zin(r) === 'Nog 1 keer winnen van Turbo en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'vriend', n: 3 }, 'online', 2, VRIEND);
+    check('vriend', zin(r) === 'Nog 1 potje met een vriend en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'top', n: 2, game: 'trucs' }, 'top.trucs', 1);
+    check('toprondes', zin(r) === 'Nog 1 topronde bij Turbo’s Trucendoos (12 sterren of meer) en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'top', n: 3, game: 'scan' }, 'top.scan', 1);
+    check('twee toprondes', zin(r) === 'Nog 2 toprondes bij Speurogen (12 sterren of meer) en je weekdoel is gehaald.');
+    const a = nieuwKind();
+    a.ev('setPref("weekGoal", { kind: "top", n: 1, game: "scan" }); renderHome()');
+    check('de weekregel op Spelen kort', /^0 van 1 topronde bij Speurogen\s*›?$/.test(tekstVan(a, 'weekStrip')));
+    a.tik('tabIk');
+    check('het doel op Ik met wat een topronde is', /Mijn doel: 1 topronde bij Speurogen \(12 sterren of meer\)/.test(tekstVan(a, 'weekCard')));
+  });
+
+  await regel('tekst: de weekdoelkiezer begint bij 3 potjes tegen de Turbo die bij het kind past', async function (check) {
+    const niveau = async function (extra) {
+      const a = nieuwKind();
+      a.ev(extra + '; goalFlow()');
+      await wacht();
+      const aan = a.el('goalSub').innerHTML.match(/chip on" data-lvl="(\d)"/);
+      return [/chip on" data-kind="potjes"/.test(a.el('goalKinds').innerHTML), /chip on big" data-n="3"/.test(a.el('goalNs').innerHTML), aan ? +aan[1] : null];
+    };
+    check('een nieuw kind: Slaapkop Turbo', JSON.stringify(await niveau('setPref("start", "nieuw")')) === '[true,true,1]');
+    check('wie Super Turbo versloeg: Super Turbo', JSON.stringify(await niveau('bump("wins", 1); bump("c.winsL3", 1)')) === '[true,true,3]');
+  });
+
+  await regel('[3.11] de weekregel zonder doel nodigt uit in één korte zin', async function (check) {
+    const a = nieuwKind();
+    a.ev('renderHome()');
+    check('de zin', /^Kies een doel voor deze week\s*›?$/.test(tekstVan(a, 'weekStrip')));
+  });
+
+  await regel('[3.11] een tik op de weekregel opent Ik bij "Deze week"', async function (check) {
+    const a = nieuwKind();
+    a.ev('setPref("weekGoal", { kind: "opdr", n: 10 })');
+    __scrolls.length = 0;
+    a.tik('weekStrip');
+    check('Ik staat open', zichtbaar(a, 'view-ik') && !zichtbaar(a, 'view-spelen'));
+    check('bij het blok van de week', __scrolls.some(function (s) { return s.el === 'ikWeek'; }) && /Deze week/.test(tekstVan(a, 'ikWeek')));
+  });
+
+  await regel('[3.11] de trofeeën: verdiende eerst, de kop telt, een tegel op slot zegt wat hij vraagt, een tik vertelt het', async function (check) {
+    const a = nieuwKind();
+    a.ev('addBadge("vlam"); addBadge("raket"); renderHome()');
+    a.tik('tabIk');
+    check('de kop telt', /Trofeeën 2 van 14/.test(tekstVan(a, 'badgeKop')));
+    const tegels = Array.prototype.slice.call(a.el('badgeGrid').querySelectorAll('[data-badge]'));
+    check('veertien tegels, de verdiende eerst', tegels.length === 14 &&
+      ['raket', 'vlam'].indexOf(tegels[0].dataset.badge) >= 0 && ['raket', 'vlam'].indexOf(tegels[1].dataset.badge) >= 0);
+    check('een verdiende tegel is als verdiend te lezen, een tegel op slot niet', tegels[0].classList.contains('verdiend') &&
+      !tegels[13].classList.contains('verdiend') && tegels[13].classList.contains('locked'));
+    /* een naam mag een zacht afbreekstreepje hebben: dat ziet een kind niet zolang hij past */
+    const lees = function (t) { return t.replace(/\u00ad/g, ''); };
+    const speur = tegels.filter(function (t) { return t.dataset.badge === 'speurneus'; })[0];
+    check('een tegel op slot zegt wat hij vraagt', !!speur && /10 perfecte speurrondes/.test(a.doc.__tekst(speur)) && !/Superspeurneus/.test(lees(a.doc.__tekst(speur))));
+    tikEl(a, speur, 'de tegel Superspeurneus');
+    check('een tik: de naam, en hoe je hem krijgt', a.open() && /Superspeurneus/.test(lees(a.scherm())) &&
+      /Nog niet verdiend\. Zo krijg je hem: 10 perfecte speurrondes\./.test(a.scherm()));
+    a.ev('closeModal()');
+    tikEl(a, tegels.filter(function (t) { return t.dataset.badge === 'raket'; })[0], 'de tegel Raket-temmer');
+    check('een verdiende: de opdracht met een kleine letter', /✔ Verdiend! De opdracht was: versla Super Turbo\./.test(a.scherm()));
+  });
+
+  await regel('[3.11] een bordkleur op slot zegt vanaf welk level, en een gekozen kleur zegt dat hij gekozen is', async function (check) {
+    const a = nieuwKind();
+    a.ev('bump("xp", 150); renderHome()');
+    a.tik('tabIk');
+    const knop = function (id) { return a.el('themeRow').querySelectorAll('[data-th="' + id + '"]')[0]; };
+    check('Lava: vanaf Dame', /vanaf Dame/.test(a.doc.__tekst(knop('lava'))));
+    a.tik('setBtn');
+    await wacht();
+    const oceaan = a.el('setThemes').querySelectorAll('[data-th="oceaan"]')[0];
+    tikEl(a, oceaan, 'Oceaan in Instellingen');
+    check('in Instellingen: "Oceaan gekozen" in het venster', a.get('P.theme') === 'oceaan' && /Oceaan gekozen/.test(a.scherm()));
   });
 
   /* ================= increment 4 (wat op een apparaat te zien is) ================= */
