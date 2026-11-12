@@ -196,11 +196,15 @@ for (const [W, H] of KLEIN) {
       for (const groep of ['scan', 'best3.best3', 'best3.safe', 'trucs', 'koning', 'opening.coach', 'opening.pad']) {
         await vers(${W}, ${H});
         const uit = await page.evaluate(async (groep) => {
-          ({ scan: () => startDrill('scan'), 'best3.best3': () => { startDrill('best3'); setTask(null); setOptions(null); buildBest3(); },
-            'best3.safe': () => { startDrill('best3'); setTask(null); setOptions(null); buildSafe(); },
+          ({ scan: () => startDrill('scan'), 'best3.best3': () => startDrill('best3'), 'best3.safe': () => startDrill('best3'),
             trucs: () => startDrill('trucs'), koning: () => startDrill('koning'),
             'opening.coach': () => startOpening('coach', null), 'opening.pad': () => startOpening('pad', PADEN[0]) })[groep]();
           await new Promise(r => setTimeout(r, 1500));
+          if (groep === 'best3.best3' || groep === 'best3.safe') {
+            setTask(null); setOptions(null); BD.arrows = [];
+            if (groep === 'best3.best3') buildBest3(); else buildSafe();
+            await new Promise(r => setTimeout(r, 500));
+          }
           if (typeof OPDRACHTEN === 'undefined') return ['er is geen tabel OPDRACHTEN'];
           const langsteHint = PADEN.map(p => p.hint).reduce((a, b) => a.concat(b), []).sort((a, b) => b.length - a.length)[0];
           const vul = t => (t || '').replace('{stuk}', 'koning').replace('{veld}', 'h8').replace('{zet}', 'Paard e4 → f6, slaat pion')
@@ -377,13 +381,14 @@ GEVALLEN.push({ regels: ['[2.6] 375x553: Turbo\'s stukken zijn donkergroen (#124
 
 /* plan.md 2.1 en de review van increment 2: elke soort opdracht, ook De Beste Zet met zijn keuzes, de
    openingsles met zijn meters en de denkwolk, op de maten waar het misging */
+/* het rondje bouwt zijn eerste opdracht pas na een tik van de klok: de soort wordt daarna klaargezet */
 const SOORTEN = [
-  ['De Beste Zet met zijn keuzes', `startDrill('best3'); setTask(null); setOptions(null); buildBest3();`],
-  ['veilig of valstrik', `startDrill('best3'); setTask(null); setOptions(null); buildSafe();`],
-  ['de Trucendoos', `startDrill('trucs');`],
-  ['Koning ontsnapt', `startDrill('koning');`],
-  ['de openingsles met de coach', `startOpening('coach', null);`],
-  ['de openingsles met een pad', `startOpening('pad', PADEN[0]);`]
+  ['De Beste Zet met zijn keuzes', `startDrill('best3');`, `setTask(null); setOptions(null); BD.arrows = []; buildBest3();`],
+  ['veilig of valstrik', `startDrill('best3');`, `setTask(null); setOptions(null); BD.arrows = []; buildSafe();`],
+  ['de Trucendoos', `startDrill('trucs');`, ``],
+  ['Koning ontsnapt', `startDrill('koning');`, ``],
+  ['de openingsles met de coach', `startOpening('coach', null);`, ``],
+  ['de openingsles met een pad', `startOpening('pad', PADEN[0]);`, ``]
 ];
 for (const [W, H] of [[360, 640], [375, 553], [375, 647], [390, 667], [402, 700], [768, 904]]) {
   const regels = SOORTEN.map(s => '[2.1] ' + W + 'x' + H + ': ' + s[0] + ': het bord, de uitleg en de laatste knop in beeld, de pagina scrolt niet')
@@ -406,6 +411,8 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647], [390, 667], [402, 700]
         await vers(${W}, ${H});
         await page.evaluate(i => [${SOORTEN.map(s => '() => { ' + s[1] + ' }').join(', ')}][i](), i);
         await page.waitForTimeout(1500);
+        await page.evaluate(i => [${SOORTEN.map(s => '() => { ' + s[2] + ' }').join(', ')}][i](), i);
+        await page.waitForTimeout(800);
         await meet(regels[i]);
       }
       await vers(${W}, ${H});
