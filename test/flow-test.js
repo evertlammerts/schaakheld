@@ -1290,10 +1290,52 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   session = { kind: 'game', online: true, over: false, myColor: 'w', S: newGame() };
   showScreen('play');
   mpStart('kamerdiENIETbestaat', 'stoeltokendatNIETbestaat', true);
-  for (i = 0; i < 80 && MP; i++) { drainTimers(); await null; await null; }
+  /* de wachttijd loopt op tot tien seconden; het venster moet daaroverheen */
+  for (i = 0; i < 80 && MP; i++) { drainTimers(400, 12000); await null; await null; }
   ok('mp: geeft na te veel mislukte herverbindingen op en meldt het',
     MP === null && __els.modalBox.innerHTML.indexOf('verbinding is weg') >= 0);
-  fire(__els.mpVwOk, 'click');
+  fire(__els.meldOk, 'click');
+  await tikje();
+
+  /* het opgeef-budget gaat pas op nul als een verbinding ook blijft staan:
+     een stoeltje dat telkens binnen een seconde weer dichtgaat telt niet,
+     en de wachttijd tussen pogingen loopt daarbij op in plaats van elke
+     keer terug naar een seconde */
+  var kFlap = await (await fetch(SYNC_URL + '/v1/room', { method: 'POST' })).json();
+  var welkoms = 0, maxBackoff = 0, oMsg = mpMsg;
+  mpMsg = function (m) {
+    if (m && m.t === 'welkom') {
+      welkoms++;
+      maxBackoff = Math.max(maxBackoff, MP.backoff);
+      setTimeout(function () { if (MP && MP.ws) MP.ws.close(); }, 1000);
+    }
+    return oMsg(m);
+  };
+  session = { kind: 'game', online: true, over: false, myColor: 'w', S: newGame() };
+  showScreen('play');
+  mpStart(kFlap.room, kFlap.seat, true);
+  for (i = 0; i < 80 && MP; i++) { drainTimers(400, 12000); await null; await null; }
+  ok('mp: een verbinding die telkens meteen wegvalt telt niet als geslaagd en wacht steeds langer',
+    MP === null && welkoms === 9 && maxBackoff === 10000 &&
+    __els.modalBox.innerHTML.indexOf('verbinding is weg') >= 0);
+  mpMsg = oMsg;
+  fire(__els.meldOk, 'click');
+  await tikje();
+
+  var kVast = await (await fetch(SYNC_URL + '/v1/room', { method: 'POST' })).json();
+  mpStart(kVast.room, kVast.seat, true);
+  drainTimers(400, 1000);
+  for (i = 0; i < 30; i++) await null;
+  MP.ws.close(); /* één hik */
+  drainTimers(400, 3000);
+  for (i = 0; i < 30; i++) await null;
+  ok('mp: na een hik is het herverbinden nog niet meteen een geslaagde verbinding',
+    !!MP && MP.open === true && MP.pogingen === 1);
+  drainTimers(400, 6000);
+  for (i = 0; i < 30; i++) await null;
+  ok('mp: na vijf seconden blijven staan is het budget weer vol',
+    !!MP && MP.pogingen === 0 && MP.backoff === 1000);
+  mpStop();
   await tikje();
 
   /* ---------- wederzijdse woordcodes tegen de nep-server ---------- */
@@ -1796,12 +1838,74 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   fire(__els.invNee, 'click');
   ok('twee kanten: nu niet = ons wachtscherm terug en onze uitnodiging staat nog',
     !!INV && INV.fid === fid && __els.modalBox.innerHTML.indexOf('Wachten op Mila') >= 0);
+  /* een tweede briefje van Bo staat op het scherm als onze eigen uitnodiging
+     verloopt: dat briefje is al als gezien gemerkt en komt niet terug, dus de
+     melding mag het niet van het scherm vegen */
+  var briefBo2 = b64url(await sealJSON(mK2, 'uitnodiging',
+    { id: 'bobriefje2', room: kamerBo.id, seat: kamerBo.gast, naam: 'Bo', ts: Date.now() }));
+  await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: {},
+    body: JSON.stringify({ bus: busBo.bus, bewijs: busBo.bewijs, blob: briefBo2 }) });
+  for (i = 0; i < 20; i++) await null;
+  await friendPoll();
+  for (i = 0; i < 30; i++) await null;
+  ok('twee kanten: Bo vraagt het nog eens', __els.modalBox.innerHTML.indexOf('Bo wil een potje spelen') >= 0);
   /* na tien minuten is het briefje uit de bus en houdt het wachten op */
   drainTimers(400, INVITE_TTL + 60000);
   for (i = 0; i < 30; i++) await null;
+  ok('twee kanten: onze uitnodiging verloopt, maar de vraag van Bo blijft staan',
+    INV === null && MP === null && __els.modalBox.innerHTML.indexOf('Bo wil een potje spelen') >= 0 &&
+    modalQueue.length === 1);
+  fire(__els.invNee, 'click');
+  for (i = 0; i < 20; i++) await null;
   ok('twee kanten: een verlopen uitnodiging stopt met wachten en zegt het',
     INV === null && MP === null && __els.modalBox.innerHTML.indexOf('heeft niet gekeken') >= 0);
-  fire(__els.invOudOk, 'click');
+  fire(__els.meldOk, 'click');
+  for (i = 0; i < 20; i++) await null;
+
+  /* zegt het kind ja op zo'n blijvende vraag, dan hoort de melding over de
+     verlopen uitnodiging niet alsnog boven het verbinden te komen */
+  await inviteFriend(fid);
+  for (i = 0; i < 30; i++) await null;
+  var briefBo3 = b64url(await sealJSON(mK2, 'uitnodiging',
+    { id: 'bobriefje3', room: kamerBo.id, seat: kamerBo.gast, naam: 'Bo', ts: Date.now() }));
+  await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: {},
+    body: JSON.stringify({ bus: busBo.bus, bewijs: busBo.bewijs, blob: briefBo3 }) });
+  for (i = 0; i < 20; i++) await null;
+  await friendPoll();
+  for (i = 0; i < 30; i++) await null;
+  drainTimers(400, INVITE_TTL + 60000);
+  for (i = 0; i < 30; i++) await null;
+  ok('twee kanten: ook nu blijft de vraag van Bo staan',
+    INV === null && MP === null && __els.modalBox.innerHTML.indexOf('Bo wil een potje spelen') >= 0);
+  fire(__els.invJa, 'click');
+  for (i = 0; i < 30; i++) await null;
+  ok('twee kanten: ja op Bo = verbinden met Bo, zonder oude melding ertussen',
+    !!MP && MP.room === kamerBo.id && MP.viaFriend === fid2 && modalQueue.length === 0 &&
+    __els.modalBox.innerHTML.indexOf('Verbinden') >= 0);
+  mpStop();
+  closeModal();
+  for (i = 0; i < 20; i++) await null;
+
+  /* ja zeggen op Bo terwijl onze eigen uitnodiging aan Mila nog naar de
+     server onderweg is: die eigen uitnodiging vervalt dan, en overschrijft
+     niet het potje met Bo */
+  var briefBo4 = b64url(await sealJSON(mK2, 'uitnodiging',
+    { id: 'bobriefje4', room: kamerBo.id, seat: kamerBo.gast, naam: 'Bo', ts: Date.now() }));
+  await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: {},
+    body: JSON.stringify({ bus: busBo.bus, bewijs: busBo.bewijs, blob: briefBo4 }) });
+  for (i = 0; i < 20; i++) await null;
+  await friendPoll();
+  for (i = 0; i < 30; i++) await null;
+  var busMila = await busFor(P.friends[fid], theirRole(P.friends[fid]));
+  var pInv = inviteFriend(fid);
+  fire(__els.invJa, 'click');
+  await pInv;
+  for (i = 0; i < 30; i++) await null;
+  ok('twee kanten: ja op Bo terwijl de eigen uitnodiging nog onderweg is = potje met Bo',
+    !!MP && MP.room === kamerBo.id && INV === null && modalQueue.length === 0 &&
+    !(busMila.bus in __server.buses));
+  mpStop();
+  closeModal();
   for (i = 0; i < 20; i++) await null;
   setFriend(fid2, Object.assign({}, P.friends[fid2], { weg: true }));
   __server.buses = {};
@@ -1829,7 +1933,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   for (i = 0; i < 30; i++) await null;
   ok('stille kamer: daarna een eerlijke melding in plaats van eeuwig wachten',
     MP === null && __els.modalBox.innerHTML.indexOf('is er nu even niet') >= 0);
-  fire(__els.mpStilOk, 'click');
+  fire(__els.meldOk, 'click');
   for (i = 0; i < 20; i++) await null;
   __server.buses = {};
   setFriend(fid, Object.assign({}, P.friends[fid], { host: true }));

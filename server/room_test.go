@@ -247,6 +247,12 @@ func TestRelay(t *testing.T) {
 	if got := wsRead(t, ctx, host); !strings.Contains(got, `"aan":true`) {
 		t.Fatalf("host verwacht peer-aan na herverbinden, kreeg %q", got)
 	}
+	// de oude verbinding hoort eerst te horen waaróm ze dichtgaat: zonder
+	// dat bericht verbindt die kant opnieuw, duwt de nieuwe eruit, en dat
+	// gaat eindeloos heen en weer
+	if got := wsRead(t, ctx, gast); !strings.Contains(got, `"t":"stoel"`) {
+		t.Fatalf("oude gast verwacht een stoel-bericht, kreeg %q", got)
+	}
 	if _, _, err := gast.Read(ctx); err == nil {
 		t.Fatal("de oude gastverbinding hoort gesloten te zijn")
 	}

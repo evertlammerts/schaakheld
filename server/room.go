@@ -71,6 +71,10 @@ func (st *seat) write(data []byte) {
 	st.mu.Lock()
 	c := st.conn
 	st.mu.Unlock()
+	writeConn(c, data)
+}
+
+func writeConn(c *websocket.Conn, data []byte) {
 	if c == nil {
 		return
 	}
@@ -319,6 +323,13 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 	mine.live.Store(true)
 	mine.mu.Unlock()
 	if old != nil {
+		// zeg erbij waarom we sluiten. Zonder dat kan de oude kant niet
+		// zien of zijn wifi hikte of dat een ander apparaat het stoeltje
+		// overnam, en verbindt hij dus opnieuw - waarmee hij de nieuwe
+		// eruit gooit, die weer terugkomt, eindeloos. Twee apparaten van
+		// hetzelfde kind (dezelfde uitnodiging, allebei aangenomen) doen
+		// dat zonder dit bericht om de paar honderd milliseconden.
+		writeConn(old, []byte(`{"t":"stoel"}`))
 		old.CloseNow()
 	}
 	// eerst het eigen welkom, dan pas de peer porren: anders kan een

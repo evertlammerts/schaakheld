@@ -2,6 +2,9 @@
 # Draait beide testsuites headless:
 #  1. engine-tests (perft, mat/pat, SEE, drill-generatoren)
 #  2. UI-flowtests (drills, uitleg, partij, blunder-alarm, voorspellen) op een DOM-shim
+#  3. tweeapparaten-tests: twee volledige app-instanties (eigen DOM, opslag en
+#     globals) op één gedeelde nep-server en relay, voor alles wat pas misgaat
+#     als beide kanten echt draaien
 # Gebruikt jsc (zit standaard in macOS). Met node werkt de engine-suite ook:
 #   node test/test-engine.js
 set -e
@@ -18,7 +21,10 @@ sed '$ s@</script>@@' src/tail.html > .tmp-ui.js
 # jsc geeft bij een gefaalde of afgebroken flowsuite gewoon 0 terug; de
 # uitkomst staat in de laatste regel
 grep -q 'ALL FLOW TESTS PASSED' .tmp-flow.log || { echo "FAIL flowtests"; rm -f .tmp-ui.js .tmp-flow.log; exit 1; }
-rm -f .tmp-ui.js .tmp-flow.log
+# 3. tweeapparaten-tests: twee echte app-instanties op één nep-server
+"$JSC" test/run-twee.js | tee .tmp-twee.log
+grep -q 'ALL TWO-DEVICE TESTS PASSED' .tmp-twee.log || { echo "FAIL tweeapparaten-tests"; rm -f .tmp-ui.js .tmp-flow.log .tmp-twee.log; exit 1; }
+rm -f .tmp-ui.js .tmp-flow.log .tmp-twee.log
 
 # PWA-bestanden: manifest parseert, sw.js registreert zijn listeners zonder
 # fouten (onder een mini-shim), en de iconen zijn echte PNG's.

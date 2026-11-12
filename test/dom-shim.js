@@ -1,7 +1,21 @@
 /* Minimal DOM shim so the UI script can run headless under jsc (or node via cat-pipe). */
 if (typeof print === 'undefined') var print = console.log;
 var elc = 0;
-function makeEl(id) {
+/* Een apparaat heeft zijn eigen DOM, opslag en adresbalk. De nep-server, de
+   relay, de klok en de crypto zijn van de wereld en dus gedeeld: twee
+   apparaten praten met dezelfde server, net als echt. */
+function maakDocument() {
+  const els = {};
+  /* Een element met een id in vers geschreven HTML is in een echte browser een
+     nieuwe knoop: zijn luisteraars zijn weg. De shim geeft hetzelfde gecachete
+     object terug, dus wissen we ze hier. Het element waarin geschreven wordt
+     blijft wel bestaan, dus daar stapelen luisteraars op, net als echt. */
+  function versHtml(html) {
+    const re = /id="([^"]+)"/g;
+    let m;
+    while ((m = re.exec(html)) !== null) { const el = els[m[1]]; if (el) el._ev = {}; }
+  }
+  function makeEl(id) {
   const el = { id, children: [], style: {}, dataset: {}, _ev: {}, _html: '', _text: '',
     _cls: new Set(), disabled: false, value: '' };
   el.classList = {
@@ -20,7 +34,7 @@ function makeEl(id) {
   });
   Object.defineProperty(el, 'innerHTML', {
     get: () => el._html,
-    set: v => { el._html = String(v); el.children = []; __versHtml(v); }
+    set: v => { el._html = String(v); el.children = []; versHtml(v); }
   });
   Object.defineProperty(el, 'textContent', {
     get: () => el._text || el._html.replace(/<[^>]*>/g, ''),
@@ -37,40 +51,42 @@ function makeEl(id) {
   el.replaceWith = () => {};
   el.focus = () => {};
   el.cloneNode = () => makeEl(id);
-  el.getContext = () => ({ clearRect() {}, save() {}, restore() {}, translate() {}, rotate() {}, fillRect() {} });
-  return el;
+    el.getContext = () => ({ clearRect() {}, save() {}, restore() {}, translate() {}, rotate() {}, fillRect() {} });
+    return el;
+  }
+  return {
+    __els: els,
+    getElementById(id) { return els[id] || (els[id] = makeEl(id)); },
+    createElement() { return makeEl('_c' + (elc++)); },
+    querySelectorAll() { return []; },
+    querySelector() { return makeEl('_q' + (elc++)); },
+    body: makeEl('body'),
+    documentElement: makeEl('documentElement'),
+    /* document-brede handlers echt bewaren, zodat fire(document, 'keydown', ...)
+       in de flowtests de app-code raakt (Escape sluit een modal) */
+    _ev: {},
+    addEventListener(t, fn) { (this._ev[t] || (this._ev[t] = [])).push(fn); }
+  };
 }
-var __els = {};
-/* Een element met een id in vers geschreven HTML is in een echte browser een
-   nieuwe knoop: zijn luisteraars zijn weg. De shim geeft hetzelfde gecachete
-   object terug, dus wissen we ze hier. Het element waarin geschreven wordt
-   blijft wel bestaan, dus daar stapelen luisteraars op, net als echt. */
-function __versHtml(html) {
-  const re = /id="([^"]+)"/g;
-  let m;
-  while ((m = re.exec(html)) !== null) { const el = __els[m[1]]; if (el) el._ev = {}; }
+/* in-memory localStorage so profile save/load and de CRDT-doc round-trip echt draaien */
+function maakOpslag() {
+  return {
+    _m: {},
+    getItem(k) { return k in this._m ? this._m[k] : null; },
+    setItem(k, v) { this._m[k] = String(v); },
+    removeItem(k) { delete this._m[k]; }
+  };
 }
-var document = {
-  getElementById(id) { return __els[id] || (__els[id] = makeEl(id)); },
-  createElement() { return makeEl('_c' + (elc++)); },
-  querySelectorAll() { return []; },
-  querySelector() { return makeEl('_q' + (elc++)); },
-  body: makeEl('body'),
-  documentElement: makeEl('documentElement'),
-  /* document-brede handlers echt bewaren, zodat fire(document, 'keydown', ...)
-     in de flowtests de app-code raakt (Escape sluit een modal) */
-  _ev: {},
-  addEventListener(t, fn) { (this._ev[t] || (this._ev[t] = [])).push(fn); }
-};
+function maakLocatie() {
+  const loc = { protocol: 'file:', origin: 'https://test.local', pathname: '/schaakheld/', search: '', hash: '' };
+  loc.__history = { replaceState() { loc.hash = ''; } };
+  return loc;
+}
+var document = maakDocument();
+var __els = document.__els;
 var window = globalThis;
 var navigator = {};
-/* in-memory localStorage so profile save/load and de CRDT-doc round-trip echt draaien */
-var localStorage = {
-  _m: {},
-  getItem(k) { return k in this._m ? this._m[k] : null; },
-  setItem(k, v) { this._m[k] = String(v); },
-  removeItem(k) { delete this._m[k]; }
-};
+var localStorage = maakOpslag();
 
 /* TextEncoder/TextDecoder: jsc heeft ze niet; utf-8 via de escape-truc */
 function TextEncoder() {}
@@ -270,8 +286,8 @@ var fetch = function (url, opts) {
     } else res(404);
   });
 };
-var location = { protocol: 'file:', origin: 'https://test.local', pathname: '/schaakheld/', search: '', hash: '' };
-var history = { replaceState() { location.hash = ''; } };
+var location = maakLocatie();
+var history = location.__history;
 var innerWidth = 900, innerHeight = 700;
 var addEventListener = function () {};
 var matchMedia = function () { return { matches: true }; };
@@ -317,7 +333,14 @@ function WebSocket(url) {
       self._room = join.room;
       self._seat = join.seat;
       rm.seats[join.seat] = self;
-      if (oud && oud !== self) oud.close();
+      /* zoals room.go: eerst zeggen dat het stoeltje is overgenomen, dan pas
+         sluiten, zodat de oude kant weet dat herverbinden zinloos is */
+      if (oud && oud !== self) {
+        setTimeout(function () {
+          if (oud.readyState === 1 && oud.onmessage) oud.onmessage({ data: '{"t":"stoel"}' });
+          oud.close();
+        }, 0);
+      }
       lever(self, '{"t":"welkom"}');
       const p = peer();
       if (p) lever(p, '{"t":"peer","aan":true}');
@@ -353,8 +376,10 @@ var __timers = [], __tid = 1, __klok = 0;
 var setTimeout = function (fn, ms) { __timers.push({ fn, at: __klok + (ms || 0), id: __tid }); return __tid++; };
 var clearTimeout = function (id) { __timers = __timers.filter(t => t.id !== id); };
 function drainTimers(max, venster) {
+  return drainTot(max, __klok + (venster == null ? 5000 : venster));
+}
+function drainTot(max, grens) {
   max = max || 400;
-  const grens = __klok + (venster == null ? 5000 : venster);
   let n = 0;
   while (n < max) {
     __timers.sort((a, b) => a.at - b.at);

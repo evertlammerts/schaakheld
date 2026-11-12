@@ -768,9 +768,10 @@ function mpEmojiTrio(roomId) {
 function mpNaam() { return (MP && MP.peerName) || 'je maatje'; }
 
 function mpStart(room, seat, host) {
+  dropModal('melding');
   MP = { room, seat, host, ws: null, open: false, peerOn: false, peerName: '',
     myColor: null, gameNo: 0, revMine: false, revTheirs: false, hunVraag: null, bewijzenP: null,
-    backoff: 1000, weg: false, syncWanted: false, pogingen: 0, reTimer: 0, wachtTimer: 0 };
+    backoff: 1000, weg: false, syncWanted: false, pogingen: 0, reTimer: 0, wachtTimer: 0, stabielTimer: 0 };
   mpConnect();
 }
 
@@ -782,11 +783,10 @@ function mpConnect() {
   ws.onopen = () => {
     if (!MP || MP.ws !== ws) return;
     MP.open = true;
-    MP.backoff = 1000;
-    /* pogingen NIET hier resetten: de server accepteert de socket en sluit
-       pas daarna een onbekende/opgeruimde kamer, dus onopen vuurt elke
-       poging. Pas het welkom bewijst dat het stoeltje echt is; daar reset
-       het budget (anders reconnect je eeuwig stil door). */
+    /* pogingen en backoff NIET hier resetten: de server accepteert de socket
+       en sluit pas daarna een onbekende/opgeruimde kamer, dus onopen vuurt
+       elke poging. Pas een welkom dat ook blijft staan bewijst dat het
+       stoeltje echt is (anders reconnect je eeuwig stil door). */
     ws.send(JSON.stringify({ room: MP.room, seat: MP.seat }));
   };
   ws.onmessage = ev => {
@@ -798,6 +798,7 @@ function mpConnect() {
   ws.onclose = () => {
     if (!MP || MP.ws !== ws) return;
     MP.open = false;
+    clearTimeout(MP.stabielTimer); /* deze verbinding hield het niet: budget blijft lopen */
     if (MP.weg) return;
     /* stilletjes opnieuw verbinden; hersync gaat via sync? na het welkom.
        Maar niet eindeloos: als de kamer echt weg is (server herstart,
@@ -816,12 +817,13 @@ function mpSend(obj) {
   if (MP && MP.open) { try { MP.ws.send(JSON.stringify(obj)); } catch (e) {} }
 }
 
-function mpStop() {
+function mpStop(stil) {
   if (!MP) return;
   MP.weg = true;
   if (MP.reTimer) clearTimeout(MP.reTimer); /* geen herverbind-timer die na een nieuw potje afgaat */
   if (MP.wachtTimer) clearTimeout(MP.wachtTimer);
-  mpSend({ t: 'weg' });
+  if (MP.stabielTimer) clearTimeout(MP.stabielTimer);
+  if (!stil) mpSend({ t: 'weg' });
   try { if (MP.ws) MP.ws.close(); } catch (e) {}
   MP = null;
   const frame = document.querySelector('.board-frame');
@@ -835,13 +837,9 @@ function mpVerbindingWeg() {
   const inSpel = !!(session && session.online);
   mpStop();
   if (inSpel) { session.over = true; BD.mode = 'off'; }
-  dropModal('mpwacht');
-  showModal('<div class="m-emoji">📡</div><h2>De verbinding is weg</h2>' +
-    '<p>' + (inSpel ? 'Jammer! Maak samen een nieuwe code om verder te spelen.' :
-      'Het lukt niet om verbinding te maken. Probeer het zo nog eens!') + '</p>' +
-    '<div class="m-btns"><button class="btn sun" id="mpVwOk">🏠 Naar huis</button></div>', () => {
-      $('mpVwOk').addEventListener('click', () => { closeModal(); goHome(); });
-    });
+  naarHuisMelding('📡', 'De verbinding is weg', inSpel ?
+    'Jammer! Maak samen een nieuwe code om verder te spelen.' :
+    'Het lukt niet om verbinding te maken. Probeer het zo nog eens!');
 }
 
 /* Wie een uitnodiging aanneemt of een code invoert verwacht iemand die er NU
@@ -855,22 +853,44 @@ function mpWachtOpMaatje(naam) {
   mp.wachtTimer = setTimeout(() => {
     if (MP !== mp || mp.peerOn) return;
     mpStop();
-    dropModal('mpwacht');
-    showModal('<div class="m-emoji">🐢</div><h2>' + escHtml(naam) + ' is er nu even niet</h2>' +
-      '<p>Misschien staat SchaakHeld bij ' + escHtml(naam) + ' niet open. Zeg het even, en probeer het dan opnieuw!</p>' +
-      '<div class="m-btns"><button class="btn sun" id="mpStilOk">🏠 Naar huis</button></div>', () => {
-        $('mpStilOk').addEventListener('click', () => { closeModal(); goHome(); });
-      });
+    naarHuisMelding('🐢', escHtml(naam) + ' is er nu even niet',
+      'Misschien staat SchaakHeld bij ' + escHtml(naam) + ' niet open. Zeg het even, en probeer het dan opnieuw!');
   }, MAATJE_WACHT);
+}
+
+/* Het opgeef-budget gaat pas terug op nul als de verbinding ook een paar
+   seconden blijft staan. Een socket die telkens meteen weer dichtgaat is
+   geen geslaagde verbinding; zonder die eis zou de app eindeloos opnieuw
+   blijven proberen zonder ooit langer te wachten. */
+const STABIEL_MS = 5000;
+function mpStabielVanaf() {
+  const mp = MP;
+  if (!mp) return;
+  clearTimeout(mp.stabielTimer);
+  mp.stabielTimer = setTimeout(() => {
+    if (MP === mp) { mp.pogingen = 0; mp.backoff = 1000; }
+  }, STABIEL_MS);
+}
+
+/* Een ander apparaat van hetzelfde kind heeft het stoeltje overgenomen (de
+   uitnodiging stond op allebei). Opnieuw verbinden zou het andere apparaat
+   er weer uit duwen, en dat duwt terug: hier stoppen we dus, zonder 'weg'
+   te roepen, want het maatje speelt gewoon door met het andere apparaat. */
+function mpStoelKwijt() {
+  const inSpel = !!(session && session.online);
+  mpStop(true);
+  if (inSpel) { session.over = true; BD.mode = 'off'; }
+  naarHuisMelding('📱', 'Je speelt op je andere apparaat',
+    'Daar ging het net verder. Op dit apparaat stoppen we, anders duwen ze elkaar steeds weg.');
 }
 
 function mpMsg(m) {
   if (!m || !MP) return;
   switch (m.t) {
     case 'welkom':
-      /* de server heeft het stoeltoken geaccepteerd: dit telt als een
-         geslaagde (her)verbinding, dus het opgeef-budget mag terug op nul */
-      MP.pogingen = 0;
+      /* de server heeft het stoeltoken geaccepteerd: dat telt als een
+         geslaagde (her)verbinding, maar pas als hij ook even blijft staan */
+      mpStabielVanaf();
       mpHallo();
       /* midden in een potje herverbonden: vraag de stand op */
       if (session && session.online && !session.over) { MP.syncWanted = true; mpSend({ t: 'sync?' }); }
@@ -935,6 +955,9 @@ function mpMsg(m) {
     case 'weg':
       mpOnWeg();
       break;
+    case 'stoel':
+      mpStoelKwijt();
+      break;
   }
 }
 
@@ -943,6 +966,10 @@ function mpOnHallo() {
   if (session && session.online) return; /* herverbinden, geen nieuw feest */
   if (INV) inviteClear(); /* de uitnodiging is aangekomen: briefje kan weg */
   dropModal('mpwacht'); /* het wachtscherm (QR, verbinden of uitnodiging) mag weg */
+  /* Een tweede hallo (de ander verbond opnieuw) hoort geen tweede kaart te
+     stapelen: op de oude bleef een startknop staan die, aangetikt, een
+     lopend potje opnieuw zou beginnen. */
+  dropModal('mpverbonden');
   const trio = '<p style="font-size:2.2em;letter-spacing:.2em">' + mpEmojiTrio(MP.room) + '</p>';
   if (MP.host) {
     showModal('<div class="m-emoji">🎉</div><h2>Verbonden met ' + escHtml(mpNaam()) + '!</h2>' + trio +
@@ -951,13 +978,13 @@ function mpOnHallo() {
       '<button class="btn plain" id="mpNee">Stoppen</button></div>', () => {
         $('mpGo').addEventListener('click', () => { closeModal(); mpHostStart(); });
         $('mpNee').addEventListener('click', () => { closeModal(); mpVerlaat(); });
-      });
+      }, false, 'mpverbonden');
   } else {
     showModal('<div class="m-emoji">🎉</div><h2>Verbonden met ' + escHtml(mpNaam()) + '!</h2>' + trio +
       '<p>Zien jullie allebei dezelfde drie plaatjes?<br>Wachten tot ' + escHtml(mpNaam()) + ' op start drukt… ⏳</p>' +
       '<div class="m-btns"><button class="btn plain" id="mpNee">Stoppen</button></div>', () => {
         $('mpNee').addEventListener('click', () => { closeModal(); mpVerlaat(); });
-      });
+      }, false, 'mpverbonden');
   }
 }
 
@@ -1112,6 +1139,9 @@ function mpOnWeg() {
       '<div class="m-btns"><button class="btn sun" id="mpWegOk">🏠 Naar huis</button></div>', () => {
         $('mpWegOk').addEventListener('click', () => { closeModal(); goHome(); });
       });
+  } else {
+    naarHuisMelding('🏠', escHtml(naam) + ' is gestopt',
+      'Maak samen een nieuwe code als jullie toch willen spelen.');
   }
 }
 
@@ -1334,7 +1364,6 @@ async function vriendVragen() {
   mpSend({ t: 'vriend?', pub: MP.ecdh.pub });
   showToast('Gevraagd! Wachten op ' + mpNaam() + '… 🤝', true);
 }
-/* ja zeggen op de vraag van de ander: onze kant van de ECDH erbij, bewaren */
 async function vriendJa() {
   if (!MP || MP.viaFriend || !MP.hunVraag) return;
   const pub = MP.hunVraag;
@@ -1421,7 +1450,8 @@ function vriendKlaar(k) {
 async function inviteFriend(fid) {
   const f = P.friends[fid];
   if (!f || f.weg) return;
-  if (INV || MP || session) { showToast('Je bent al met een potje bezig 🐢'); return; }
+  const bezet = () => !!(INV || MP || session);
+  if (bezet()) { showToast('Je bent al met een potje bezig 🐢'); return; }
   let resp = null;
   if (netAvailable()) {
     try {
@@ -1433,10 +1463,14 @@ async function inviteFriend(fid) {
   const to = await busFor(f, theirRole(f));
   const blob = b64url(await sealJSON(f.k, 'uitnodiging',
     { id: b64url(randBytes(9)), room: resp.room, seat: resp.guest, naam: P.name || 'kampioen', ts: Date.now() }));
+  /* tijdens het wachten op de server kan het kind al op een binnengekomen
+     uitnodiging zijn ingegaan; dan is onze eigen niet meer aan de orde */
+  if (bezet()) return;
   try {
     await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob }) });
   } catch (e) {}
+  if (bezet()) return;
   INV = { fid, bus: to.bus, bewijs: to.bewijs, tot: Date.now() + INVITE_TTL };
   mpStart(resp.room, resp.seat, true);
   MP.viaFriend = fid;
@@ -1452,12 +1486,8 @@ function inviteVerlopen() {
   if (!f) return;
   inviteClear();
   if (MP) mpStop();
-  dropModal('mpwacht');
-  showModal('<div class="m-emoji">🐢</div><h2>' + escHtml(f.naam) + ' heeft niet gekeken</h2>' +
-    '<p>De uitnodiging is verlopen. Zeg het even, en nodig ' + escHtml(f.naam) + ' dan opnieuw uit!</p>' +
-    '<div class="m-btns"><button class="btn sun" id="invOudOk">🏠 Naar huis</button></div>', () => {
-      $('invOudOk').addEventListener('click', () => { closeModal(); goHome(); });
-    });
+  naarHuisMelding('🐢', escHtml(f.naam) + ' heeft niet gekeken',
+    'De uitnodiging is verlopen. Zeg het even, en nodig ' + escHtml(f.naam) + ' dan opnieuw uit!');
 }
 /* het wachtscherm van een verstuurde uitnodiging; het gaat even opzij als er
    ondertussen zelf een uitnodiging binnenkomt, en komt dan hier weer terug */
@@ -1563,7 +1593,7 @@ function showInvite(fid, inv) {
         closeModal();
         wachtScherm();
       });
-    });
+    }, false, 'uitnodiging');
   return true;
 }
 function removeFriendAsk(fid) {
@@ -2063,6 +2093,21 @@ function closeModal() {
 function dropModal(key) {
   modalQueue = modalQueue.filter(m => m[3] !== key);
   if (modalOpen && modalKey === key) closeModal();
+}
+/* Een melding die het scherm overneemt: wat er nog openstond of in de rij
+   wachtte ging over een verbinding die niet meer bestaat. Behalve een
+   uitnodiging van iemand anders: die is al als gezien gemerkt en komt niet
+   terug, dus die blijft staan en de melding wacht erachter. */
+function meldInPlaats(html, setup) {
+  modalQueue = modalQueue.filter(m => m[3] === 'uitnodiging');
+  if (modalKey !== 'uitnodiging') closeModal();
+  showModal(html, setup, false, 'melding');
+}
+function naarHuisMelding(emoji, kop, tekst) {
+  meldInPlaats('<div class="m-emoji">' + emoji + '</div><h2>' + kop + '</h2><p>' + tekst + '</p>' +
+    '<div class="m-btns"><button class="btn sun" id="meldOk">🏠 Naar huis</button></div>', () => {
+      $('meldOk').addEventListener('click', () => { closeModal(); goHome(); });
+    });
 }
 $('overlay').addEventListener('click', e => {
   /* alleen een tik op de achtergrond zelf, niet in de kaart */

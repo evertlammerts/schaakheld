@@ -57,13 +57,19 @@ README.md voor de spelvormen en de opbouw.
 
 ## Testen
 
-- `./test.sh` draait alles headless onder jsc en faalt als een van beide
-  suites rood is of de flowsuite afbreekt (een fout in een async-blok komt
-  als `ASYNC EXCEPTION` in de uitvoer). Beide suites moeten groen zijn voor
-  elke wijziging telt als af. De Go-tests draaien mee als er een
-  go-toolchain is, anders op de devbox.
+- `./test.sh` draait alles headless onder jsc en faalt als een van de
+  suites rood is of afbreekt (een fout in een async-blok komt als
+  `ASYNC EXCEPTION` in de uitvoer). Alle suites moeten groen zijn voor een
+  wijziging telt als af. De Go-tests draaien mee als er een go-toolchain
+  is, anders op de devbox.
 - Engine-wijzigingen: perft-counts in `test/test-engine.js` zijn heilig.
   Nooit een verwachte count aanpassen om een test groen te krijgen.
+- Alles wat pas misgaat als beide kanten echt draaien (samen spelen,
+  vrienden, uitnodigen, koppelen en sync) hoort in `test/twee-apparaten.js`:
+  twee (of drie) volledige app-instanties met elk een eigen DOM, opslag en
+  globals, op een gedeelde nep-server, relay en klok. `maakApparaat()` geeft
+  een handvat waarmee je in die instantie leest en aanroept. Een kant met een
+  rauwe socket naspelen mist precies de fouten die uit de volgorde komen.
 - UI-wijzigingen: voeg een flowtest toe in `test/flow-test.js` die het
   nieuwe gedrag naspeelt op de DOM-shim. De shim heeft een nep-server met
   de semantiek van `server/` (koppelcodes, profielen, kamers, paren,
