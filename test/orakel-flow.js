@@ -33,6 +33,14 @@ function opslagMetPotje(level, zetten, extra) {
     started: 1794700000000, updated: 1794700000000 }, extra || {})));
   return o;
 }
+/* potjes tegen Turbo in de vorm van nu: per niveau de zetten, en desgewenst wanneer het laatst gespeeld */
+function opslagMetPotjes(perNiveau, wanneer) {
+  const o = maakOpslag(), games = {};
+  for (const n in perNiveau) games[n] = { level: +n, moves: perNiveau[n], tips: 3, drawAsked: null, started: 1794700000000,
+    updated: (wanneer && wanneer[n]) || 1794700000000, patXP: 0 };
+  o.setItem(POTJE, JSON.stringify({ v: 2, games }));
+  return o;
+}
 
 /* een opdracht klaarzetten in het lopende rondje, zoals de bestaande tests */
 function zetOpdracht(app, fen, type, antwoorden, extra) {
@@ -86,9 +94,9 @@ async function orakelFlow() {
     const a = nieuwKind();
     await startPotje(a, 1);
     await zetEnWacht(a, 'e2e4');
-    const r = opgeslagen(a, POTJE);
-    check('er staat een potje in ' + POTJE, !!r && typeof r === 'object');
-    check('vorm {v: 1, level, moves, tips, drawAsked, started, updated}', !!r && r.v === 1 && r.level === 1 &&
+    const d = opgeslagen(a, POTJE), r = d && d.games ? d.games['1'] : null;
+    check('er staat een potje in ' + POTJE, !!d && typeof d === 'object');
+    check('vorm {v: 2, games: {1: {level, moves, tips, drawAsked, started, updated}}}', !!d && d.v === 2 && !!r && r.level === 1 &&
       Array.isArray(r.moves) && typeof r.tips === 'number' && 'drawAsked' in r && r.started > 0 && r.updated > 0);
     check('beide halve zetten als van-naar', !!r && r.moves.length === 2 && r.moves[0] === 'e2e4' &&
       /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(r.moves[1]));
@@ -117,7 +125,7 @@ async function orakelFlow() {
     await startPotje(a, 1);
     zet(a, 'e2e4');
     drainTimers(400, 40);
-    const r = opgeslagen(a, POTJE);
+    const r = turboPotje(a, 1);
     check('jouw zet staat al bewaard voor Turbo zet', !!r && r.moves && r.moves.length === 1);
     const b = herlaad(a);
     await wacht();
@@ -190,7 +198,7 @@ async function orakelFlow() {
     const xp0 = zonder.get('P.xp');
     await zetEnWacht(zonder, 'b5c7');
     check('een potje zonder dat veld telt als nul: de bonus komt', zonder.get('P.xp') === xp0 + 10);
-    const r = opgeslagen(zonder, POTJE);
+    const r = turboPotje(zonder, 1);
     check('en het bewaarde potje telt hem', !!r && r.patXP === 1);
   });
 
@@ -241,7 +249,7 @@ async function orakelFlow() {
     check('testopzet: Turbo wil nog geen remise, het aanbod staat', !a.get('session.over') && a.get('session.drawAsked') === zetten.length);
     const b = herlaad(a);
     await wacht();
-    const r = opgeslagen(b, POTJE);
+    const r = turboPotje(b, 1);
     check('het aanbod staat bewaard', !!r && r.drawAsked === zetten.length);
     b.tik('verderKaart');
     await wacht();
@@ -326,7 +334,7 @@ async function orakelFlow() {
     await startPotje(a, 1);
     check('in een potje zonder zet nog niet: er is niets bewaard', !bewaardInBeeld(a));
     await zetEnWacht(a, 'e2e4');
-    const r = opgeslagen(a, POTJE);
+    const r = turboPotje(a, 1);
     check('na de zetten wel, en dan staan ze ook echt bewaard', bewaardInBeeld(a) && !!r &&
       r.moves.length === a.get('session.S.hist.length'));
     a.tik('backBtn');
@@ -373,7 +381,7 @@ async function orakelFlow() {
     await startPotje(a, 1);
     await zetEnWacht(a, 'e2e4');
     const voor = opgeslagen(a, POTJE);
-    check('testopzet: twee halve zetten bewaard', !!voor && voor.moves.length === 2);
+    check('testopzet: twee halve zetten bewaard', !!turboPotje(a, 1) && turboPotje(a, 1).moves.length === 2);
     oa.weiger = true;
     await zetEnWacht(a, 'd2d4');
     check('de balk zegt niet bewaard', zichtbaar(a, 'bewaard') && /niet/.test(tekstVan(a, 'bewaard')) && !/✔/.test(tekstVan(a, 'bewaard')));
@@ -422,53 +430,96 @@ async function orakelFlow() {
     check('verder spelen geeft de echte stand, niet de droom', a.fen() === echt && !a.get('!!(session && session.cloud)'));
   });
 
-  await regel('[1.3] met een bewaard potje toont Speel tegen Turbo eerst dat potje', async function (check) {
-    const a = nieuwKind({ opslag: opslagMetPotje(2, ['e2e4', 'e7e5']) });
-    if (heeftKlik(a, 'spelTurbo')) a.tik('spelTurbo'); else a.ev('startGameFlow()');
+  /* regel 4.13: één potje tegen Turbo per niveau; een niveau kiezen vraagt nooit iets */
+  const niveauKnop = function (a, n) { return a.el('modalBox').querySelectorAll('[data-lvl="' + n + '"]')[0]; };
+  const kiezerOpen = async function (a) {
+    if (heeftKlik(a, 'spelTurbo')) { naarSpelen(a); a.tik('spelTurbo'); } else a.ev('startGameFlow()');
     await wacht();
-    const h = a.modal(), verder = h.indexOf('Verder spelen'), niveau = h.indexOf('data-lvl');
-    check('"Verder spelen" staat boven de niveaus', verder >= 0 && niveau >= 0 && verder < niveau);
+  };
+  const zettenVan = function (a) { return JSON.stringify(a.get('session.S.hist.map(function (h) { return moveKey(h.m); })')); };
+
+  await regel('[1.3] met een bewaard potje zegt Tegen Turbo bij zijn niveau "Verder · zet {n}", en geen vraag', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(2, ['e2e4', 'e7e5']) });
+    await kiezerOpen(a);
+    check('niveau 2: Verder · zet 2', /Verder · zet 2/.test(a.doc.__tekst(niveauKnop(a, 2))));
+    check('niveau 1 en 3: hun eigen zin', /Doet soms een dutje/.test(a.doc.__tekst(niveauKnop(a, 1))) && /Kijkt ver vooruit/.test(a.doc.__tekst(niveauKnop(a, 3))));
+    check('geen aparte knop en geen waarschuwing', !kanTikken(a, 'Verder spelen') && !/opgeven|Een nieuw potje/i.test(a.scherm()));
   });
 
-  await regel('[1.3] een niveau kiezen vraagt eerst; "Nee, verder spelen" houdt het potje', async function (check) {
+  await regel('[1.3] een ander niveau kiezen begint daar een nieuw potje, zonder vraag, en het bewaarde potje blijft staan', async function (check) {
     const zetten = ['e2e4', 'e7e5'];
     const a = nieuwKind({ opslag: opslagMetPotje(2, zetten) });
+    const voor = JSON.stringify(a.get('[P.c.gamesPlayed, P.xp, wkGet(curWeek(), "potjes2")]'));
     await startPotje(a, 1);
-    check('de vraag noemt opgeven', a.open() && /opgeven/i.test(a.scherm()) && kanTikken(a, 'Nee, verder spelen'));
-    tikTekst(a, 'Nee, verder spelen');
-    await wacht();
-    check('terug in hetzelfde potje', opSpeelscherm(a) && a.fen() === toFEN(naSpelen(zetten)) && a.get('session.level') === 2);
-    check('het bewaarde potje is onveranderd', JSON.stringify(opgeslagen(a, POTJE).moves) === JSON.stringify(zetten));
+    check('een nieuw potje op niveau 1, zonder vraag', !a.open() && opSpeelscherm(a) && a.get('session.level') === 1 && a.fen() === START_FEN_O);
+    await zetEnWacht(a, 'd2d4');
+    check('het potje op niveau 2 staat er nog', !!turboPotje(a, 2) && JSON.stringify(turboPotje(a, 2).moves) === JSON.stringify(zetten));
+    check('geen teller veranderd', JSON.stringify(a.get('[P.c.gamesPlayed, P.xp, wkGet(curWeek(), "potjes2")]')) === voor);
   });
 
-  await regel('[1.3] ja voor twintig halve zetten: een nieuw potje, en geen teller verandert', async function (check) {
-    const a = nieuwKind({ opslag: opslagMetPotje(2, TWINTIG.slice(0, 6)) });
-    const voor = a.get('[P.c.gamesPlayed, P.xp, wkGet(curWeek(), "potjes2")]');
-    await startPotje(a, 3);
-    tikTekst(a, 'Ja');
+  await regel('[4.13] een potje op niveau 1 en een op niveau 2 blijven allebei staan, ook na herladen, en elk niveau opent zijn eigen potje', async function (check) {
+    const a = nieuwKind();
+    await startPotje(a, 1);
+    await zetEnWacht(a, 'e2e4');
+    a.tik('backBtn');
     await wacht();
-    check('een nieuw potje op niveau 3', opSpeelscherm(a) && a.get('session.level') === 3 && a.fen() === START_FEN_O);
-    check('het oude potje is weg, en het nieuwe staat pas na een zet bewaard', opgeslagen(a, POTJE) === null);
-    check('tellers gelijk', JSON.stringify(a.get('[P.c.gamesPlayed, P.xp, wkGet(curWeek(), "potjes2")]')) === JSON.stringify(voor));
+    await startPotje(a, 2);
+    check('niveau 2 begint zonder vraag een nieuw potje', !a.open() && opSpeelscherm(a) && a.get('session.level') === 2 && a.fen() === START_FEN_O);
+    await zetEnWacht(a, 'd2d4');
+    a.tik('backBtn');
+    await wacht();
+    const z1 = JSON.stringify(turboPotje(a, 1) && turboPotje(a, 1).moves), z2 = JSON.stringify(turboPotje(a, 2) && turboPotje(a, 2).moves);
+    check('testopzet: allebei bewaard', /e2e4/.test(z1) && /d2d4/.test(z2));
+    const b = herlaad(a);
+    await wacht();
+    check('na herladen staan ze er allebei', JSON.stringify(turboPotje(b, 1).moves) === z1 && JSON.stringify(turboPotje(b, 2).moves) === z2);
+    await startPotje(b, 1);
+    check('niveau 1 opent zijn eigen potje, zonder vraag', !b.open() && b.get('session.level') === 1 && zettenVan(b) === z1);
+    b.tik('backBtn');
+    await wacht();
+    await startPotje(b, 2);
+    check('niveau 2 ook', !b.open() && b.get('session.level') === 2 && zettenVan(b) === z2);
   });
 
-  await regel('[1.3] ja na twintig halve zetten telt precies als opgeven', async function (check) {
-    const tellers = '[P.c.gamesPlayed, P.xp, wkGet(curWeek(), "potjes2")]';
-    const verschil = function (voor, na) { return na.map(function (x, i) { return x - voor[i]; }); };
-    /* zo telt opgeven: hetzelfde potje, met de knop Opgeven */
-    const c = nieuwKind({ opslag: opslagMetPotje(2, TWINTIG) });
-    const cVoor = c.get(tellers);
-    c.tik('verderKaart');
+  await regel('[4.13] opgeven op het ene niveau laat het potje op het andere staan; Alles wissen haalt ze allemaal weg', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotjes({ 1: ['e2e4', 'e7e5'], 3: ['d2d4', 'd7d5'] }) });
+    await startPotje(a, 1);
+    check('testopzet: niveau 1 gaat verder', a.get('session.level') === 1 && a.get('session.S.hist.length') === 2);
+    await geefOp(a);
+    check('niveau 1 is weg, niveau 3 staat er nog', turboPotje(a, 1) === null && JSON.stringify(turboPotje(a, 3).moves) === JSON.stringify(['d2d4', 'd7d5']));
+    const b = nieuwKind({ opslag: opslagMetPotjes({ 1: ['e2e4', 'e7e5'], 3: ['d2d4', 'd7d5'] }) });
+    b.tik('setBtn');
     await wacht();
-    await geefOp(c);
-    const opgeven = verschil(cVoor, c.get(tellers));
-    check('opgeven na twintig halve zetten telt (zoals vandaag)', opgeven[0] === 1);
-    const a = nieuwKind({ opslag: opslagMetPotje(2, TWINTIG) });
-    const aVoor = a.get(tellers);
+    b.tik('setReset');
+    await wacht();
+    b.tik('rstGo');
+    await wacht();
+    check('Alles wissen: geen potje meer', opgeslagen(b, POTJE) === null);
+  });
+
+  await regel('[4.13] de Verder-kaart toont het potje dat het laatst gespeeld is, en Verder opent dat potje', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotjes({ 1: ['e2e4', 'e7e5'], 3: ['d2d4', 'd7d5', 'c2c4'] }, { 1: 1794700009000, 3: 1794700001000 }) });
+    await wacht();
+    check('de kaart noemt Slaapkop Turbo', /Slaapkop Turbo/.test(tekstVan(a, 'verder')) && !/Super Turbo/.test(tekstVan(a, 'verder')));
+    a.tik('verderKaart');
+    await wacht();
+    check('Verder opent het potje op niveau 1', opSpeelscherm(a) && a.get('session.level') === 1 && a.get('session.S.hist.length') === 2);
+  });
+
+  await regel('[4.13] compat: een potje van de vorige vorm hoort daarna bij zijn niveau, naast een nieuw potje op een ander niveau', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(3, ['e2e4', 'e7e5']) });
+    await kiezerOpen(a);
+    check('niveau 3: Verder · zet 2', /Verder · zet 2/.test(a.doc.__tekst(niveauKnop(a, 3))));
+    a.ev('closeModal()');
+    await startPotje(a, 1);
+    await zetEnWacht(a, 'g1f3');
+    const d = opgeslagen(a, POTJE);
+    check('in de nieuwe vorm, met het oude potje op niveau 3', !!d && d.v === 2 && JSON.stringify(turboPotje(a, 3).moves) === JSON.stringify(['e2e4', 'e7e5']) &&
+      /g1f3/.test(JSON.stringify(turboPotje(a, 1).moves)));
+    a.tik('backBtn');
+    await wacht();
     await startPotje(a, 3);
-    tikTekst(a, 'Ja');
-    await wacht();
-    check('nieuw niveau kiezen telt hetzelfde', JSON.stringify(verschil(aVoor, a.get(tellers))) === JSON.stringify(opgeven));
+    check('niveau 3 opent het oude potje', a.get('session.level') === 3 && zettenVan(a) === JSON.stringify(['e2e4', 'e7e5']));
   });
 
   await regel('[1.3] Revanche na afloop begint meteen een nieuw potje, zonder vraag', async function (check) {
@@ -549,7 +600,7 @@ async function orakelFlow() {
     const a = nieuwKind();
     await startPotje(a, 1);
     await zetEnWacht(a, 'e2e4');
-    const zetten = JSON.stringify(opgeslagen(a, POTJE) && opgeslagen(a, POTJE).moves);
+    const zetten = JSON.stringify(turboPotje(a, 1) && turboPotje(a, 1).moves);
     a.tik('backBtn');
     await wacht();
     a.tik('tabIk');
@@ -560,8 +611,8 @@ async function orakelFlow() {
     await wacht();
     const b = herlaad(a);
     await wacht();
-    check('na Pauze, tabs, een rondje en herladen staat het er nog', !!opgeslagen(b, POTJE) &&
-      JSON.stringify(opgeslagen(b, POTJE).moves) === zetten && zetten !== 'null');
+    check('na Pauze, tabs, een rondje en herladen staat het er nog', !!turboPotje(b, 1) &&
+      JSON.stringify(turboPotje(b, 1).moves) === zetten && zetten !== 'null');
   });
 
   const onleesbaar = [

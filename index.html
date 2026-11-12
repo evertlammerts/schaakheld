@@ -811,6 +811,11 @@
   .lvl-btn { display: flex; align-items: center; gap: 12px; text-align: left; }
   .lvl-btn .l-emoji { font-size: 30px; }
   .lvl-btn .l-sub { display: block; font-size: 12.5px; font-weight: normal; opacity: .85; }
+  .lvl-btn .l-txt { flex: 1; min-width: 0; }
+  .lvl-btn .l-sub.verder-zet { color: var(--leaf-deep); font-weight: bold; font-size: 14px; opacity: 1; }
+  .lvl-btn .go-mini { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: var(--on-primary);
+    display: grid; place-items: center; box-shadow: 0 2px 0 var(--primary-edge); font-size: 14px; }
+  .lvl-btn .l-pijl { flex: none; font-size: 22px; opacity: .6; }
 
   /* onderaan, boven de tabbalk, zodat hij nooit over de Verder-kaart valt;
      tikken gaan erdoorheen */
@@ -5387,15 +5392,58 @@ function toonBewaard(gelukt) {
   el.classList.remove('hidden');
   if (session) session.nietBewaard = !gelukt;
 }
-function leesPotje() {
-  const ruw = opslag(POTJE_KEY);
-  if (ruw == null) return null;
+/* Eén potje tegen Turbo per niveau: {v: 2, games: {<niveau>: record}}. Een record van de vorige vorm (v: 1) is
+   het potje van zijn niveau; het wordt pas in de nieuwe vorm geschreven bij de volgende zet. */
+function potjesRauw() {
+  let d;
+  try { d = JSON.parse(opslag(POTJE_KEY)); } catch (e) { return null; }
+  if (d == null) return {};
+  if (d && d.v === 1) { const g = {}; g[d.level] = d; return g; }
+  return d && d.v === 2 && d.games && typeof d.games === 'object' && !Array.isArray(d.games) ? Object.assign({}, d.games) : null;
+}
+/* per niveau het potje, of {kapot}; null als er niets te lezen valt */
+function leesPotjes() {
+  const rauw = potjesRauw();
+  if (!rauw) return null;
+  const uit = {};
+  for (const k in rauw) uit[k] = leesRecord(rauw[k], k);
+  return uit;
+}
+/* het potje van een niveau, of zonder niveau het potje dat het laatst gespeeld is */
+function leesPotje(level) {
+  const alle = leesPotjes();
+  if (!alle) return { kapot: true };
+  if (level != null) return alle[level] || null;
+  const goed = Object.keys(alle).map(k => alle[k]).filter(b => !b.kapot);
+  return goed.sort((x, y) => (+y.r.updated || 0) - (+x.r.updated || 0))[0] || null;
+}
+/* een potje dat niet te lezen is, staat ergens; dat ziet het kind eerst */
+function potjeKapot() {
+  const alle = leesPotjes();
+  return !alle || Object.keys(alle).some(k => alle[k].kapot);
+}
+/* Weghalen op de kaart: alleen wat niet te lezen is */
+function wisKapottePotjes() {
+  const alle = leesPotjes(), rauw = potjesRauw();
+  if (!alle || !rauw) { opslag(POTJE_KEY, null); return; }
+  for (const k in alle) if (alle[k].kapot) delete rauw[k];
+  schrijfPotjes(rauw);
+}
+function schrijfPotjes(games) {
+  return opslag(POTJE_KEY, Object.keys(games).length ? JSON.stringify({ v: 2, games }) : null);
+}
+function wisPotje(level) {
+  const rauw = potjesRauw();
+  if (!rauw) return;
+  delete rauw[level];
+  schrijfPotjes(rauw);
+}
+function leesRecord(r, k) {
   try {
-    const r = JSON.parse(ruw);
-    if (!r || r.v !== 1 || !Number.isInteger(r.level) || !(r.level in TURBO_NAMES) || !Array.isArray(r.moves)) return { kapot: true };
+    if (!r || typeof r !== 'object' || !Number.isInteger(r.level) || String(r.level) !== String(k) || !(r.level in TURBO_NAMES) || !Array.isArray(r.moves)) return { kapot: true };
     const S = newGame();
-    for (const k of r.moves) {
-      const m = legalMoves(S).find(x => moveKey(x) === k);
+    for (const z of r.moves) {
+      const m = legalMoves(S).find(x => moveKey(x) === z);
       if (!m) return { kapot: true };
       makeMove(S, m);
     }
@@ -5418,11 +5466,13 @@ function potjeInhoud() {
 function bewaarPotje() {
   if (!session || session.kind !== 'game' || session.online || session.over) return;
   const inhoud = potjeInhoud();
-  if (!inhoud.moves.length) { opslag(POTJE_KEY, null); session.laatstBewaard = null; $('bewaard').classList.add('hidden'); return; }
+  if (!inhoud.moves.length) { wisPotje(inhoud.level); session.laatstBewaard = null; $('bewaard').classList.add('hidden'); return; }
   /* wat al zo bewaard staat, hoeft niet nog eens: een mislukte herhaling zou een verlies melden dat er niet is */
   const sleutel = JSON.stringify(inhoud);
   if (sleutel === session.laatstBewaard) { toonBewaard(true); return; }
-  const gelukt = opslag(POTJE_KEY, JSON.stringify(Object.assign({ v: 1 }, inhoud, { updated: Date.now() })));
+  const games = potjesRauw() || {};
+  games[inhoud.level] = Object.assign({}, inhoud, { updated: Date.now() });
+  const gelukt = schrijfPotjes(games);
   if (gelukt) session.laatstBewaard = sleutel;
   toonBewaard(gelukt);
 }
@@ -5487,7 +5537,7 @@ function pauze() {
   let melding = null;
   if (session && session.kind === 'game' && !session.over) {
     bewaarPotje();
-    const eerder = session.nietBewaard ? leesPotje() : null;
+    const eerder = session.nietBewaard ? leesPotje(session.level) : null;
     melding = !session.S.hist.length ? 'Dit potje was nog niet begonnen.' :
       !session.nietBewaard ? '✔ Bewaard. Je kunt later verder bij zet ' + zetNummer(session.S) + '.' :
       eerder && !eerder.kapot ? POTJE_DEELS_BEWAARD(zetNummer(eerder.S)) : POTJE_NIET_BEWAARD;
@@ -5623,7 +5673,10 @@ function nextStep(P, ctx) {
 function doeActie(a) {
   if (a.go === 'verder') hervatPotje();
   else if (a.go === 'rondje' || a.go === 'oefening') startDrill(a.kind);
-  else if (a.go === 'game') { if (leesPotje()) startGameFlow(); else startGame(a.level); }
+  else if (a.go === 'game') {
+    const b = leesPotje(a.level);
+    if (b && b.kapot) startGameFlow(); else startGame(a.level, b || undefined);
+  }
   else if (a.go === 'samen') openSamen();
   else if (a.go === 'gestopt') toonKamerWeg();
   else if (a.go === 'oud') toonOudEinde(a.gameId);
@@ -5662,7 +5715,7 @@ function renderVerder() {
   const r = nextStep(P, { now: Date.now(), potje: b && !b.kapot ? b.r : null, rondjes: Object.keys(rj).length ? rj : null,
     samen: null, uitnodiging: null, moment: null });
   const bezig = vriendItems(alle).concat(r.bezig);
-  const kapotKey = !Array.isArray(alle) ? SAMEN_KEY : b && b.kapot ? POTJE_KEY : null;
+  const kapotKey = !Array.isArray(alle) ? SAMEN_KEY : potjeKapot() ? POTJE_KEY : null;
   const eerste = kapotKey || !bezig.length ? r : bezig[0];
   const ook = kapotKey ? bezig : bezig.slice(1);
   let h = kapotKey ?
@@ -5683,7 +5736,7 @@ function renderVerder() {
   /* het welkom hoort bij de groet, zodat de naam niet twee keer onder elkaar staat */
   const welkom = !kapotKey && eerste.rule === 'R3', naam = P.name ? (welkom ? ', ' : ' ') + P.name : '';
   $('groet').textContent = (welkom ? 'Welkom terug' : 'Hoi') + naam + '! 👋';
-  if (kapotKey) $('verderWeg').addEventListener('click', () => { opslag(kapotKey, null); renderVerder(); });
+  if (kapotKey) $('verderWeg').addEventListener('click', () => { if (kapotKey === POTJE_KEY) wisKapottePotjes(); else opslag(kapotKey, null); renderVerder(); });
   else $('verderKaart').addEventListener('click', () => doeActie(eerste.action));
   el.querySelectorAll('.verder-ook').forEach(o => o.addEventListener('click', () => doeActie(ook[+o.dataset.ook].action)));
 }
@@ -6741,41 +6794,28 @@ function gameWinXP(level) {
   return (P.day.winsByLvl[level] || 0) >= 2 ? TIRED_XP : WIN_XP[level];
 }
 
+/* Eén potje per niveau: een niveau met een potje gaat verder, een niveau zonder begint er een. Nooit een vraag:
+   een nieuw potje op een niveau met een potje komt alleen na het einde, met Revanche. */
+const TURBO_KEUZE = [[1, '😴', 'Slaapkop Turbo', 'Doet soms een dutje. Fijn om mee te beginnen.'], [2, '🐢', 'Turbo', 'Denkt al best goed na.'],
+  [3, '🚀', 'Super Turbo', 'Kijkt ver vooruit. Pittig!']];
 function startGameFlow() {
-  const b = leesPotje();
-  const kies = lvl => (b && !b.kapot ? vraagNieuwPotje(lvl) : startGame(lvl));
-  const bovenaan = !b ? '' : b.kapot ?
-    '<p>Je oude potje kan ik niet meer openen. Een nieuw potje haalt het weg.</p>' :
-    '<div class="m-btns"><button class="btn sun" id="kiesVerder">▶ Verder spelen</button></div>' +
-    '<p>Je potje tegen ' + TURBO_NAMES[b.r.level] + ', zet ' + zetNummer(b.S) + ', ' +
-    (b.S.turn === 'w' ? 'jij bent aan zet' : 'Turbo is aan zet') + '.<br>Een nieuw potje? Dan stopt dit potje, en telt het als opgegeven.</p>';
-  showModal('<div class="m-emoji">🐢</div><h2>Tegen wie speel je?</h2>' + bovenaan + '<div class="m-btns">' +
-    '<button class="btn plain lvl-btn" data-lvl="1"><span class="l-emoji">😴</span><span><b>Slaapkop Turbo</b><span class="l-sub">Doet soms een dutje. Fijn om mee te beginnen.</span></span></button>' +
-    '<button class="btn plain lvl-btn" data-lvl="2"><span class="l-emoji">🐢</span><span><b>Turbo</b><span class="l-sub">Denkt al best goed na.</span></span></button>' +
-    '<button class="btn plain lvl-btn" data-lvl="3"><span class="l-emoji">🚀</span><span><b>Super Turbo</b><span class="l-sub">Kijkt ver vooruit. Pittig!</span></span></button>' +
-    '</div>', () => {
-      if (b && !b.kapot) $('kiesVerder').addEventListener('click', () => { closeModal(); hervatPotje(); });
+  const alle = leesPotjes() || {};
+  const kapot = potjeKapot() ? '<p>Je oude potje kan ik niet meer openen. Een nieuw potje haalt het weg.</p>' : '';
+  showModal('<div class="m-emoji">🐢</div><h2>Tegen wie speel je?</h2>' + kapot + '<div class="m-btns">' +
+    TURBO_KEUZE.map(([lvl, emoji, naam, zin]) => {
+      const b = alle[lvl] && !alle[lvl].kapot ? alle[lvl] : null;
+      return '<button class="btn plain lvl-btn" data-lvl="' + lvl + '"><span class="l-emoji">' + emoji + '</span><span class="l-txt"><b>' + naam + '</b>' +
+        (b ? '<span class="l-sub verder-zet">Verder · zet ' + zetNummer(b.S) + '</span></span><span class="go-mini">▶</span>' :
+          '<span class="l-sub">' + zin + '</span></span><span class="l-pijl">›</span>') + '</button>';
+    }).join('') + '</div>', () => {
       document.querySelectorAll('.lvl-btn').forEach(k => {
-        k.addEventListener('click', () => { closeModal(); kies(+k.dataset.lvl); });
+        k.addEventListener('click', () => {
+          closeModal();
+          const lvl = +k.dataset.lvl, b = alle[lvl] && !alle[lvl].kapot ? alle[lvl] : null;
+          startGame(lvl, b || undefined);
+        });
       });
     }, true);
-}
-function vraagNieuwPotje(lvl) {
-  showModal('<div class="m-emoji">🐢</div><h2>Dit potje opgeven en een nieuw potje beginnen?</h2>' +
-    '<p>Een nieuw potje? Dan stopt dit potje, en telt het als opgegeven.</p>' +
-    '<div class="m-btns"><button class="btn sun" id="nieuwNee">↩️ Nee, verder spelen</button>' +
-    '<button class="btn plain" id="nieuwJa">Ja, een nieuw potje</button></div>', () => {
-      $('nieuwNee').addEventListener('click', () => { closeModal(); hervatPotje(); });
-      $('nieuwJa').addEventListener('click', () => { closeModal(); geefBewaardOp(); startGame(lvl); });
-    }, true);
-}
-/* telt precies als opgeven met de knop: met dezelfde eindafrekening */
-function geefBewaardOp() {
-  const b = leesPotje();
-  if (!b || b.kapot) { opslag(POTJE_KEY, null); return; }
-  session = { kind: 'game', S: b.S, level: b.r.level, tips: b.r.tips, over: false, pending: null };
-  endGame({ over: true, result: 'b', reason: 'opgave' }, true);
-  session = null;
 }
 
 function startGame(level, bewaard) {
@@ -6800,7 +6840,11 @@ function startGame(level, bewaard) {
   BD.check = inCheck(session.S) ? session.S.kings[session.S.turn] : null;
   renderBoard();
   /* een hervat potje staat al precies zo bewaard; een nieuw potje haalt een oud record weg */
-  if (bewaard) { session.laatstBewaard = JSON.stringify(potjeInhoud()); toonBewaard(true); } else bewaarPotje();
+  if (bewaard) { session.laatstBewaard = JSON.stringify(potjeInhoud()); toonBewaard(true); } else {
+    /* een nieuw potje haalt weg wat niet te lezen is: dat zei de kiezer */
+    if (potjeKapot()) wisKapottePotjes();
+    bewaarPotje();
+  }
   if (session.S.turn === 'w') kidTurn(); else { BD.mode = 'off'; turboTurn(); }
   if (bewaard) say('Welkom terug! Je potje staat nog precies zo. ' +
     (session.S.turn !== 'w' ? 'Ik ben aan zet.' : inCheck(session.S) ? 'Je staat schaak!' : 'Jij bent aan zet.'));
@@ -7553,7 +7597,7 @@ function endGame(st, stil) {
      of een laat relay-bericht mag geen tweede einde inluiden */
   if (!session || session.kind !== 'game' || session.over) return;
   session.over = true;
-  if (!session.online) opslag(POTJE_KEY, null);
+  if (!session.online) wisPotje(session.level);
   BD.mode = 'off';
   /* opgeven kan terwijl de voorspelvraag openstaat */
   session.pending = null;
