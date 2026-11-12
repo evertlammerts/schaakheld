@@ -484,7 +484,7 @@ var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, k
    koppelcode kan laten verlopen */
 var BUS_TTL = 10 * 60000, MAX_BUSES = 512, MAX_BUS_BLOB = 4 << 10, MAX_BUS_CHECK = 64;
 var LINK_TTL = 10 * 60000, MAX_LINKS = 8192;
-var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000, MAX_KAMERS = 64;
+var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000, MAX_KAMERS = 64, KAMER_RUST = 3000;
 function __busNu() { return Date.now() + __server.klok; }
 function __veegBussen() {
   for (var id in __server.buses) if (__server.buses[id].tot <= __busNu()) delete __server.buses[id];
@@ -503,13 +503,14 @@ function __veegKamers() {
     if (!__kamerBezet(rm)) delete __server.wsrooms[id];
   }
 }
-/* zoals evictRoomLocked: alleen een kamer zonder iemand erin wijkt, eerst
-   een zonder potje, dan de langst stille */
+/* zoals evictRoomLocked: alleen een kamer zonder iemand erin en ouder dan
+   KAMER_RUST wijkt, eerst een zonder potje, dan de langst stille */
 function __maakPlaats() {
+  const nu = __busNu();
   let weg = null;
   for (const id in __server.wsrooms) {
     const rm = __server.wsrooms[id], w = weg && __server.wsrooms[weg];
-    if (__kamerBezet(rm)) continue;
+    if (__kamerBezet(rm) || nu - rm.created < KAMER_RUST) continue;
     if (!w || (__heeftPotje(rm) !== __heeftPotje(w) ? !__heeftPotje(rm) : rm.touched < w.touched)) weg = id;
   }
   if (weg) delete __server.wsrooms[weg];
