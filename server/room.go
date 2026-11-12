@@ -51,6 +51,7 @@ const (
 	roomMaxAge  = 3 * time.Hour // harde bovengrens, ook voor een openbaar gehouden socket
 	gameIdle    = 12 * time.Hour
 	gameMaxAge  = 48 * time.Hour
+	evictMinAge = 3 * time.Second // een net uitgedeelde kamer wijkt niet voor zijn eerste stoel verbonden is
 	maxRooms    = 64
 	maxPending  = 256
 	maxWsConns  = 160 // globale gelijktijdige websocket-verbindingen
@@ -144,9 +145,13 @@ func (s *server) newRoomLocked() (*room, bool) {
 // kamer waar iemand in zit wijkt nooit; wie zijn kamer zo kwijt is, krijgt
 // bij terugkomen hetzelfde antwoord als bij een verlopen kamer.
 func (s *server) evictRoomLocked() bool {
+	now := s.cfg.now()
 	var weg *room
 	for _, r := range s.rooms {
-		if !r.occupied() && (weg == nil || wijktEerder(r, weg)) {
+		if r.occupied() || now.Sub(r.created) < evictMinAge {
+			continue
+		}
+		if weg == nil || wijktEerder(r, weg) {
 			weg = r
 		}
 	}
