@@ -27,7 +27,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '4.7', '4.8']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.7', '4.8']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -233,25 +233,167 @@ for (const [W, H] of KLEIN) {
       }`
   });
 
-  GEVALLEN.push({ regels: ['[3.3] ' + W + 'x' + H + ': de Verder-kaart, de weekregel en beide spelknoppen staan boven de tabbalk'],
-    code: `
-      const n = '[3.3] ${W}x${H}: de Verder-kaart, de weekregel en beide spelknoppen staan boven de tabbalk';
+
+  const balk = '[3.11] ' + W + 'x' + H + ': de tabbalk is 64 hoog met drie gelijke tabs, elk woord op één regel, en de weekregel is een rij van 44';
+  GEVALLEN.push({ regels: [balk], code: `
+      const n = ${JSON.stringify(balk)};
       await vers(${W}, ${H});
       const tab = await rect('.tabbar');
-      for (const s of ['#verder', '#weekStrip', '#spelTurbo', '#spelVriend']) {
-        const r = await rect(s);
-        check(n, s + ' boven de tabbalk', !!r && !!tab && r.top >= 0 && r.bottom <= tab.top + 0.5);
-      }
-      const t = {};
-      for (const s of ['#verder', '#weekStrip', '#spelTurbo', '#spelVriend', '#oefen-scan', '#oefen-best3', '#oefen-trucs', '#oefen-koning', '#oefen-opening']) {
-        const r = await rect(s);
-        t[s] = r ? r.top : NaN;
-      }
-      check(n, 'van boven: de kaart, de weekregel, de twee spelknoppen, de vijf oefeningen onder elkaar',
-        t['#verder'] < t['#weekStrip'] && t['#weekStrip'] < t['#spelTurbo'] && t['#spelTurbo'] <= t['#spelVriend'] &&
-        t['#spelVriend'] < t['#oefen-scan'] && t['#oefen-scan'] < t['#oefen-best3'] && t['#oefen-best3'] < t['#oefen-trucs'] &&
-        t['#oefen-trucs'] < t['#oefen-koning'] && t['#oefen-koning'] < t['#oefen-opening']);`
-  });
+      check(n, 'de tabbalk is 64 hoog', !!tab && Math.abs(tab.h - 64) < 0.5);
+      const tabs = await page.evaluate(() => [...document.querySelectorAll('.tabbar .tab')].map(t => {
+        const r = t.getBoundingClientRect(), z = document.createRange();
+        z.selectNodeContents(t);
+        const tops = new Set([...z.getClientRects()].filter(x => x.width > 0).map(x => Math.round(x.top)));
+        return { w: r.width, h: r.height, woord: t.textContent.replace(/[^A-Za-z]/g, ''), regels: tops.size };
+      }));
+      check(n, 'drie tabs', tabs.length === 3);
+      check(n, 'even breed', tabs.length === 3 && tabs.every(t => Math.abs(t.w - tabs[0].w) < 0.5));
+      check(n, 'minstens 44 hoog', tabs.every(t => t.h >= 44));
+      const woorden = await page.evaluate(() => [...document.querySelectorAll('.tabbar .tab .tab-woord')].map(w => {
+        const z = document.createRange(); z.selectNodeContents(w);
+        return new Set([...z.getClientRects()].filter(x => x.width > 0).map(x => Math.round(x.top))).size;
+      }));
+      check(n, 'elk woord op één regel', woorden.length === 3 && woorden.every(r => r === 1));
+      const week = await rect('#weekStrip');
+      check(n, 'de weekregel is 44 hoog', !!week && Math.abs(week.h - 44) < 0.5);
+      check(n, 'zonder kaart eromheen', await page.evaluate(() => { const s = getComputedStyle(document.getElementById('weekStrip'));
+        return s.backgroundColor === 'rgba(0, 0, 0, 0)' && s.borderTopWidth === '0px' && s.boxShadow === 'none'; }));` });
+
+  /* de langste tekst die de weekregel kan krijgen: winnen van Slaapkop Turbo of sterker, met het hoogste aantal */
+  const lang = '[3.11] ' + W + 'x' + H + ': de weekregel blijft een rij van 44, ook met het langste weekdoel';
+  GEVALLEN.push({ regels: [lang], code: `
+      const n = ${JSON.stringify(lang)};
+      const doc = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} },
+        lww: { name: { v: 'Mees', t: 1 }, weekGoal: { v: { kind: 'wins', n: 3, lvl: 1 }, t: 1 } }, max: { best: 0, goal: {} }, friends: {}, loc: {} });
+      await vers(${W}, ${H}, { schaakheld1: doc });
+      const tekst = await page.evaluate(() => document.getElementById('weekStrip').textContent);
+      check(n, 'testopzet: het langste doel staat erin', /van 3 keer winnen van .*Slaapkop Turbo of sterker/.test(tekst));
+      const week = await rect('#weekStrip');
+      check(n, 'de weekregel is 44 hoog', !!week && Math.abs(week.h - 44) < 0.5);` });
+}
+
+/* visual.md 11.6: Ik met een grid van trofeeën, en elk label binnen zijn kaart */
+for (const [W, H] of [[360, 640], [375, 553], [1024, 748]]) {
+  const n = '[3.11] ' + W + 'x' + H + ': Ik: Grootmeester blijft in de levelkaart, en de trofeeën zijn tegels van minstens 88 breed die binnen hun kaart blijven';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      await klik('#tabIk');
+      await page.waitForTimeout(300);
+      const kaart = await page.evaluate(() => { const r = document.getElementById('levelPath').closest('.home-card').getBoundingClientRect();
+        return { left: r.left, right: r.right }; });
+      const labels = await page.evaluate(() => [...document.querySelectorAll('#levelPath .lp-node')].map(e => {
+        const z = document.createRange(); z.selectNodeContents(e); const rs = [...z.getClientRects()].filter(x => x.width > 0);
+        return { links: Math.min(...rs.map(x => x.left)), rechts: Math.max(...rs.map(x => x.right)), tekst: e.textContent }; }));
+      check(n, 'zeven levels', labels.length === 7);
+      check(n, 'elk level binnen de kaart', labels.every(l => l.links >= kaart.left - 0.5 && l.rechts <= kaart.right + 0.5));
+      const tegels = await page.evaluate(() => [...document.querySelectorAll('#badgeGrid > *')].map(e => {
+        const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, w: r.width, sw: e.scrollWidth, cw: e.clientWidth }; }));
+      const grid = await rect('#badgeGrid');
+      check(n, 'veertien tegels', tegels.length === 14);
+      check(n, 'elk minstens 88 breed', tegels.every(t => t.w >= 88 - 0.5));
+      check(n, 'drie of meer naast elkaar', new Set(tegels.map(t => Math.round(t.top))).size <= 5);
+      check(n, 'niets loopt eruit', !!grid && tegels.every(t => t.left >= grid.left - 0.5 && t.right <= grid.right + 0.5 && t.sw <= t.cw + 1));
+      const p = await pagina();
+      check(n, 'de pagina scrolt niet opzij', p.sw <= p.W + 1);` });
+}
+
+/* plan.md 3.3, ook op 375x647 (de app met browserbalken, waar het panel twee keer moest scrollen) en met
+   een bewaard potje op de kaart; en geen zin op Spelen die halverwege wordt afgeknipt. Plan 3.11: met een
+   potje en een rondje bewaard is Spelen het krapst, en ook dan staan de spelknoppen boven de tabbalk. */
+for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
+  const regels = ['[3.3] ' + W + 'x' + H + ': de Verder-kaart, de weekregel en beide spelknoppen staan boven de tabbalk',
+    '[3.3] ' + W + 'x' + H + ': met een bewaard potje staan de kaart, de weekregel en beide spelknoppen ook boven de tabbalk, en niets is afgeknipt',
+    '[3.11] ' + W + 'x' + H + ': met een bewaard potje en een bewaard rondje staan de kaart, de weekregel en beide spelknoppen boven de tabbalk, en niets is afgeknipt'];
+  GEVALLEN.push({ regels, code: `
+      const regels = ${JSON.stringify(regels)};
+      const potje = JSON.stringify({ v: 1, level: 1, moves: ['e2e4', 'e7e5', 'g1f3', 'b8c6'], tips: 3, drawAsked: null, started: 1, updated: 1 });
+      const rondje = JSON.stringify({ scan: { round: 2, earned: 6 } });
+      const opslag = [{}, { 'schaakheld-potje': potje }, { 'schaakheld-potje': potje, 'schaakheld-rondjes': rondje }];
+      for (let k = 0; k < 3; k++) {
+        const n = regels[k];
+        await vers(${W}, ${H}, opslag[k]);
+        const tab = await rect('.tabbar');
+        for (const s of ['#verder', '#weekStrip', '#spelTurbo', '#spelVriend']) {
+          const r = await rect(s);
+          check(n, s + ' boven de tabbalk', !!r && !!tab && r.top >= 0 && r.bottom <= tab.top + 0.5);
+        }
+        const t = {};
+        for (const s of ['#verder', '#weekStrip', '#spelTurbo', '#spelVriend', '#oefen-scan', '#oefen-best3', '#oefen-trucs', '#oefen-koning', '#oefen-opening']) {
+          const r = await rect(s);
+          t[s] = r ? r.top : NaN;
+        }
+        check(n, 'van boven: de kaart, de weekregel, de twee spelknoppen, de vijf oefeningen onder elkaar',
+          t['#verder'] < t['#weekStrip'] && t['#weekStrip'] < t['#spelTurbo'] && t['#spelTurbo'] <= t['#spelVriend'] &&
+          t['#spelVriend'] < t['#oefen-scan'] && t['#oefen-scan'] < t['#oefen-best3'] && t['#oefen-best3'] < t['#oefen-trucs'] &&
+          t['#oefen-trucs'] < t['#oefen-koning'] && t['#oefen-koning'] < t['#oefen-opening']);
+        const geknipt = await page.evaluate(() => [...document.querySelectorAll('#view-spelen *')]
+          .filter(e => e.getClientRects().length && e.children.length === 0 && e.textContent.trim() &&
+            (e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1) && getComputedStyle(e).overflow !== 'visible')
+          .map(e => e.textContent.trim().slice(0, 30)));
+        check(n, 'geen tekst afgeknipt' + (geknipt.length ? ': ' + geknipt.join(' | ') : ''), geknipt.length === 0);
+      }` });
+}
+
+/* visual.md G1: een lange naam in de groet breekt af in plaats van "…", en de rij blijft 40 tot 41 hoog */
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[3.11] ' + W + 'x' + H + ': de groet met een naam van veertien W\'s is heel, de rij is hoogstens 41 hoog en de spelknoppen staan boven de tabbalk';
+  const doc = (loc) => JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'WWWWWWWWWWWWWW', t: 1 } },
+    max: { best: 0, goal: {} }, friends: {}, loc });
+  const docs = [['Hoi', doc({ weekSeen: '2026-W46' })], ['Welkom terug', doc({ weekSeen: '2026-W46', lastSeen: '2026-10-01' })]];
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      for (const [soort, d] of ${JSON.stringify(docs)}) {
+        await vers(${W}, ${H}, { schaakheld1: d });
+        const g = await page.evaluate(() => {
+          const e = document.getElementById('groet'), rij = e.closest('.groet') || e.parentElement, s = getComputedStyle(e);
+          return { tekst: e.textContent, over: e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1,
+            puntjes: s.textOverflow === 'ellipsis' && s.overflow === 'hidden' && s.whiteSpace === 'nowrap', h: rij.getBoundingClientRect().height };
+        });
+        check(n, soort + ': de groet met de hele naam (' + g.tekst + ')', g.tekst.indexOf(soort) === 0 && g.tekst.indexOf('WWWWWWWWWWWWWW') >= 0);
+        check(n, soort + ': niet afgeknipt', !g.over && !g.puntjes);
+        check(n, soort + ': de rij is hoogstens 41 hoog (' + g.h + ')', g.h <= 41.5);
+        const tab = await rect('.tabbar');
+        for (const s of ['#spelTurbo', '#spelVriend']) {
+          const r = await rect(s);
+          check(n, soort + ': ' + s + ' boven de tabbalk', !!r && !!tab && r.bottom <= tab.top + 0.5);
+        }
+      }` });
+}
+
+/* visual.md 11.6: een tegel breekt een woord alleen bij een zacht afbreekstreepje, en niets loopt over */
+{
+  const n = '[3.11] 360x640: de trofeetegels, met alle namen en met alle opdrachten: niets loopt over en "meteen" blijft heel';
+  const alles = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: { potje: true, winst: true, turbo2: true, raket: true, speurneus: true,
+    detective: true, goudzoeker: true, orakel: true, zen: true, wolk: true, trucs: true, sterren: true, vlam: true, koning: true } },
+    lww: { name: { v: 'Mees', t: 1 } }, max: { best: 0, goal: {} }, friends: {}, loc: {} });
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const meet = async () => page.evaluate(() => [...document.querySelectorAll('#badgeGrid .badge-tile')]
+        .filter(t => t.scrollWidth > t.clientWidth + 1 || t.scrollHeight > t.clientHeight + 1).map(t => t.dataset.badge));
+      await vers(360, 640, { schaakheld1: ${JSON.stringify(alles)} });
+      await klik('#tabIk');
+      await page.waitForTimeout(300);
+      check(n, 'testopzet: alle veertien verdiend', await page.evaluate(() => document.querySelectorAll('#badgeGrid .badge-tile.verdiend').length) === 14);
+      let over = await meet();
+      check(n, 'met de namen loopt niets over' + (over.length ? ': ' + over.join(', ') : ''), over.length === 0);
+      await vers(360, 640);
+      await klik('#tabIk');
+      await page.waitForTimeout(300);
+      over = await meet();
+      check(n, 'met de opdrachten loopt niets over' + (over.length ? ': ' + over.join(', ') : ''), over.length === 0);
+      const heel = await page.evaluate(() => {
+        const t = document.querySelector('#badgeGrid [data-badge="goudzoeker"]');
+        const w = document.createTreeWalker(t, NodeFilter.SHOW_TEXT);
+        for (let x = w.nextNode(); x; x = w.nextNode()) {
+          const i = x.data.indexOf('meteen');
+          if (i < 0) continue;
+          const z = document.createRange(); z.setStart(x, i); z.setEnd(x, i + 6);
+          return new Set([...z.getClientRects()].filter(r => r.width > 0).map(r => Math.round(r.top))).size === 1;
+        }
+        return false;
+      });
+      check(n, '"meteen" op één regel', heel);` });
 }
 
 /* plan.md 1.8: een speelscherm opent met het hele bord in beeld, ook als het

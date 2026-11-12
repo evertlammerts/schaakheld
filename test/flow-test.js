@@ -20,12 +20,12 @@ P.name = 'Testkind'; closeModal();
 /* iOS 15.0 kent crypto.randomUUID niet (de shim ook niet): dan maakt de terugval het apparaat-id */
 ok('apparaat-id: zonder randomUUID 32 hex-tekens', typeof crypto.randomUUID === 'undefined' && /^[0-9a-f]{32}$/.test(DEV));
 
-/* close any queued LEVEL OMHOOG modals so later modal assertions see past them */
+/* close any queued level-up modals so later modal assertions see past them */
 /* thuis komt een venster voor een nieuw level of een trofee die nog niet te zien was; een kind tikt het weg */
 function closeLevelUps() {
   var guard = 0;
   while (guard++ < 8 && !__els.overlay.classList.contains('hidden')) {
-    if (__els.modalBox.innerHTML.indexOf('LEVEL OMHOOG') >= 0) fire(__els.lvlOk, 'click');
+    if (__els.modalBox.innerHTML.indexOf('Level omhoog') >= 0) fire(__els.lvlOk, 'click');
     else if (__els.modalBox.innerHTML.indexOf('id="trofOk"') >= 0) fire(__els.trofOk, 'click');
     else break;
   }
@@ -51,9 +51,9 @@ while (session && session.kind === 'scan' && session.round <= 5 && rounds < 10) 
 closeLevelUps();
 ok('scan: summary modal', __els.modalBox.innerHTML.indexOf('Rondje klaar') >= 0);
 ok('scan: 15 stars earned', P.stars - stars0 === 15);
-ok('scan: xp 150 + streak bonuses 15', P.xp - xp0 === 165);
+ok('[3.7] scan: 150 XP, zonder reeksbonus', P.xp - xp0 === 150);
 ok('scan: perfect rounds counted', P.c.perfectScans === 5);
-ok('badge: vuurpijl bij 5 op een rij', !!P.badges.vlam);
+ok('[3.7] badge: geen Vuurpijl meer voor 5 op een rij', !P.badges.vlam && P.c.drie === 5);
 closeModal();
 
 /* ---------- scan explanations: Oscar's screenshot scenario ---------- */
@@ -585,7 +585,15 @@ goHome();
 showHomeTab('ik');
 fire(__els.goalBtn, 'click');
 ok('weekdoel: kiezer open met sjablonen en aantallen', __els.modalBox.innerHTML.indexOf('Wat wordt je doel') >= 0 &&
-  __els.goalKinds.innerHTML.indexOf('Opdrachten') >= 0 && __els.goalNs.innerHTML.indexOf('data-n="20"') >= 0);
+  __els.goalKinds.innerHTML.indexOf('Opdrachten') >= 0 && __els.goalNs.innerHTML.indexOf('data-n="3"') >= 0);
+ok('tekst: de kiezer begint bij 3 potjes tegen de Turbo die bij je past', __els.goalKinds.innerHTML.indexOf('chip on" data-kind="potjes"') >= 0 &&
+  __els.goalNs.innerHTML.indexOf('chip on big" data-n="3"') >= 0 &&
+  __els.goalSub.innerHTML.indexOf('chip on" data-lvl="' + turboVoorstel(P, stadium(P)) + '"') >= 0);
+ok('tekst: de soorten zeggen wat telt', __els.goalKinds.innerHTML.indexOf('Potjes uitspelen tegen Turbo') >= 0 &&
+  __els.goalKinds.innerHTML.indexOf('Toprondes (12 sterren of meer)') >= 0);
+fire(__els.goalKinds, 'click', { target: { dataset: { kind: 'opdr' } } });
+ok('tekst: opdrachten zonder schooldag', __els.goalPreview.innerHTML.indexOf('Een paar rondjes per week en je bent er.') >= 0 &&
+  __els.goalPreview.innerHTML.indexOf('schooldag') < 0);
 fire(__els.goalKinds, 'click', { target: { dataset: { kind: 'potjes' } } });
 ok('weekdoel: potjes-sjabloon toont de drie Turbo\'s', __els.goalSub.innerHTML.indexOf('Super Turbo') >= 0);
 fire(__els.goalSub, 'click', { target: { dataset: { lvl: '1' } } });
@@ -651,12 +659,18 @@ closeLevelUps();
 closeModal();
 P.weekSeen = '2020-W01';
 checkNewWeek();
-ok('nieuwe week: terugblik met vorige stand', __els.modalBox.innerHTML.indexOf('Nieuwe week') >= 0 &&
-  __els.modalBox.innerHTML.indexOf('0 van ' + (potjesNu + 2)) >= 0 && P.weekSeen === curWeek());
+ok('[3.9] nieuwe week: zonder iets vorige week geen nul, wel het doel', __els.modalBox.innerHTML.indexOf('Nieuwe week, nieuwe kansen') >= 0 &&
+  __els.modalBox.innerHTML.indexOf('0 van ') < 0 && __els.modalBox.innerHTML.indexOf(goalText(P.weekGoal)) >= 0 && P.weekSeen === curWeek());
 fire(__els.wkKeep, 'click');
 ok('nieuwe week: doel blijft', P.weekGoal && P.weekGoal.n === potjesNu + 2);
 checkNewWeek();
 ok('nieuwe week: maar één keer per week', __els.overlay.classList.contains('hidden'));
+P.weekSeen = '2020-W01';
+bump('wk.' + weekBefore(1) + '.' + GOAL_KINDS[P.weekGoal.kind].key(P.weekGoal), 1);
+checkNewWeek();
+ok('[3.9] nieuwe week: een deel gehaald noemt wat er wel was', __els.modalBox.innerHTML.indexOf('1 van ' + P.weekGoal.n) >= 0 &&
+  __els.modalBox.innerHTML.indexOf('Mooi geoefend') >= 0);
+fire(__els.wkKeep, 'click');
 /* vorige weken: overzicht zonder verwijt */
 fire(__els.weeksBtn, 'click');
 ok('weken: overzicht toont deze week met potjes', __els.modalBox.innerHTML.indexOf('Deze week') >= 0 &&
@@ -679,11 +693,16 @@ P.log = DOC.log;
 var vk = vormInfo('koning');
 ok('vorm: sterk recent venster scoort hoog', vk && vk.n === 10 && vk.score >= 75 && vk.score <= 100);
 ok('vorm: stijging t.o.v. vorige 14 dagen', vk.delta > 20);
-ok('vorm: tekst met pijl', vormTxt('koning').indexOf('↑') >= 0);
+renderVorm();
+ok('vorm: op Ik een pijl omhoog', __els.vormList.innerHTML.indexOf('↑') >= 0);
 DOC.log.koning = {};
 for (vi = 0; vi < 10; vi++) DOC.log.koning['c' + vi] = [nu - vi * 3600000, 0.8, 200000, 0];
 var vk0 = vormInfo('koning');
 ok('vorm: alles fout en traag scoort laag', vk0.score < 25);
+for (vi = 0; vi < 10; vi++) DOC.log.koning['d' + vi] = [nu - 20 * 86400000 - vi * 3600000, 0.8, 20000, 3];
+renderVorm();
+ok('[3.7] vorm: op Ik nooit een pijl omlaag', vormInfo('koning').delta < 0 &&
+  __els.vormList.innerHTML.indexOf('↓') < 0 && __els.vormList.innerHTML.indexOf('vorm-d') < 0);
 ok('vorm: normDoc gooit oude en kapotte regels weg', (function () {
   var d = JSON.parse(JSON.stringify(DOC));
   d.log.koning.oud = [nu - 40 * 86400000, 0.5, 1000, 3];
@@ -718,11 +737,15 @@ ok('[3.7] vorm: niet in de sterrenbalk', __els.drillStars.innerHTML.indexOf('Vor
 goHome();
 renderVorm();
 ok('vorm: kaart op Ik toont Speurogen met score', __els.vormList.innerHTML.indexOf('Speurogen') >= 0 &&
-  __els.vormList.innerHTML.indexOf('vorm-s') >= 0 && __els.vormList.innerHTML.indexOf('nog geen vorm') >= 0);
+  __els.vormList.innerHTML.indexOf('vorm-s') >= 0 && __els.vormList.innerHTML.indexOf('nog niet gespeeld de laatste twee weken') >= 0 &&
+  __els.vormList.innerHTML.indexOf('nog geen vorm') < 0);
+ok('tekst: onder de vormkaart wat het getal is', __els.vormUitleg.textContent === 'Hoe vaak, hoe goed en hoe moeilijk, de laatste 14 dagen. 100 is het hoogst.');
 /* gates: meesterproeven remmen pure XP-farm */
 var gSave = { xp: P.xp, ps: P.c.perfectScans, w2: P.c.winsL2, w3: P.c.winsL3 };
 P.xp = 10000; P.c.perfectScans = 0; P.c.winsL2 = 0; P.c.winsL3 = 0;
 ok('gate: zonder proeven blijf je Paard', levelIdx(P.xp) === 1);
+ok('[3.5] gate: de stand van elke meesterproef heet "a van b", op Ik en op de kaart', LEVELS.filter(function (L) { return L.gate; })
+  .every(function (L) { return /^0 van \d$/.test(L.gate.prog(P)); }));
 P.c.perfectScans = 5;
 ok('gate: Loper na 5 perfecte rondes', levelIdx(P.xp) === 2);
 P.c.winsL2 = 1;
@@ -829,6 +852,8 @@ ok('modal zonder cancel: eigen knop sluit', modalOpen === false &&
     v.wins === 3 && v.c.winsL2 === 1 && v.c.safeCorrect === 7 && v.c.pat.vork === 4 &&
     v.badges.winst === true && v.badges.detective === true && v.name === 'Oscar' && v.theme === 'oceaan' &&
     v.best === 6 && v.streak === 2 && v.weekGoal === null && v.day.winsByLvl[1] === 1);
+  ok('[3.10] compat: een doc van de vorige release krijgt de nieuwe velden leeg', v.start === '' &&
+    v.lastKind === null && v.lastSeen === null && v.c.drie === 0);
   /* per apparaat: welke trofeeën dit apparaat al liet zien. De vorige release
      kent dat veld niet; daar telt elke trofee die er al is als getoond. */
   var d = normDoc(JSON.parse(JSON.stringify(oud)));
@@ -839,6 +864,27 @@ ok('modal zonder cancel: eigen knop sluit', modalOpen === false &&
   ok('compat: de lijst gaat mee door bewaren en laden', JSON.stringify(normDoc(JSON.parse(JSON.stringify(normDoc(metLijst)))).loc.shownBadges) === '["winst"]');
   ok('compat: een oud plat profiel: elke trofee telt als getoond', JSON.stringify(migrateLegacy({ badges: { winst: true } }, 'd1').loc.shownBadges || null) === '["winst"]');
   ok('een nieuw profiel: niets getoond, en het kent zijn level', (emptyDoc().loc.shownBadges || [1]).length === 0 && emptyDoc().loc.lastLevel === 0);
+})();
+/* de velden van het startadvies: start (LWW), lastKind en lastSeen (per apparaat) en de teller c.drie */
+(function () {
+  var nieuw = { v: 2, epoch: 0, cnt: { 'c.drie': { d1: 4, d2: 3 } }, set: { badges: {} },
+    lww: { start: { v: 'sterk', t: 5 } }, max: { best: 0 },
+    loc: { streak: 0, lastLevel: 2, lastKind: 'koning', lastSeen: '2026-11-01' } };
+  var v = viewFromDoc(normDoc(JSON.parse(JSON.stringify(nieuw))));
+  ok('[3.10] start, lastKind, lastSeen en c.drie laden terug', v.start === 'sterk' && v.lastKind === 'koning' &&
+    v.lastSeen === '2026-11-01' && v.c.drie === 7);
+  var raar = JSON.parse(JSON.stringify(nieuw));
+  raar.lww.start = { v: 'heel goed', t: 6 };
+  raar.loc.lastKind = 'onzin';
+  raar.loc.lastSeen = 'gisteren';
+  var w = viewFromDoc(normDoc(raar));
+  ok('[3.10] onzin in start, lastKind of lastSeen valt terug op leeg', w.start === '' && w.lastKind === null &&
+    w.lastSeen === null && w.c.drie === 7);
+  var ander = JSON.parse(JSON.stringify(nieuw));
+  ander.cnt['c.drie'] = { d3: 2 };
+  ander.lww.start = { v: 'speelt', t: 9 };
+  var m = viewFromDoc(mergeDoc(normDoc(JSON.parse(JSON.stringify(nieuw))), normDoc(ander)));
+  ok('[3.10] samenvoegen: c.drie telt per apparaat op en de nieuwste start wint', m.c.drie === 9 && m.start === 'speelt');
 })();
 /* doc en weergave lopen gelijk (predictHits niet: die is hierboven met opzet
    rechtstreeks in P gezet en dus alleen weergave) */
@@ -994,6 +1040,36 @@ ACC = { id: 'testaccountid123', secret: 'testsecret-1234567890' };
 saveAcc();
 saveP();
 var preResetDoc = localStorage.getItem('schaakheld1');
+/* Instellingen: elke keuze werkt meteen, er is geen Klaar en ✕ sluit */
+fire(__els.setBtn, 'click');
+ok('[3.8] instellingen: geen Klaar-knop, wel een kruisje', __els.modalBox.innerHTML.indexOf('Klaar') < 0 && !!__els.mClose);
+var geluid0 = P.sound;
+fire(__els.tglSound, 'click');
+ok('[3.8] instellingen: geluid uit en weer aan', P.sound === !geluid0 && __els.tglSoundSw.textContent === (P.sound ? 'aan' : 'uit') &&
+  DOC.lww.sound.v === P.sound);
+fire(__els.tglSound, 'click');
+ok('[3.8] instellingen: geluid weer zoals het was', P.sound === geluid0);
+var naam0 = P.name;
+__els.setName.value = '   ';
+fire(__els.setName, 'change', { target: __els.setName });
+ok('[3.8] instellingen: een lege naam laat de oude staan', P.name === naam0 && __els.setName.value === naam0);
+var vrij = THEMES.filter(function (t) { return t.lvl <= levelIdx(P.xp) && t.id !== P.theme; })[0];
+var kleurKnop = __els.setThemes.querySelectorAll('.theme-sw').filter(function (b) { return b.dataset.th === (vrij && vrij.id); })[0];
+ok('[3.8] instellingen: testopzet, een andere vrije bordkleur in de lijst', !!vrij && !!kleurKnop &&
+  __els.setThemes.querySelectorAll('.theme-sw').length === THEMES.length);
+fire(kleurKnop, 'click');
+ok('[3.8] instellingen: de bordkleur werkt meteen, hier en bij Ik', P.theme === vrij.id &&
+  __els.setThemes.innerHTML.indexOf('theme-sw sel" data-th="' + vrij.id) >= 0 &&
+  __els.themeRow.innerHTML.indexOf('theme-sw sel" data-th="' + vrij.id) >= 0);
+fire(__els.mClose, 'click');
+ok('[3.8] instellingen: het kruisje sluit', __els.overlay.classList.contains('hidden'));
+var lvlNu = levelIdx(P.xp);
+ok('[3.8] level omhoog: testopzet, een level met een nieuw bord', lvlNu >= 1);
+P.lastLevel = lvlNu - 1;
+checkLevelUp();
+ok('[3.8] level omhoog zegt waar het nieuwe bord staat', __els.modalBox.innerHTML.indexOf('Kies het bij Ik, onder Bordkleuren') >= 0);
+ok('tekst: "Level omhoog!" zonder hoofdletters', __els.modalBox.innerHTML.indexOf('<h2>Level omhoog!</h2>') >= 0);
+closeLevelUps();
 /* wissen zit nu achter het tandwiel (⚙️ Instellingen) */
 fire(__els.setBtn, 'click');
 ok('instellingen: koppelen en wissen achter het tandwiel',
@@ -1985,6 +2061,33 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var stK5 = await nieuwBezet();
   __server.klok -= 3000;
   ok('kamers: na drie seconden wijkt de kamer van net weer gewoon', stK5 === 200 && !('vers' in __server.wsrooms));
+  /* de grens van precies drie seconden, op een stilgezette klok: de klok van
+     de nep-server is de echte tijd plus een stap, dus anders lopen er altijd
+     een paar milliseconden bij */
+  var echtNu = Date.now, vastNu = Date.now();
+  Date.now = function () { return vastNu; };
+  try {
+    __server.wsrooms = {};
+    nuK = __busNu();
+    nepKamer('grens', false, false, 0, 2999);
+    for (j = 0; Object.keys(__server.wsrooms).length < MAX_KAMERS; j++) nepKamer('bezet' + j, false, true, 0);
+    var stG1 = await nieuwBezet();
+    __server.wsrooms.grens.created = nuK - 3000;
+    var stG2 = await nieuwBezet();
+    ok('kamers: een lege kamer van 2999 ms wijkt niet, een van precies 3000 ms wel',
+      stG1 === 429 && stG2 === 200 && !('grens' in __server.wsrooms));
+  } finally { Date.now = echtNu; }
+  nuK = __busNu();
+  /* een speelcode-verzoek ruimt verlopen kamers op, zoals handlePair */
+  __server.wsrooms = {};
+  var pendingVoor = __server.pending;
+  __server.pending = {};
+  nepKamer('verlopenBijPaar', false, false, 16 * 60000);
+  await fetch(SYNC_URL + '/v1/pair', { method: 'POST', headers: {},
+    body: JSON.stringify({ mine: 'mijnwoordcode1', theirs: 'jouwwoordcode1' }) });
+  ok('kamers: een speelcode-verzoek ruimt verlopen kamers op, zoals op de echte server',
+    !('verlopenBijPaar' in __server.wsrooms));
+  __server.pending = pendingVoor;
   __server.wsrooms = kamersVoor;
   /* koppelcodes uit server.go: vol is vol, ook voor een code die er al staat */
   var linksVoor = __server.links;
@@ -1994,6 +2097,150 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     body: JSON.stringify({ code: 'code-0', payload: 'nieuw' }) });
   ok('koppelcode: vol is vol, ook voor een code die er al staat', rL.status === 429 && __server.links['code-0'].payload === 'x');
   __server.links = linksVoor;
+
+  /* potjesbussen uit bus.go: dertig dagen na het laatste schrijven, dezelfde
+     bytes verlengen alleen, een volle tabel laat de langst niet geschreven
+     bus wijken, en een herstart verliest ze en houdt de profielen */
+  var tabellenVoor = { links: __server.links, wsrooms: __server.wsrooms, pending: __server.pending,
+    buses: __server.buses, potjes: __server.potjes }, klokP = __server.klok;
+  __server.potjes = {};
+  var pBus = async function (naam) {
+    var bewijs = 'potje-' + naam + '-0123456789abcdef';
+    return { bewijs: bewijs, bus: await __sha256hex(bewijs) };
+  };
+  var pSchrijf = async function (b, blob, extra) {
+    var body = Object.assign({ bus: b.bus, bewijs: b.bewijs, blob: blob }, extra || {});
+    return (await fetch(SYNC_URL + '/v1/potje', { method: 'POST', headers: {}, body: JSON.stringify(body) })).status;
+  };
+  var pLees = async function (ids) {
+    return (await fetch(SYNC_URL + '/v1/bus/check', { method: 'POST', headers: {}, body: JSON.stringify({ bussen: ids }) })).json();
+  };
+  var pa = await pBus('a'), pb = await pBus('b');
+  ok('potje: schrijven en lezen via de check, opnieuw schrijven vervangt',
+    await pSchrijf(pa, 'zet-1') === 204 && (await pLees([pa.bus])).blobs[pa.bus] === 'zet-1' &&
+    await pSchrijf(pa, 'zet-2') === 204 && (await pLees([pa.bus])).blobs[pa.bus] === 'zet-2');
+  ok('potje: een ander veld, een verkeerd bewijs of meer dan 4096 tekens weigert de server, precies 4096 niet',
+    await pSchrijf(pb, 'x', { naam: 'Fien' }) === 400 && await pSchrijf({ bus: pa.bus, bewijs: pb.bewijs }, 'x') === 400 &&
+    await pSchrijf(pb, 'a'.repeat(4097)) === 400 && !(pb.bus in (await pLees([pb.bus])).blobs) &&
+    await pSchrijf(pb, 'a'.repeat(4096)) === 204);
+  var pRauw = async function (pad, tekst) {
+    return (await fetch(SYNC_URL + pad, { method: 'POST', headers: {}, body: tekst })).status;
+  };
+  var eeVol = 'é'.repeat(2048), eeTeVeel = 'é'.repeat(2049);
+  var pGetal = JSON.stringify({ bus: pb.bus, bewijs: pb.bewijs, blob: 42 });
+  ok('potje en uitnodiging: de grens is 4096 bytes en niet 4096 tekens, en een blob is tekst',
+    await pSchrijf(pb, eeTeVeel) === 400 && await pSchrijf(pb, eeVol) === 204 &&
+    await pRauw('/v1/bus', JSON.stringify({ bus: pb.bus, bewijs: pb.bewijs, blob: eeTeVeel })) === 400 &&
+    await pRauw('/v1/potje', pGetal) === 400 && await pRauw('/v1/bus', pGetal) === 400 &&
+    (await pLees([pb.bus])).blobs[pb.bus] === eeVol);
+  var pStaart = JSON.stringify({ bus: pb.bus, bewijs: pb.bewijs, blob: 'staart' });
+  ok('potje en uitnodiging: tekst na het json-object weigert de server, ook een losse }, witruimte niet',
+    await pRauw('/v1/potje', pStaart + '}') === 400 && await pRauw('/v1/potje', pStaart + ']{"naam":"Fien"}') === 400 &&
+    await pRauw('/v1/bus', pStaart + '}') === 400 && (await pLees([pb.bus])).blobs[pb.bus] === eeVol &&
+    await pRauw('/v1/potje', pStaart + ' \n') === 204);
+  var rKamer = await fetch(SYNC_URL + '/v1/room', { method: 'POST', headers: {}, body: 'geen json' });
+  if (rKamer.status === 200) delete __server.wsrooms[(await rKamer.json()).room];
+  ok('kamer: POST /v1/room leest geen body, dus een kapotte body maakt niets uit', rKamer.status === 200);
+
+  __server.potjes = {};
+  await pSchrijf(pa, 'x');
+  __server.klok += 30 * 24 * 3600000 - 1000;
+  var pNa29 = pa.bus in (await pLees([pa.bus])).blobs;
+  __server.klok += 1000;
+  ok('potje: dertig dagen na het laatste schrijven weg, ook als hij gelezen werd',
+    pNa29 && !(pa.bus in (await pLees([pa.bus])).blobs));
+  __server.klok = klokP;
+  __server.potjes = {};
+  await pSchrijf(pa, 'x');
+  __server.klok += 20 * 24 * 3600000;
+  await pSchrijf(pa, 'x');
+  __server.klok += 30 * 24 * 3600000 - 1000;
+  var pNa49 = pa.bus in (await pLees([pa.bus])).blobs;
+  __server.klok += 1000;
+  ok('potje: elk schrijven verlengt, ook met dezelfde bytes', pNa49 && !(pa.bus in (await pLees([pa.bus])).blobs));
+  __server.klok = klokP;
+
+  __server.potjes = {};
+  await pSchrijf(pa, 'zet-1');
+  __server.klok += 2 * 3600000;
+  await pSchrijf(pa, 'zet-1');
+  var oZelfde = (await pLees([pa.bus])).ongewijzigd[pa.bus];
+  await pSchrijf(pa, 'zet-2');
+  var oAnders = (await pLees([pa.bus])).ongewijzigd[pa.bus];
+  __server.klok += 1800000;
+  var oHalf = (await pLees([pa.bus])).ongewijzigd[pa.bus];
+  await pSchrijf(pa, '');
+  var oGewist = pa.bus in (await pLees([pa.bus])).blobs;
+  await pSchrijf(pa, 'zet-2');
+  var oVers = (await pLees([pa.bus])).ongewijzigd[pa.bus];
+  ok('potje: ongewijzigd loopt door bij dezelfde bytes en begint opnieuw bij andere bytes of na wissen',
+    oZelfde === 7200 && oAnders === 0 && oHalf === 1800 && !oGewist && oVers === 0);
+  __server.klok = klokP;
+  __server.potjes = {};
+  await pSchrijf(pa, 'zet-1');
+  /* geen check tussendoor: die veegt ook, en verbergt dan een schrijven dat niet veegt */
+  __server.klok += 30 * 24 * 3600000 + 3600000;
+  await pSchrijf(pa, 'zet-1');
+  __server.klok += 5000;
+  var oTerug = await pLees([pa.bus]);
+  ok('potje: verlopen en met dezelfde bytes terug, dan begint ongewijzigd opnieuw',
+    oTerug.blobs[pa.bus] === 'zet-1' && oTerug.ongewijzigd[pa.bus] === 5);
+  __server.klok = klokP;
+
+  __server.potjes = {};
+  var pVol = [];
+  for (j = 0; j < 1024; j++) {
+    pVol.push(await pBus('v' + j));
+    await pSchrijf(pVol[j], 'x');
+    __server.klok += 1000;
+  }
+  await pSchrijf(await pBus('nieuw'), 'x');
+  var pN1 = Object.keys(__server.potjes).length, pWeg0 = !(pVol[0].bus in __server.potjes);
+  __server.klok += 1000;
+  await pSchrijf(pVol[500], 'y');
+  var pN2 = Object.keys(__server.potjes).length, pNog1 = pVol[1].bus in __server.potjes;
+  __server.klok += 1000;
+  await pSchrijf(await pBus('nieuw2'), 'x');
+  ok('potje: vol, dan wijkt de langst niet geschreven bus, en opnieuw schrijven duwt niemand weg',
+    pN1 === 1024 && pWeg0 && pN2 === 1024 && pNog1 &&
+    !(pVol[1].bus in __server.potjes) && (pVol[500].bus in __server.potjes));
+  __server.klok = klokP;
+
+  __server.potjes = {};
+  __server.buses = {};
+  for (j = 0; j < MAX_BUSES; j++) __server.buses[j.toString(16).padStart(64, '0')] = { blob: 'x', tot: __busNu() + BUS_TTL };
+  ok('potje: een volle tabel met uitnodigingen houdt een potje niet tegen', await pSchrijf(pa, 'x') === 204);
+  var uId = (0).toString(16).padStart(64, '0'), lUP = await pLees([uId, pa.bus]);
+  ok('potje: alleen een potjesbus krijgt een ongewijzigd, een uitnodiging niet',
+    lUP.blobs[uId] === 'x' && (pa.bus in lUP.ongewijzigd) && !(uId in lUP.ongewijzigd));
+  for (j = 1; j < 1023; j++) __server.potjes['f' + j.toString(16).padStart(63, '0')] = { blob: 'x', tot: __busNu() + POTJE_TTL, veranderd: __busNu() };
+  ok('potje: de uitnodigingen tellen niet mee voor de 1024 potjesbussen',
+    await pSchrijf(pb, 'x') === 204 && Object.keys(__server.potjes).length === 1024 && (pa.bus in __server.potjes));
+
+  __server.links = { 'een-code': { payload: 'x', tot: __busNu() + LINK_TTL } };
+  __server.wsrooms = {};
+  __server.pending = { 'a|b': { dirA: 'a' } };
+  __server.profiles.herstartproef = { secret: 'geheim', blob: new Uint8Array([1, 2, 3]) };
+  var kH = __nieuweKamer(), wsH = new WebSocket('wss://test.local/v1/room/ws'), wsHDicht = null;
+  wsH.onopen = function () { wsH.send(JSON.stringify({ room: kH.id, seat: kH.host })); };
+  wsH.onclose = function (e) { wsHDicht = e.code; };
+  drainTimers(50, 0);
+  __herstartServer();
+  drainTimers(50, 0);
+  ok('potje: een herstart verliest potjes, uitnodigingen, codes, kamers en paren, breekt open lijnen en houdt de profielen',
+    !(pa.bus in (await pLees([pa.bus])).blobs) && Object.keys(__server.buses).length === 0 &&
+    Object.keys(__server.links).length === 0 && Object.keys(__server.wsrooms).length === 0 &&
+    Object.keys(__server.pending).length === 0 && wsHDicht === 1006 && !!__server.profiles.herstartproef);
+  await pSchrijf(pa, 'x');
+  __server.klok += 3600000;
+  ok('potje: na een herstart telt ongewijzigd vanaf het opnieuw schrijven', (await pLees([pa.bus])).ongewijzigd[pa.bus] === 3600);
+  __server.klok = klokP;
+  delete __server.profiles.herstartproef;
+  __server.links = tabellenVoor.links;
+  __server.wsrooms = tabellenVoor.wsrooms;
+  __server.pending = tabellenVoor.pending;
+  __server.buses = tabellenVoor.buses;
+  __server.potjes = tabellenVoor.potjes;
 
   /* wie zelf op iemand wacht moet een uitnodiging van een ander nog steeds
      te zien krijgen: met twee vermeldingen van hetzelfde kind (een kapotte

@@ -147,6 +147,7 @@ func TestLinkGrensBovenWatEenSpuiterHaalt(t *testing.T) {
 	}{
 		{defaultDelay, defaultSlots, 6000, true},
 		{defaultDelay, defaultSlots, 6001, false},
+		{190 * time.Millisecond, defaultSlots, 6316, true},
 		{defaultDelay, 4, defaultMaxLinks, true},
 		{100 * time.Millisecond, defaultSlots, defaultMaxLinks, true},
 		{0, defaultSlots, defaultMaxLinks, true},

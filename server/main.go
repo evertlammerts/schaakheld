@@ -23,6 +23,10 @@ func main() {
 		log.Printf("waarschuwing: met -delay %v en -redeem-slots %d houdt een spuiter -max-links %d vol; een echt kind krijgt dan 429 op zijn koppelcode",
 			*delay, *slots, *maxLinks)
 	}
+	if kamerTabelTeKlein(*delay, *slots) {
+		log.Printf("waarschuwing: met -delay %v en -redeem-slots %d kunnen er in %v meer dan %d kamers bijkomen; een vloed van nieuwe kamers geeft dan iedereen 429",
+			*delay, *slots, evictMinAge, maxRooms)
+	}
 
 	srv, err := newServer(config{
 		dataDir:     *data,

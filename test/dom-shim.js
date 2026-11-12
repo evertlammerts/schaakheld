@@ -114,6 +114,7 @@ function maakDocument(vast) {
   };
   el.scrollIntoView = () => { __scrolls.push({ el: id }); };
   el.focus = () => {};
+  el.select = () => { el.selectionStart = 0; el.selectionEnd = String(el.value).length; };
   el.cloneNode = () => {
     const n = makeEl(id);
     n._tag = el._tag;
@@ -479,16 +480,48 @@ var crypto = {
 /* Nep-fetch met dezelfde semantiek als de Go-server (koppelcodes eenmalig,
    profielblobs met bearer secret, kamers en wederzijdse paren), zodat de
    flows end-to-end testbaar zijn. */
-var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, klok: 0, teller: 0 };
+var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, potjes: {}, klok: 0, teller: 0 };
 /* grenzen en TTL uit bus.go, room.go en server.go; __server.klok schuift de
    klok van de nep-server vooruit zodat een test een bus, een kamer of een
    koppelcode kan laten verlopen */
 var BUS_TTL = 10 * 60000, MAX_BUSES = 512, MAX_BUS_BLOB = 4 << 10, MAX_BUS_CHECK = 64;
+var POTJE_TTL = 30 * 24 * 3600000, MAX_POTJES = 1024;
 var LINK_TTL = 10 * 60000, MAX_LINKS = 8192;
 var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000, MAX_KAMERS = 64, KAMER_RUST = 3000;
 function __busNu() { return Date.now() + __server.klok; }
 function __veegBussen() {
   for (var id in __server.buses) if (__server.buses[id].tot <= __busNu()) delete __server.buses[id];
+}
+function __veegPotjes() {
+  for (var id in __server.potjes) if (__server.potjes[id].tot <= __busNu()) delete __server.potjes[id];
+}
+function __sha256hex(tekst) {
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(tekst)).then(function (d) {
+    var hex = '', bytes = new Uint8Array(d);
+    for (var i = 0; i < 32; i++) hex += (bytes[i] >> 4).toString(16) + (bytes[i] & 15).toString(16);
+    return hex;
+  });
+}
+/* zoals busGeldig na readJSON: de velden zijn tekst (null of weg telt als
+   leeg) en de grens telt bytes, zoals len in Go */
+function __busGeldig(body, hex) {
+  const tekst = v => v == null || typeof v === 'string';
+  return tekst(body.bus) && tekst(body.bewijs) && tekst(body.blob) &&
+    /^[a-f0-9]{64}$/.test(body.bus) && hex === body.bus && /^[A-Za-z0-9_-]{8,64}$/.test(body.bewijs) &&
+    new TextEncoder().encode(body.blob == null ? '' : body.blob).length <= MAX_BUS_BLOB;
+}
+/* een herstart van de server: alles wat alleen in het geheugen staat is weg
+   en elke open lijn breekt; de profielen op schijf blijven */
+function __herstartServer() {
+  for (const id in __server.wsrooms) {
+    const rm = __server.wsrooms[id];
+    for (const tok in rm.seats) if (rm.seats[tok] && rm.seats[tok].verbreek) rm.seats[tok].verbreek();
+  }
+  __server.links = {};
+  __server.wsrooms = {};
+  __server.pending = {};
+  __server.buses = {};
+  __server.potjes = {};
 }
 /* zoals room.go: een kamer heeft een potje zodra beide stoeltjes ooit
    verbonden waren; stil is pas stil als er niemand verbonden is */
@@ -536,12 +569,17 @@ var fetch = function (url, opts) {
     const hdrs = opts.headers || {};
     const auth = hdrs.Authorization || hdrs.authorization || '';
     const secret = auth.indexOf('Bearer ') === 0 ? auth.slice(7) : '';
-    const body = typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body;
     const res = (status, data) => resolve({
       status,
       json: () => Promise.resolve(data),
       arrayBuffer: () => Promise.resolve(data instanceof Uint8Array ? data.buffer.slice(0) : new ArrayBuffer(0))
     });
+    /* zoals readJSON: een json-body die niet parseert (ook tekst na het
+       object) is 400; POST /v1/room leest geen body */
+    let body = opts.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch (e) { if (!(m === 'POST' && path === '/v1/room')) { res(400); return; } }
+    }
     if (m === 'POST' && path === '/v1/link') {
       /* zoals server.go: vol is vol, ook voor een code die er al staat */
       for (const c in __server.links) if (__server.links[c].tot <= __busNu()) delete __server.links[c];
@@ -553,12 +591,8 @@ var fetch = function (url, opts) {
       /* zelfde regels als bus.go: bus = sha256(bewijs), leeg blob wist, een
          bus houdt het briefje BUS_TTL lang, en vol is vol (een bestaande bus
          mag wel vervangen worden) */
-      crypto.subtle.digest('SHA-256', new TextEncoder().encode(body.bewijs)).then(function (d) {
-        var hex = '';
-        var bytes = new Uint8Array(d);
-        for (var i = 0; i < 32; i++) hex += (bytes[i] >> 4).toString(16) + (bytes[i] & 15).toString(16);
-        if (!/^[a-f0-9]{64}$/.test(body.bus) || hex !== body.bus || !/^[A-Za-z0-9_-]{8,64}$/.test(body.bewijs) ||
-          String(body.blob == null ? '' : body.blob).length > MAX_BUS_BLOB) { res(400); return; }
+      __sha256hex(body.bewijs).then(function (hex) {
+        if (!__busGeldig(body, hex)) { res(400); return; }
         __veegBussen();
         if (body.blob === '') { delete __server.buses[body.bus]; res(204); return; }
         if (!(body.bus in __server.buses) && Object.keys(__server.buses).length >= MAX_BUSES) { res(429); return; }
@@ -566,15 +600,43 @@ var fetch = function (url, opts) {
         res(204);
       });
     }
+    else if (m === 'POST' && path === '/v1/potje') {
+      /* zoals handlePotjePost: de regels van een bus, maar dertig dagen na het
+         laatste schrijven, een volle tabel laat de langst niet geschreven bus
+         plaatsmaken, dezelfde bytes verlengen alleen, en alleen bus, bewijs
+         en blob mogen erin staan */
+      if (!body || typeof body !== 'object' ||
+        Object.keys(body).some(function (k) { return ['bus', 'bewijs', 'blob'].indexOf(k) < 0; })) { res(400); return; }
+      __sha256hex(body.bewijs).then(function (hex) {
+        if (!__busGeldig(body, hex)) { res(400); return; }
+        __veegPotjes();
+        const blob = body.blob == null ? '' : String(body.blob), nu = __busNu();
+        if (blob === '') { delete __server.potjes[body.bus]; res(204); return; }
+        const oud = __server.potjes[body.bus];
+        if (!oud && Object.keys(__server.potjes).length >= MAX_POTJES) {
+          let weg = null;
+          for (const id in __server.potjes) if (weg === null || __server.potjes[id].tot < __server.potjes[weg].tot) weg = id;
+          delete __server.potjes[weg];
+        }
+        __server.potjes[body.bus] = { blob: blob, tot: nu + POTJE_TTL, veranderd: oud && oud.blob === blob ? oud.veranderd : nu };
+        res(204);
+      });
+    }
     else if (m === 'POST' && path === '/v1/bus/check') {
       var vraag = body.bussen || [];
       if (vraag.length > MAX_BUS_CHECK) { res(400); return; }
       __veegBussen();
-      var blobs = {};
+      __veegPotjes();
+      var blobs = {}, ongewijzigd = {}, nuC = __busNu();
       vraag.forEach(function (id) {
-        if (/^[a-f0-9]{64}$/.test(id) && (id in __server.buses)) blobs[id] = __server.buses[id].blob;
+        if (!/^[a-f0-9]{64}$/.test(id)) return;
+        if (id in __server.buses) blobs[id] = __server.buses[id].blob;
+        if (id in __server.potjes) {
+          blobs[id] = __server.potjes[id].blob;
+          ongewijzigd[id] = Math.floor((nuC - __server.potjes[id].veranderd) / 1000);
+        }
       });
-      res(200, { blobs: blobs });
+      res(200, { blobs: blobs, ongewijzigd: ongewijzigd });
     }
     else if (m === 'POST' && path === '/v1/room') {
       const k = __nieuweKamer();
