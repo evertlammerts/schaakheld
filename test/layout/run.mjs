@@ -4,20 +4,22 @@
    heeft geen opmaak; hier staan de rechthoeken echt op een scherm.
 
    Draaien: node test/layout/run.mjs   (./test.sh doet dat als playwright-cli er is)
-   Het bouwsel in de repo-root wordt geserveerd met tools/dev.sh op poort 8719;
-   DEV_SH wijst desgewenst een ander dev.sh aan. De sessie heet fd-layout-*.
+   Het bouwsel in de repo-root wordt geserveerd met tools/dev.sh op poort 8719,
+   of op LAYOUT_POORT, zodat twee bomen tegelijk kunnen draaien; DEV_SH wijst
+   desgewenst een ander dev.sh aan. De sessie heet fd-layout-<poort>.
 
    Zoals in de flowsuite staat een regel die nog niet gebouwd is als nogNiet:
-   zijn controles moeten falen; slagen ze, dan faalt de suite. */
+   zijn controles moeten falen; slagen ze, dan faalt de suite. Een geval
+   waarop de browser geen antwoord geeft, faalt altijd: dan is niets gemeten. */
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const POORT = 8719;
+const POORT = Number(process.env.LAYOUT_POORT || 8719);
 const URL = 'http://127.0.0.1:' + POORT + '/';
 const DEV = process.env.DEV_SH || path.join(ROOT, 'tools', 'dev.sh');
-const SESSIE = 'fd-layout-webkit';
+const SESSIE = 'fd-layout-' + POORT;
 
 /* een kind met een naam en verder niets: geen naamvraag, geen weekkaart */
 const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'Mees', t: 1 } },
@@ -34,7 +36,10 @@ function oordeel(regel, fouten, gebouwd) {
   return fouten.length ? 'NOG NIET GEBOUWD' : 'FAIL';
 }
 
-const MATEN = [[360, 640], [375, 553], [375, 647], [390, 667], [402, 874], [768, 1024], [1024, 768], [1194, 834], [1280, 720]];
+/* elke maat uit de tabel van visual.md 8.3 die een doel is: alles behalve de telefoon dwars */
+const MATEN = [[360, 640], [375, 647], [375, 553], [390, 667], [402, 700], [360, 708], [390, 844], [402, 874],
+  [768, 1004], [768, 904], [1024, 748], [1024, 648], [1024, 1346], [1024, 1246], [1366, 1004], [1366, 904],
+  [834, 1170], [834, 1070], [1194, 810], [1194, 710], [1280, 720], [1280, 630], [1440, 900]];
 const KLEIN = [[360, 640], [375, 553]];
 
 function pw(...args) {
@@ -139,7 +144,23 @@ for (const [W, H] of KLEIN) {
       voor = await rect('#board');
       await klikTekst(/Klaar/);
       await page.waitForTimeout(500);
-      check(n, 'na een antwoord', gelijk(voor, await rect('#board')));`
+      check(n, 'na een antwoord', gelijk(voor, await rect('#board')));
+      await vers(${W}, ${H});
+      await startPotje();
+      voor = await rect('#board');
+      check(n, 'testopzet: de Denkwolk is aan te tikken', await klikTekst(/Denkwolk/));
+      await page.waitForTimeout(400);
+      check(n, 'bij de melding van de denkwolk', gelijk(voor, await rect('#board')));`
+  });
+
+  GEVALLEN.push({ regels: ['[3.4] ' + W + 'x' + H + ': de kop is één rij: de levelchip en ⚙ staan naast elkaar bovenin'],
+    code: `
+      const n = '[3.4] ${W}x${H}: de kop is één rij: de levelchip en ⚙ staan naast elkaar bovenin';
+      await vers(${W}, ${H});
+      const chip = await rect('#lvlChip'), gear = await rect('#setBtn');
+      check(n, 'de levelchip en ⚙ staan er', !!chip && !!gear);
+      check(n, 'naast elkaar, op één rij', !!chip && !!gear && chip.top < gear.bottom && gear.top < chip.bottom);
+      check(n, 'in de bovenste 64 pixels (visual.md 11.1: een rij van 56)', !!chip && !!gear && chip.bottom <= 64.5 && gear.bottom <= 64.5);`
   });
 
   GEVALLEN.push({ regels: ['[2.4] ' + W + 'x' + H + ': de uitleg staat onder het bord met Volgende in beeld, en het bord blijft waar het was'],
@@ -166,8 +187,38 @@ for (const [W, H] of KLEIN) {
       for (const s of ['#verder', '#weekStrip', '#spelTurbo', '#spelVriend']) {
         const r = await rect(s);
         check(n, s + ' boven de tabbalk', !!r && !!tab && r.top >= 0 && r.bottom <= tab.top + 0.5);
-      }`
+      }
+      const t = {};
+      for (const s of ['#verder', '#weekStrip', '#spelTurbo', '#spelVriend', '#oefen-scan', '#oefen-best3', '#oefen-trucs', '#oefen-koning', '#oefen-opening']) {
+        const r = await rect(s);
+        t[s] = r ? r.top : NaN;
+      }
+      check(n, 'van boven: de kaart, de weekregel, de twee spelknoppen, de vijf oefeningen onder elkaar',
+        t['#verder'] < t['#weekStrip'] && t['#weekStrip'] < t['#spelTurbo'] && t['#spelTurbo'] <= t['#spelVriend'] &&
+        t['#spelVriend'] < t['#oefen-scan'] && t['#oefen-scan'] < t['#oefen-best3'] && t['#oefen-best3'] < t['#oefen-trucs'] &&
+        t['#oefen-trucs'] < t['#oefen-koning'] && t['#oefen-koning'] < t['#oefen-opening']);`
   });
+}
+
+/* plan.md 1.8: een speelscherm opent met het hele bord in beeld, ook als het
+   kind op Spelen eerst naar beneden scrolde (B03: het speelscherm erfde die
+   scroll); tot increment 2 mag dat door het bord in beeld te scrollen. Op
+   360x640 en 390x667 staat het bord vandaag al in beeld; vanaf increment 2
+   meet 2.1 elke maat. */
+for (const [W, H] of [[375, 553]]) {
+  const n = '[1.8] ' + W + 'x' + H + ': een oefening die onderaan Spelen staat, opent met het hele bord in beeld';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      /* zoals een kind: naar beneden scrollen tot de rij onderaan in beeld staat,
+         en dan tikken (een klik van playwright scrolt zelf, een tik niet) */
+      const tikOnderaan = (...sels) => page.evaluate(ss => { for (const s of ss) { const e = document.querySelector(s);
+        if (e && e.getClientRects().length) { e.scrollIntoView({ block: 'end' }); e.click(); return true; } } return false; }, sels);
+      for (const k of ['scan', 'koning']) {
+        await vers(${W}, ${H});
+        check(n, 'testopzet: de rij ' + k + ' is aan te tikken', await tikOnderaan('#oefen-' + k, '.mode-card[data-mode="' + k + '"]'));
+        await page.waitForTimeout(1200);
+        check(n, k + ': het bord in beeld', binnen(await rect('#board'), ${W}, ${H}));
+      }` });
 }
 
 for (const [W, H] of MATEN) {
@@ -207,11 +258,15 @@ function draai(geval) {
   const r = pw('--raw', 'run-code', code);
   let uit = null;
   try { uit = JSON.parse(JSON.parse(r.stdout.trim())); } catch (e) { uit = null; }
-  const fouten = {};
+  /* zonder antwoord of zonder een enkele controle is er niets gemeten: dat is
+     een fout van de meting, ook voor een regel die nog niet gebouwd is */
+  const fouten = {}, kapot = {};
   for (const regel of geval.regels) {
-    fouten[regel] = uit ? (uit[regel] || ['geen meting']) : ['de browser gaf geen antwoord: ' + (r.stderr || r.stdout).trim().split('\n')[0]];
+    if (!uit) { kapot[regel] = 'de browser gaf geen antwoord: ' + (r.stderr || r.stdout || '').trim().split('\n')[0]; continue; }
+    if (!uit[regel]) { kapot[regel] = 'geen enkele controle gedaan'; continue; }
+    fouten[regel] = uit[regel];
   }
-  return fouten;
+  return { fouten, kapot };
 }
 
 function zelftest() {
@@ -235,8 +290,9 @@ function main() {
     const open = pw('open', URL);
     if (open.status !== 0) throw new Error('playwright-cli open lukte niet: ' + open.stderr);
     for (const geval of GEVALLEN) {
-      const fouten = draai(geval);
+      const { fouten, kapot } = draai(geval);
       for (const regel of geval.regels) {
+        if (kapot[regel]) { fails++; console.log('FAIL  ' + regel + '  (meting mislukt: ' + kapot[regel] + ')'); continue; }
         const f = fouten[regel], o = oordeel(regel, f, GEBOUWD);
         if (o === 'NOG NIET GEBOUWD') { nogNiet++; console.log('NOG NIET GEBOUWD  ' + regel + '  (' + f[0] + ')'); }
         else if (o === 'PASS') { gebouwd++; console.log('PASS  ' + regel); }
