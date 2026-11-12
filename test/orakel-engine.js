@@ -50,8 +50,8 @@
   const speel = function (S, zetten) { for (const k of zetten) E.makeMove(S, zet(S, k)); return S; };
   /* een rustige zet die 95 minder scoort dan de beste en niets verliest (reviewer, v7) */
   const STIL_FEN = 'r2qkb1r/ppp1bppp/B1bp1n2/4p3/4P3/5P1N/PPPPQ1PP/R1B2K1R w kq - 1 10', STIL_ZET = 'a6b5';
-  /* een voorraadregel die alle vijf de toetsen van de coach doorstaat */
-  const STUK_GOED = 'rn1qk2r/ppp2ppp/4bn2/4p3/4p3/2bP3N/PPPQ1PPP/R1B1KB1R w|stuk|b2c3,d2c3';
+  /* een regel uit de voorraad, die de tool met de vijf toetsen van de coach bij 300.000 knopen controleerde */
+  const STUK_GOED = 'r1b1kb1r/pppp1pp1/4pq1p/4N3/1n1P4/P1n1B3/1PPQPPPP/1R2KB1R w|stuk|b2c3,d2c3';
   /* een middenspel buiten het boek waarin een zoektocht op tijd een andere zet kiest dan het knoopbudget */
   const SUPER_FEN = 'r1bq1k1r/p1p3pp/2p1pp2/4p3/1bNP2n1/5N2/PPP2PPP/R1BQ1RK1 w - - 0 11';
   /* een vaste reeks toevalsgetallen, zodat een steekproef elke keer dezelfde is */
@@ -132,6 +132,7 @@
     check('met alleen Pc3-b5: afgekeurd', E.checkPieceTask(taak(['c3b5'])) === null);
     check('de stand blijft onaangeroerd', E.toFEN(S) === fen);
     const t = E.trucTask(STUK_GOED);
+    check(STUK_GOED + ': staat in de voorraad', typeof STUK_POOL !== 'undefined' && STUK_POOL.indexOf(STUK_GOED) >= 0);
     check(STUK_GOED + ': goed', !!t && !!E.checkPieceTask(t));
     check('dezelfde stand zonder redding: afgekeurd', !!t && E.checkPieceTask(Object.assign({}, t, { answers: [] })) === null);
   });
