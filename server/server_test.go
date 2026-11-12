@@ -110,17 +110,50 @@ func TestLinkTTL(t *testing.T) {
 	s, clk := newTestServer(t, nil)
 	do(t, s, "POST", "/v1/link", "", jsonBody(t, map[string]string{
 		"code": "aap-noot-mies-wim", "payload": "x"}))
-	clk.advance(6 * time.Minute)
+	do(t, s, "POST", "/v1/link", "", jsonBody(t, map[string]string{
+		"code": "kat-vis-boom-lamp", "payload": "y"}))
+	clk.advance(10*time.Minute - time.Second)
 	w := do(t, s, "POST", "/v1/link/redeem", "", jsonBody(t, map[string]string{
 		"code": "aap-noot-mies-wim"}))
+	if w.Code != 200 {
+		t.Fatalf("een seconde voor tien minuten moet de code nog werken, kreeg %d", w.Code)
+	}
+	clk.advance(time.Second)
+	w = do(t, s, "POST", "/v1/link/redeem", "", jsonBody(t, map[string]string{
+		"code": "kat-vis-boom-lamp"}))
 	if w.Code != 404 {
-		t.Fatalf("verlopen code moet 404 zijn, kreeg %d", w.Code)
+		t.Fatalf("op tien minuten moet de code op zijn, kreeg %d", w.Code)
 	}
 	s.mu.Lock()
 	n := len(s.links)
 	s.mu.Unlock()
 	if n != 0 {
 		t.Fatalf("verlopen entries niet opgeruimd: %d over", n)
+	}
+}
+
+func TestLinkGrensBovenWatEenSpuiterHaalt(t *testing.T) {
+	// wie zo snel registreert als de server toelaat, krijgt de tabel niet
+	// vol: anders krijgt een echt kind 429 op zijn koppelcode
+	if linkTabelTeKlein(defaultDelay, defaultSlots, defaultMaxLinks) {
+		t.Fatalf("met de standaardinstellingen krijgt een spuiter de tabel vol")
+	}
+	// wie de vlaggen zelf zet, krijgt bij het starten een waarschuwing
+	for _, geval := range []struct {
+		delay    time.Duration
+		slots    int
+		maxLinks int
+		teKlein  bool
+	}{
+		{defaultDelay, defaultSlots, 6000, true},
+		{defaultDelay, defaultSlots, 6001, false},
+		{defaultDelay, 4, defaultMaxLinks, true},
+		{100 * time.Millisecond, defaultSlots, defaultMaxLinks, true},
+		{0, defaultSlots, defaultMaxLinks, true},
+	} {
+		if got := linkTabelTeKlein(geval.delay, geval.slots, geval.maxLinks); got != geval.teKlein {
+			t.Errorf("%v, %d plekken, %d codes: te klein %v, wil %v", geval.delay, geval.slots, geval.maxLinks, got, geval.teKlein)
+		}
 	}
 }
 

@@ -41,10 +41,16 @@ func newToken() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
+// Een kamer waar beide stoeltjes ooit verbonden waren, heeft een potje en
+// overleeft het avondeten en de nacht. Een kamer zonder tweede stoel (een
+// onbeantwoorde uitnodiging, een ongebruikte speelcode) houdt het korte
+// leven, anders vullen die de maxRooms.
 const (
 	pairTTL     = 5 * time.Minute
 	roomIdle    = 15 * time.Minute
 	roomMaxAge  = 3 * time.Hour // harde bovengrens, ook voor een openbaar gehouden socket
+	gameIdle    = 12 * time.Hour
+	gameMaxAge  = 48 * time.Hour
 	maxRooms    = 64
 	maxPending  = 256
 	maxWsConns  = 160 // globale gelijktijdige websocket-verbindingen
@@ -59,7 +65,10 @@ type seat struct {
 	token string
 	live  atomic.Bool // heeft dit stoeltje een levende verbinding? (lockvrij leesbaar)
 
-	mu   sync.Mutex // serialiseert schrijvers (relay en peer-signalen)
+	// beschermt conn en houdt live gelijk met conn. Nooit vastgehouden
+	// tijdens netwerkverkeer, dus mag hij onder s.mu genomen worden; s.mu
+	// onder mu nemen mag nooit.
+	mu   sync.Mutex
 	conn *websocket.Conn
 }
 
@@ -89,7 +98,20 @@ type room struct {
 	id      string
 	seats   [2]*seat
 	created time.Time
-	touched time.Time
+	touched time.Time // aanmaak of laatste vertrek; stil telt alleen als er niemand in zit
+	joined  [2]bool   // per stoeltje: ooit verbonden geweest
+}
+
+func (r *room) hasGame() bool { return r.joined[0] && r.joined[1] }
+
+// live verandert alleen onder s.mu, dus onder s.mu is dit exact
+func (r *room) occupied() bool { return r.seats[0].live.Load() || r.seats[1].live.Load() }
+
+func (r *room) lifetimes() (idle, maxAge time.Duration) {
+	if r.hasGame() {
+		return gameIdle, gameMaxAge
+	}
+	return roomIdle, roomMaxAge
 }
 
 type pendingPair struct {
@@ -108,7 +130,7 @@ func newSeat() *seat { return &seat{token: newToken()} }
 
 func (s *server) newRoomLocked() (*room, bool) {
 	s.sweepRoomsLocked()
-	if len(s.rooms) >= maxRooms {
+	if len(s.rooms) >= maxRooms && !s.evictRoomLocked() {
 		return nil, false
 	}
 	now := s.cfg.now()
@@ -117,22 +139,48 @@ func (s *server) newRoomLocked() (*room, bool) {
 	return r, true
 }
 
+// evictRoomLocked maakt plaats in een volle tabel. Weigeren zou bij kamers
+// met een potje een halve dag geen nieuw potje betekenen, voor iedereen. Een
+// kamer waar iemand in zit wijkt nooit; wie zijn kamer zo kwijt is, krijgt
+// bij terugkomen hetzelfde antwoord als bij een verlopen kamer.
+func (s *server) evictRoomLocked() bool {
+	var weg *room
+	for _, r := range s.rooms {
+		if !r.occupied() && (weg == nil || wijktEerder(r, weg)) {
+			weg = r
+		}
+	}
+	if weg == nil {
+		return false
+	}
+	delete(s.rooms, weg.id)
+	return true
+}
+
+// een kamer zonder potje (die leeft toch maar een kwartier) voor een
+// gepauzeerd potje, en daarbinnen de langst stille
+func wijktEerder(a, b *room) bool {
+	if a.hasGame() != b.hasGame() {
+		return !a.hasGame()
+	}
+	return a.touched.Before(b.touched)
+}
+
 func (s *server) sweepRoomsLocked() {
 	now := s.cfg.now()
 	for id, r := range s.rooms {
+		idle, maxAge := r.lifetimes()
 		// harde bovengrens ongeacht activiteit: anders houdt een
 		// opengehouden socket zijn kamer voor eeuwig bezet en is de
 		// kamer-cap uit te putten
-		if now.Sub(r.created) >= roomMaxAge {
+		if now.Sub(r.created) >= maxAge {
 			delete(s.rooms, id)
 			continue
 		}
-		if now.Sub(r.touched) < roomIdle {
+		if now.Sub(r.touched) < idle {
 			continue
 		}
-		// live lockvrij lezen: seat.mu onder s.mu nemen zou een trage
-		// schrijver de hele server laten bevriezen
-		if !r.seats[0].live.Load() && !r.seats[1].live.Load() {
+		if !r.occupied() {
 			delete(s.rooms, id)
 		}
 	}
@@ -298,15 +346,29 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.mu.Lock()
+	// verlopen is verlopen, ook als er sindsdien geen kamer bij kwam
+	s.sweepRoomsLocked()
 	rm := s.rooms[join.Room]
 	var mine, peer *seat
+	var old *websocket.Conn
 	if rm != nil {
 		if rm.seats[0].token == join.Seat {
 			mine, peer = rm.seats[0], rm.seats[1]
+			rm.joined[0] = true
 		} else if rm.seats[1].token == join.Seat {
 			mine, peer = rm.seats[1], rm.seats[0]
+			rm.joined[1] = true
 		}
-		rm.touched = s.cfg.now()
+	}
+	if mine != nil {
+		// stoel innemen onder s.mu: anders telt de kamer even als leeg en
+		// kan hij precies dan plaats moeten maken. Een oude verbinding (tab
+		// kwijt, wifi weg) wordt vervangen door de nieuwe.
+		mine.mu.Lock()
+		old = mine.conn
+		mine.conn = c
+		mine.live.Store(true)
+		mine.mu.Unlock()
 	}
 	s.mu.Unlock()
 	if mine == nil {
@@ -314,14 +376,6 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 		c.Close(websocket.StatusPolicyViolation, "onbekend")
 		return
 	}
-
-	// stoel innemen; een oude verbinding (tab kwijt, wifi weg) wordt
-	// vervangen door de nieuwe
-	mine.mu.Lock()
-	old := mine.conn
-	mine.conn = c
-	mine.live.Store(true)
-	mine.mu.Unlock()
 	if old != nil {
 		// zeg erbij waarom we sluiten. Zonder dat kan de oude kant niet
 		// zien of zijn wifi hikte of dat een ander apparaat het stoeltje
@@ -370,21 +424,24 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 		if typ != websocket.MessageText {
 			continue
 		}
-		s.mu.Lock()
-		rm.touched = s.cfg.now()
-		s.mu.Unlock()
 		peer.write(data)
 	}
 	close(stopPing)
 
-	// alleen opruimen als het stoeltje nog van deze verbinding is
+	// alleen opruimen als het stoeltje nog van deze verbinding is; een
+	// verbinding die al vervangen is, raakt niets meer aan
+	s.mu.Lock()
 	mine.mu.Lock()
 	nog := mine.conn == c
 	if nog {
 		mine.conn = nil
 		mine.live.Store(false)
+		// de stille tijd telt vanaf het vertrek, niet vanaf de laatste zet:
+		// een kind dat lang nadenkt en dan de app sluit, verliest die tijd niet
+		rm.touched = s.cfg.now()
 	}
 	mine.mu.Unlock()
+	s.mu.Unlock()
 	if nog {
 		peer.write([]byte(`{"t":"peer","aan":false}`))
 	}

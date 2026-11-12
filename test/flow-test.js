@@ -1838,6 +1838,110 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     rVerv.status === 204 && __server.buses[mijnBus.bus].blob === briefje);
   __server.buses = {};
 
+  /* de kamertabel uit room.go: hoe lang een kamer leeft, en wie plaatsmaakt
+     als de tabel vol is (een kamer zonder iemand erin, eerst een zonder
+     potje, dan het langst stille potje; anders weigert de server) */
+  var kamersVoor = __server.wsrooms, klokK = __server.klok, nuK = __busNu();
+  __server.wsrooms = {};
+  var nepKamer = function (id, potje, bezet, stil) {
+    var rm = { seats: {}, order: [id + '-a', id + '-b'], joined: {}, created: nuK - 60000, touched: nuK - stil };
+    rm.seats[id + '-a'] = bezet ? { readyState: 1 } : null;
+    rm.seats[id + '-b'] = null;
+    if (potje) { rm.joined[id + '-a'] = true; rm.joined[id + '-b'] = true; }
+    __server.wsrooms[id] = rm;
+  };
+  /* rauwe verbindingen zoals de app ze opent, met de timers van nu */
+  var rauw = function (kamer, stoel) {
+    var ws = new WebSocket('wss://test.local/v1/room/ws');
+    ws.ontvangen = [];
+    ws.onopen = function () { ws.send(JSON.stringify({ room: kamer, seat: stoel })); };
+    ws.onmessage = function (e) { ws.ontvangen.push(e.data); };
+    ws.onclose = function (e) { ws.dicht = { code: e.code, reden: e.reason }; };
+    drainTimers(50, 0);
+    return ws;
+  };
+  var weg = function (ws) { ws.close(); drainTimers(50, 0); };
+  nepKamer('verlopen', false, false, KAMER_STIL + 1000);
+  var sV = rauw('verlopen', 'verlopen-a');
+  ok('kamers: verlopen is verlopen, ook als er sindsdien geen kamer bij kwam',
+    !!sV.dicht && sV.dicht.code === 1008 && sV.dicht.reden === 'onbekend' && sV.ontvangen.length === 0);
+
+  __server.wsrooms = {};
+  var k3 = __nieuweKamer(), h3 = rauw(k3.id, k3.host);
+  __server.klok += 2 * 3600000 + 50 * 60000;
+  __veegKamers();
+  var na250 = k3.id in __server.wsrooms;
+  __server.klok += 20 * 60000;
+  __veegKamers();
+  ok('kamers: zonder potje hoogstens 3 uur, ook met de host erin', na250 && !(k3.id in __server.wsrooms));
+  weg(h3);
+  __server.klok = klokK;
+
+  __server.wsrooms = {};
+  var k48 = __nieuweKamer(), h48 = rauw(k48.id, k48.host), g48 = rauw(k48.id, k48.gast);
+  __server.klok += 47 * 3600000 + 50 * 60000;
+  __veegKamers();
+  var na4750 = k48.id in __server.wsrooms;
+  __server.klok += 20 * 60000;
+  __veegKamers();
+  ok('kamers: een potje hoogstens 48 uur, ook met iemand erin', na4750 && !(k48.id in __server.wsrooms));
+  h48.send('{"t":"na"}');
+  drainTimers(50, 0);
+  ok('kamers: wie daarna nog verbonden is, krijgt de berichten van de ander, zoals op de echte server',
+    g48.ontvangen.indexOf('{"t":"na"}') >= 0);
+  weg(h48);
+  weg(g48);
+  __server.klok = klokK;
+
+  __server.wsrooms = {};
+  var ks = __nieuweKamer(), hs = rauw(ks.id, ks.host);
+  weg(rauw(ks.id, ks.gast));
+  __server.klok += 13 * 3600000;
+  weg(hs);
+  __server.klok += 11 * 3600000 + 50 * 60000;
+  __veegKamers();
+  var na1150 = ks.id in __server.wsrooms;
+  __server.klok += 20 * 60000;
+  __veegKamers();
+  ok('kamers: de 12 uur stil tellen vanaf het laatste vertrek', na1150 && !(ks.id in __server.wsrooms));
+  __server.klok = klokK;
+
+  __server.wsrooms = {};
+  var nieuwBezet = async function () {
+    var r = await fetch(SYNC_URL + '/v1/room', { method: 'POST', headers: {} });
+    if (r.status === 200) {
+      var k = __server.wsrooms[(await r.json()).room];
+      k.seats[k.order[0]] = { readyState: 1 };
+    }
+    return r.status;
+  };
+  nepKamer('wacht', true, true, 9000);
+  nepKamer('oudPotje', true, false, 3000);
+  nepKamer('leeg', false, false, 2000);
+  nepKamer('jongPotje', true, false, 1000);
+  for (var j = 0; Object.keys(__server.wsrooms).length < MAX_KAMERS; j++) nepKamer('vol' + j, false, true, 0);
+  var stK1 = await nieuwBezet();
+  ok('kamers: vol, dan wijkt eerst de kamer zonder potje, ook voor een ouder potje',
+    stK1 === 200 && !('leeg' in __server.wsrooms) && ('oudPotje' in __server.wsrooms));
+  var stK2 = await nieuwBezet();
+  ok('kamers: daarna het potje dat het langst stil ligt',
+    stK2 === 200 && !('oudPotje' in __server.wsrooms) && ('jongPotje' in __server.wsrooms));
+  var stK3 = await nieuwBezet();
+  ok('kamers: een kamer waar iemand in zit wijkt nooit, ook de stilste niet',
+    stK3 === 200 && !('jongPotje' in __server.wsrooms) && ('wacht' in __server.wsrooms));
+  var stK4 = await nieuwBezet();
+  ok('kamers: in elke kamer iemand, dan weigert de server en blijft het bij de grens',
+    stK4 === 429 && Object.keys(__server.wsrooms).length === MAX_KAMERS);
+  __server.wsrooms = kamersVoor;
+  /* koppelcodes uit server.go: vol is vol, ook voor een code die er al staat */
+  var linksVoor = __server.links;
+  __server.links = {};
+  for (j = 0; j < MAX_LINKS; j++) __server.links['code-' + j] = { payload: 'x', tot: __busNu() + LINK_TTL };
+  var rL = await fetch(SYNC_URL + '/v1/link', { method: 'POST', headers: {},
+    body: JSON.stringify({ code: 'code-0', payload: 'nieuw' }) });
+  ok('koppelcode: vol is vol, ook voor een code die er al staat', rL.status === 429 && __server.links['code-0'].payload === 'x');
+  __server.links = linksVoor;
+
   /* wie zelf op iemand wacht moet een uitnodiging van een ander nog steeds
      te zien krijgen: met twee vermeldingen van hetzelfde kind (een kapotte
      en een goede) bleven anders allebei de kanten eeuwig wachten */

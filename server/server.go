@@ -28,10 +28,29 @@ import (
 )
 
 const (
-	linkTTL    = 5 * time.Minute
+	linkTTL    = 10 * time.Minute
 	maxPayload = 4 << 10  // versleutelde credentials in een koppelcode
 	maxBlob    = 64 << 10 // versleuteld profielblob
 )
+
+// Registreren gaat door defaultSlots plekken die elk defaultDelay bezet
+// zijn, dus er leven hoogstens linkTTL/defaultDelay*defaultSlots codes
+// tegelijk (6000). defaultMaxLinks ligt daarboven: anders houdt een spuiter
+// de tabel vol en krijgt een echt kind 429.
+const (
+	defaultDelay    = 200 * time.Millisecond
+	defaultSlots    = 2
+	defaultMaxLinks = 8192
+)
+
+// linkTabelTeKlein: kan iedereen samen, zo snel als de rem toelaat, de
+// tabel met koppelcodes vol houden? Dan krijgt een echt kind 429.
+func linkTabelTeKlein(delay time.Duration, slots, maxLinks int) bool {
+	if delay <= 0 {
+		return true
+	}
+	return int(linkTTL/delay)*slots >= maxLinks
+}
 
 var (
 	codeRe = regexp.MustCompile(`^[a-z0-9-]{4,64}$`)
@@ -83,10 +102,10 @@ func newServer(cfg config) (*server, error) {
 		cfg.now = time.Now
 	}
 	if cfg.redeemSlots <= 0 {
-		cfg.redeemSlots = 2
+		cfg.redeemSlots = defaultSlots
 	}
 	if cfg.maxLinks <= 0 {
-		cfg.maxLinks = 4096
+		cfg.maxLinks = defaultMaxLinks
 	}
 	if cfg.maxAccounts <= 0 {
 		cfg.maxAccounts = 64
