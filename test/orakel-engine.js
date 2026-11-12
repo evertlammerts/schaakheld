@@ -378,6 +378,22 @@
     check('een rustig begin heeft geen moment', k === null);
   });
 
+  regel('[5.8] sleutelmoment: een gedekte pion slaan is een ruil, een vluchtende dame mist niets, en de verdediger die wegging krijgt een naam', function (check) {
+    /* de coach: Dxd5 slaat een pion die c6 dekt; de les is de gedekte pion, niet een hangend stuk */
+    let k = E.keyMoment(speel(E.parseFEN('4k3/8/2p5/3p4/8/8/8/3QK3 w - - 0 1'), ['d1d5', 'c6d5']));
+    check('Dxd5, cxd5: een ruil (' + JSON.stringify(k) + ')', !!k && k.kind === 'ruil' && k.moveNo === 1);
+    /* de dame vlucht voor het paard; Txa8 zou de dame kosten, dus niets gemist */
+    k = E.keyMoment(speel(E.parseFEN('b7/8/7k/4n3/8/3Q4/8/R3K3 w - - 0 1'), ['d3d1']));
+    check('Dd1 terecht: geen gemiste loper (' + JSON.stringify(k) + ')', k === null || k.kind !== 'gemist');
+    /* met de koning op e8 geeft Txa8 schaak: dan moet zwart eerst de koning redden, en wint wit de loper wel */
+    k = E.keyMoment(speel(E.parseFEN('b3k3/8/8/4n3/8/3Q4/8/R3K3 w - - 0 1'), ['d3d1']));
+    check('Dd1 naast Txa8+: wel een gemiste loper (' + JSON.stringify(k) + ')', !!k && k.kind === 'gemist' && k.sq === 'a8');
+    /* de loper op f4 dekte het paard op e5 en ging weg; de toren pakt het paard */
+    k = E.keyMoment(speel(E.parseFEN('4r1k1/8/8/4N3/5B2/8/8/6K1 w - - 0 1'), ['f4c1', 'e8e5']));
+    check('Lc1: hang, en de loper die dekte heeft een naam (' + JSON.stringify(k) + ')',
+      !!k && k.kind === 'hang' && k.defender === 'loper' && k.moved === true && k.piece === 'paard');
+  });
+
   regel('[5.8] sleutelmoment: Turbo zet een vork na je zet; een vork van jou telt pas als hij iets opleverde', function (check) {
     /* de lijn van de coach: 4.f3?? Dh4+ valt koning en loper tegelijk aan */
     const S = speel(E.newGame(), ['g1h3', 'e7e6', 'e2e3', 'b8a6', 'f1c4', 'd7d5', 'f2f3', 'd8h4']);

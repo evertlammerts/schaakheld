@@ -2300,6 +2300,10 @@ function moveMoment(S, m) {
   const base = { moveNo: S.full, ply: S.hist.length, move: moveKey(m) };
   const bc = blunderCheck(S, m);
   if (bc && bc.mate) return Object.assign(base, { kind: 'mat', loss: MATE, punish: moveKey(bc.punish) });
+  /* Turbo takes back on the square the child just captured on: the lesson is
+     the defended piece that was taken, not a piece left hanging. */
+  if (bc && bc.punish && isCapture(S, m) && bc.punish.to === m.to)
+    return Object.assign(base, { kind: 'ruil', loss: bc.loss, sq: alg(m.to), punish: moveKey(bc.punish) });
   if (bc && bc.punish) {
     makeMove(S, m);
     const t = capturedSq(S, bc.punish), victim = isCapture(S, bc.punish) ? (S.board[t] || 'p') : null;
@@ -2310,7 +2314,7 @@ function moveMoment(S, m) {
     if (undefended) {
       const d = findAttacker(S, t, 'w');
       return Object.assign(base, { kind: 'hang', loss: bc.loss, punish: moveKey(bc.punish),
-        defender: d >= 0 && d !== m.from ? NAME_NL[S.board[d].toLowerCase()] : null }, taken);
+        defender: d >= 0 ? NAME_NL[S.board[d].toLowerCase()] : null, moved: d >= 0 && d === m.from }, taken);
     }
     if (isPattern(info)) return Object.assign(base, { kind: 'truc', loss: bc.loss, punish: moveKey(bc.punish) }, taken);
   }
@@ -2329,7 +2333,11 @@ function moveMoment(S, m) {
   if (mated) return null;
   const mate = mateReply(S);
   if (mate) return Object.assign(base, { kind: 'gemist', loss: 1000, mateWith: moveKey(mate) });
-  const wins = winnableCaptures(S).filter(x => x.gain >= 300);
+  /* a capture that would have cost more elsewhere (a queen that had to flee)
+     was rightly left: it counts only when taking left White 2.5 points better */
+  const resultOf = x => { makeMove(S, x); const v = forcedMaterial(S); unmakeMove(S); return v; };
+  const afterM = resultOf(m);
+  const wins = winnableCaptures(S).filter(x => x.gain >= 300 && resultOf(x.move) - afterM >= 250);
   if (wins.length && !wins.some(x => isCapture(S, m) && capturedSq(S, m) === x.sq)) {
     const w = wins.reduce((a, b) => b.gain > a.gain ? b : a);
     return Object.assign(base, { kind: 'gemist', loss: w.gain, sq: alg(w.sq), piece: NAME_NL[S.board[w.sq].toLowerCase()],
