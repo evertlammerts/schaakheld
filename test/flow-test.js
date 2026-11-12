@@ -115,7 +115,7 @@ puzzleAttempt(legalMoves(m2S2).find(function (m) { return alg(m.to) === 'h7'; })
 drainTimers();
 ok('mat2: tweede misser = voorgespeeld tot mat, 0 sterren', session.phase === 'review' &&
   session.earned === m2Earned && gameStatus(session.S).reason === 'mat' &&
-  __els.taskBox.innerHTML.indexOf('daarna kan Turbo de mat niet meer tegenhouden') >= 0);
+  __els.taskBox.innerHTML.indexOf('dan kan Turbo de mat niet meer tegenhouden') >= 0);
 
 /* ---------- koning ontsnapt ---------- */
 startDrill('koning');
@@ -318,8 +318,9 @@ drainTimers();
 ok('best3 r1: kiezen uit drie', session.round === 1 && !!(session.task && session.task.options));
 nextRound();
 drainTimers();
+/* de antwoorden staan in de onderste knoppenrij, net als Klaar! */
 ok('best3 r2: valstrik-vraag', session.round === 2 && typeof session.task.trap === 'boolean' &&
-  __els.optionsBox.innerHTML.indexOf('Valstrik') >= 0);
+  !!actionBtns.ansTrap && actionBtns.ansTrap.textContent.indexOf('Valstrik') >= 0);
 var earnedBefore = session.earned;
 safeAnswer(session.task.trap);
 drainTimers();

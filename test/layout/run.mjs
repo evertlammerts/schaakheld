@@ -381,6 +381,97 @@ GEVALLEN.push({ regels: ['[2.6] 375x553: Turbo\'s stukken zijn donkergroen (#124
 
 /* plan.md 2.1 en de review van increment 2: elke soort opdracht, ook De Beste Zet met zijn keuzes, de
    openingsles met zijn meters en de denkwolk, op de maten waar het misging */
+/* een tweede tik op Volgende mag niet op een knop van de volgende opdracht landen (Hint, Klaar!, de keuzes) */
+for (const [W, H] of KLEIN) {
+  const regels = ['scan', 'best3', 'trucs', 'koning'].map(k => '[2.4] ' + W + 'x' + H + ': ' + k + ': waar Volgende stond, staat bij de volgende opdracht geen knop');
+  GEVALLEN.push({ regels, code: `
+      const regels = ${JSON.stringify(regels)};
+      const soorten = ['scan', 'best3', 'trucs', 'koning'];
+      for (let i = 0; i < soorten.length; i++) {
+        const n = regels[i];
+        await vers(${W}, ${H});
+        await startOefening(soorten[i]);
+        await page.evaluate(() => { session.phase = 'review'; BD.mode = 'off'; awardRound(0, 'Zo zit het', 'Een reden.'); });
+        await page.waitForTimeout(300);
+        const v = await page.evaluate(() => { const b = [...document.querySelectorAll('#onder button')].find(x => /Volgende/.test(x.textContent));
+          if (!b) return null; const r = b.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }; });
+        check(n, 'testopzet: Volgende staat er', !!v);
+        await klikTekst(/Volgende/);
+        await page.waitForTimeout(1800);
+        const raak = await page.evaluate(v => [...document.querySelectorAll('#onder button')].filter(b => b.getClientRects().length)
+          .filter(b => { const r = b.getBoundingClientRect(); return r.left < v.right && r.right > v.left && r.top < v.bottom && r.bottom > v.top; })
+          .map(b => b.textContent.trim()), v);
+        check(n, 'geen knop op de plek van Volgende' + (raak.length ? ': ' + raak.join(', ') : ''), !!v && raak.length === 0);
+        const hint = await page.evaluate(() => { const b = [...document.querySelectorAll('#onder button')].find(x => /Hint/.test(x.textContent) && x.getClientRects().length);
+          if (!b) return null; const r = b.getBoundingClientRect(), o = document.getElementById('onder').getBoundingClientRect(); return { w: r.width, ow: o.width, left: r.left - o.left }; });
+        if (hint) check(n, 'Hint houdt zijn eigen breedte, links', hint.w < hint.ow * 0.6 && hint.left < 24);
+      }`
+  });
+
+  GEVALLEN.push({ regels: ['[2.4] ' + W + 'x' + H + ': De Beste Zet: elke keuze is 56 hoog, ook met een zet van twee regels'],
+    code: `
+      const n = '[2.4] ${W}x${H}: De Beste Zet: elke keuze is 56 hoog, ook met een zet van twee regels';
+      await vers(${W}, ${H});
+      await startOefening('best3');
+      await page.evaluate(() => { setTask(null); setOptions(null); BD.arrows = []; buildBest3();
+        const z = document.querySelector('.opt .o-move'); if (z) z.textContent = 'Paard e4 → f6, slaat pion'; });
+      await page.waitForTimeout(300);
+      const h = await page.evaluate(() => [...document.querySelectorAll('.opt')].map(o => o.getBoundingClientRect().height));
+      check(n, 'drie keuzes van 56: ' + h.map(x => Math.round(x)).join(', '), h.length === 3 && h.every(x => Math.abs(x - 56) < 1));
+      check(n, 'Deze kies ik! in beeld', binnen(await laatsteOnder(), ${W}, ${H}));`
+  });
+
+  GEVALLEN.push({ regels: ['[2.4] ' + W + 'x' + H + ': na twee missers bij mat in twee staat de eerste reden helemaal in beeld'],
+    code: `
+      const n = '[2.4] ${W}x${H}: na twee missers bij mat in twee staat de eerste reden helemaal in beeld';
+      await vers(${W}, ${H});
+      await startOefening('trucs');
+      await page.evaluate(() => { const S = parseFEN('k7/8/2K5/8/8/8/8/7R w - - 0 1');
+        const ans = ['c6b6'].map(k => ({ m: legalMoves(S).find(x => moveKey(x) === k), info: null }));
+        session.S = S; session.task = { S, type: 'mat2', answers: ans, hintUsed: false }; session.phase = 'puzzle'; session.tries = 0;
+        BD.mode = 'puzzle'; renderBoard(); });
+      for (const k of ['h1h2', 'h1h3']) {
+        await page.evaluate(k => { const m = legalMoves(session.S).find(x => moveKey(x) === k); onCell(m.from); onCell(m.to); }, k);
+        await page.waitForTimeout(3500);
+      }
+      const reden = await rect('#taskBox .e-body > :first-child'), onder = await rect('#onder');
+      check(n, 'testopzet: de uitleg staat er', !!reden);
+      check(n, 'de eerste reden helemaal in beeld', !!reden && !!onder && binnen(reden, ${W}, ${H}) && reden.bottom <= onder.bottom + 0.5);`
+  });
+
+  GEVALLEN.push({ regels: ['[2.2] ' + W + 'x' + H + ': het schildpadje van de denkmeter loopt niet door een lange spelzin'],
+    code: `
+      const n = '[2.2] ${W}x${H}: het schildpadje van de denkmeter loopt niet door een lange spelzin';
+      await vers(${W}, ${H});
+      await startPotje();
+      await page.evaluate(() => { say('Kijk uit, een SPIES! 🍢 De koning moet vluchten, en dan pak je wat erachter staat. Wat doe je hiertegen? 🐢');
+        document.getElementById('patience').classList.remove('hidden'); });
+      await page.waitForTimeout(200);
+      const t = await rect('#bubble'), s = await rect('#patTurtle');
+      check(n, 'testopzet: de zin en het schildpadje staan er', !!t && !!s);
+      check(n, 'het schildpadje staat onder de tekst', !!t && !!s && s.top >= t.bottom - 0.5);`
+  });
+
+  GEVALLEN.push({ regels: ['[2.5] ' + W + 'x' + H + ': de eindkaart past op het bord: winst met trofeeën, verlies, remise en een potje dat niet telt'],
+    code: `
+      const n = '[2.5] ${W}x${H}: de eindkaart past op het bord: winst met trofeeën, verlies, remise en een potje dat niet telt';
+      for (const [naam, uitslag, telt] of [['winst', { over: true, result: 'w', reason: 'mat' }, true], ['verlies', { over: true, result: 'b', reason: 'mat' }, true],
+          ['remise', { over: true, result: 'd', reason: 'pat' }, true], ['telt niet', { over: true, result: 'b', reason: 'opgave' }, false]]) {
+        await vers(${W}, ${H});
+        await startPotje();
+        await page.evaluate(([u, telt]) => { const S = session.S;
+          for (let i = 0; telt && i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
+          endGame(u); }, [uitslag, telt]);
+        await page.waitForTimeout(1500);
+        const k = await page.evaluate(() => { const e = document.getElementById('eindkaart');
+          return e && e.getClientRects().length ? { sh: e.scrollHeight, ch: e.clientHeight, t: e.innerText } : null; });
+        check(n, naam + ': testopzet, de eindkaart staat er', !!k);
+        check(n, naam + ': alles past, niets scrolt in de kaart (' + (k ? k.sh + ' in ' + k.ch : '') + ')', !!k && k.sh <= k.ch + 1);
+        if (naam === 'winst') check(n, 'winst: met een trofee', !!k && /Winnaar|Eerste potje/.test(k.t));
+      }`
+  });
+}
+
 /* het rondje bouwt zijn eerste opdracht pas na een tik van de klok: de soort wordt daarna klaargezet */
 const SOORTEN = [
   ['De Beste Zet met zijn keuzes', `startDrill('best3');`, `setTask(null); setOptions(null); BD.arrows = []; buildBest3();`],

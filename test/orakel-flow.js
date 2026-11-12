@@ -985,7 +985,7 @@ async function orakelFlow() {
   const VRAGEN = {
     'scan.attacked': ['Welke stukken van jou valt Turbo aan?', 'Tik ze allemaal aan. Een stuk is aangevallen als een groen stuk het kan slaan als Turbo aan zet is.'],
     'scan.capture': ['Welke groene stukken kun jij nu slaan?', 'Tik ze allemaal aan. Kijk bij al je witte stukken wat ze kunnen pakken.'],
-    'scan.mobility': ['Waar kan je {stuk} op {veld} heen?', 'Tik alle velden aan, ook de verre. Het stuk dat glimt is het.'],
+    'scan.mobility': ['Waar kan je {stuk} op {veld} heen?', 'Tik alle velden aan, ook de verre. Het stuk dat oplicht is het.'],
     'scan.free': ['Welk groen stuk sla je met winst?', 'Gratis is het mooist. Een ruil telt ook, als jij meer pakt dan Turbo terugpakt. Soms zijn er meer.'],
     'scan.threat': ['Wat kan Turbo nu met winst pakken?', 'Doe alsof jij past. Tik je stukken aan die Turbo dan wint: hij slaat, en jij pakt minder terug.'],
     'best3.best3': ['Welke zet is de beste voor wit? Tik er een aan.', ''],
@@ -1245,6 +1245,40 @@ async function orakelFlow() {
     return await zagOoit(function () { return a.get('BD.mode') === 'predict'; }, 3000);
   }
 
+  /* F2: bij elke truc van de Trucendoos horen de poging en de uitleg bij die truc, niet bij een andere */
+  const TRUC_WOORD = { vork: /VORK/, penning: /PENNING/, spies: /SPIES/, aftrek: /AFTREK/, mat1: /^Dit was mat: .+\.$/, mat2: /dan kan Turbo de mat niet meer tegenhouden/ };
+  for (const type of Object.keys(TRUC_WOORD)) {
+    await regel('[2.4] Trucendoos, ' + type + ': de foute poging en de uitleg na twee missers horen bij deze truc', async function (check) {
+      const a = nieuwKind();
+      await startOefening(a, 'trucs');
+      const fout = a.get('(function () { var t = genPatternTask(' + JSON.stringify(type) + '); if (!t) return null;' +
+        'session.task = t; session.S = t.S; session.phase = "puzzle"; session.tries = 0; t.hintUsed = false;' +
+        'BD.mode = "puzzle"; BD.glow.clear(); renderBoard(); opdrachtVan("trucs." + t.type);' +
+        'var uit = legalMoves(t.S).filter(function (m) { var info = patternsAfterMove(t.S, m);' +
+        '  return !patternMatches(t.S, m, t.type, info) && !patternMatches(t.S, m, t.type, Object.assign({}, info, { safe: true })); })' +
+        '  .map(function (m) { return moveKey(m); }); return uit.slice(0, 2); })()');
+      check('testopzet: een opdracht van deze soort met twee foute zetten', !!fout && fout.length === 2 && a.get('session.task.type') === type);
+      if (!fout || fout.length < 2) return;
+      const naam = a.get('PATTERNS[' + JSON.stringify(type) + '].n.toLowerCase()');
+      zet(a, fout[0]);
+      await wacht(3000);
+      check('de poging noemt deze truc', tekstVan(a, 'hulpZin').indexOf('Nog niet de ' + naam + '.') === 0);
+      zet(a, fout[1]);
+      await wacht(8000);
+      const reden = a.doc.__tekst(a.el('taskBox').querySelectorAll('.e-body')[0] || a.el('taskBox')).trim();
+      check('de uitleg na twee missers noemt deze truc: ' + reden.slice(0, 60), a.get('session.phase') === 'review' && TRUC_WOORD[type].test(reden));
+    });
+  }
+
+  await regel('[2.8] een tik op een eigen stuk bij de voorspelvraag: de strook zegt waarom er niets gebeurt', async function (check) {
+    const a = nieuwKind();
+    check('testopzet: de vraag staat open', await metVoorspelvraag(a));
+    tikVeld(a, a.get('sqFromAlg("e4")'));
+    await wacht(200);
+    check('de vraag staat nog open', a.get('BD.mode') === 'predict');
+    check('de strook zegt het', tekstVan(a, 'bubble').trim() === 'Welk stuk zet Turbo? Tik het aan. Dat is jouw stuk: kies er een van Turbo.');
+  });
+
   await regel('[2.3] de voorspelvraag past: "Welk stuk zet Turbo? Tik het aan."', async function (check) {
     const a = nieuwKind();
     check('testopzet: de vraag staat open', await metVoorspelvraag(a));
@@ -1345,6 +1379,7 @@ async function orakelFlow() {
     await geefOp(a);
     await wacht(2000);
     check('de reden', /Dit potje telt niet mee: het was korter dan tien zetten\./.test(tekstVan(a, 'eindkaart')));
+    check('als rustige regel, niet in de opmaak van de XP', !/class="ek-xp"[^>]*>Dit potje/.test(a.el('eindkaart')._html || ''));
   });
 
   await regel('[2.5] na Revanche! staat er geen eindkaart meer over het bord', async function (check) {

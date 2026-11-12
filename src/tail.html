@@ -2051,7 +2051,7 @@ function say(txt) {
 const OPDRACHTEN = {
   'scan.attacked': ['Welke stukken van jou valt Turbo aan?', 'Tik ze allemaal aan. Een stuk is aangevallen als een groen stuk het kan slaan als Turbo aan zet is.'],
   'scan.capture': ['Welke groene stukken kun jij nu slaan?', 'Tik ze allemaal aan. Kijk bij al je witte stukken wat ze kunnen pakken.'],
-  'scan.mobility': ['Waar kan je {stuk} op {veld} heen?', 'Tik alle velden aan, ook de verre. Het stuk dat glimt is het.'],
+  'scan.mobility': ['Waar kan je {stuk} op {veld} heen?', 'Tik alle velden aan, ook de verre. Het stuk dat oplicht is het.'],
   'scan.free': ['Welk groen stuk sla je met winst?', 'Gratis is het mooist. Een ruil telt ook, als jij meer pakt dan Turbo terugpakt. Soms zijn er meer.'],
   'scan.threat': ['Wat kan Turbo nu met winst pakken?', 'Doe alsof jij past. Tik je stukken aan die Turbo dan wint: hij slaat, en jij pakt minder terug.'],
   'best3.best3': ['Welke zet is de beste voor wit? Tik er een aan.', null],
@@ -2260,43 +2260,48 @@ const PATTERNS = {
 function patName(S, sq) { return NAME_NL[S.board[sq].toLowerCase()]; }
 
 /* Welk patroon maakt zet m (op positie S, vóór de zet)? Voor de duiding. */
-function patternCallout(S, m) {
-  const info = patternsAfterMove(S, m);
-  if (info.mate) return null;
+/* een zet kan meer trucs tegelijk zijn; met een voorkeur (de truc van de opdracht) wint die, anders de eerste */
+function patternCallout(S, m, voorkeur) {
+  const alle = patternCallouts(S, m);
+  return alle.find(c => c.key === voorkeur) || alle[0] || null;
+}
+function patternCallouts(S, m) {
+  const info = patternsAfterMove(S, m), uit = [];
+  if (info.mate) return uit;
   const disKing = info.discovered.find(x => x.isKing);
   if (disKing) {
-    return { key: 'aftrek', info,
+    uit.push({ key: 'aftrek', info,
       what: 'AFTREKSCHAAK! 🎭 Het stuk erachter geeft ineens schaak!',
-      squares: [disKing.from, disKing.target] };
+      squares: [disKing.from, disKing.target] });
   }
   if (info.safe && info.fork.length >= 2) {
     const names = info.fork.map(t => patName(S, t));
-    return { key: 'vork', info,
+    uit.push({ key: 'vork', info,
       what: 'VORK! 🍴 Eén zet valt ' + (names.length > 1 ? names.slice(0, -1).join(', ') + ' en ' + names[names.length - 1] : names[0]) + ' tegelijk aan.',
-      squares: info.fork.slice() };
+      squares: info.fork.slice() });
   }
   if (info.safe && info.skewer) {
     makeMove(S, m);
     const ft = S.board[info.skewer.front].toLowerCase();
     unmakeMove(S);
     if (ft === 'k' || ft === 'q') {
-      return { key: 'spies', info,
+      uit.push({ key: 'spies', info,
         what: 'SPIES! 🍢 De ' + NAME_NL[ft] + ' moet vluchten, en dan pak je wat erachter staat.',
-        squares: [info.skewer.front, info.skewer.back] };
+        squares: [info.skewer.front, info.skewer.back] });
     }
   }
   if (info.safe && info.pin && patternMatches(S, m, 'penning', info)) {
-    return { key: 'penning', info,
+    uit.push({ key: 'penning', info,
       what: 'PENNING! 📌 De ' + patName(S, info.pin.front) + ' kan niet meer weg!',
-      squares: [info.pin.front, info.pin.back] };
+      squares: [info.pin.front, info.pin.back] });
   }
-  if (info.safe && info.discovered.length) {
+  if (info.safe && info.discovered.length && !disKing) {
     const d = info.discovered[0];
-    return { key: 'aftrek', info,
+    uit.push({ key: 'aftrek', info,
       what: 'AFTREKAANVAL! 🎭 Het stuk erachter valt ineens aan!',
-      squares: [d.from, d.target] };
+      squares: [d.from, d.target] });
   }
-  return null;
+  return uit;
 }
 
 function countPattern(key) {
@@ -2608,7 +2613,7 @@ function buildTrucs() {
   BD.mode = 'puzzle';
   renderBoard();
   opdrachtVan('trucs.' + task.type);
-  setActions([{ label: '💡 Hint', cls: 'plain small', fn: trucHint, id: 'hint' }]);
+  setActions([{ label: '💡 Hint', cls: 'plain small hint', fn: trucHint, id: 'hint' }]);
   return true;
 }
 
@@ -2654,7 +2659,7 @@ function puzzleAttempt(m) {
   if (patternMatches(session.S, m, type, info)) {
     session.phase = 'review';
     BD.mode = 'off';
-    const co = type === 'mat1' ? null : patternCallout(session.S, m);
+    const co = type === 'mat1' ? null : patternCallout(session.S, m, type);
     playMove(m, () => {
       if (co) BD.spy = new Set(co.squares);
       BD.glow.clear();
@@ -2680,13 +2685,13 @@ function puzzleAttempt(m) {
     const ans = t.answers[0];
     const name = moveNameNL(session.S, ans.m);
     if (type === 'mat2') { revealMate2(ans.m); return; }
-    const co = type === 'mat1' ? null : patternCallout(session.S, ans.m);
+    const co = type === 'mat1' ? null : patternCallout(session.S, ans.m, type);
     BD.arrows = [{ from: ans.m.from, to: ans.m.to, cls: 'a-leaf' }];
     playMove(ans.m, () => {
       if (co) BD.spy = new Set(co.squares);
       BD.glow.clear();
       renderBoard();
-      awardRound(0, 'Zo zit het', co ? 'De truc was <b>' + name + '</b>. ' + co.what : 'Dit was mat: <b>' + name + '</b>.');
+      awardRound(0, 'Zo zit het', co ? '<b>' + name + '</b>: ' + co.what : 'Dit was mat: <b>' + name + '</b>.');
     });
   } else {
     hulpZin(near || 'Nog niet de ' + PATTERNS[type].n.toLowerCase() + '. Kijk naar alle stukken van Turbo, en probeer nog een zet.');
@@ -2702,7 +2707,7 @@ function mate2Second(m) {
     playMove(m, () => {
       countPattern('mat2');
       const stars = session.tries === 0 ? (t.hintUsed ? 2 : 3) : 1;
-      awardRound(stars, 'Mat in twee! 👑', 'Na je eerste zet kon Turbo de mat niet meer tegenhouden. Dat is een plan in twee stappen.');
+      awardRound(stars, 'Mat in twee! 👑', 'Na je eerste zet kon Turbo de mat niet meer tegenhouden. Een plan!');
     });
     return;
   }
@@ -2719,7 +2724,7 @@ function mate2Second(m) {
     playMove(ans, () => {
       BD.arrows = [];
       renderBoard();
-      awardRound(0, 'Zo zit het', 'Dit was mat: <b>' + ansName + '</b>. Je eerste zet was goed; de matzet zie je de volgende keer.');
+      awardRound(0, 'Zo zit het', 'Dit was mat: <b>' + ansName + '</b>. Je eerste zet was al goed!');
     });
   } else hulpZin('Nog geen mat: Turbo kan zich dan nog redden. Probeer nog een zet.');
 }
@@ -2742,7 +2747,7 @@ function revealMate2(first) {
           if (!session || session.kind !== 'trucs' || !mate) return;
           BD.arrows = [{ from: mate.from, to: mate.to, cls: 'a-leaf' }];
           playMove(mate, () => {
-            awardRound(0, 'Zo zit het', 'Eerst <b>' + firstName + '</b>: daarna kan Turbo de mat niet meer tegenhouden. Hij antwoordt, en dan is het mat.');
+            awardRound(0, 'Zo zit het', 'Eerst <b>' + firstName + '</b>: dan kan Turbo de mat niet meer tegenhouden.');
           });
         }, 600);
       });
@@ -2907,12 +2912,9 @@ function buildSafe() {
   BD.arrows = [{ from: task.move.from, to: task.move.to, cls: 'a-sun' }];
   renderBoard();
   opdrachtVan('best3.safe', { zet: moveNameNL(task.S, task.move) });
-  setOptions('<div class="answer-row">' +
-    '<button id="ansSafe" class="btn leaf">✅ Veilig!</button>' +
-    '<button id="ansTrap" class="btn coral">⚠️ Valstrik!</button></div>');
-  $('ansSafe').addEventListener('click', () => safeAnswer(false));
-  $('ansTrap').addEventListener('click', () => safeAnswer(true));
-  setActions([]);
+  /* de antwoorden zijn de onderste rij, zoals Klaar!: bovenin staat na het antwoord Volgende */
+  setActions([{ label: '✅ Veilig!', cls: 'leaf', fn: () => safeAnswer(false), id: 'ansSafe' },
+    { label: '⚠️ Valstrik!', cls: 'coral', fn: () => safeAnswer(true), id: 'ansTrap' }]);
   return true;
 }
 
@@ -2920,6 +2922,7 @@ function safeAnswer(saidTrap) {
   if (!session || session.phase !== 'answer') return;
   session.phase = 'review';
   setOptions(null);
+  setActions([]);
   const t = session.task;
   const correct = saidTrap === t.trap;
   if (correct) { bump('c.safeCorrect', 1); }
@@ -3090,7 +3093,7 @@ function best3Confirm() {
               } else {
                 session.phase = 'choose';
                 session.picked = null;
-                say('Niet de beste: kijk wat Turbo doet. Kies een andere.');
+                say('Niet de beste: kijk wat Turbo dan doet. Kies een andere.');
               }
             }, 900);
           });
@@ -3135,7 +3138,7 @@ function buildKoning() {
   const n = task.answers.length;
   opdrachtVan('koning.' + task.type, { goed: n === 1 ? 'Er is één goede zet.' :
     'Er zijn ' + (['', '', 'twee', 'drie', 'vier'][n] || n) + ' goede zetten.' });
-  setActions([{ label: '💡 Hint', cls: 'plain small', fn: koningHint, id: 'hint' }]);
+  setActions([{ label: '💡 Hint', cls: 'plain small hint', fn: koningHint, id: 'hint' }]);
   return true;
 }
 function koningHint() {
@@ -3156,7 +3159,7 @@ function stukHow(S, m, hang) {
   makeMove(S, m);
   const dekt = findAttacker(S, hang.sq, 'w') >= 0;
   unmakeMove(S);
-  if (dekt) return 'Gedekt: slaat Turbo, dan pak jij terug. Dat levert hem niets op.';
+  if (dekt) return 'Gedekt: slaat Turbo, dan pak jij terug.';
   return 'Turbo wint nu niets meer.';
 }
 function koningAttempt(m) {
@@ -3381,7 +3384,7 @@ function startOpening(mode, pad) {
   if (frame) frame.classList.toggle('flip', color === 'b');
   renderBoard();
   updateDrillStars();
-  setActions(mode === 'pad' ? [{ label: '💡 Hint', cls: 'plain small', fn: openingHint, id: 'hint' }] : []);
+  setActions(mode === 'pad' ? [{ label: '💡 Hint', cls: 'plain small hint', fn: openingHint, id: 'hint' }] : []);
   hulpZin(null);
   if (color === 'b') { BD.mode = 'off'; say('Jij speelt met zwart. Wit begint… ⏳'); later(openingTurbo, 500); }
   else kidOpeningTurn();
@@ -3886,6 +3889,7 @@ function onCell(sq) {
   if (BD.mode === 'predict') {
     const p = session.S.board[sq];
     if (p && colorOf(p) === 'b') resolvePredict(sq);
+    else if (p) say('Welk stuk zet Turbo? Tik het aan. Dat is jouw stuk: kies er een van Turbo.');
     return;
   }
   if (BD.mode === 'puzzle') {
@@ -4358,7 +4362,7 @@ function endGame(st, stil) {
   later(() => {
     say(h);
     toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p>' +
-      '<p class="ek-xp">' + (xp ? '+' + xp + ' XP' : 'Dit potje telt niet mee: het was korter dan tien zetten.') + '</p><!--trofeeen-->' +
+      (xp ? '<p class="ek-xp">+' + xp + ' XP</p>' : '<p>Dit potje telt niet mee: het was korter dan tien zetten.</p>') + '<!--trofeeen-->' +
       '<div class="ek-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
       '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', nieuw, () => {
         $('mAgain').addEventListener('click', () => startGame(lvl));
@@ -4465,6 +4469,9 @@ function trofeeRij(lijst) {
 function toonEindkaart(html, nieuw, setup) {
   const k = $('eindkaart');
   k.innerHTML = html.replace('<!--trofeeen-->', trofeeRij(voorKaart().concat(nieuw)));
+  /* de kaart ligt op het bord; onder 400 px past de volle kaart daar niet in (de opmaak kan het bord niet meten) */
+  const bord = $('board').getBoundingClientRect ? $('board').getBoundingClientRect().height : 0;
+  k.classList.toggle('klein', bord > 0 && bord < 400);
   k.classList.remove('hidden');
   if (setup) setup();
 }
