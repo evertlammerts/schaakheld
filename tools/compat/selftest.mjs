@@ -157,6 +157,24 @@ const JS = [
   ['const tO8 = c => c.roundRect(0, 0, 1, 1);', []],
   ['const tO9 = {}; tO9.throwIfAborted = function () {};', []],
   ['const tO10 = s => s.throwIfAborted();', []],
+  /* een handler in een string krijgt een eigen controle, die het syntaxmerk van het script eromheen laat staan */
+  ["const tH1 = '<button onclick=\"go()\">x</button>';", []],
+  ['const tH2 = /(?<=a)b/; // compat-allow regexp-lookbehind-assertions: alleen na een feature-test gebruikt', ['regexp-lookbehind-assertions', 'allow-malformed']],
+  ["const tH3 = '<button onclick=\"go()\">x</button>';", []],
+  ["const tH4 = el => el.setAttribute('onclick', 'go()');", []],
+  ['class TH5 { static { TH5.x = 1; } } // compat-allow class-static-block: alleen in nieuwe browsers gebruikt', ['class-static-block', 'allow-malformed']],
+  ["const tH6 = el => el.setAttribute('onclick', 'go()');", []],
+  ["const tH7 = '<a href=\"javascript:go()\">x</a>';", []],
+  ['const tH8 = /(?<=c)d/; // compat-allow regexp-lookbehind-assertions: alleen na een feature-test gebruikt', ['regexp-lookbehind-assertions', 'allow-malformed']],
+  ["const tH9 = '<a href=\"javascript:go()\">x</a>';", []],
+  /* een gat in een handler-template is geen syntaxfout; de rest wordt gelezen */
+  ["const tH10 = (el, i) => el.setAttribute('onclick', `kies(${i})`);", []],
+  ["const tH11 = (el, a, b) => el.setAttribute('onclick', `${a} ${b}`);", []],
+  ["const tH12 = (el, i) => el.setAttribute('onclick', `xs${i}.toSorted()`);", ['array-prototype-tosorted']],
+  /* tekst die geen CSS is, negeert een browser ook: alleen wat als declaratie leest, telt */
+  ["const tY1 = knop => { knop.style = 'sun'; };", []],
+  ["const tY2 = opties => { opties.cssText = 'groot'; };", []],
+  ["const tY3 = el => { el.style.cssText = 'zon; backdrop-filter: blur(1px)'; };", ['css.properties.backdrop-filter']],
 ];
 
 const CSS = [
@@ -326,6 +344,8 @@ try {
   expectAt(findings, at(JS[0][0]), JS[0][0].indexOf('/(?') + 1, 'regexp-lookbehind-assertions');
   const tpl = JS.find(c => c[0].startsWith('const t77'))[0];
   expectAt(findings, at(tpl), tpl.indexOf(':has') + 1, 'css-has');
+  const stack = findings.find(f => f.id === 'javascript.builtins.Error.captureStackTrace');
+  check(!!stack && stack.msg.startsWith('Error.captureStackTrace ontbreekt'), `de melding noemt het onderdeel niet heel: ${stack && stack.msg}`);
   const lit = JS.find(c => c[0].startsWith('const t53'))[0];
   expectAt(findings, at(lit), lit.indexOf('inert') + 1, 'html.global_attributes.inert');
   const zoek = (lijst, begin) => lijst.find(c => c[0].startsWith(begin))[0];
