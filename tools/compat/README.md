@@ -27,14 +27,22 @@ haken: `src/head.html:37:3: ... [css-focus-visible]`.
 - JavaScript, in elk script-blok van elk JavaScript-type, in `sw.js`, in
   inline handlers (`onclick=`) en in `javascript:`-links:
   - syntax: de parser van ESLint (`syntax`);
-  - nieuwere syntax en ingebouwde functies vanaf ES2022, plus RegExp
-    lookbehind: eslint-plugin-es-x;
+  - syntax en ingebouwde functies: eslint-plugin-es-x. Van ES2022 en later
+    staat elke regel aan, behalve wat `ES_ON_FLOOR` met de gegevens
+    vrijgeeft; van ES2021 en ouder alleen de regels waarvan de gegevens
+    zeggen dat het onderdeel ergens ontbreekt (`Atomics`,
+    `SharedArrayBuffer`, RegExp lookbehind). Een nieuwe editie van es-x komt
+    vanzelf mee;
   - web-API's op globale namen: eslint-plugin-compat, aangevuld met de
-    MDN-gegevens voor statische leden (`AbortSignal.timeout`), leden van de
-    bekende globale objecten (`document`, `navigator`, `window.crypto`) en
-    globale namen (`CompressionStream`);
-  - een vaste lijst DOM-leden met een eigen naam (`inert`, `showModal`,
-    popover, `showPicker`, `requestSubmit` en meer, zie `DOM_MEMBERS`);
+    MDN-gegevens voor statische leden (`AbortSignal.timeout`, ook achter
+    `window.`, `self.` en `globalThis.`), leden van de bekende globale
+    objecten (`document`, `navigator`, `window.crypto`) en globale namen
+    (`CompressionStream`);
+  - leden van web-API's op objecten van onbekend type (`el.inert`,
+    `form.requestSubmit()`): een naam telt als hij in de gegevens alleen
+    bestaat op interfaces die ergens op de ondergrens ontbreken. Bestaat de
+    naam op meer interfaces, dan noemt het kenmerk de eerste op alfabet en
+    de melding de rest;
   - HTML en CSS in strings: HTML-stukken gaan door de HTML-controle;
     strings voor `querySelector`, `matches` en `closest` door de
     selectorcontrole; strings voor `style`, `cssText`, `setProperty`,
@@ -49,12 +57,13 @@ haken: `src/head.html:37:3: ... [css-focus-visible]`.
   (`css-selector-list`).
 - HTML: elementen en attributen met de MDN-gegevens.
 
-Gedeeltelijke ondersteuning is geen bevinding, behalve bij JavaScript: een
-es-x-regel gaat alleen uit als MDN volledige ondersteuning op de hele
-ondergrens toont (`ES_ON_FLOOR`), want een gat in JavaScript gooit een
-fout. Daarom blijven klassevelden met een beginwaarde verboden: MDN meldt
-voor Safari 14.1 tot 15.6 dat haakjes in zo'n beginwaarde een
-`ReferenceError` kunnen geven (WebKit-bug 236843).
+Gedeeltelijke ondersteuning is geen bevinding, behalve bij JavaScript.
+Regel: een regel voor JavaScript-syntax of een ingebouwde functie gaat
+alleen uit waar de MDN-gegevens volledige ondersteuning op elke browser van
+de ondergrens tonen, want gedeeltelijke ondersteuning in JavaScript gooit
+tijdens het draaien een fout. Daarom blijven klassevelden met een
+beginwaarde verboden: MDN meldt voor Safari 14.1 tot 15.6 dat haakjes in
+zo'n beginwaarde een `ReferenceError` kunnen geven (WebKit-bug 236843).
 
 ## Doorlaten
 
@@ -83,10 +92,13 @@ Twee manieren, elk met een smalle regel.
   ingebouwde functie dezelfde naam heeft: `it.map()` op een Iterator lijkt
   op `Array.prototype.map`. Een methode van een nieuwere ingebouwde functie
   telt pas als hij wordt aangeroepen.
-- DOM-leden op objecten van onbekend type die niet in `DOM_MEMBERS` staan.
-  De MDN-gegevens hebben honderden namen die op de ondergrens ontbreken,
-  maar ook gewone namen (`to`, `check`, `level`); een controle op alle
-  namen meldt vooral de eigen velden van de app.
+- Een lid van een web-API op een object van onbekend type, als de app
+  dezelfde naam zelf gebruikt als sleutel in een object, als lid van een
+  klasse of als methode die ze toewijst. De gegevens hebben ruim
+  tweeduizend ledennamen die op de ondergrens ontbreken, met gewone namen
+  ertussen (`to`, `level`, `move`); zonder dit filter meldde de controle
+  166 keer een eigen veld van de app. Ook leden van `style` (dat zijn
+  CSS-eigenschappen) en van `dataset` telt deze controle niet.
 - CSS en selectors die in stukken worden samengesteld buiten de bekende
   plekken, behalve de paar valkuilen hierboven.
 - Code die pas tijdens het draaien ontstaat: `eval`, `new Function`,

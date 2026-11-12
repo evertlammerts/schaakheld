@@ -62,20 +62,11 @@ export const ES_ON_FLOOR = {
   'no-intl-segmenter': 'javascript.builtins.Intl.Segmenter',
 };
 
-// Leden van DOM-objecten waarvan geen linter het type ziet (`el.inert`); de
-// namen zijn eigen genoeg dat een treffer het DOM-lid is.
-const DOM_MEMBERS = {
-  inert: 'api.HTMLElement.inert',
-  showModal: 'api.HTMLDialogElement.showModal',
-  requestClose: 'api.HTMLDialogElement.requestClose',
-  popover: 'api.HTMLElement.popover',
-  showPopover: 'api.HTMLElement.showPopover',
-  hidePopover: 'api.HTMLElement.hidePopover',
-  togglePopover: 'api.HTMLElement.togglePopover',
-  checkVisibility: 'api.Element.checkVisibility',
-  showPicker: 'api.HTMLInputElement.showPicker',
-  requestSubmit: 'api.HTMLFormElement.requestSubmit',
-  computedStyleMap: 'api.Element.computedStyleMap',
+// es-x-regels van ES2021 en ouder staan alleen aan als hun onderdeel volgens
+// de MDN-gegevens ergens op de ondergrens ontbreekt; dit zijn de regels die
+// hun onderdeel niet in hun beschrijving noemen.
+const ESX_OLDER_DATA = {
+  'no-regexp-lookbehind-assertions': 'javascript.regular_expressions.lookbehind_assertion',
 };
 
 const GLOBAL_OBJECTS = new Set(['window', 'self', 'globalThis']);
@@ -196,9 +187,32 @@ const STRING_TRAPS = [
 ].map(([re, id, what, p]) => ({ re, id, what, miss: applicable(id, lacking(bcdAt(p))) }));
 
 const SUPPORTED_BUILTIN_MEMBERS = new Set();
+const BUILTIN_MEMBERS = new Set();
 for (const cls of Object.values(bcd.javascript.builtins)) {
   for (const [name, entry] of Object.entries(cls)) {
-    if (name !== '__compat' && entry.__compat && !lacking(entry.__compat).length) SUPPORTED_BUILTIN_MEMBERS.add(name);
+    if (name === '__compat' || !entry.__compat) continue;
+    BUILTIN_MEMBERS.add(name);
+    if (!lacking(entry.__compat).length) SUPPORTED_BUILTIN_MEMBERS.add(name);
+  }
+}
+
+// Leden van web-API's waarvan geen linter het type ziet (`el.inert`): een naam
+// telt als hij in de gegevens alleen bestaat op interfaces die ergens op de
+// ondergrens ontbreken. Namen van ingebouwde JS-functies zijn voor es-x.
+const NEW_MEMBERS = new Map();
+{
+  const defs = new Map();
+  for (const [iface, members] of Object.entries(bcd.api)) {
+    for (const [name, entry] of Object.entries(members)) {
+      if (!/^[A-Za-z$][A-Za-z0-9$]*$/.test(name) || name === iface || !entry || !entry.__compat) continue;
+      if (!defs.has(name)) defs.set(name, []);
+      defs.get(name).push({ path: `api.${iface}.${name}`, compat: entry.__compat });
+    }
+  }
+  for (const [name, list] of defs) {
+    if (BUILTIN_MEMBERS.has(name)) continue;
+    const miss = list.map(d => missing(d.path, d.compat));
+    if (miss.every(m => m.length)) NEW_MEMBERS.set(name, { paths: list.map(d => d.path).sort(), miss: [...new Set(miss.flat())] });
   }
 }
 
@@ -249,15 +263,35 @@ function withoutOldNames(rule) {
   };
 }
 
+// De onderdelen die een es-x-regel in zijn beschrijving noemt
+// (`Array.prototype.{flat,flatMap}`), als paden in de MDN-gegevens.
+function esxPaths(rule) {
+  if (own(ESX_OLDER_DATA, rule)) return [ESX_OLDER_DATA[rule]];
+  return [...esx.rules[rule].meta.docs.description.matchAll(/`([^`]+)`/g)]
+    .flatMap(m => {
+      const n = m[1].replace(/\(\)$/, '');
+      const b = n.match(/^(.*)\.\{(.*)\}$/);
+      return b ? b[2].split(',').map(x => `${b[1]}.${x}`) : [n];
+    })
+    .map(n => `javascript.builtins.${n.replace('.prototype', '')}`)
+    .filter(p => own(p.split('.').reduce((o, k) => own(o, k), bcd), '__compat'));
+}
+
+// ES2022 en later: elke regel, behalve wat ES_ON_FLOOR met de gegevens
+// vrijgeeft. ES2021 en ouder draait de ondergrens, op wat de gegevens anders
+// zeggen na (Atomics, SharedArrayBuffer, lookbehind). Nieuwe edities van es-x
+// komen zo vanzelf mee.
 const ESX_PLUGIN = { meta: esx.meta, rules: { ...esx.rules } };
 const ESX_RULES = {};
 for (const cfg of Object.keys(esx.configs)) {
-  const m = cfg.match(/^flat\/no-new-in-es(20\d\d|next)(?:-intl-api)?$/);
-  if (!m || (m[1] !== 'next' && +m[1] < 2022)) continue;
-  for (const id of Object.keys(esx.configs[cfg].rules)) ESX_RULES[id] = 'error';
+  const m = cfg.match(/^flat\/no-new-in-es(5|20\d\d|next)(?:-intl-api)?$/);
+  if (!m) continue;
+  const newer = m[1] === 'next' || +m[1] >= 2022;
+  for (const id of Object.keys(esx.configs[cfg].rules)) {
+    const rule = id.slice('es-x/'.length);
+    if (newer ? !own(ES_ON_FLOOR, rule) : esxPaths(rule).some(p => lacking(bcdAt(p), '', true).length)) ESX_RULES[id] = 'error';
+  }
 }
-ESX_RULES['es-x/no-regexp-lookbehind-assertions'] = 'error';
-for (const rule of Object.keys(ES_ON_FLOOR)) delete ESX_RULES['es-x/' + rule];
 for (const id of Object.keys(ESX_RULES)) {
   const name = id.slice('es-x/'.length);
   if (esx.rules[name].meta.schema?.[0]?.properties?.aggressive) {
@@ -495,17 +529,29 @@ function stringOf(node, rep) {
 const kebab = s => s.replace(/[A-Z]/g, c => '-' + c.toLowerCase()).replace(/^(webkit|moz|ms)-/, '-$1-');
 
 function localPlugin(rep, apiFindings) {
-  const api = (offset, p, miss) => apiFindings.push({ offset, id: p, msg: `${p.slice(4).replace(/_static$/, '')} ontbreekt in ${names(miss)}` });
+  const api = (offset, p, miss, what = p.slice(4).replace(/_static$/, '')) => apiFindings.push({ offset, id: p, msg: `${what} ontbreekt in ${names(miss)}` });
   const apiMembers = {
-    create: context => ({
+    create: context => {
+      const ownNames = new Set();
+      const candidates = [];
+      const keyName = k => k.type === 'Identifier' ? k.name : k.type === 'Literal' ? String(k.value) : null;
+      const define = n => { if (!n.computed) ownNames.add(keyName(n.key)); };
+      return {
+      Property: define,
+      MethodDefinition: define,
+      PropertyDefinition: define,
+      AssignmentExpression(n) {
+        if (n.left.type === 'MemberExpression' && /Function|Class/.test(n.right.type)) ownNames.add(memberName(n.left));
+      },
+      // Een naam die de app zelf als veld of methode gebruikt, is van de app (`snd.move()`).
+      'Program:exit'() {
+        for (const c of candidates) {
+          if (!ownNames.has(c.name)) api(c.offset, c.member.paths[0], c.member.miss, `${c.name} bestaat alleen in ${c.member.paths.slice(0, 3).join(', ')}`);
+        }
+      },
       MemberExpression(n) {
         const name = memberName(n);
         if (!name) return;
-        const hand = own(DOM_MEMBERS, name);
-        if (hand) {
-          const miss = missing(hand, bcdAt(hand));
-          if (miss.length) api(n.property.range[0], hand, miss);
-        }
         const obj = n.object;
         if (obj.type === 'Identifier' && GLOBAL_OBJECTS.has(obj.name) && isGlobal(obj, context)) {
           const c = own(own(bcd.api, name), '__compat');
@@ -518,15 +564,22 @@ function localPlugin(rep, apiFindings) {
         if (obj.type === 'Identifier' && isGlobal(obj, context)) g = obj.name;
         else if (obj.type === 'MemberExpression' && !obj.computed && obj.object.type === 'Identifier'
           && GLOBAL_OBJECTS.has(obj.object.name) && isGlobal(obj.object, context)) g = obj.property.name;
-        if (!g) return;
-        const isInterface = !!own(bcd.api, g) && /^[A-Z]/.test(g);
-        const iface = isInterface ? g : own(GLOBAL_INSTANCES, g);
-        const key = isInterface ? `${name}_static` : name;
-        const c = own(own(own(bcd.api, iface), key), '__compat');
-        if (!c) return;
-        const p = `api.${iface}.${key}`;
-        const miss = missing(p, c);
-        if (miss.length) api(n.range[0], p, miss);
+        if (g) {
+          const isInterface = !!own(bcd.api, g) && /^[A-Z]/.test(g);
+          const iface = isInterface ? g : own(GLOBAL_INSTANCES, g);
+          const key = isInterface ? `${name}_static` : name;
+          const c = own(own(own(bcd.api, iface), key), '__compat');
+          if (c) {
+            const p = `api.${iface}.${key}`;
+            const miss = missing(p, c);
+            if (miss.length) api(n.range[0], p, miss);
+            return;
+          }
+        }
+        // Leden van `style` zijn CSS-eigenschappen en die van `dataset` kiest de app zelf.
+        if (['style', 'dataset'].includes(memberName(obj))) return;
+        const member = NEW_MEMBERS.get(name);
+        if (member) candidates.push({ offset: n.property.range[0], name, member });
       },
       Identifier(n) {
         const parent = n.parent;
@@ -537,7 +590,8 @@ function localPlugin(rep, apiFindings) {
         const miss = missing(`api.${n.name}`, c);
         if (miss.length) api(n.range[0], `api.${n.name}`, miss);
       },
-    }),
+      };
+    },
   };
 
   const strings = {
@@ -731,12 +785,10 @@ function applyAllows(findings, text, comments, lineOf) {
   return out;
 }
 
-function buildIsFresh(root) {
+function staleFiles(root) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-build-'));
   try {
-    fs.cpSync(path.join(root, 'src'), path.join(dir, 'src'), { recursive: true });
-    fs.copyFileSync(path.join(root, 'build.sh'), path.join(dir, 'build.sh'));
-    execFileSync('sh', ['build.sh'], { cwd: dir, stdio: 'pipe' });
+    execFileSync('sh', [path.join(root, 'build.sh'), dir], { stdio: 'pipe' });
     return ['index.html', 'sw.js'].filter(f => !fs.readFileSync(path.join(dir, f)).equals(fs.readFileSync(path.join(root, f))));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -747,7 +799,7 @@ export async function checkBuild(root) {
   const read = f => fs.readFileSync(path.join(root, f), 'utf8');
   const sources = fs.readdirSync(path.join(root, 'src')).filter(f => /\.(js|html)$/.test(f))
     .map(f => ({ file: `src/${f}`, lines: read(`src/${f}`).split('\n') }));
-  const results = buildIsFresh(root).map(f => ({ at: f, id: 'build-stale', msg: `${f} is niet gebouwd uit de huidige src/; draai ./build.sh` }));
+  const results = staleFiles(root).map(f => ({ at: f, id: 'build-stale', msg: `${f} is niet gebouwd uit de huidige src/; draai ./build.sh` }));
 
   function checkFile(builtName, srcs, kind) {
     const text = read(builtName);

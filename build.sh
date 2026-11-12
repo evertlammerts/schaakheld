@@ -4,7 +4,10 @@
 #    GitHub Pages. Werkt samen met sw.js en manifest.webmanifest offline.
 #  - sw.js: service worker uit src/sw.js, met een hash van index.html als
 #    cacheversie. Zo krijgt elke release vanzelf een verse cache.
+# Met een map als argument komen beide daar terecht in plaats van naast dit
+# script (de compatibiliteitspoort vergelijkt zo de build met src/).
 set -e
+OUT=$(cd "${1:-$(dirname "$0")}" && pwd)
 cd "$(dirname "$0")"
 n=$(grep -n '</style>' src/head.html | head -1 | cut -d: -f1)
 {
@@ -21,7 +24,7 @@ n=$(grep -n '</style>' src/head.html | head -1 | cut -d: -f1)
   tail -n +"$((n + 1))" src/head.html
   cat src/engine.js src/koning.js src/words.js src/qr.js src/jsqr.js src/tail.html
   printf '</body>\n</html>\n'
-} > index.html
-HASH=$(shasum index.html | cut -c1-12)
-sed "s/__VERSION__/$HASH/" src/sw.js > sw.js
-echo "gebouwd: index.html ($(wc -c < index.html | tr -d ' ') bytes) en sw.js (versie $HASH)"
+} > "$OUT/index.html"
+HASH=$(shasum "$OUT/index.html" | cut -c1-12)
+sed "s/__VERSION__/$HASH/" src/sw.js > "$OUT/sw.js"
+echo "gebouwd: index.html ($(wc -c < "$OUT/index.html" | tr -d ' ') bytes) en sw.js (versie $HASH)"
