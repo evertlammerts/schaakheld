@@ -550,6 +550,44 @@ for (const [W, H] of KLEIN) {
       check(n, 'Vrienden worden staat er niet naast Ja', !k.dubbel);` });
 }
 
+/* in een kleine eindkaart krimpen de knoppen niet: elke knop is minstens 44 hoog */
+for (const [W, H] of KLEIN) {
+  const n = '[2.5] ' + W + 'x' + H + ': elke knop van de eindkaart is minstens 44 hoog, ook met trofeeën of een vriendschapsvraag';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const meet = () => page.evaluate(() => [...document.getElementById('eindkaart').querySelectorAll('button')]
+        .filter(b => b.getClientRects().length).map(b => Math.round(b.getBoundingClientRect().height * 10) / 10));
+      /* een deel dat kleiner is dan wat erin staat, is ingekrompen */
+      const gekrompen = () => page.evaluate(() => [...document.getElementById('eindkaart').children]
+        .filter(c => c.getClientRects().length && c.getBoundingClientRect().height + 0.5 < c.scrollHeight).map(c => c.className || c.id));
+      await vers(${W}, ${H});
+      await startPotje();
+      /* een volle kaart: winst, acht trofeeën en een level */
+      await page.evaluate(() => { const S = session.S;
+        for (let i = 0; i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
+        ['wolk', 'vlam', 'orakel', 'zen', 'trucs', 'sterren', 'detective', 'goudzoeker'].forEach(addBadge); bump('xp', 140);
+        endGame({ over: true, result: 'w', reason: 'mat' }); });
+      await page.waitForTimeout(1500);
+      const turbo = await meet();
+      check(n, 'testopzet: een eindkaart tegen Turbo met knoppen', turbo.length >= 2);
+      check(n, 'tegen Turbo: ' + turbo.join(', '), turbo.every(h => h >= 43.5));
+      const krimp = await gekrompen();
+      check(n, 'tegen Turbo is geen deel ingekrompen' + (krimp.length ? ': ' + krimp.join(', ') : ''), krimp.length === 0);
+      await vers(${W}, ${H});
+      await page.evaluate(async () => {
+        MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false, revTheirs: false,
+          peerName: 'Fien', open: false, weg: false, gameId: 'potje-test-1', peerOn: true };
+        mpBeginGame();
+        endGame({ over: true, result: 'b', reason: 'opgave' });
+        await new Promise(r => setTimeout(r, 300));
+        mpOnVriendVraag({ t: 'vriend?', pub: 'A'.repeat(88) });
+        await new Promise(r => setTimeout(r, 300));
+      });
+      const vriend = await meet();
+      check(n, 'testopzet: een eindkaart met een vriendschapsvraag', vriend.length >= 3);
+      check(n, 'met een vriendschapsvraag: ' + vriend.join(', '), vriend.every(h => h >= 43.5));` });
+}
+
 /* visual.md K1: met het toetsenbord open blijven de woordsuggesties in beeld, en de knop springt niet */
 for (const [W, H, grens] of [[375, 553, 330], [375, 647, 380]]) {
   const n = '[4.8] ' + W + 'x' + H + ': het woordveld met focus: de suggesties staan boven het toetsenbord en de knop blijft staan';

@@ -1761,7 +1761,7 @@ function mpOnVriendVraag(m) {
 async function mpOnVriend(m) {
   if (!MP || !MP.ecdh) return;
   if (m.nee === true) { MP.ecdh = null; say(mpNaam() + ' wil nu even niet 🙂'); vriendKnopTerug(); return; }
-  if (m.mislukt === true) { MP.ecdh = null; say('Vrienden worden lukte niet bij ' + mpNaam() + '. Probeer het nog eens.'); vriendKnopTerug(); return; }
+  if (m.mislukt === true) { MP.ecdh = null; say(mpNaam() + ' zei ja, maar het lukte niet. Probeer het nog eens.'); vriendKnopTerug(); return; }
   if (!geldigePub(m.pub)) return;
   try {
     const k = await ecdhFinish(MP.ecdh.kp, m.pub);

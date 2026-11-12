@@ -625,6 +625,8 @@
     box-shadow: var(--elev-2); animation: pop-in var(--dur-slow) var(--ease);
   }
   /* midden in de kaart met marges: een kaart die te hoog is, scrolt dan vanaf de titel in plaats van boven af te knippen */
+  /* een volle kaart scrolt; de delen krimpen niet, anders worden de knoppen te klein om te tikken */
+  .eindkaart > * { flex-shrink: 0; }
   .eindkaart > :first-child { margin-top: auto; }
   .eindkaart > :last-child { margin-bottom: auto; }
   .eindkaart.klein > .ek-turbo + * { margin-top: auto; }
@@ -4272,7 +4274,7 @@ function mpOnVriendVraag(m) {
 async function mpOnVriend(m) {
   if (!MP || !MP.ecdh) return;
   if (m.nee === true) { MP.ecdh = null; say(mpNaam() + ' wil nu even niet 🙂'); vriendKnopTerug(); return; }
-  if (m.mislukt === true) { MP.ecdh = null; say('Vrienden worden lukte niet bij ' + mpNaam() + '. Probeer het nog eens.'); vriendKnopTerug(); return; }
+  if (m.mislukt === true) { MP.ecdh = null; say(mpNaam() + ' zei ja, maar het lukte niet. Probeer het nog eens.'); vriendKnopTerug(); return; }
   if (!geldigePub(m.pub)) return;
   try {
     const k = await ecdhFinish(MP.ecdh.kp, m.pub);

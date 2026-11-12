@@ -899,7 +899,7 @@ async function orakelTwee() {
       await wacht();
     } finally { crypto.subtle.generateKey = echt; }
     await wacht();
-    check('Daan hoort dat het niet lukte', /lukte niet/.test(tekstVan(daan, 'bubble')));
+    check('Daan hoort dat het niet lukte', /Fien zei ja, maar het lukte niet\. Probeer het nog eens\./.test(tekstVan(daan, 'bubble')));
     check('en kan het nog eens vragen', kanTikken(daan, 'Vrienden worden') && !/Gevraagd/.test(tekstVan(daan, 'eindkaart')));
   });
 
