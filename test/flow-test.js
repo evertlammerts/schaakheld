@@ -2021,5 +2021,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   goHome();
   ok('offline: na afloop gaat ← Home gewoon naar huis', session === null && __els.overlay.classList.contains('hidden'));
 
+  await orakelZelftest();
+  await orakelFlow();
+  print('\norakel: ' + ORAKEL.nogNiet + ' nog niet gebouwd, ' + ORAKEL.gebouwd + ' gebouwd');
   print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');
 })().catch(function (e) { print('ASYNC EXCEPTION: ' + e + '\n' + (e && e.stack)); print('\nFLOW SUITE ABORTED'); });

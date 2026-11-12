@@ -4,7 +4,7 @@ var elc = 0;
 /* Een apparaat heeft zijn eigen DOM, opslag en adresbalk. De nep-server, de
    relay, de klok en de crypto zijn van de wereld en dus gedeeld: twee
    apparaten praten met dezelfde server, net als echt. */
-function maakDocument() {
+function maakDocument(vast) {
   const els = {};
   /* Een element met een id in vers geschreven HTML is in een echte browser een
      nieuwe knoop: zijn luisteraars zijn weg. De shim geeft hetzelfde gecachete
@@ -41,25 +41,107 @@ function maakDocument() {
     set: v => { el._text = String(v); el._html = String(v); }
   });
   el.appendChild = c => { el.children.push(c); return c; };
-  el.querySelectorAll = () => [];
-  el.querySelector = () => null;
+  el.querySelectorAll = sel => zoekIn([el], sel);
+  el.querySelector = sel => zoekIn([el], sel)[0] || null;
   el.addEventListener = (t, fn) => { (el._ev[t] || (el._ev[t] = [])).push(fn); };
   el.style.setProperty = function () {};
   el.getBoundingClientRect = () => ({ left: 0, top: 0, right: 100, bottom: 20, width: 40, height: 40 });
   el.remove = () => {};
   el.closest = () => makeEl('closest' + (elc++));
-  el.replaceWith = () => {};
+  /* showToast vervangt de toast door een kloon; zonder dit las een test de oude */
+  el.replaceWith = n => { if (n && n.id && els[n.id] === el) els[n.id] = n; };
+  el.scrollIntoView = () => { __scrolls.push({ el: id }); };
   el.focus = () => {};
   el.cloneNode = () => makeEl(id);
     el.getContext = () => ({ clearRect() {}, save() {}, restore() {}, translate() {}, rotate() {}, fillRect() {} });
     return el;
   }
+  /* querySelectorAll over wat de app als HTML schreef: de knoppen die ze daarna
+     via een klasse of data-attribuut bindt (niveaus, opties, openingen) zijn zo
+     dezelfde objecten die een test aantikt. Alleen enkelvoudige selectors
+     (tag, #id, .klasse, [attr], [attr="v"], en lijsten met komma's). */
+  function knopen(host) {
+    if (host._qsa && host._qsa.html === host._html) return host._qsa.knopen;
+    const lijst = [];
+    const re = /<([a-zA-Z][\w-]*)((?:\s+[^\s=>\/]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*\/?>/g;
+    let m;
+    while ((m = re.exec(host._html)) !== null) {
+      const tag = m[1].toLowerCase(), attrs = {};
+      const ar = /([^\s=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+      let a;
+      while ((a = ar.exec(m[2])) !== null) attrs[a[1].toLowerCase()] = a[2] != null ? a[2] : a[3] != null ? a[3] : a[4] != null ? a[4] : '';
+      const sluit = host._html.indexOf('</' + tag, re.lastIndex);
+      const binnen = sluit < 0 ? '' : host._html.slice(re.lastIndex, sluit);
+      const k = attrs.id ? (els[attrs.id] || (els[attrs.id] = makeEl(attrs.id))) : makeEl('_q' + (elc++));
+      k._tag = tag;
+      k._attrs = attrs;
+      if (!attrs.id || !k._qsaGezien) {
+        k._qsaGezien = true;
+        if (attrs.class && !k._cls.size) k.className = attrs.class;
+        for (const n in attrs) {
+          if (n.indexOf('data-') === 0) k.dataset[n.slice(5).replace(/-([a-z])/g, (x, c) => c.toUpperCase())] = attrs[n];
+        }
+        if (!k._html && !k._text) k._text = binnen.replace(/<[^>]*>/g, '');
+        if ('disabled' in attrs) k.disabled = true;
+      }
+      lijst.push(k);
+    }
+    host._qsa = { html: host._html, knopen: lijst };
+    return lijst;
+  }
+  function past(k, enkel) {
+    const t = enkel.match(/^[a-zA-Z][\w-]*/);
+    if (t && k._tag !== t[0].toLowerCase()) return false;
+    const id = enkel.match(/#([\w-]+)/);
+    if (id && k._attrs.id !== id[1]) return false;
+    for (const c of enkel.match(/\.[\w-]+/g) || []) if (!k._cls.has(c.slice(1))) return false;
+    for (const a of enkel.match(/\[[^\]]+\]/g) || []) {
+      const am = a.match(/^\[\s*([\w-]+)\s*(?:=\s*["']?([^"'\]]*)["']?)?\s*\]$/);
+      if (!am || !(am[1] in k._attrs)) return false;
+      if (am[2] !== undefined && k._attrs[am[1]] !== am[2]) return false;
+    }
+    return true;
+  }
+  function zoekIn(hosts, sel) {
+    const delen = String(sel).split(',').map(x => x.trim());
+    if (delen.some(d => /\s|>|\+|~|:/.test(d))) return [];
+    const uit = [];
+    for (const h of hosts) for (const k of knopen(h)) if (delen.some(d => past(k, d)) && uit.indexOf(k) < 0) uit.push(k);
+    return uit;
+  }
+  /* De vaste opmaak van de pagina (src/head.html): elk element met een id
+     krijgt zijn klassen, data en tekst van daar, zodat een test ziet en
+     aantikt wat een kind ziet. Een ouder houdt de opmaak van toen. */
+  if (vast == null && typeof __VASTE_OPMAAK === 'string') vast = __VASTE_OPMAAK;
+  if (vast) {
+    const lees = { _html: vast, _qsa: null };
+    knopen(lees);
+    const leeg = /^(area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr)$/;
+    const re = /<([a-zA-Z][\w-]*)\b[^>]*\bid="([^"]+)"[^>]*>/g;
+    let m;
+    while ((m = re.exec(vast)) !== null) {
+      const tag = m[1].toLowerCase(), el = els[m[2]];
+      if (!el || leeg.test(tag)) continue;
+      let diepte = 1, i = re.lastIndex, eind = vast.length;
+      const open = new RegExp('<' + tag + '\\b|</' + tag + '\\s*>', 'gi');
+      open.lastIndex = i;
+      let t;
+      while ((t = open.exec(vast)) !== null) {
+        diepte += t[0][1] === '/' ? -1 : 1;
+        if (diepte === 0) { eind = t.index; break; }
+      }
+      el._html = vast.slice(i, eind);
+      el._text = '';
+    }
+  }
   return {
     __els: els,
     getElementById(id) { return els[id] || (els[id] = makeEl(id)); },
     createElement() { return makeEl('_c' + (elc++)); },
-    querySelectorAll() { return []; },
-    querySelector() { return makeEl('_q' + (elc++)); },
+    querySelectorAll(sel) { return zoekIn(Object.keys(els).map(k => els[k]).filter(e => e._html), sel); },
+    /* zonder treffer een los element, zoals de shim altijd deed: de app leest
+       vaak .board-frame uit de vaste opmaak, die de shim niet kent */
+    querySelector(sel) { return this.querySelectorAll(sel)[0] || makeEl('_q' + (elc++)); },
     body: makeEl('body'),
     documentElement: makeEl('documentElement'),
     /* document-brede handlers echt bewaren, zodat fire(document, 'keydown', ...)
@@ -289,6 +371,12 @@ var fetch = function (url, opts) {
 var location = maakLocatie();
 var history = location.__history;
 var innerWidth = 900, innerHeight = 700;
+/* scrollen heeft hier geen opmaak; de shim onthoudt alleen wat er gevraagd werd */
+var __scrolls = [];
+var scrollTo = function (x, y) {
+  const top = x && typeof x === 'object' ? x.top : y;
+  __scrolls.push({ top: top == null ? null : top });
+};
 var addEventListener = function () {};
 var matchMedia = function () { return { matches: true }; };
 var performance = { now: () => Date.now() };
