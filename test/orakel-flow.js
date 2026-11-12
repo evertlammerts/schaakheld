@@ -1011,6 +1011,18 @@ async function orakelFlow() {
     }));
   });
 
+  await regel('[2.5] na het einde zegt het scherm niet meer dat het potje loopt: geen ✔ bewaard en geen hulpjes', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
+    a.tik('verderKaart');
+    await wacht();
+    check('testopzet: tijdens het potje ✔ bewaard en de hulpjes', zichtbaar(a, 'bewaard') && kanTikken(a, 'Speurbril'));
+    await zetEnWacht(a, 'd1h5');
+    check('testopzet: de eindkaart staat er', zichtbaar(a, 'eindkaart'));
+    check('geen ✔ bewaard meer', !zichtbaar(a, 'bewaard'));
+    check('geen hulpjes meer', !kanTikken(a, 'Speurbril') && !kanTikken(a, 'Denkwolk') && !kanTikken(a, 'Zet terug'));
+    check('de strook zegt het einde', /Gewonnen!/.test(tekstVan(a, 'strook')));
+  });
+
   await regel('[2.6] de zeven bordkleuren houden id, naam en het level dat ze opent; een gekozen kleur blijft gekozen', async function (check) {
     const a = nieuwKind();
     const thema = a.get('THEMES.map(function (t) { return [t.id, t.naam, t.lvl]; })');

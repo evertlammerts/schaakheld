@@ -563,11 +563,11 @@
   #cloudBar.hidden, #predictBar.hidden, #patience.hidden { display: none; }
   #predictBar { flex: none; align-self: center; }
   #predictSkip { min-height: 44px; padding: 0 14px; }
-  #patience { position: absolute; left: 12px; right: 12px; bottom: 4px; }
+  #patience { position: absolute; left: 12px; right: 12px; bottom: 2px; }
   .pat-track { position: relative; height: 6px; background: var(--track); border-radius: 999px; }
   .pat-track i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--leaf); border-radius: 999px; }
   .pat-track.full i { background: var(--sun); }
-  .pat-turtle { position: absolute; top: -8px; left: 0; font-size: 16px; line-height: 1; transition: left .3s linear; }
+  .pat-turtle { position: absolute; top: -6px; left: 0; font-size: 14px; line-height: 1; transition: left .3s linear; }
   .play-board {
     grid-area: board; display: grid; justify-content: center;
     grid-template-columns: var(--coord) var(--board); grid-template-rows: var(--board) var(--coord);
@@ -591,7 +591,8 @@
     box-shadow: var(--elev-2); animation: pop-in var(--dur-slow) var(--ease);
   }
   .eindkaart.hidden { display: none; }
-  .eindkaart .ek-turbo { font-size: 64px; line-height: 1; }
+  .eindkaart .ek-turbo { width: 88px; height: 88px; display: grid; place-items: center; font-size: 56px; line-height: 1;
+    background: var(--leaf-soft); border-radius: 50%; }
   .eindkaart h2 { margin: 0; font-size: var(--fs-xl); }
   .eindkaart p { margin: 0; font-size: var(--fs-sm); color: var(--text-quiet); }
   .eindkaart .ek-xp { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); color: var(--accent-text); }
@@ -621,7 +622,9 @@
   .e-body p { margin: 0 0 4px; }
   .e-body ul { margin: 0; padding-left: 1.1em; }
   .e-body li { margin: 0 0 4px; }
-  .helper { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; }
+  .play-bottom .action-row .btn.helper {
+    min-height: 52px; padding: 2px 6px; white-space: pre-line; font-size: var(--fs-cap); line-height: 1.2;
+  }
   @media (orientation: landscape) and (min-width: 560px) {
     .play {
       --g: 24px; --coord: 18px;
@@ -642,7 +645,6 @@
     .tegen { order: 3; flex-basis: 100%; }
     .meer-btn { margin-left: auto; }
     .play-bottom .action-row .btn { white-space: normal; font-size: var(--fs-cap); min-height: 52px; padding: 0 6px; }
-    .play-bottom .action-row .btn.helper { white-space: pre-line; }
     .play-strip { margin: 0; height: auto; min-height: 88px; max-height: 180px; }
     .play-strip .s-txt { max-height: 158px; }
   }
@@ -879,7 +881,7 @@
       <div id="strook" class="play-strip">
         <span class="mascot" id="mascotFace">🐢</span>
         <div class="s-txt"><div id="bubble">…</div><div id="cloudBar" class="hidden">☁️ <b>DENKWOLK</b> <span id="cloudDepth"></span><br>Hier mag alles: schuif ook Turbo's stukken. Niks telt echt!</div></div>
-        <div id="predictBar" class="hidden"><button id="predictSkip" class="btn sun small">▶ Speel maar</button></div>
+        <div id="predictBar" class="hidden"><button id="predictSkip" class="btn plain small">▶ Speel maar</button></div>
         <div id="patience" class="hidden"><div class="pat-track" id="patTrack"><i id="patFill"></i><span class="pat-turtle" id="patTurtle">🐢</span></div></div>
       </div>
       <div class="play-board">

@@ -576,11 +576,11 @@
   #cloudBar.hidden, #predictBar.hidden, #patience.hidden { display: none; }
   #predictBar { flex: none; align-self: center; }
   #predictSkip { min-height: 44px; padding: 0 14px; }
-  #patience { position: absolute; left: 12px; right: 12px; bottom: 4px; }
+  #patience { position: absolute; left: 12px; right: 12px; bottom: 2px; }
   .pat-track { position: relative; height: 6px; background: var(--track); border-radius: 999px; }
   .pat-track i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--leaf); border-radius: 999px; }
   .pat-track.full i { background: var(--sun); }
-  .pat-turtle { position: absolute; top: -8px; left: 0; font-size: 16px; line-height: 1; transition: left .3s linear; }
+  .pat-turtle { position: absolute; top: -6px; left: 0; font-size: 14px; line-height: 1; transition: left .3s linear; }
   .play-board {
     grid-area: board; display: grid; justify-content: center;
     grid-template-columns: var(--coord) var(--board); grid-template-rows: var(--board) var(--coord);
@@ -604,7 +604,8 @@
     box-shadow: var(--elev-2); animation: pop-in var(--dur-slow) var(--ease);
   }
   .eindkaart.hidden { display: none; }
-  .eindkaart .ek-turbo { font-size: 64px; line-height: 1; }
+  .eindkaart .ek-turbo { width: 88px; height: 88px; display: grid; place-items: center; font-size: 56px; line-height: 1;
+    background: var(--leaf-soft); border-radius: 50%; }
   .eindkaart h2 { margin: 0; font-size: var(--fs-xl); }
   .eindkaart p { margin: 0; font-size: var(--fs-sm); color: var(--text-quiet); }
   .eindkaart .ek-xp { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); color: var(--accent-text); }
@@ -634,7 +635,9 @@
   .e-body p { margin: 0 0 4px; }
   .e-body ul { margin: 0; padding-left: 1.1em; }
   .e-body li { margin: 0 0 4px; }
-  .helper { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; }
+  .play-bottom .action-row .btn.helper {
+    min-height: 52px; padding: 2px 6px; white-space: pre-line; font-size: var(--fs-cap); line-height: 1.2;
+  }
   @media (orientation: landscape) and (min-width: 560px) {
     .play {
       --g: 24px; --coord: 18px;
@@ -655,7 +658,6 @@
     .tegen { order: 3; flex-basis: 100%; }
     .meer-btn { margin-left: auto; }
     .play-bottom .action-row .btn { white-space: normal; font-size: var(--fs-cap); min-height: 52px; padding: 0 6px; }
-    .play-bottom .action-row .btn.helper { white-space: pre-line; }
     .play-strip { margin: 0; height: auto; min-height: 88px; max-height: 180px; }
     .play-strip .s-txt { max-height: 158px; }
   }
@@ -894,7 +896,7 @@
       <div id="strook" class="play-strip">
         <span class="mascot" id="mascotFace">🐢</span>
         <div class="s-txt"><div id="bubble">…</div><div id="cloudBar" class="hidden">☁️ <b>DENKWOLK</b> <span id="cloudDepth"></span><br>Hier mag alles: schuif ook Turbo's stukken. Niks telt echt!</div></div>
-        <div id="predictBar" class="hidden"><button id="predictSkip" class="btn sun small">▶ Speel maar</button></div>
+        <div id="predictBar" class="hidden"><button id="predictSkip" class="btn plain small">▶ Speel maar</button></div>
         <div id="patience" class="hidden"><div class="pat-track" id="patTrack"><i id="patFill"></i><span class="pat-turtle" id="patTurtle">🐢</span></div></div>
       </div>
       <div class="play-board">
@@ -6199,9 +6201,9 @@ function updateCloudBar() {
 
 function cloudActions() {
   setActions([
-    { label: '🌤 Terug naar echt', cls: 'sun', fn: exitCloud, id: 'cloudExit' },
-    { label: '↩ Stapje terug', cls: 'plain small', fn: cloudUndo, id: 'cloudUndoBtn' },
-    { label: '🐢 Wat zou Turbo doen?', cls: 'plain small', fn: cloudTurbo, id: 'cloudTurboBtn' }
+    { label: '🌤\nTerug naar echt', cls: 'sun small helper', fn: exitCloud, id: 'cloudExit' },
+    { label: '↩\nStapje terug', cls: 'plain small helper', fn: cloudUndo, id: 'cloudUndoBtn' },
+    { label: '🐢\nWat zou Turbo doen?', cls: 'plain small helper', fn: cloudTurbo, id: 'cloudTurboBtn' }
   ]);
 }
 
@@ -6649,7 +6651,7 @@ function openMeer() {
   const knoppen = (potje ? [['meerRemise', '🤝 Remise aanbieden'], ['meerOpgeven', '🏳️ Opgeven']] : [])
     .concat([['meerPunten', '🏅 Puntenwijzer']])
     .concat(potje && !session.online ? [['meerHulp', '⚙️ Hulp aan of uit']] : []);
-  showModal('<div class="m-btns">' + knoppen.map(k => '<button class="btn plain" id="' + k[0] + '">' + k[1] + '</button>').join('') + '</div>', () => {
+  showModal('<h2>' + (potje ? 'Potje' : 'Meer') + '</h2><div class="m-btns">' + knoppen.map(k => '<button class="btn plain" id="' + k[0] + '">' + k[1] + '</button>').join('') + '</div>', () => {
     const doe = (id, fn) => { if ($(id)) $(id).addEventListener('click', () => { closeModal(); fn(); }); };
     doe('meerRemise', offerDraw);
     doe('meerOpgeven', resignAsk);
@@ -6663,18 +6665,16 @@ function openMeer() {
    alleen binnen deze sessie, kleuren wisselen om */
 function endGameOnline(st, drawTxt) {
   const ik = session.myColor || 'w';
-  let emoji, h, p;
+  let h, p;
   /* gameStatus meldt remise als result 'd', nooit als een leeg result. Op
      !st.result testen betekende dat de remise-tak nooit aansloeg: bij pat,
      de 50-zettenregel of te weinig materiaal kregen BEIDE kinderen te
      horen dat de ander gewonnen had. */
   if (st.result === 'd') {
-    emoji = '🤝';
     h = 'Gelijkspel!';
     p = (drawTxt[st.reason] || 'Remise!') + '<br>Goed gespeeld, allebei!';
     snd.star();
   } else if (st.result === ik) {
-    emoji = '🏆';
     h = 'JIJ WINT!';
     p = st.reason === 'opgave' ? escHtml(mpNaam()) + ' geeft op. Goed gespeeld!' : 'Schaakmat! Wat een partij.';
     /* alleen een eigen online-teller: NIET de gedeelde 'wins' of de
@@ -6685,14 +6685,14 @@ function endGameOnline(st, drawTxt) {
     snd.win();
     celebrate();
   } else {
-    emoji = '💪';
     h = escHtml(mpNaam()) + ' wint dit potje';
     p = st.reason === 'opgave' ? 'Je gaf op. Netjes afgesloten. Revanche?' : 'Schaakmat… maar goed gespeeld! Pak je revanche!';
     snd.bad();
   }
   const nieuw = checkBadges(true);
   const vriendKnop = MP && !MP.viaFriend ? '<button class="btn plain" id="mpVriend">🤝 Vrienden worden</button>' : '';
-  toonEindkaart('<div class="ek-turbo">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p><!--trofeeen-->' +
+  say(h);
+  toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p><!--trofeeen-->' +
     '<div class="ek-btns"><button class="btn sun" id="mpRev">🔁 Revanche!</button>' + vriendKnop +
     '<button class="btn plain" id="mpEind">🏠 Stoppen</button></div>', nieuw, () => {
       $('mpRev').addEventListener('click', () => {
@@ -6718,6 +6718,10 @@ function endGame(st, stil) {
   BD.mode = 'off';
   stopPatience();
   renderBoard();
+  /* een afgelopen potje staat niet meer bewaard en heeft geen hulpjes meer: alleen de eindkaart telt */
+  $('bewaard').classList.add('hidden');
+  $('patience').classList.add('hidden');
+  setActions([]);
   const drawTxt = { pat: 'Pat! De koning kan nergens meer heen, maar staat geen schaak.',
     '50': 'Vijftig zetten zonder slaan of pionzet.', materiaal: 'Te weinig stukken om mat te zetten.',
     remise: 'Remise afgesproken: jullie vonden het allebei gelijk.' };
@@ -6726,9 +6730,9 @@ function endGame(st, stil) {
   if (telt) bump('c.gamesPlayed', 1);
   if (session.online) { if (telt) bumpWeek('online', 1); endGameOnline(st, drawTxt); return; }
   if (telt) bumpWeek('potjes' + session.level, 1);
-  let emoji, h, p, xp;
+  let h, p, xp;
   if (st.result === 'w') {
-    emoji = '🏆'; h = 'Gewonnen!';
+    h = 'Gewonnen!';
     p = 'Schaakmat! Ik buig voor jou. Wat een partij.';
     bump('wins', 1);
     if (session.level === 2) bump('c.winsL2', 1);
@@ -6740,12 +6744,12 @@ function endGame(st, stil) {
     bumpWeek('wins' + session.level, 1);
     snd.win(); celebrate();
   } else if (st.result === 'b') {
-    emoji = '🐢'; h = 'Turbo wint dit potje';
+    h = 'Turbo wint dit potje';
     p = (st.reason === 'opgave' ? 'Je gaf op. Prima, dit potje is klaar.' : 'Schaakmat. Goed volgehouden!') + '<br><small>💡 ' +
       pick(LOSS_TIPS) + '</small>';
     xp = telt ? 15 : 0; if (!stil) snd.bad();
   } else {
-    emoji = '🤝'; h = 'Gelijkspel!';
+    h = 'Gelijkspel!';
     p = drawTxt[st.reason] || 'Niemand wint, niemand verliest.';
     xp = telt ? 30 : 0; snd.good();
   }
@@ -6755,7 +6759,8 @@ function endGame(st, stil) {
   if (stil) return;
   const lvl = session.level;
   later(() => {
-    toonEindkaart('<div class="ek-turbo">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p>' +
+    say(h);
+    toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p>' +
       '<p class="ek-xp">' + (xp ? '+' + xp + ' XP' : 'Dit potje telt niet mee.') + '</p><!--trofeeen-->' +
       '<div class="ek-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
       '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', nieuw, () => {
