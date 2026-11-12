@@ -637,6 +637,57 @@ func TestKamerVolBezetteKamerWijktNooit(t *testing.T) {
 	}
 }
 
+func TestKamerVerseKamerKrijgtTijd(t *testing.T) {
+	// tussen het uitdelen van een kamer en het verbinden van de eerste stoel
+	// zit even tijd; zonder rust is de verse kamer zonder potje de eerste
+	// die wijkt in een tabel vol gepauzeerde potjes
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	vulMetPotjes(t, ctx, s, ts, clk)
+	clk.advance(time.Minute)
+	vers, _, _ := nieuweKamer(s)
+	clk.advance(evictMinAge - time.Second)
+	c := bezet(t, ctx, s, ts)
+	defer c.CloseNow()
+	if !kamerBestaat(s, vers) {
+		t.Fatalf("een kamer van net hoort niet plaats te maken")
+	}
+	clk.advance(time.Second)
+	c2 := bezet(t, ctx, s, ts)
+	defer c2.CloseNow()
+	if kamerBestaat(s, vers) {
+		t.Fatalf("na de rust gaat een lege kamer zonder potje weer eerst")
+	}
+}
+
+func TestKamerVolMetAlleenVerseKamers(t *testing.T) {
+	s, clk := newTestServer(t, nil)
+	for aantalKamers(s) < maxRooms {
+		nieuweKamer(s)
+	}
+	if w := do(t, s, "POST", "/v1/room", "", nil); w.Code != 429 {
+		t.Fatalf("alleen kamers van net: status %d, wil 429", w.Code)
+	}
+	clk.advance(evictMinAge)
+	if w := do(t, s, "POST", "/v1/room", "", nil); w.Code != 200 {
+		t.Fatalf("na de rust: status %d, wil 200", w.Code)
+	}
+}
+
+func TestKamerRustPastInDeTabel(t *testing.T) {
+	// zoveel kamers per seconde kan iedereen samen maken: een per POST
+	// /v1/room, en een per twee gematchte speelcodes, elk achter eigen
+	// plekken; wat in de rust valt, mag de tabel niet vullen
+	perSeconde := float64(defaultSlots) / defaultDelay.Seconds() * 1.5
+	if n := perSeconde * evictMinAge.Seconds(); n >= maxRooms {
+		t.Fatalf("in %v komen %.0f kamers bij, de tabel houdt er %d", evictMinAge, n, maxRooms)
+	}
+}
+
 func TestKamerFoutTokenRaaktStilteNiet(t *testing.T) {
 	// wie het kamer-id kent maar geen stoeltoken, houdt de kamer niet in leven
 	s, clk := newTestServer(t, nil)

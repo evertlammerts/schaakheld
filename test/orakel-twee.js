@@ -196,9 +196,12 @@ async function orakelTwee() {
     stopApparaat(a);
     stopApparaat(b);
     await wacht();
-    const vuller = [], lijnen = [];
+    const klok = __server.klok, vuller = [], lijnen = [];
     try {
-      /* andere kinderen maken kamers en zitten erin, tot de server vol is */
+      /* een minuut later: de kamer is ouder dan de drie seconden waarin een
+         kamer van net nooit plaatsmaakt. Andere kinderen maken kamers en
+         zitten erin, tot de server vol is. */
+      __server.klok += 60000;
       for (let i = 0; i < 2 * MAX_KAMERS && (kamer in __server.wsrooms); i++) {
         const r = await fetch('https://test.local/v1/room', { method: 'POST' });
         if (r.status !== 200) break;
@@ -221,6 +224,7 @@ async function orakelTwee() {
     } finally {
       lijnen.forEach(function (ws) { ws.close(); });
       vuller.forEach(function (id) { delete __server.wsrooms[id]; });
+      __server.klok = klok;
     }
   });
 
