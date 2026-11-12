@@ -1926,6 +1926,33 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var stK5 = await nieuwBezet();
   __server.klok -= 3000;
   ok('kamers: na drie seconden wijkt de kamer van net weer gewoon', stK5 === 200 && !('vers' in __server.wsrooms));
+  /* de grens van precies drie seconden, op een stilgezette klok: de klok van
+     de nep-server is de echte tijd plus een stap, dus anders lopen er altijd
+     een paar milliseconden bij */
+  var echtNu = Date.now, vastNu = Date.now();
+  Date.now = function () { return vastNu; };
+  try {
+    __server.wsrooms = {};
+    nuK = __busNu();
+    nepKamer('grens', false, false, 0, 2999);
+    for (j = 0; Object.keys(__server.wsrooms).length < MAX_KAMERS; j++) nepKamer('bezet' + j, false, true, 0);
+    var stG1 = await nieuwBezet();
+    __server.wsrooms.grens.created = nuK - 3000;
+    var stG2 = await nieuwBezet();
+    ok('kamers: een lege kamer van 2999 ms wijkt niet, een van precies 3000 ms wel',
+      stG1 === 429 && stG2 === 200 && !('grens' in __server.wsrooms));
+  } finally { Date.now = echtNu; }
+  nuK = __busNu();
+  /* een speelcode-verzoek ruimt verlopen kamers op, zoals handlePair */
+  __server.wsrooms = {};
+  var pendingVoor = __server.pending;
+  __server.pending = {};
+  nepKamer('verlopenBijPaar', false, false, 16 * 60000);
+  await fetch(SYNC_URL + '/v1/pair', { method: 'POST', headers: {},
+    body: JSON.stringify({ mine: 'mijnwoordcode1', theirs: 'jouwwoordcode1' }) });
+  ok('kamers: een speelcode-verzoek ruimt verlopen kamers op, zoals op de echte server',
+    !('verlopenBijPaar' in __server.wsrooms));
+  __server.pending = pendingVoor;
   __server.wsrooms = kamersVoor;
   /* koppelcodes uit server.go: vol is vol, ook voor een code die er al staat */
   var linksVoor = __server.links;

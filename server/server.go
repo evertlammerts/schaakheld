@@ -44,13 +44,19 @@ const (
 	defaultMaxLinks = 8192
 )
 
+// hoogstensInVenster: zoveel verzoeken kan een pad met slots plekken die
+// elk delay bezet zijn, hoogstens afmaken binnen een venster van die lengte
+func hoogstensInVenster(venster, delay time.Duration, slots int) int {
+	return int((venster+delay-1)/delay) * slots
+}
+
 // linkTabelTeKlein: kan iedereen samen, zo snel als de rem toelaat, de
 // tabel met koppelcodes vol houden? Dan krijgt een echt kind 429.
 func linkTabelTeKlein(delay time.Duration, slots, maxLinks int) bool {
 	if delay <= 0 {
 		return true
 	}
-	return int(linkTTL/delay)*slots >= maxLinks
+	return hoogstensInVenster(linkTTL, delay, slots) >= maxLinks
 }
 
 var (
