@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { checkBuild, exemptionProblems, esExemptionProblems } from './gate.mjs';
+import { checkBuild, exemptionProblems, esExemptionProblems, supportsAt } from './gate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -110,10 +110,16 @@ const JS = [
   ["const t75 = 'container-name: kaart';", ['css.properties.container-name']],
   ["const t76 = ':HAS(a)';", ['css-has']],
   ['const t77 = n => `${n}:has(b)`;', ['css-has']],
-  ['const t78 = /(?<=a)b/; // compat-allow regexp-lookbehind-assertions: alleen na een feature-test gebruikt', []],
-  ['const t79 = /(?<=c)d/; // compat-allow regexp-lookbehind-assertions', ['regexp-lookbehind-assertions', 'allow-without-reason']],
-  ['const t80 = /(?<=e)f/; // compat-allow regexp-lookbehind-assertions: prima', ['regexp-lookbehind-assertions', 'allow-without-reason']],
-  ['const t81 = /(?<=k)l/; // compat-allow', ['regexp-lookbehind-assertions', 'allow-malformed']],
+  /* nieuwe syntax kan niet weg: een oude browser leest het script dan niet eens */
+  ['const t78 = /(?<=a)b/; // compat-allow regexp-lookbehind-assertions: alleen na een feature-test gebruikt', ['regexp-lookbehind-assertions', 'allow-malformed']],
+  ["const t78b = new RegExp('(?<=a)b'); // compat-allow regexp-lookbehind-assertions: alleen na een feature-test gebruikt", []],
+  ['class T78c { static { this.x = 1; } } // compat-allow class-static-block: alleen in nieuwe browsers gebruikt', ['class-static-block', 'allow-malformed']],
+  ['const t78e = /[\\p{L}--[a-z]]/v; // compat-allow regexp-v-flag: alleen na een feature-test gebruikt', ['regexp-v-flag', 'allow-malformed']],
+  ['class T78d { v = 1; } // compat-allow class-instance-fields: de ondergrens leest dit wel in', []],
+  ['const t79 = o => structuredClone(o); // compat-allow structuredClone', ['structuredClone', 'allow-without-reason']],
+  ['const t80 = o => structuredClone(o); // compat-allow structuredClone: prima', ['structuredClone', 'allow-without-reason']],
+  ['const t80b = o => structuredClone(o); // compat-allow structuredClone: prima zo', ['structuredClone', 'allow-without-reason']],
+  ['const t81 = o => structuredClone(o); // compat-allow', ['structuredClone', 'allow-malformed']],
   ['const t82 = 1; // compat-allow css-has: deze regel heeft geen bevinding', ['allow-unused']],
   ['const t83 = /(?<=g)h/; // compat-allow css-has: verkeerd kenmerk voor deze regel', ['regexp-lookbehind-assertions', 'allow-unused']],
   ['const t84 = xs => xs.at(-1).findLast(Boolean); /* compat-allow array-prototype-at: een twee drie */ /* compat-allow x: een twee drie */',
@@ -121,9 +127,46 @@ const JS = [
   ["const t85 = 'x // compat-allow array-prototype-at: een twee drie', t85b = xs => xs.at(0);", ['array-prototype-at']],
   ['const t86 = /(?<=i)j/; // eslint-disable-line', ['regexp-lookbehind-assertions', 'eslint-comment']],
   ['const t87 = 1; // eslint-disable-line compat-allow eslint-comment: een twee drie', ['eslint-comment', 'allow-malformed']],
+  /* een lid van Window zonder window. ervoor, tenzij de app de naam zelf heeft */
+  ["const tW1 = () => navigation.addEventListener('navigate', function () {});", ['api.Window.navigation', 'api.Navigation.navigate_event']],
+  ['const tW2 = id => cancelIdleCallback(id);', ['api.Window.cancelIdleCallback']],
+  ['function tW3() { const navigation = { go: 1 }; return navigation.go; }', []],
+  /* een gat in een template is geen syntaxfout; de vaste delen worden gelezen */
+  ['const tT1 = (el, base) => { el.style.cssText = `${base};color:red`; };', []],
+  ["const tT2 = (el, a) => el.setAttribute('style', `${a}`);", []],
+  ['const tT3 = (el, b) => { el.style.cssText = `${b};backdrop-filter: blur(1px)`; };', ['css.properties.backdrop-filter']],
+  ["const tC1 = el => el.style.setProperty('--kleur', 'color-mix(in srgb, red, blue)');", ['css.types.color.color-mix']],
+  /* een bekende plek met een waarde die geen tekst is: de eigenschap telt nog */
+  ["const tS1 = (el, n) => { el.style.backdropFilter = 'blur(' + n + 'px)'; };", ['css.properties.backdrop-filter']],
+  ["const tS2 = (el, kind) => el.style.setProperty('container-type', kind);", ['css.properties.container-type']],
+  ["const tS3 = el => { el.style = 'backdrop-filter: blur(1px)'; };", ['css.properties.backdrop-filter']],
+  ["const tM1 = () => matchMedia('(width >= 400px)');", ['css-media-range-syntax']],
+  ["const tE1 = (el, f) => el.addEventListener('scrollend', f);", ['api.Document.scrollend_event']],
+  ['const tE2 = (el, f) => { el.onscrollend = f; };', ['api.Document.scrollend_event']],
+  ["const tE3 = el => { el.textContent = '1 < 2 en <dit is geen tag>'; };", []],
+  ['const tR1 = /(?i:a)b/; // compat-allow regexp-modifiers: alleen na een feature-test gebruikt', ['regexp-modifiers', 'allow-malformed']],
+  ['const tR2 = /(?<y>a)|(?<y>b)/; // compat-allow regexp-duplicate-named-capturing-groups: alleen na een feature-test gebruikt', ['regexp-duplicate-named-capturing-groups', 'allow-malformed']],
+  ['function tX1() { Error.captureStackTrace(this, tX1); }', ['javascript.builtins.Error.captureStackTrace']],
+  /* een eigen veld verklaart lezen, geen aanroep; destructureren definieert niets */
+  ['const tO1 = async r => new Uint8Array(await r.bytes());', ['api.Blob.bytes']],
+  ['const tO2 = r => r.bytes.length;', []],
+  ['const tO3 = el => { const { showPopover } = el; return showPopover; };', []],
+  ['class TO5 { requestVideoFrameCallback() { return 1; } }', []],
+  ['const tO6 = v => v.requestVideoFrameCallback();', []],
+  ['class TO7 { static roundRect = function () {}; }', []],
+  ['const tO8 = c => c.roundRect(0, 0, 1, 1);', []],
+  ['const tO9 = {}; tO9.throwIfAborted = function () {};', []],
+  ['const tO10 = s => s.throwIfAborted();', []],
 ];
 
 const CSS = [
+  [':root { --t: color-mix(in srgb, red, blue); }', ['css.types.color.color-mix']],
+  [':root { --t: oklch(70% 0.1 200); }', ['css.types.color.oklch']],
+  [':root { --t: light-dark(#fff, #000); }', ['css.types.color.light-dark']],
+  ['.t { -moz-user-select: none; user-select: none; }', ['css.properties.user-select']],
+  ['@keyframes t { 0% { color: red; } 50% { color: blue; } }', []],
+  ['.t { height: 2lh; }', ['css.types.length.lh']],
+  ['.t { animation-timing-function: linear(0, 0.5, 1); }', ['css.types.easing-function.linear-function']],
   ['.t:has(b) { color: red; }', ['css-has']],
   ['@container (min-width: 10px) { .t { color: red; } }', ['css-container-queries']],
   ['.t { container-type: inline-size; }', ['css.properties.container-type']],
@@ -158,6 +201,8 @@ const CSS = [
 ];
 
 const MARKUP = [
+  ['<div style="--t: color-mix(in srgb, red, blue)"></div>', ['css.types.color.color-mix']],
+  ['<div hidden="until-found"></div>', ['html.global_attributes.hidden.until-found']],
   ['<dialog id="t1"></dialog>', ['html.elements.dialog']],
   ['<div inert></div>', ['html.global_attributes.inert']],
   ['<div popover></div>', ['html.global_attributes.popover']],
@@ -239,11 +284,32 @@ check(esExemptionProblems({ 'no-class-static-block': 'javascript.classes.static.
 check(esExemptionProblems({ 'no-class-instance-fields': 'javascript.classes.public_class_fields' }).length === 1,
   'een es-x-uitzondering voor iets dat de ondergrens maar half draait valt niet op');
 
+/* drie regels uit de MDN-gegevens: een vlag, een andere naam en weggehaald tellen niet */
+check(supportsAt({ version_added: '10' }, '15', '', false) && !supportsAt({ version_added: '10', flags: [{}] }, '15', '', false) &&
+  !supportsAt({ version_added: '10', alternative_name: 'x' }, '15', '', false) &&
+  !supportsAt({ version_added: '10', version_removed: '14' }, '15', '', false), 'supportsAt telt een vlag, een andere naam of weggehaald mee');
+
+/* een piepkleine app: de poort zegt ok, wat de echte app ook doet */
+const schoon = fs.mkdtempSync(path.join(os.tmpdir(), 'compat-schoon-'));
+try {
+  fs.mkdirSync(path.join(schoon, 'src'));
+  fs.copyFileSync(path.join(REPO, 'build.sh'), path.join(schoon, 'build.sh'));
+  const bron = {
+    'head.html': '<title>Proef</title>\n<style>\n  body { color: #123; }\n</style>\n<main id="m">hoi</main>\n<script>\n',
+    'engine.js': "'use strict';\nconst PROEF = 1;\n", 'koning.js': '\n', 'words.js': '\n', 'qr.js': '\n', 'jsqr.js': '\n',
+    'tail.html': 'function hallo() { return PROEF; }\n</script>\n',
+    'sw.js': "const VERSION = 'proef-__VERSION__';\nself.addEventListener('install', function () {});\n"
+  };
+  for (const f in bron) fs.writeFileSync(path.join(schoon, 'src', f), bron[f]);
+  build(schoon);
+  const clean = cli(schoon);
+  check(clean.status === 0 && /compat ok/.test(clean.stdout), `de poort op een schone proefapp gaf status ${clean.status}\n${clean.stdout}${clean.stderr}`);
+} finally {
+  fs.rmSync(schoon, { recursive: true, force: true });
+}
+
 const dir = copyRepo();
 try {
-  build(dir);
-  const clean = cli(dir);
-  check(clean.status === 0 && /compat ok/.test(clean.stdout), `de poort op de schone build gaf status ${clean.status}\n${clean.stdout}${clean.stderr}`);
 
   const placed = [];
   placed.push(...insert(dir, 'src/tail.html', lastLine(dir, 'src/tail.html', l => l.trim() === '</script>'), JS));
@@ -262,9 +328,11 @@ try {
   expectAt(findings, at(tpl), tpl.indexOf(':has') + 1, 'css-has');
   const lit = JS.find(c => c[0].startsWith('const t53'))[0];
   expectAt(findings, at(lit), lit.indexOf('inert') + 1, 'html.global_attributes.inert');
-  expectAt(findings, at(MARKUP[1][0]), 6, 'html.global_attributes.inert');
-  expectAt(findings, at(MARKUP[3][0]), MARKUP[3][0].indexOf('height') + 1, 'viewport-unit-variants');
-  expectAt(findings, at(CSS[3][0]), 6, 'viewport-unit-variants');
+  const zoek = (lijst, begin) => lijst.find(c => c[0].startsWith(begin))[0];
+  expectAt(findings, at(zoek(MARKUP, '<div inert>')), 6, 'html.global_attributes.inert');
+  const svh = zoek(MARKUP, '<div style="height: 100svh"');
+  expectAt(findings, at(svh), svh.indexOf('height') + 1, 'viewport-unit-variants');
+  expectAt(findings, at(zoek(CSS, '.t { height: 100dvh; }')), 6, 'viewport-unit-variants');
 
   const failing = cli(dir);
   check(failing.status === 1 && failing.stdout.includes(`${at(JS[0][0]).file}:${at(JS[0][0]).line}:`) && /FAIL compat/.test(failing.stdout),

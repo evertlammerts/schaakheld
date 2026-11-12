@@ -93,8 +93,8 @@ command -v node >/dev/null 2>&1 || { echo "FAIL compat: node ontbreekt, en zonde
 if [ ! -f tools/compat/node_modules/.package-lock.json ] || [ tools/compat/package-lock.json -nt tools/compat/node_modules/.package-lock.json ]; then
   (cd tools/compat && npm ci --no-audit --no-fund) || { echo "FAIL compat: npm ci in tools/compat mislukte"; exit 1; }
 fi
-node tools/compat/selftest.mjs || { echo "FAIL compat-selftest"; exit 1; }
 node tools/compat/gate.mjs || exit 1
+node tools/compat/selftest.mjs || { echo "FAIL compat-selftest"; exit 1; }
 
 # Layoutcontroles in een echte browser-engine (plan.md: 1.13, 1.14, 2.1,
 # 2.2, 2.4, 3.3, 3.5). Zonder playwright-cli een waarschuwing, zoals bij go.
