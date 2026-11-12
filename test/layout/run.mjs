@@ -27,7 +27,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '3.3', '3.4', '3.5']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '3.3', '3.4', '3.5', '3.11']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -198,6 +198,73 @@ for (const [W, H] of KLEIN) {
         t['#spelVriend'] < t['#oefen-scan'] && t['#oefen-scan'] < t['#oefen-best3'] && t['#oefen-best3'] < t['#oefen-trucs'] &&
         t['#oefen-trucs'] < t['#oefen-koning'] && t['#oefen-koning'] < t['#oefen-opening']);`
   });
+
+  /* visual.md 11.2 en 11.3: met een potje en een rondje bewaard is Spelen het krapst */
+  const potje = JSON.stringify({ v: 1, level: 1, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null, started: 1, updated: 1 });
+  const rondje = JSON.stringify({ scan: { round: 2, earned: 6 } });
+  for (const [wat, extra] of [['niets bewaard', {}], ['een potje bewaard', { 'schaakheld-potje': potje }],
+    ['een potje en een rondje bewaard', { 'schaakheld-potje': potje, 'schaakheld-rondjes': rondje }]]) {
+    const n = '[3.11] ' + W + 'x' + H + ', ' + wat + ': de kaart, de weekregel en beide spelknoppen staan boven de tabbalk';
+    GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(extra)});
+      const tab = await rect('.tabbar');
+      for (const s of ['#verder', '#weekStrip', '#spelTurbo', '#spelVriend']) {
+        const r = await rect(s);
+        check(n, s + ' boven de tabbalk', !!r && !!tab && r.top >= 0 && r.bottom <= tab.top + 0.5);
+      }` });
+  }
+
+  const balk = '[3.11] ' + W + 'x' + H + ': de tabbalk is 64 hoog met drie gelijke tabs, elk woord op één regel, en de weekregel is een rij van 44';
+  GEVALLEN.push({ regels: [balk], code: `
+      const n = ${JSON.stringify(balk)};
+      await vers(${W}, ${H});
+      const tab = await rect('.tabbar');
+      check(n, 'de tabbalk is 64 hoog', !!tab && Math.abs(tab.h - 64) < 0.5);
+      const tabs = await page.evaluate(() => [...document.querySelectorAll('.tabbar .tab')].map(t => {
+        const r = t.getBoundingClientRect(), z = document.createRange();
+        z.selectNodeContents(t);
+        const tops = new Set([...z.getClientRects()].filter(x => x.width > 0).map(x => Math.round(x.top)));
+        return { w: r.width, h: r.height, woord: t.textContent.replace(/[^A-Za-z]/g, ''), regels: tops.size };
+      }));
+      check(n, 'drie tabs', tabs.length === 3);
+      check(n, 'even breed', tabs.length === 3 && tabs.every(t => Math.abs(t.w - tabs[0].w) < 0.5));
+      check(n, 'minstens 44 hoog', tabs.every(t => t.h >= 44));
+      const woorden = await page.evaluate(() => [...document.querySelectorAll('.tabbar .tab .tab-woord')].map(w => {
+        const z = document.createRange(); z.selectNodeContents(w);
+        return new Set([...z.getClientRects()].filter(x => x.width > 0).map(x => Math.round(x.top))).size;
+      }));
+      check(n, 'elk woord op één regel', woorden.length === 3 && woorden.every(r => r === 1));
+      const week = await rect('#weekStrip');
+      check(n, 'de weekregel is 44 hoog', !!week && Math.abs(week.h - 44) < 0.5);
+      check(n, 'zonder kaart eromheen', await page.evaluate(() => { const s = getComputedStyle(document.getElementById('weekStrip'));
+        return s.backgroundColor === 'rgba(0, 0, 0, 0)' && s.borderTopWidth === '0px' && s.boxShadow === 'none'; }));` });
+}
+
+/* visual.md 11.6: Ik met een grid van trofeeën, en elk label binnen zijn kaart */
+for (const [W, H] of [[360, 640], [375, 553], [1024, 748]]) {
+  const n = '[3.11] ' + W + 'x' + H + ': Ik: Grootmeester blijft in de levelkaart, en de trofeeën zijn tegels van minstens 88 breed die binnen hun kaart blijven';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      await klik('#tabIk');
+      await page.waitForTimeout(300);
+      const kaart = await page.evaluate(() => { const r = document.getElementById('levelPath').closest('.home-card').getBoundingClientRect();
+        return { left: r.left, right: r.right }; });
+      const labels = await page.evaluate(() => [...document.querySelectorAll('#levelPath .lp-node')].map(e => {
+        const z = document.createRange(); z.selectNodeContents(e); const rs = [...z.getClientRects()].filter(x => x.width > 0);
+        return { links: Math.min(...rs.map(x => x.left)), rechts: Math.max(...rs.map(x => x.right)), tekst: e.textContent }; }));
+      check(n, 'zeven levels', labels.length === 7);
+      check(n, 'elk level binnen de kaart', labels.every(l => l.links >= kaart.left - 0.5 && l.rechts <= kaart.right + 0.5));
+      const tegels = await page.evaluate(() => [...document.querySelectorAll('#badgeGrid > *')].map(e => {
+        const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, w: r.width, sw: e.scrollWidth, cw: e.clientWidth }; }));
+      const grid = await rect('#badgeGrid');
+      check(n, 'veertien tegels', tegels.length === 14);
+      check(n, 'elk minstens 88 breed', tegels.every(t => t.w >= 88 - 0.5));
+      check(n, 'drie of meer naast elkaar', new Set(tegels.map(t => Math.round(t.top))).size <= 5);
+      check(n, 'niets loopt eruit', !!grid && tegels.every(t => t.left >= grid.left - 0.5 && t.right <= grid.right + 0.5 && t.sw <= t.cw + 1));
+      const p = await pagina();
+      check(n, 'de pagina scrolt niet opzij', p.sw <= p.W + 1);` });
 }
 
 /* plan.md 1.8: een speelscherm opent met het hele bord in beeld, ook als het

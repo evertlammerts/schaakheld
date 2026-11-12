@@ -1634,6 +1634,42 @@ async function orakelFlow() {
     check('erachter: het doel met 2 te gaan, zonder bijna', /Je weekdoel/.test(kaart) && /Nog 2 toprondes/.test(kaart) && !/Bijna/.test(kaart));
   });
 
+  await regel('[3.11] een tik op de weekregel opent Ik bij "Deze week"', async function (check) {
+    const a = nieuwKind();
+    a.ev('setPref("weekGoal", { kind: "opdr", n: 10 })');
+    __scrolls.length = 0;
+    a.tik('weekStrip');
+    check('Ik staat open', zichtbaar(a, 'view-ik') && !zichtbaar(a, 'view-spelen'));
+    check('bij het blok van de week', __scrolls.some(function (s) { return s.el === 'ikWeek'; }) && /Deze week/.test(tekstVan(a, 'ikWeek')));
+  });
+
+  await regel('[3.11] de trofeeën: verdiende eerst, de kop telt, een tegel op slot zegt wat hij vraagt, een tik vertelt het', async function (check) {
+    const a = nieuwKind();
+    a.ev('addBadge("vlam"); addBadge("raket"); renderHome()');
+    a.tik('tabIk');
+    check('de kop telt', /Trofeeën 2 van 14/.test(tekstVan(a, 'badgeKop')));
+    const tegels = Array.prototype.slice.call(a.el('badgeGrid').querySelectorAll('[data-badge]'));
+    check('veertien tegels, de verdiende eerst', tegels.length === 14 &&
+      ['raket', 'vlam'].indexOf(tegels[0].dataset.badge) >= 0 && ['raket', 'vlam'].indexOf(tegels[1].dataset.badge) >= 0);
+    const speur = tegels.filter(function (t) { return t.dataset.badge === 'speurneus'; })[0];
+    check('een tegel op slot zegt wat hij vraagt', !!speur && /10 perfecte speurrondes/.test(a.doc.__tekst(speur)) && !/Superspeurneus/.test(a.doc.__tekst(speur)));
+    tikEl(a, speur, 'de tegel Superspeurneus');
+    check('een tik: de naam en wat hij vraagt', a.open() && /Superspeurneus/.test(a.scherm()) && /10 perfecte speurrondes/.test(a.scherm()));
+  });
+
+  await regel('[3.11] een bordkleur op slot zegt vanaf welk level, en een gekozen kleur zegt dat hij gekozen is', async function (check) {
+    const a = nieuwKind();
+    a.ev('bump("xp", 150); renderHome()');
+    a.tik('tabIk');
+    const knop = function (id) { return a.el('themeRow').querySelectorAll('[data-th="' + id + '"]')[0]; };
+    check('Lava: vanaf Dame', /vanaf Dame/.test(a.doc.__tekst(knop('lava'))));
+    a.tik('setBtn');
+    await wacht();
+    const oceaan = a.el('setThemes').querySelectorAll('[data-th="oceaan"]')[0];
+    tikEl(a, oceaan, 'Oceaan in Instellingen');
+    check('in Instellingen: "Oceaan gekozen" in het venster', a.get('P.theme') === 'oceaan' && /Oceaan gekozen/.test(a.scherm()));
+  });
+
   /* ================= increment 4 (wat op een apparaat te zien is) ================= */
 
   const koppelInvoer = [

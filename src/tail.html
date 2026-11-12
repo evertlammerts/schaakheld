@@ -4451,7 +4451,7 @@ function applyTheme() {
   document.documentElement.style.setProperty('--board-dark', th.dark);
 }
 
-function pickTheme(id) {
+function pickTheme(id, melding) {
   const th = THEMES.find(t => t.id === id);
   if (!th) return;
   if (levelIdx(P.xp) < th.lvl) {
@@ -4462,6 +4462,9 @@ function pickTheme(id) {
   applyTheme();
   renderThemes();
   snd.select();
+  /* in Instellingen staat de bevestiging in het venster zelf, niet in een melding erover */
+  if (melding) melding.textContent = '✔ ' + th.naam + ' gekozen';
+  else showToast('✔ ' + th.naam + ' gekozen');
 }
 
 function renderThemes() {
@@ -4474,10 +4477,11 @@ function renderThemeRow(row) {
     return '<button class="theme-sw' + (P.theme === t.id ? ' sel' : '') + (locked ? ' locked' : '') +
       '" data-th="' + t.id + '" title="' + (locked ? 'Vanaf level ' + LEVELS[t.lvl].n : t.naam) + '">' +
       '<span class="sw" style="background:linear-gradient(110deg,' + t.light + ' 50%,' + t.dark + ' 50%)"></span>' +
-      '<span>' + (locked ? '🔒 ' : '') + t.naam + '</span></button>';
+      (locked ? '<span class="b-slot">🔒</span>' : '') +
+      '<span>' + t.naam + (locked ? '<span class="lvl">vanaf <span class="lvl-n">' + LEVELS[t.lvl].n + '</span></span>' : '') + '</span></button>';
   }).join('');
   row.querySelectorAll('.theme-sw').forEach(b => {
-    b.addEventListener('click', () => pickTheme(b.dataset.th));
+    b.addEventListener('click', () => pickTheme(b.dataset.th, row.id === 'setThemes' ? $('setKleurMsg') : null));
   });
 }
 
@@ -4524,15 +4528,22 @@ function toonEindkaart(html, nieuw, setup) {
 }
 function sluitEindkaart() { $('eindkaart').classList.add('hidden'); $('eindkaart').innerHTML = ''; }
 
+/* verdiende trofeeën eerst; een tegel op slot zegt wat hij vraagt, een tik vertelt het hele verhaal */
 function renderBadges() {
   const grid = $('badgeGrid');
   if (!grid) return;
-  grid.innerHTML = BADGES.map(b => {
-    const got = !!P.badges[b.id];
-    return '<div class="badge' + (got ? '' : ' locked') + '"><span class="b-e">' + b.e + '</span>' +
-      '<span><span class="b-n">' + b.n + (got ? ' ✔' : '') + '</span><br>' +
-      '<span class="b-d">' + b.d + '</span></span></div>';
-  }).join('');
+  const got = BADGES.filter(b => P.badges[b.id]), rest = BADGES.filter(b => !P.badges[b.id]);
+  $('badgeKop').textContent = '🏆 Trofeeën ' + got.length + ' van ' + BADGES.length;
+  grid.innerHTML = got.map(b => '<button class="badge-tile" data-badge="' + b.id + '"><span class="b-e">' + b.e + '</span>' + b.n + '</button>')
+    .concat(rest.map(b => '<button class="badge-tile locked" data-badge="' + b.id + '"><span class="b-slot">🔒</span>' +
+      '<span class="b-e">' + b.e + '</span>' + b.d + '</button>')).join('');
+  grid.querySelectorAll('.badge-tile').forEach(t => t.addEventListener('click', () => toonTrofee(t.dataset.badge)));
+}
+function toonTrofee(id) {
+  const b = BADGES.find(x => x.id === id);
+  showModal('<div class="m-emoji">' + b.e + '</div><h2>' + b.n + '</h2><p>' +
+    (P.badges[id] ? '✔ Verdiend! ' + b.d + '.' : 'Nog niet verdiend. Zo krijg je hem: ' + b.d + '.') + '</p>' +
+    '<div class="m-btns"><button class="btn sun" id="trofeeOk">Oké</button></div>', () => $('trofeeOk').addEventListener('click', closeModal), true);
 }
 
 /* ---------- weekdoel en vorm ----------
@@ -4639,18 +4650,8 @@ function renderWeekStrip() {
   const W = curWeek(), g = P.weekGoal;
   const dots = DAG_NAMEN.map((d, i) => '<i class="' + (wkGet(W, 'd' + i) > 0 ? 'on' : '') +
     (i === dagIdx() ? ' today' : '') + '"></i>').join('');
-  let txt, sub;
-  if (g) {
-    const cur = goalProgress(g, W);
-    txt = Math.min(cur, g.n) + ' van ' + g.n + ': ' + goalText(g);
-    sub = goalLine(cur, g.n);
-  } else {
-    const actief = DAG_NAMEN.filter((d, i) => wkGet(W, 'd' + i) > 0).length;
-    txt = actief ? 'Deze week al ' + actief + (actief === 1 ? ' dag' : ' dagen') + ' geoefend' : 'Nieuwe week, nieuwe kansen!';
-    sub = 'Tik hier om een weekdoel te kiezen.';
-  }
-  el.innerHTML = '<span class="dots">' + dots + '</span><span class="ws-txt">' + txt +
-    '<span class="ws-sub">' + sub + '</span></span><span class="ws-arrow">›</span>';
+  const txt = g ? Math.min(goalProgress(g, W), g.n) + ' van ' + goalText(g) : 'Kies een weekdoel: wat wil jij deze week doen?';
+  el.innerHTML = '<span class="dots">' + dots + '</span><span class="ws-txt">' + txt + '</span><span class="ws-arrow">›</span>';
 }
 
 function goalFlow() {
@@ -4796,7 +4797,7 @@ function renderLevelPath() {
   path.innerHTML = LEVELS.map((L, i) => {
     const cls = i < cur ? 'done' : (i === cur ? 'current' : 'locked');
     return '<div class="lp-node ' + cls + '"><span class="lp-g">' + L.g + '</span>' +
-      '<span>' + L.n + '</span><span class="lp-xp">' + (i <= cur ? '✔' : L.xp + ' <br>XP') + '</span></div>';
+      '<span class="lp-n">' + L.n + '</span><span class="lp-xp">' + (i <= cur ? '✔' : L.xp + ' <br>XP') + '</span></div>';
   }).join('');
   const nxt = $('lpNext');
   if (!nxt) return;
@@ -4858,7 +4859,7 @@ function openSettings() {
   const schakelRij = (id, txt) => rij(id, txt, '<span class="switch" id="' + id + 'Sw"></span>');
   showModal('<h2>Instellingen</h2><div class="set-lijst">' +
     '<label class="set-row"><span>Naam</span><input id="setName" maxlength="14" autocomplete="off" value="' + escHtml(P.name) + '"></label>' +
-    '<div class="set-kleur"><span>Bordkleur</span><div id="setThemes" class="theme-row"></div></div>' +
+    '<div class="set-kleur"><span>Bordkleur</span> <span id="setKleurMsg" class="set-msg"></span><div id="setThemes" class="theme-row"></div></div>' +
     schakelRij('tglSound', '🔊 Geluid') +
     schakelRij('tglGuard', '🛡️ Blunder-alarm in een potje') +
     schakelRij('tglPredict', '🔮 Voorspellen in een potje') +
@@ -4892,7 +4893,11 @@ document.querySelectorAll('.mode-card').forEach(b => {
     else startDrill(mode);
   });
 });
-$('weekStrip').addEventListener('click', () => { showHomeTab('ik'); if (!P.weekGoal) goalFlow(); });
+$('weekStrip').addEventListener('click', () => {
+  showHomeTab('ik');
+  $('ikWeek').scrollIntoView({ block: 'start' });
+  if (!P.weekGoal) goalFlow();
+});
 $('vrScan').addEventListener('click', () => openScanner('play'));
 $('vrToon').addEventListener('click', mpHostQR);
 $('vrWoord').addEventListener('click', mpWordFlow);
