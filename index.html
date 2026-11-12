@@ -1496,6 +1496,10 @@ function think(S, budgetMs, maxDepth, opts) {
    slow phone and on a laptop and plays the same move in the same position.
    About 2 s on the slowest phone; the time cap is only a safety net. */
 const SUPER_NODES = 100000, SUPER_CAP_MS = 4000;
+/* Turbo's two-ply choice cannot drive a bare king to the edge, so against one
+   he searches a little deeper and mates instead of drawing by fifty moves. */
+const TURBO_BARE_NODES = 12000;
+function bareKing(S, color) { return piecesOf(S, color).length === 1; }
 
 /* Level 1 (Baby): mostly random. Level 2 (Turbo): book, then depth 2 with a
    margin, so it stays beatable. Level 3 (Super Turbo): book, then the search
@@ -1515,6 +1519,7 @@ function pickMove(S, level, rng, budgetMs) {
     if (bm) return bm;
   }
   if (level === 3) return think(S, budgetMs || SUPER_CAP_MS, 8, { nodes: SUPER_NODES }).m;
+  if (level === 2 && bareKing(S, other(S.turn))) return think(S, budgetMs || SUPER_CAP_MS, 8, { nodes: TURBO_BARE_NODES }).m;
   const depth = level === 1 ? 1 : 2;
   const margin = level === 1 ? 250 : 80;
   const scored = rootScores(S, depth);
@@ -1749,7 +1754,7 @@ function genScanTask(type, rng) {
 
 /* The checks when a task is picked look deeper than forcedMaterial, which
    sees captures only: a quiet fork or a mate threat counts too. */
-const CHECK_NODES = 40000;
+const CHECK_NODES = 25000;
 /* White's score after move m, by the search with the check budget. */
 function scoreAfter(S, m) {
   makeMove(S, m);
@@ -2246,7 +2251,7 @@ function isPattern(info) { return info.fork.length >= 2 || !!info.pin || !!info.
    moment, the first kind that applies, or null. A loss is in centipawns; 250
    is a minor piece minus a little, so a pawn lost in a trade never counts. */
 function moveMoment(S, m) {
-  const base = { moveNo: S.full, move: moveKey(m) };
+  const base = { moveNo: S.full, ply: S.hist.length, move: moveKey(m) };
   const bc = blunderCheck(S, m);
   if (bc && bc.mate) return Object.assign(base, { kind: 'mat', loss: MATE, punish: moveKey(bc.punish) });
   if (bc && bc.punish) {
@@ -2285,14 +2290,29 @@ function moveMoment(S, m) {
       points: POINTS[S.board[w.sq].toLowerCase()], with: moveKey(w.move) });
   }
   const info = patternsAfterMove(S, m);
-  if (info.safe && isPattern(info)) return Object.assign(base, { kind: 'goed', gain: 250 });
+  if (info.safe && isPattern(info)) return Object.assign(base, { kind: 'goed', pattern: true, gain: 0 });
   return null;
+}
+/* White's material when the game had `ply` half-moves. */
+function materialAt(S, ply) {
+  const back = [];
+  while (S.hist.length > ply) { back.push(S.hist[S.hist.length - 1].m); unmakeMove(S); }
+  const v = material(S);
+  for (let i = back.length - 1; i >= 0; i--) makeMove(S, back[i]);
+  return v;
 }
 /* The one moment for the end card: a mate first, otherwise the largest loss,
    otherwise the best good move; on a tie the earliest, since the first big
-   mistake usually decided the game. */
-function chooseMoment(moments) {
-  const ms = moments.filter(Boolean);
+   mistake usually decided the game. A pattern move counts as good only when
+   it worked: after the child's next move White is at least 2 points better
+   than before it, because the detector also sees forks that win nothing. */
+function chooseMoment(moments, S) {
+  const ms = moments.filter(Boolean).map(x => {
+    if (!x.pattern) return x;
+    if (!S || S.hist.length < x.ply + 3) return null;
+    const gain = materialAt(S, x.ply + 3) - materialAt(S, x.ply);
+    return gain >= 200 ? Object.assign({}, x, { gain }) : null;
+  }).filter(Boolean);
   const mate = ms.find(x => x.kind === 'mat');
   if (mate) return mate;
   const lost = ms.filter(x => x.kind !== 'goed');
@@ -2310,7 +2330,7 @@ function keyMoment(S) {
     if (S.turn === 'w') moments.push(moveMoment(S, m));
     makeMove(S, m);
   }
-  return chooseMoment(moments);
+  return chooseMoment(moments, S);
 }
 
 /* --- the verified stock of tricks (src/trucs.js, made by tools/make-trucs.js) --- */

@@ -285,6 +285,31 @@
     check('een rustig begin heeft geen moment', k === null);
   });
 
+  regel('[5.8] sleutelmoment: Turbo zet een vork na je zet; een vork van jou telt pas als hij iets opleverde', function (check) {
+    /* de lijn van de coach: 4.f3?? Dh4+ valt koning en loper tegelijk aan */
+    const S = speel(E.newGame(), ['g1h3', 'e7e6', 'e2e3', 'b8a6', 'f1c4', 'd7d5', 'f2f3', 'd8h4']);
+    let k = E.keyMoment(S);
+    check('truc bij zet 4 (' + JSON.stringify(k) + ')', !!k && k.kind === 'truc' && k.moveNo === 4 && k.punish === 'd8h4');
+    /* Pc7+ vorkt koning en toren; daarna pakt het paard de toren */
+    k = E.keyMoment(speel(E.parseFEN('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1'), ['b5c7', 'e8d7', 'c7a8']));
+    check('een vork die de toren oplevert is goed (' + JSON.stringify(k) + ')', !!k && k.kind === 'goed' && k.moveNo === 1);
+    k = E.keyMoment(speel(E.parseFEN('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1'), ['b5c7', 'e8d7', 'c7b5']));
+    check('dezelfde vork, maar het paard laat de toren staan: het moment is de gemiste toren, niet de vork (' + JSON.stringify(k) + ')',
+      !!k && k.kind === 'gemist' && k.moveNo === 2 && k.sq === 'a8');
+  });
+
+  regel('[5.7] Turbo zet mat tegen een kale koning in plaats van remise door vijftig zetten', function (check) {
+    if (!knoopbudget(check)) return;
+    /* zwart is Turbo met dame en koning, wit heeft alleen zijn koning */
+    const S = E.parseFEN('3qk3/8/8/8/4K3/8/8/8 w - - 0 1');
+    let st = E.gameStatus(S);
+    for (let ply = 0; ply < 100 && !st.over; ply++) {
+      E.makeMove(S, S.turn === 'b' ? E.pickMove(S, 2) : E.pickMove(S, 3));
+      st = E.gameStatus(S);
+    }
+    check('mat binnen 50 zetten (' + (st.reason || 'niet') + ')', st.over && st.reason === 'mat' && st.result === 'b');
+  });
+
   console.log('\nengine-orakel: ' + nogNietN + ' nog niet gebouwd, ' + gebouwdN + ' gebouwd');
   if (fouten) { console.log(fouten + ' ENGINE ORACLE FAILURES'); throw new Error('engine-orakel: ' + fouten + ' fouten'); }
   console.log('ALL ENGINE ORACLE TESTS PASSED');
