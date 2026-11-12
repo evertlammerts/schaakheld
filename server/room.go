@@ -162,6 +162,17 @@ func (s *server) evictRoomLocked() bool {
 	return true
 }
 
+// kamerTabelTeKlein: kunnen er in evictMinAge zoveel kamers bijkomen dat
+// de tabel vol verse kamers staat? Dan geeft een vloed iedereen 429. Twee
+// paden maken kamers, elk op volle snelheid: POST /v1/room, en de
+// speelcode die een paar afmaakt (de eerste helften kunnen al klaarliggen).
+func kamerTabelTeKlein(delay time.Duration, slots int) bool {
+	if delay <= 0 {
+		return true
+	}
+	return 2*hoogstensInVenster(evictMinAge, delay, slots) >= maxRooms
+}
+
 // een kamer zonder potje (die leeft toch maar een kwartier) voor een
 // gepauzeerd potje, en daarbinnen de langst stille
 func wijktEerder(a, b *room) bool {

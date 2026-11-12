@@ -679,12 +679,25 @@ func TestKamerVolMetAlleenVerseKamers(t *testing.T) {
 }
 
 func TestKamerRustPastInDeTabel(t *testing.T) {
-	// zoveel kamers per seconde kan iedereen samen maken: een per POST
-	// /v1/room, en een per twee gematchte speelcodes, elk achter eigen
-	// plekken; wat in de rust valt, mag de tabel niet vullen
-	perSeconde := float64(defaultSlots) / defaultDelay.Seconds() * 1.5
-	if n := perSeconde * evictMinAge.Seconds(); n >= maxRooms {
-		t.Fatalf("in %v komen %.0f kamers bij, de tabel houdt er %d", evictMinAge, n, maxRooms)
+	// kamers die in de rust vallen mogen de tabel niet kunnen vullen, anders
+	// geeft een vloed van verse kamers iedereen 429
+	if kamerTabelTeKlein(defaultDelay, defaultSlots) {
+		t.Fatalf("met de standaardinstellingen vult een vloed van verse kamers de tabel")
+	}
+	// wie de vlaggen zelf zet, krijgt bij het starten een waarschuwing
+	for _, geval := range []struct {
+		delay   time.Duration
+		slots   int
+		teKlein bool
+	}{
+		{defaultDelay, 3, true},
+		{150 * time.Millisecond, defaultSlots, true},
+		{250 * time.Millisecond, defaultSlots, false},
+		{0, defaultSlots, true},
+	} {
+		if got := kamerTabelTeKlein(geval.delay, geval.slots); got != geval.teKlein {
+			t.Errorf("%v, %d plekken: te klein %v, wil %v", geval.delay, geval.slots, got, geval.teKlein)
+		}
 	}
 }
 
