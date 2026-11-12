@@ -2290,6 +2290,7 @@ async function orakelFlow() {
     check('na een minuut: 9', /Werkt nog 9 minuten/.test(a.scherm()));
     await wacht(10 * 60000);
     check('daarna werkt hij niet meer', /Deze code werkt niet meer/.test(a.scherm()));
+    check('en de oude woorden en de uitleg erbij staan er niet meer', !/Typ daar deze vier woorden/.test(a.scherm()) && a.el('linkWoorden').style.display === 'none');
     const oud = a.scherm();
     tikTekst(a, 'Nieuwe code');
     await wacht();
