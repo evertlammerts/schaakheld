@@ -190,6 +190,7 @@
   .pat-row.pat-locked .pat-e { filter: grayscale(1); opacity: .55; }
   .pat-row.pat-locked .pat-count { color: var(--text-quiet); font-weight: normal; }
   .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .ik-uitleg { margin: 8px 4px 0; font-size: var(--fs-cap); line-height: 1.35; color: var(--text-quiet); }
   .ik-bewaard { margin: 12px 4px 0; font-size: var(--fs-sm); line-height: 1.4; }
   .ik-bewaard small { display: block; margin-top: 4px; font-size: var(--fs-cap); color: var(--text-quiet); }
   .ik-bewaard .btn { margin-top: 6px; }
@@ -733,6 +734,7 @@
   }
   .switch.on { background: var(--success); border-color: var(--success); color: var(--on-success); }
   .set-pijl { font-size: 24px; color: var(--text-quiet); }
+  .set-msg { font-size: var(--fs-cap); font-weight: 700; color: var(--success); }
   .danger-zone { margin-top: var(--sp-6); padding-top: var(--sp-3); border-top: var(--border); }
   .danger-zone .btn { color: var(--danger); }
   .modal input {
@@ -873,6 +875,7 @@
         <div id="levelPath" class="level-path"></div>
         <div id="lpNext" class="lp-next"></div>
       </div>
+      <div id="xpUitleg" class="ik-uitleg">Een level haal je met XP en soms een meesterproef. Sterren (0 tot 3) zeggen hoe goed een opdracht ging.</div>
       <div id="ikBewaard" class="ik-bewaard"></div>
       <div class="stats-row">
         <span class="stat-chip">⭐ Sterren: <b id="statStars">0</b></span>
@@ -2522,6 +2525,8 @@ const DRILLS = {
   koning: { e: '🛡️', naam: 'Koning ontsnapt', ref: 30000 },
   opening: { e: '📖', naam: 'Openingsschool', ref: 40000 }
 };
+/* "topronde" staat nergens anders uitgelegd waar een kind het woord leest */
+const TOP_UITLEG = ' (12 sterren of meer)';
 /* weekdoel-sjablonen: sleutel in de weektellers, tekst voor het kind */
 const GOAL_KINDS = {
   opdr: { e: '🎯', naam: 'Opdrachten', ns: [10, 20, 40], key: () => 'opdr',
@@ -2532,8 +2537,8 @@ const GOAL_KINDS = {
     key: g => 'wins' + g.lvl, txt: g => g.n + ' keer winnen van ' + TURBO_NAMES[g.lvl] + (g.lvl < 3 ? ' of sterker' : '') },
   vriend: { e: '🤝', naam: 'Potjes met een vriend', ns: [1, 2, 3], key: () => 'online',
     txt: g => g.n + (g.n === 1 ? ' potje' : ' potjes') + ' met een vriend' },
-  top: { e: '🌟', naam: 'Toprondes (12 sterren of meer)', ns: [1, 2, 3], game: true, key: g => 'top.' + g.game,
-    txt: g => g.n + (g.n === 1 ? ' topronde' : ' toprondes') + ' bij ' + DRILLS[g.game].naam }
+  top: { e: '🌟', naam: 'Toprondes' + TOP_UITLEG, ns: [1, 2, 3], game: true, key: g => 'top.' + g.game,
+    txt: (g, kort) => g.n + (g.n === 1 ? ' topronde' : ' toprondes') + ' bij ' + DRILLS[g.game].naam + (kort ? '' : TOP_UITLEG) }
 };
 
 function newDevId() {
@@ -5000,7 +5005,7 @@ function nextStep(P, ctx) {
         potjes: () => [(meer ? 'potjes' : 'potje') + ' tegen ' + turboNaam(g.lvl), 'Potje tegen ' + turboNaam(g.lvl), { go: 'game', level: g.lvl }],
         wins: () => ['keer winnen van ' + turboNaam(g.lvl), 'Potje tegen ' + turboNaam(g.lvl), { go: 'game', level: g.lvl }],
         vriend: () => [(meer ? 'potjes' : 'potje') + ' met een vriend', 'Naar Vrienden', { go: 'vrienden' }],
-        top: () => [(meer ? 'toprondes' : 'topronde') + ' bij ' + DRILLS[oef].naam, DRILLS[oef].naam, { go: 'oefening', kind: oef }]
+        top: () => [(meer ? 'toprondes' : 'topronde') + ' bij ' + DRILLS[oef].naam + TOP_UITLEG, DRILLS[oef].naam, { go: 'oefening', kind: oef }]
       }[g.kind]();
       /* "bijna" alleen als het kind er zelf dichtbij kwam: iets gedaan en precies één te gaan */
       const titel = gedaan >= 1 && rest === 1 ? 'Bijna je weekdoel!' : 'Je weekdoel';
@@ -7060,7 +7065,7 @@ function goalProgress(g, week = curWeek(), p = P) {
   }
   return wkGet(week, K.key(g), p);
 }
-function goalText(g) { return GOAL_KINDS[g.kind].txt(g); }
+function goalText(g, kort) { return GOAL_KINDS[g.kind].txt(g, kort); }
 function goalDoneWeek(W, p = P) { return !!(p.goalDone && p.goalDone[W]); }
 function checkGoal() {
   const g = P.weekGoal;
@@ -7124,7 +7129,7 @@ function renderWeekStrip() {
   const W = curWeek(), g = P.weekGoal;
   const dots = DAG_NAMEN.map((d, i) => '<i class="' + (wkGet(W, 'd' + i) > 0 ? 'on' : '') +
     (i === dagIdx() ? ' today' : '') + '"></i>').join('');
-  const txt = g ? Math.min(goalProgress(g, W), g.n) + ' van ' + goalText(g) : 'Kies een weekdoel: wat wil jij deze week doen?';
+  const txt = g ? Math.min(goalProgress(g, W), g.n) + ' van ' + goalText(g, true) : 'Kies een weekdoel: wat wil jij deze week doen?';
   el.innerHTML = '<span class="dots">' + dots + '</span><span class="ws-txt">' + txt + '</span><span class="ws-arrow">›</span>';
 }
 
@@ -7142,7 +7147,7 @@ function goalFlow() {
     $('goalSub').innerHTML = K.lvl ? [1, 2, 3].map(l => chip('', 'lvl', l, TURBO_NAMES[l], l === st.lvl)).join('') :
       (K.game ? DRILL_KINDS.map(d => chip('', 'game', d, DRILLS[d].e + ' ' + DRILLS[d].naam, d === st.game)).join('') : '');
     $('goalNs').innerHTML = K.ns.map(n => chip('big', 'n', n, n, n === st.n)).join('');
-    $('goalPreview').innerHTML = 'Elke week ' + goalText(normGoal(st)) + '. ' + goalMotto(st);
+    $('goalPreview').innerHTML = 'Elke week ' + goalText(normGoal(st), true) + '. ' + goalMotto(st);
   };
   showModal('<div class="m-emoji">🎯</div><h2>Wat wordt je doel deze week?</h2>' +
     '<p>Kies iets wat je leuk vindt. Je mag het altijd veranderen.</p>' +
@@ -7217,7 +7222,7 @@ function checkNewWeek() {
   /* een week zonder iets begint niet met een nul */
   showModal('<div class="m-emoji">' + (gehaald ? '🎉' : '🌱') + '</div>' +
     (gehaald ? '<h2>Nieuwe week!</h2><p>Vorige week: doel gehaald! <b>' + g.n + ' van ' + g.n + '</b>.</p>' :
-      cur > 0 ? '<h2>Nieuwe week!</h2><p>Vorige week: <b>' + cur + ' van ' + g.n + '</b> (' + goalText(g) + ').<br>' +
+      cur > 0 ? '<h2>Nieuwe week!</h2><p>Vorige week: <b>' + cur + ' van ' + g.n + '</b> (' + goalText(g, true) + ').<br>' +
         'Mooi geoefend. Deze week weer een frisse start!</p>' :
       '<h2>Nieuwe week, nieuwe kansen</h2><p>Je doel: ' + goalText(g) + '.</p>') +
     '<div class="m-btns"><button class="btn sun" id="wkKeep">Zelfde doel houden 👍</button>' +
@@ -7292,7 +7297,7 @@ function renderIkBewaard() {
   $('ikBewaard').innerHTML = (anderApparaat() ? '✔ Bewaard op dit apparaat en je andere apparaat.' :
     'Alles staat op ' + ditApparaat() + '. Speel je ook ergens anders? Koppel het, dan is alles dubbel bewaard.' +
     '<br><button class="btn plain small" id="ikKoppel">🔑 Speel op een ander apparaat</button>') +
-    '<small>Een potje of rondje dat nog bezig is, blijft op dit apparaat.</small>';
+    '<small>Een potje blijft hier staan vanaf de eerste zet, een rondje vanaf het eerste antwoord.</small>';
   if ($('ikKoppel')) $('ikKoppel').addEventListener('click', linkShareFlow);
 }
 
@@ -7332,7 +7337,7 @@ function openSettings() {
   const rij = (id, txt, rechts) => '<button class="set-row" id="' + id + '"><span>' + txt + '</span>' + rechts + '</button>';
   const schakelRij = (id, txt) => rij(id, txt, '<span class="switch" id="' + id + 'Sw"></span>');
   showModal('<h2>Instellingen</h2><div class="set-lijst">' +
-    '<label class="set-row"><span>Naam</span><input id="setName" maxlength="14" autocomplete="off" value="' + escHtml(P.name) + '"></label>' +
+    '<label class="set-row"><span>Naam <span id="setNaamOk" class="set-msg"></span></span><input id="setName" maxlength="14" autocomplete="off" value="' + escHtml(P.name) + '"></label>' +
     '<div class="set-kleur"><span>Bordkleur</span> <span id="setKleurMsg" class="set-msg"></span><div id="setThemes" class="theme-row"></div></div>' +
     schakelRij('tglSound', '🔊 Geluid') +
     schakelRij('tglGuard', '🛡️ Blunder-alarm in een potje') +
@@ -7349,8 +7354,10 @@ function openSettings() {
       naam.addEventListener('change', () => {
         const v = naam.value.trim().slice(0, 14);
         if (!v) { naam.value = P.name; return; }
-        if (v !== P.name) { setPref('name', v); renderHome(); }
+        if (v !== P.name) { setPref('name', v); renderHome(); $('setNaamOk').textContent = '✔ bewaard'; }
       });
+      /* WebKit zet bij een tik de cursor pas na de focus neer en wist dan een selectie in de focus zelf */
+      naam.addEventListener('focus', () => setTimeout(() => naam.select(), 0));
       naam.addEventListener('keydown', e => { if (e.key === 'Enter') naam.blur(); });
       renderThemes();
       $('setLink').addEventListener('click', () => { closeModal(); linkShareFlow(); });

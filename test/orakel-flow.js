@@ -1293,7 +1293,7 @@ async function orakelFlow() {
     const a = nieuwKind();
     a.tik('tabIk');
     check('de bewaard-regel', /bewaard|staat op deze/i.test(tekstVan(a, 'ikBewaard')) &&
-      /blijft op dit apparaat/.test(tekstVan(a, 'ikBewaard')));
+      /Een potje blijft hier staan vanaf de eerste zet, een rondje vanaf het eerste antwoord\./.test(tekstVan(a, 'ikBewaard')));
   });
 
   await regel('[3.6] het getal dat het level bepaalt heet XP, zonder ster', async function (check) {
@@ -1664,6 +1664,67 @@ async function orakelFlow() {
     const ontsnapt = function (t) { return t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'); };
     check('de groet toont de tekens', ontsnapt(a.get('$("groet").textContent')).indexOf('<b>Mees</b>') >= 0);
     check('de kaart maakt er geen opmaak van', a.el('verder').innerHTML.indexOf('<b>') < 0);
+  });
+
+  await regel('[3.9] maandag na vijf dagen weg: eerst de kaart van de nieuwe week, en erachter en erna zegt de groet welkom terug', async function (check) {
+    zetDatum('2026-11-11T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); setPref("weekGoal", { kind: "potjes", n: 3, lvl: 2 }); bumpWeek("potjes2", 1);' +
+      'P.lastSeen = "2026-11-11"; saveP()');
+    const a2 = herlaad(a);
+    await wacht();
+    zetDatum('2026-11-16T08:00:00');
+    const b = herlaad(a2);
+    await wacht();
+    check('eerst de kaart van de nieuwe week', b.open() && /Nieuwe week/.test(b.scherm()));
+    check('erachter zegt de groet welkom terug', tekstVan(b, 'groet') === 'Welkom terug, Mees! 👋');
+    tikTekst(b, 'Zelfde doel houden');
+    await wacht();
+    check('en erna ook, met een potje op de kaart', !b.open() && tekstVan(b, 'groet') === 'Welkom terug, Mees! 👋' &&
+      /^Speel een potje/.test(tekstVan(b, 'verder')));
+  });
+
+  await regel('[3.11] Ik zegt onder het level wat XP en sterren zijn', async function (check) {
+    const a = nieuwKind();
+    a.tik('tabIk');
+    check('de regel', tekstVan(a, 'xpUitleg') === 'Een level haal je met XP en soms een meesterproef. Sterren (0 tot 3) zeggen hoe goed een opdracht ging.');
+  });
+
+  await regel('[3.11] Instellingen: een nieuwe naam zegt "✔ bewaard", en het veld selecteert alles als je erop tikt', async function (check) {
+    const a = nieuwKind();
+    a.tik('setBtn');
+    await wacht();
+    const veld = a.el('setName');
+    check('testopzet: nog geen teken', !/bewaard/.test(a.scherm()));
+    fire(veld, 'focus', { target: veld });
+    await wacht();
+    check('alles geselecteerd', veld.selectionStart === 0 && veld.selectionEnd === 'Mees'.length);
+    vulIn(a, veld, 'Mees de Grote');
+    fire(veld, 'change', { target: veld });
+    await wacht();
+    check('bewaard en gezegd', a.get('P.name') === 'Mees de Grote' && /✔ bewaard/.test(a.scherm()));
+  });
+
+  await regel('[3.11] elke zin over wat er nog moet telt goed: "Nog 1 opdracht", "Nog 1 topronde", en een topronde zegt wat hij is', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const zin = function (r) { return r.rule === 'R4' ? r.text : '(geen R4) ' + r.rule; };
+    let r = await doelKaart({ kind: 'opdr', n: 10 }, 'opdr', 9);
+    check('opdrachten', zin(r) === 'Nog 1 opdracht en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'potjes', n: 2, lvl: 1 }, 'potjes1', 1);
+    check('potjes', zin(r) === 'Nog 1 potje tegen Slaapkop Turbo en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'wins', n: 2, lvl: 2 }, 'wins2', 1);
+    check('winnen', zin(r) === 'Nog 1 keer winnen van Turbo en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'vriend', n: 3 }, 'online', 2, VRIEND);
+    check('vriend', zin(r) === 'Nog 1 potje met een vriend en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'top', n: 2, game: 'trucs' }, 'top.trucs', 1);
+    check('toprondes', zin(r) === 'Nog 1 topronde bij Turbo’s Trucendoos (12 sterren of meer) en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'top', n: 3, game: 'scan' }, 'top.scan', 1);
+    check('twee toprondes', zin(r) === 'Nog 2 toprondes bij Speurogen (12 sterren of meer) en je weekdoel is gehaald.');
+    const a = nieuwKind();
+    a.ev('setPref("weekGoal", { kind: "top", n: 1, game: "scan" }); renderHome()');
+    check('de weekregel op Spelen kort', /^0 van 1 topronde bij Speurogen\s*›?$/.test(tekstVan(a, 'weekStrip')));
+    a.tik('tabIk');
+    check('het doel op Ik met wat een topronde is', /Mijn doel: 1 topronde bij Speurogen \(12 sterren of meer\)/.test(tekstVan(a, 'weekCard')));
   });
 
   await regel('[3.11] een tik op de weekregel opent Ik bij "Deze week"', async function (check) {

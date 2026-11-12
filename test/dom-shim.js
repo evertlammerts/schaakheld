@@ -114,6 +114,7 @@ function maakDocument(vast) {
   };
   el.scrollIntoView = () => { __scrolls.push({ el: id }); };
   el.focus = () => {};
+  el.select = () => { el.selectionStart = 0; el.selectionEnd = String(el.value).length; };
   el.cloneNode = () => {
     const n = makeEl(id);
     n._tag = el._tag;
