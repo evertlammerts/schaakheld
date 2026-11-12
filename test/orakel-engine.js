@@ -258,6 +258,33 @@
     check('geen puzzel zonder foute zet (' + zonder.length + ' van ' + KONING_POOL.length + (zonder.length ? ', zoals ' + zonder[0].fen : '') + ')', zonder.length === 0);
   });
 
+  /* de coach (schaak.md, "The fix list stock", K2): remise als redding gooit een gewonnen stelling weg */
+  regel('[5.5] Koning ontsnapt: geen antwoord is remise terwijl wit een stuk of meer voor staat', function (check) {
+    if (!check('er is een voorraad KONING_POOL', typeof KONING_POOL !== 'undefined' && KONING_POOL.length > 0)) return;
+    const fout = KONING_POOL.filter(function (p) {
+      const S = E.parseFEN(p.fen);
+      if (E.material(S) < 300) return false;
+      return p.answers.some(function (k) {
+        E.makeMove(S, zet(S, k));
+        const st = E.gameStatus(S);
+        E.unmakeMove(S);
+        return st.over && st.reason !== 'mat';
+      });
+    });
+    check('geen (' + fout.length + (fout.length ? ', zoals ' + fout[0].fen : '') + ')', fout.length === 0);
+  });
+
+  /* de coach (K3): in deze zes scoort een foute zet ongeveer even goed als een antwoord; de tool houdt ze nu tegen */
+  regel('[5.5] Koning ontsnapt: de zes puzzels waarin een foute zet bijna even goed is als het antwoord, staan niet in de voorraad', function (check) {
+    if (!check('er is een voorraad KONING_POOL', typeof KONING_POOL !== 'undefined' && KONING_POOL.length > 0)) return;
+    const borden = KONING_POOL.map(function (p) { return p.fen.split(' ')[0]; });
+    for (const b of ['2k1r3/1r4p1/3bb2p/B2p1p2/P7/2p1PP1P/2P1RPB1/RK6', 'r1b1r1k1/pp3ppp/3p1n2/qNp5/5P2/4pQ2/PPP1B1PP/R3K2R',
+      'r4rk1/p1p1nppp/1p6/3P1q2/1B2p3/3nPP1P/PP4BP/2RQK2R', '3r1rk1/p5pp/2bb4/2ppPpq1/3p4/P4BP1/1PPKPB1P/2RQR3',
+      'r3k1nr/ppp2ppp/2nbb3/3p4/7q/2NPPP2/PPP2PBP/R1BQ1RK1', '2kr1b1r/pppb1ppp/2n5/3pp3/3Pn1Pq/2P1P2P/PPNBNP2/R2QKB1R']) {
+      check(b + ' niet in de voorraad', borden.indexOf(b) < 0);
+    }
+  });
+
   /* ---------- 5.1: de voorraad trucs ---------- */
 
   const TYPES = ['vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat2'];
@@ -300,6 +327,22 @@
   });
 
   /* D24: een type telt mee vanaf 15 geverifieerde puzzels */
+  /* de coach (schaak.md, "the trick names from the stock"): het stuk dat de vork of penning maakt, wordt meteen geslagen en iets anders wint */
+  regel('[5.1] een vork of penning waarvan het stuk meteen geslagen wordt, staat niet als vork of penning in de voorraad', function (check) {
+    if (!check('er is een voorraad TRUC_POOL', typeof TRUC_POOL !== 'undefined' && Array.isArray(TRUC_POOL))) return;
+    const typeVan = function (bord) { const r = TRUC_POOL.find(function (x) { return x.split('|')[0] === bord; }); return r ? r.split('|')[1] : null; };
+    for (const b of ['1rb1k2r/1pp1bpp1/p2pn2p/3n1q2/3PN3/3BPN2/PPP1QPPP/3RR1K1 w', '2kr3r/ppp2pRp/2qbb3/3Nn3/8/4PB2/PPP1QP1P/1RB1K3 w',
+      'r1b1k2r/1ppp1ppp/p1nbq2n/3NN3/2BPPP2/4B3/PPP3PP/2RQK2R w', 'r1b2rk1/ppp2ppp/6n1/2nqp1B1/3pN3/3P1Q2/PPP1PNPP/3RKB1R w',
+      'r1b2rk1/ppp2ppp/n2bp3/7q/3BpnN1/3P4/PPPNBPPP/2RQ1K1R w']) {
+      check(b + ': een aftrekaanval (' + typeVan(b) + ')', typeVan(b) === 'aftrek');
+    }
+    for (const b of ['3rk2r/1ppq1ppp/p3b3/4bn1Q/2B1P3/2N1B2P/PPP2PPn/1R2K1NR w', '4r1kr/1ppbqppp/p1nn4/3pN3/1b1P1P2/4PB2/PPPQ2PP/R1B1R1K1 w',
+      '1rb2qkr/1pp2ppp/p1Nb1n2/Q1nP4/5B2/N2P4/PPP2PPP/1K2RB1R w', '3q1k1r/rpp1bppp/4bn2/3Pp3/1n6/1B1Q1N2/PPPPKPPP/R1B4R w',
+      'r1b1kb1r/p1pq1ppp/4pn2/1Q1p1n2/1p1PP3/1B3N2/PPP1NPPP/R1B1K2R w']) {
+      check(b + ': niet in de voorraad (' + typeVan(b) + ')', typeVan(b) === null);
+    }
+  });
+
   regel('[5.1] een type met 14 trucs blijft uit de Trucendoos, met 15 doet het mee', function (check) {
     const regels = function (type, n) { const r = []; for (let i = 0; i < n; i++) r.push('8/8/8/8/8/8/8/K6k w|' + type + '|a1a2'); return r; };
     const types = E.trucTypes(regels('penning', 14).concat(regels('spies', 15), regels('vork', 150)));
@@ -347,6 +390,12 @@
   });
 
   /* ---------- 5.9: Red je stuk uit een geverifieerde voorraad ---------- */
+
+  /* de coach (R2): Dg5-h4 redt de dame, maar na ...g5 en ...g4 is het paard op h3 weg; voorbij de lijn van twee halve zetten */
+  regel('[5.9] Red je stuk: de opdracht waarin een redding drie zetten later het paard kost, staat niet in de voorraad', function (check) {
+    if (!check('er is een voorraad STUK_POOL', typeof STUK_POOL !== 'undefined' && Array.isArray(STUK_POOL))) return;
+    check('niet in de voorraad', !STUK_POOL.some(function (r) { return r.split('|')[0] === '1rbqk1r1/1ppp1ppp/p2bnn2/4p1Q1/4P3/2NB3N/PPPP1PPP/R1B1R1K1 w'; }));
+  });
 
   regel('[5.9] elke Red je stuk-opdracht in de voorraad: er hangt een stuk, elke redding houdt het materiaal, elke andere zet niet', function (check) {
     check('er is een voorraad STUK_POOL met minstens 15', typeof STUK_POOL !== 'undefined' && Array.isArray(STUK_POOL) && STUK_POOL.length >= 15);

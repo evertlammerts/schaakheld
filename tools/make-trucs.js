@@ -23,7 +23,8 @@
    Mat in een en mat in twee komen van genMate1Task en genMate2Task, die exact
    zijn. Red je stuk komt van pieceTaskFrom, met de vijf toetsen van regel 5.3
    (checkPieceTask) bij het kiezen en nog eens met 300.000 knopen.
-   herzie haalt een bestaande voorraad door de toetsen van nu. */
+   herzie haalt een bestaande voorraad door de toetsen van nu; merge leest
+   ook src/trucs.js zelf, zodat een regel uit AFGEKEURD weg kan zonder te zoeken. */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -32,6 +33,14 @@ const E = require(path.join(__dirname, '..', 'src', 'engine.js'));
 const TYPES = ['vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat2', 'stuk'];
 const DOEL = { vork: 150, penning: 80, spies: 40, aftrek: 60, mat1: 120, mat2: 120, stuk: 120 };
 const LIJN_KNOPEN = 150000, DIEP_KNOPEN = 600000, STUK_KNOPEN = 300000;
+/* Regels die een diepere controle dan die van de tool afkeurde; samenvoegen
+   laat ze weg, ook als een werker ze opnieuw vindt. */
+const AFGEKEURD = {
+  /* de schaakcoach, zes halve zetten diep: na Dg5-h4 kosten ...g5 en ...g4 het paard op h3 */
+  '1rbqk1r1/1ppp1ppp/p2bnn2/4p1Q1/4P3/2NB3N/PPPP1PPP/R1B1R1K1 w': 'stuk',
+  /* de schaakcoach, zes zetten diep: de aangevallen dame ontsnapt met een dubbele dreiging, geen penning */
+  '3q1k1r/rpp1bppp/4bn2/3Pp3/1n6/1B1Q1N2/PPPPKPPP/R1B4R w': 'penning'
+};
 
 function mulberry32(a) {
   return function () {
@@ -53,23 +62,25 @@ const bijzonder = m => m.flags === 'K' || m.flags === 'Q' || m.flags === 'e';
 
 /* Het veld waarop wit slaat na de truc en zwarts beste antwoord: met wits
    tweede zet, of anders met zijn derde (een penning betaalt vaak een zet
-   later uit). -1 als wit dan niet slaat. */
+   later uit); -1 als wit dan niet slaat. En het veld waarop zwart onderweg
+   het stuk slaat dat de truc deed, of -1. */
 function winstVeld(S, m) {
   const gezet = [m];
   E.makeMove(S, m);
-  let veld = -1;
+  let veld = -1, stuk = m.to, geslagenOp = -1;
   for (let ronde = 0; ronde < 2 && veld < 0 && !E.gameStatus(S).over; ronde++) {
     const zwart = E.think(S, 60000, 8, { nodes: LIJN_KNOPEN }).m;
     if (!zwart) break;
+    if (zwart.to === stuk && geslagenOp < 0) geslagenOp = stuk;
     E.makeMove(S, zwart); gezet.push(zwart);
     if (E.gameStatus(S).over) break;
     const wit = E.think(S, 60000, 8, { nodes: LIJN_KNOPEN }).m;
     if (!wit) break;
     if (E.isCapture(S, wit)) veld = wit.flags === 'e' ? wit.to - 16 : wit.to;
-    else { E.makeMove(S, wit); gezet.push(wit); }
+    else { if (wit.from === stuk) stuk = wit.to; E.makeMove(S, wit); gezet.push(wit); }
   }
   for (let i = 0; i < gezet.length; i++) E.unmakeMove(S);
-  return veld;
+  return { veld, geslagenOp };
 }
 
 /* Een zet die een penning, een spies of een aftrekaanval kan zijn; zonder
@@ -83,18 +94,29 @@ function vorm(S, m) {
 }
 
 /* Het type van de truc m, beslist door waar de winst valt (toets 4), of null;
-   met het veld erbij. Alle penningen en spiesen van de zet tellen. */
-function typeVan(S, m) {
+   met het veld erbij. Alle penningen en spiesen van de zet tellen. Een vork,
+   penning of spies maakt het stuk dat zette; slaat zwart dat stuk in de lijn
+   en wint wit dan elders, dan won iets anders (de schaakcoach), en telt alleen
+   een aftrekaanval nog. Wint wit op dat veld terug, dan was het wel de truc:
+   een gepende dame die de loper slaat, wordt zelf geslagen. */
+function typeVan(S, m) { return typeUitLijn(S, m, winstVeld(S, m)); }
+function typeUitLijn(S, m, lijn) {
   const info = vorm(S, m);
-  const veld = winstVeld(S, m);
+  const { veld, geslagenOp } = lijn;
   if (veld < 0) return null;
   const met = type => ({ type, veld });
-  if (info.fork.length >= 2 && info.fork.indexOf(veld) >= 0) return met('vork');
-  if (info.pins.some(p => p.front === veld || p.back === veld)) return met('penning');
-  if (info.skewers.some(p => p.back === veld)) return met('spies');
+  if (geslagenOp < 0 || veld === geslagenOp) {
+    if (info.fork.length >= 2 && info.fork.indexOf(veld) >= 0) return met('vork');
+    if (info.pins.some(p => p.front === veld || p.back === veld)) return met('penning');
+    if (info.skewers.some(p => p.back === veld)) return met('spies');
+  }
   if (info.discovered.some(x => x.target === veld)) return met('aftrek');
   return null;
 }
+/* Een slag die zelf al 2 punten of meer wint, is een truc alleen als de
+   winst ergens anders valt. */
+function slagWint(S, m) { return E.isCapture(S, m) ? E.seeSquare(S, m.to) : 0; }
+function goedType(S, m, t) { return !!t && (slagWint(S, m) < 200 || t.veld !== m.to); }
 
 /* Een stelling uit een rustige partij met ruis, wit aan zet, met een truc
    van een van de gevraagde types. */
@@ -113,13 +135,11 @@ function zoekPatroon(rng, types) {
     const v = vorm(S, best.m);
     if (!v.pins.length && !v.skewers.length && !v.discovered.length) return null;
   }
-  /* Een slag die zelf al 2 punten of meer wint, is een truc alleen als de
-     winst ergens anders valt en de lijn nog 1,5 punt meer oplevert. */
-  const slag = m => E.isCapture(S, m) ? E.seeSquare(S, m.to) : 0;
-  const goedType = (m, t) => !!t && (slag(m) < 200 || t.veld !== m.to);
+  /* en de lijn levert dan nog 1,5 punt meer op */
+  const slag = m => slagWint(S, m);
   if (bijzonder(best.m)) return null;
   const t0 = typeVan(S, best.m);
-  if (!goedType(best.m, t0) || types.indexOf(t0.type) < 0) return null;
+  if (!goedType(S, best.m, t0) || types.indexOf(t0.type) < 0) return null;
   const type = t0.type, antwoorden = [best.m];
   for (const x of scores.slice(1)) {
     if (best.score - x.score > 50) {
@@ -127,7 +147,7 @@ function zoekPatroon(rng, types) {
       break;
     }
     const t = bijzonder(x.m) ? null : typeVan(S, x.m);
-    if (!goedType(x.m, t) || t.type !== type) return null;
+    if (!goedType(S, x.m, t) || t.type !== type) return null;
     antwoorden.push(x.m);
   }
   if (antwoorden.length > 2) return null;
@@ -185,15 +205,7 @@ function houdtStand(p) {
    of src/trucs.js zelf; wat de toetsen van nu doorstaat gaat naar de uitvoer */
 function herzie(uitvoer, bronnen) {
   const lijst = [];
-  for (const f of bronnen) {
-    if (/\.js$/.test(f)) {
-      const v = require(path.resolve(f));
-      for (const r of v.TRUC_POOL.concat(v.STUK_POOL)) {
-        const d = r.split('|');
-        lijst.push({ bord: d[0], type: d[1], antwoorden: d[2].split(',') });
-      }
-    } else lijst.push(...JSON.parse(fs.readFileSync(f, 'utf8')));
-  }
+  for (const f of bronnen) lijst.push(...leesBron(f));
   const goed = [], weg = {};
   lijst.forEach((p, i) => {
     if (houdtStand(p)) goed.push(p);
@@ -202,6 +214,32 @@ function herzie(uitvoer, bronnen) {
   });
   fs.writeFileSync(uitvoer, JSON.stringify(goed));
   process.stderr.write('herzien: ' + goed.length + ' van ' + lijst.length + ' blijven; weg: ' + JSON.stringify(weg) + '\n');
+}
+
+/* hertype <uitvoer.json> <bron> ...: alleen waar zwart in de lijn het stuk van
+   de truc slaat en wit elders wint, telt het type van nu: aftrekaanval of geen
+   (dan gaat de regel weg). Elders blijft het type van de voorraad; een
+   zoektocht met een lege tabel kiest soms een andere lijn dan toen. */
+function hertype(uitvoer, bronnen) {
+  const lijst = [];
+  for (const f of bronnen) lijst.push(...leesBron(f));
+  const uit = [], anders = [];
+  for (const p of lijst) {
+    if (['vork', 'penning', 'spies', 'aftrek'].indexOf(p.type) < 0) { uit.push(p); continue; }
+    const S = E.parseFEN(p.bord + ' - - 0 1');
+    E.clearTT();
+    const types = p.antwoorden.map(k => {
+      const m = E.legalMoves(S).find(x => E.moveKey(x) === k), lijn = winstVeld(S, m);
+      if (lijn.geslagenOp < 0 || lijn.veld === lijn.geslagenOp) return p.type;
+      const t = typeUitLijn(S, m, lijn);
+      return goedType(S, m, t) ? t.type : null;
+    });
+    const type = types.every(t => t === types[0]) ? types[0] : null;
+    if (type !== p.type) { anders.push(p.bord + '|' + p.type + '|' + p.antwoorden + ' wordt ' + type); process.stderr.write(anders[anders.length - 1] + '\n'); }
+    if (type) uit.push(Object.assign({}, p, { type }));
+  }
+  fs.writeFileSync(uitvoer, JSON.stringify(uit));
+  process.stderr.write('hergetypeerd: ' + anders.length + ' anders, ' + uit.length + ' van ' + lijst.length + ' blijven\n');
 }
 
 function zoekMat2(rng) {
@@ -234,11 +272,17 @@ function zoek(seconden, zaad, uitvoer, soorten) {
   process.stderr.write(zaad + ' klaar: ' + JSON.stringify(telling) + ' in ' + pogingen + ' pogingen\n');
 }
 
+/* een bron is een deel.json van een werker of src/trucs.js zelf */
+function leesBron(f) {
+  if (!/\.js$/.test(f)) return JSON.parse(fs.readFileSync(f, 'utf8'));
+  const v = require(path.resolve(f));
+  return v.TRUC_POOL.concat(v.STUK_POOL).map(r => { const d = r.split('|'); return { bord: d[0], type: d[1], antwoorden: d[2].split(',') }; });
+}
 function merge(bestanden) {
   const perType = {}, gezien = new Set();
   for (const f of bestanden) {
-    for (const p of JSON.parse(fs.readFileSync(f, 'utf8'))) {
-      if (gezien.has(p.bord)) continue;
+    for (const p of leesBron(f)) {
+      if (gezien.has(p.bord) || AFGEKEURD[p.bord] === p.type) continue;
       gezien.add(p.bord);
       (perType[p.type] = perType[p.type] || []).push(p);
     }
@@ -263,4 +307,5 @@ const [opdracht, ...rest] = process.argv.slice(2);
 if (opdracht === 'zoek') zoek(+rest[0], +rest[1], rest[2], (rest[3] || 'vork,penning,spies,aftrek').split(','));
 else if (opdracht === 'merge') merge(rest);
 else if (opdracht === 'herzie') herzie(rest[0], rest.slice(1));
-else { process.stderr.write('gebruik: zoek <seconden> <zaad> <uitvoer.json> [types, of mat2] | merge <deel.json> ... | herzie <uitvoer.json> <bron> ...\n'); process.exit(1); }
+else if (opdracht === 'hertype') hertype(rest[0], rest.slice(1));
+else { process.stderr.write('gebruik: zoek <seconden> <zaad> <uitvoer.json> [types, of mat2] | merge <deel.json> ... | herzie <uitvoer.json> <bron> ... | hertype <uitvoer.json> <bron> ...\n'); process.exit(1); }

@@ -8,6 +8,13 @@
    Een puzzel heeft minstens een zet die fout is (de schaakcoach): goed is een
    antwoord of een zet die het potje meteen beëindigt, zoals de app oordeelt.
    Zonder foute zet krijgt een kind drie sterren voor de enige zet die er is.
+   Ook weg (de schaakcoach, na een diepere controle): een antwoord dat remise
+   maakt terwijl wit een stuk of meer voor staat, want dan gooit "Gered!" een
+   gewonnen stelling weg; en een foute zet die minder dan 1,5 punt slechter
+   scoort dan het slechtste antwoord, want dan hoort een kind dat een even
+   goede zet fout is. Die laatste toets zoekt elke zet apart, dus loopt hij
+   los: node tools/make-koning.js toets <uitvoer.json> <bron> [deel/aantal],
+   en daarna merge van de uitvoer.
    Draaien: node tools/make-koning.js [aantal] [uitvoerbestand]; parallel: meerdere
    werkers met elk een eigen uitvoerbestand, daarna samenvoegen (zie merge onderaan).
    Samenvoegen houdt ook de regel van de foute zet, dus de bestaande voorraad
@@ -17,7 +24,9 @@
 const fs = require('fs');
 const path = require('path');
 const E = require(path.join(__dirname, '..', 'src', 'engine.js'));
+const DIEP = 400000;
 if (process.argv[2] === 'merge') { mergeOnly(); process.exit(0); }
+if (process.argv[2] === 'toets') { toetsOnly(); process.exit(0); }
 const want = +(process.argv[2] || 150);
 const outFile = process.argv[3] || null;
 const perType = Math.ceil(want / 3) + 10;
@@ -32,7 +41,8 @@ while (pool.length < want) {
   if ((counts[k.type] || 0) >= perType) continue;
   const fen = E.toFEN(k.S);
   if (seen.has(fen)) continue;
-  if (!heeftFouteZet(fen, k.answers.map(a => E.moveKey(a.m)))) continue;
+  const keys = k.answers.map(a => E.moveKey(a.m));
+  if (!heeftFouteZet(fen, keys) || remiseTerwijlVoor(fen, keys) || fouteZetBijna(fen, keys)) continue;
   let leak = false;
   for (const a of k.answers) {
     E.makeMove(k.S, a.m);
@@ -66,21 +76,67 @@ function heeftFouteZet(fen, answers) {
     return !eindigt;
   });
 }
+function remiseTerwijlVoor(fen, answers) {
+  const S = E.parseFEN(fen);
+  if (E.material(S) < 300) return false;
+  return E.legalMoves(S).some(m => {
+    if (answers.indexOf(E.moveKey(m)) < 0) return false;
+    E.makeMove(S, m);
+    const st = E.gameStatus(S);
+    E.unmakeMove(S);
+    return st.over && st.reason !== 'mat';
+  });
+}
+/* Wits score na zet m, elke zet met een lege tabel en hetzelfde knoopbudget. */
+function waardeNa(S, m) {
+  E.makeMove(S, m);
+  const st = E.gameStatus(S);
+  let v;
+  if (st.over) v = st.reason === 'mat' ? E.MATE : 0;
+  else { E.clearTT(); v = -E.think(S, 600000, 10, { nodes: DIEP }).score; }
+  E.unmakeMove(S);
+  return v;
+}
+function fouteZetBijna(fen, answers) {
+  const S = E.parseFEN(fen), zetten = E.legalMoves(S);
+  const isAntwoord = m => answers.indexOf(E.moveKey(m)) >= 0;
+  const eindigt = m => { E.makeMove(S, m); const o = E.gameStatus(S).over; E.unmakeMove(S); return o; };
+  const slechtste = Math.min(...zetten.filter(isAntwoord).map(m => waardeNa(S, m)));
+  return zetten.some(m => !isAntwoord(m) && !eindigt(m) && waardeNa(S, m) > slechtste - 150);
+}
+function leesBron(f) { return /\.js$/.test(f) ? require(path.resolve(f)).KONING_POOL : JSON.parse(fs.readFileSync(f, 'utf8')); }
 /* samenvoegen: node tools/make-koning.js merge <bron> ...; een bron is een
-   deel.json van een werker of src/koning.js zelf */
+   deel.json van een werker of src/koning.js zelf. De goedkope regels hier;
+   de diepe toets van de foute zet doet toets. */
 function mergeOnly() {
   const seen = new Set(), all = [];
-  let zonder = 0;
+  let zonder = 0, remise = 0;
   for (const f of process.argv.slice(3)) {
-    const lijst = /\.js$/.test(f) ? require(path.resolve(f)).KONING_POOL : JSON.parse(fs.readFileSync(f, 'utf8'));
-    for (const p of lijst) {
+    for (const p of leesBron(f)) {
       if (seen.has(p.fen)) continue;
       seen.add(p.fen);
-      if (heeftFouteZet(p.fen, p.answers)) all.push(p);
-      else zonder++;
+      if (!heeftFouteZet(p.fen, p.answers)) zonder++;
+      else if (remiseTerwijlVoor(p.fen, p.answers)) remise++;
+      else all.push(p);
     }
   }
   writePool(all);
-  process.stderr.write('samengevoegd: ' + all.length + ' puzzels, ' + zonder + ' weg zonder foute zet\n');
+  process.stderr.write('samengevoegd: ' + all.length + ' puzzels, ' + zonder + ' weg zonder foute zet, ' + remise + ' weg om remise terwijl wit voor staat\n');
+}
+/* toets <uitvoer.json> <bron> [deel/aantal]: de puzzels die de diepe toets
+   doorstaan; een deel is een aaneengesloten stuk, zodat de delen samen de
+   volgorde van de bron houden */
+function toetsOnly() {
+  const [uitvoer, bron, deel] = process.argv.slice(3);
+  const lijst = leesBron(bron), [i, n] = (deel || '0/1').split('/').map(Number);
+  const van = Math.floor(lijst.length * i / n), tot = Math.floor(lijst.length * (i + 1) / n);
+  const goed = [];
+  for (let j = van; j < tot; j++) {
+    const p = lijst[j];
+    if (fouteZetBijna(p.fen, p.answers)) process.stderr.write('weg: ' + j + ' ' + p.fen + ' ' + p.answers + '\n');
+    else goed.push(p);
+    fs.writeFileSync(uitvoer, JSON.stringify(goed));
+  }
+  process.stderr.write('getoetst: ' + goed.length + ' van ' + (tot - van) + ' blijven\n');
 }
 process.stderr.write('klaar: ' + pool.length + ' puzzels ' + JSON.stringify(counts) + ' in ' + Math.round((Date.now() - t0) / 1000) + 's\n');
