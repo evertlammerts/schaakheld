@@ -1489,7 +1489,8 @@ function moveMoment(S, m) {
     unmakeMove(S);
     const taken = victim ? { sq: alg(t), piece: NAME_NL[victim.toLowerCase()], points: POINTS[victim.toLowerCase()] } : {};
     if (undefended) {
-      const d = findAttacker(S, t, 'w');
+      /* taken where it went itself: no guard of that square went away */
+      const d = t === m.to ? -1 : findAttacker(S, t, 'w');
       return Object.assign(base, { kind: 'hang', loss: bc.loss, punish: moveKey(bc.punish),
         defender: d >= 0 ? NAME_NL[S.board[d].toLowerCase()] : null, moved: d >= 0 && d === m.from }, taken);
     }
