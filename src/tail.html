@@ -3971,7 +3971,7 @@ function onKidMove(m) {
       showModal('<div class="m-emoji">🐢❗</div><h2>Wacht even!</h2>' +
         '<p>Deze zet kan je een stuk kosten!<br>Kijk nog eens goed: wat kan Turbo hierna állemaal doen?</p>' +
         '<div class="m-btns"><button class="btn sun" id="gLook">🔍 Ik kijk nog even</button>' +
-        '<button class="btn coral" id="gGo">Toch doen! 😤</button></div>', () => {
+        '<button class="btn plain" id="gGo">Ik weet het zeker</button></div>', () => {
           $('gLook').addEventListener('click', () => { closeModal(); BD.mode = 'move'; renderBoard(); });
           $('gGo').addEventListener('click', () => { closeModal(); commitKid(m); });
         });
@@ -4046,7 +4046,7 @@ function askPredict(m) {
   session.pending = m;
   BD.mode = 'predict';
   strookModus('predict');
-  say('Denk vooruit: wat is Turbo van plan? Tik zijn stuk aan. 🔮');
+  say('Wat is Turbo van plan? Tik zijn stuk aan. 🔮');
 }
 
 function resolvePredict(sq) {

@@ -564,6 +564,11 @@
   }
   .play-strip .mascot { flex: none; width: 28px; height: 28px; font-size: 18px; display: grid; place-items: center; }
   .play-strip .s-txt { flex: 1; min-width: 0; max-height: 100%; overflow-y: auto; font-size: var(--fs-md); line-height: 1.35; }
+  /* langere tekst scrolt in de strook; een zachte rand onderaan zegt dat er meer staat */
+  .play-strip::after { content: ''; position: absolute; left: 0; right: 0; bottom: 10px; height: 10px;
+    background: linear-gradient(rgba(255, 255, 255, 0), var(--strip-bg, #FFFFFF)); pointer-events: none; }
+  .play-strip.predict { --strip-bg: var(--violet-soft); }
+  .play-strip.cloud { --strip-bg: var(--cloud-soft); }
   .play-strip.predict { background: var(--violet-soft); }
   .play-strip.cloud { background: var(--cloud-soft); border: 2px dashed var(--cloud); }
   .play-strip.cloud #bubble { display: none; }
@@ -637,6 +642,8 @@
     .tegen { order: 3; flex-basis: 100%; }
     .meer-btn { margin-left: auto; }
     .play-bottom .action-row { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
+    .play-bottom .action-row .btn { white-space: normal; }
+    .play-bottom .action-row .btn.sun, .play-bottom .action-row .btn.leaf { grid-column: 1 / -1; }
     .play-strip { margin: 0; height: auto; min-height: 88px; max-height: 180px; }
   }
   @media (orientation: landscape) and (min-width: 1100px) { .play { --side: 340px; } }
@@ -6396,7 +6403,7 @@ function onKidMove(m) {
       showModal('<div class="m-emoji">🐢❗</div><h2>Wacht even!</h2>' +
         '<p>Deze zet kan je een stuk kosten!<br>Kijk nog eens goed: wat kan Turbo hierna állemaal doen?</p>' +
         '<div class="m-btns"><button class="btn sun" id="gLook">🔍 Ik kijk nog even</button>' +
-        '<button class="btn coral" id="gGo">Toch doen! 😤</button></div>', () => {
+        '<button class="btn plain" id="gGo">Ik weet het zeker</button></div>', () => {
           $('gLook').addEventListener('click', () => { closeModal(); BD.mode = 'move'; renderBoard(); });
           $('gGo').addEventListener('click', () => { closeModal(); commitKid(m); });
         });
@@ -6471,7 +6478,7 @@ function askPredict(m) {
   session.pending = m;
   BD.mode = 'predict';
   strookModus('predict');
-  say('Denk vooruit: wat is Turbo van plan? Tik zijn stuk aan. 🔮');
+  say('Wat is Turbo van plan? Tik zijn stuk aan. 🔮');
 }
 
 function resolvePredict(sq) {
