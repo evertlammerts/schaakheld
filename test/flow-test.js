@@ -420,19 +420,22 @@ ok('game: turbo replied', session.S.hist.length === 2 && session.S.turn === 'w')
 /* predict window, driven directly: correct guess pays out */
 var pm = pickMove(session.S, 2);
 askPredict(pm);
-ok('predict: bar shown, timer armed', BD.mode === 'predict' &&
-  !!session.pending && !!session.predictTimer);
+ok('[2.8] predict: de vraag staat in de strook en er loopt geen klok', BD.mode === 'predict' &&
+  !!session.pending && !session.predictTimer && !__els.predictBar.classList.contains('hidden'));
 var xpBefore = P.xp;
 resolvePredict(pm.from); /* correct prediction */
 ok('predict: bonus +15', P.xp - xpBefore >= 15);
 ok('predict: bar hidden again', __els.predictBar.classList.contains('hidden'));
-/* predict timeout: no tap needed, the move plays by itself, no bonus */
+/* Turbo wacht op een tik, hoe lang het ook duurt; "Speel maar" laat hem zetten, zonder bonus */
 var pm2 = pickMove(session.S, 2);
 var hBefore = session.S.hist.length;
 var xpB2 = P.xp;
 askPredict(pm2);
-drainTimers(); /* fires the window timeout -> auto-resolve */
-ok('predict: timeout auto-plays, no bonus', session.S.hist.length === hBefore + 1 && P.xp === xpB2);
+drainTimers();
+ok('[2.8] predict: Turbo wacht, ook na lang wachten', session.S.hist.length === hBefore && BD.mode === 'predict');
+fire(__els.predictSkip, 'click');
+drainTimers();
+ok('[2.8] predict: Speel maar laat Turbo zetten, zonder bonus', session.S.hist.length === hBefore + 1 && P.xp === xpB2);
 /* double-resolve is harmless */
 resolvePredict(0);
 ok('predict: double resolve is a no-op', session.S.hist.length === hBefore + 1);
@@ -1427,10 +1430,10 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   MP = { room: 'r', seat: 's', host: true, myColor: 'w', gameNo: 1, revMine: false,
     revTheirs: false, peerName: 'Fien', open: false, weg: false };
   mpBeginGame();
-  ok('mp: stopknop staat onderaan, niet tegen het bord',
-    __els.actionRow.classList.contains('onderaan'));
+  ok('[2.3] mp: opgeven en remise staan achter ⋯, niet onder het bord', !actionBtns.mpStopBtn && !actionBtns.drawBtn);
   /* een potje verlaat je niet zomaar: de knop is opgeven, en die vraagt eerst */
-  fire(actionBtns.mpStopBtn, 'click');
+  fire(__els.meerBtn, 'click');
+  fire(document.getElementById('meerOpgeven'), 'click');
   ok('mp: opgeven vraagt eerst om bevestiging',
     __els.modalBox.innerHTML.indexOf('Opgeven?') >= 0 && __els.modalBox.innerHTML.indexOf('Fien') >= 0 &&
     !!MP && !!session && session.over !== true);
@@ -1440,7 +1443,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     __els.overlay.classList.contains('hidden'));
   /* opgeven: het potje is voorbij, het maatje wint, de kamer blijft voor revanche */
   var gpVoor = P.c.gamesPlayed;
-  fire(actionBtns.mpStopBtn, 'click');
+  fire(__els.meerBtn, 'click');
+  fire(document.getElementById('meerOpgeven'), 'click');
   fire(__els.rsJa, 'click');
   await tikje();
   ok('mp: na ja is het potje afgelopen en wint het maatje', !!MP && !!session && session.over === true &&
@@ -1981,8 +1985,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   /* tegen Turbo: opgeven vraagt, weglopen is opgeven, remise alleen bij een echt gelijke stand */
   startGame(2);
   drainTimers();
-  ok('offline: knoppenrij staat weer onder het bord en heeft opgeven en remise',
-    !__els.actionRow.classList.contains('onderaan') && !!actionBtns.resignBtn && !!actionBtns.drawBtn);
+  ok('[2.3] turbo: de hulpjes staan onder het bord, opgeven en remise achter ⋯',
+    !!actionBtns.cloudBtn && !!actionBtns.tip && !!actionBtns.undo && !actionBtns.resignBtn && !actionBtns.drawBtn);
   offerDraw();
   ok('turbo: remise meteen aan het begin wordt afgewimpeld', session.over !== true &&
     __els.bubble.innerHTML.indexOf('net begonnen') >= 0);
@@ -1995,7 +1999,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('[1.1] turbo: daarna begint een nieuw potje zonder vraag', session !== null && session.over !== true &&
     __els.overlay.classList.contains('hidden'));
   var gpT = P.c.gamesPlayed, xpT = P.xp;
-  fire(actionBtns.resignBtn, 'click');
+  fire(__els.meerBtn, 'click');
+  fire(document.getElementById('meerOpgeven'), 'click');
   fire(__els.rsJa, 'click');
   drainTimers();
   ok('turbo: opgeven aan het begin = Turbo wint, telt niet, geen XP', session.over === true &&

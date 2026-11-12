@@ -550,7 +550,6 @@ function syncSoon() {
 function refreshAfterSync() {
   updateHud();
   applyTheme();
-  updateToggles();
   if (!session) renderHome();
 }
 
@@ -826,9 +825,7 @@ function mpStop(stil) {
   if (!stil) mpSend({ t: 'weg' });
   try { if (MP.ws) MP.ws.close(); } catch (e) {}
   MP = null;
-  const frame = document.querySelector('.board-frame');
-  if (frame) frame.classList.remove('flip');
-  $('trayTurboLabel').textContent = 'Turbo pakte:';
+  draaiBord(false);
 }
 
 /* de verbinding komt niet meer terug: eerlijk zeggen en naar huis. Ook
@@ -1013,24 +1010,18 @@ function mpBeginGame() {
   session = { kind: 'game', online: true, S: newGame(), level: 0, tips: 0,
     over: false, pending: null, myColor: MP.myColor };
   showScreen('play');
-  $('modeTitle').textContent = '🤝 Samen spelen';
-  $('roundChip').textContent = mpNaam();
-  $('trayTurboLabel').textContent = mpNaam() + ' pakte:'; /* textContent: geen escHtml */
+  $('modeTitle').textContent = '🤝 ' + mpNaam(); /* textContent: geen escHtml */
+  $('roundChip').textContent = '';
   clearBD();
-  const frame = document.querySelector('.board-frame');
-  if (frame) frame.classList.toggle('flip', MP.myColor === 'b');
+  draaiBord(MP.myColor === 'b');
   renderBoard();
   setTask(null);
   setOptions(null);
   $('drillStars').classList.add('hidden');
-  $('gameInfo').classList.remove('hidden');
   $('patience').classList.add('hidden');
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
   updateTrays();
-  updateToggles();
-  setActions([{ label: '🤝 Remise?', cls: 'plain small', fn: offerDraw, id: 'drawBtn' },
-    { label: '🏳️ Opgeven', cls: 'plain small', fn: resignAsk, id: 'mpStopBtn' }]);
-  $('actionRow').classList.add('onderaan');
+  setActions([]);
   if (MP.myColor === 'w') {
     BD.mode = 'move';
     say('Jij speelt met wit tegen ' + mpNaam() + '. Jij mag beginnen! ⬜');
@@ -1091,8 +1082,7 @@ function mpOnSync(m) {
   clearSel();
   BD.last = null;
   BD.check = inCheck(S) ? S.kings[S.turn] : null;
-  const frame = document.querySelector('.board-frame');
-  if (frame) frame.classList.toggle('flip', MP.myColor === 'b');
+  draaiBord(MP.myColor === 'b');
   renderBoard();
   updateTrays();
   /* de stand kan al uit zijn (mat tijdens het verbindingsgat): dan meteen
@@ -1919,14 +1909,31 @@ const cellEls = {};
       const sq = rank * 16 + file;
       const b = document.createElement('button');
       b.className = 'cell ' + (((rank + file) % 2 === 1) ? 'light' : 'dark');
-      if (file === 0) { const c = document.createElement('span'); c.className = 'coord rank'; c.textContent = rank + 1; b.appendChild(c); }
-      if (rank === 0) { const c = document.createElement('span'); c.className = 'coord file'; c.textContent = 'abcdefgh'[file]; b.appendChild(c); }
       b.addEventListener('click', () => onCell(sq));
       boardEl.appendChild(b);
       cellEls[sq] = b;
     }
   }
+  zetCoords(false);
 })();
+/* de letters en cijfers staan naast het bord en volgen het omgedraaide bord */
+function zetCoords(zwart) {
+  const r = [8, 7, 6, 5, 4, 3, 2, 1], f = 'abcdefgh'.split('');
+  if (zwart) { r.reverse(); f.reverse(); }
+  $('coordsR').innerHTML = r.map(x => '<span>' + x + '</span>').join('');
+  $('coordsF').innerHTML = f.map(x => '<span>' + x + '</span>').join('');
+}
+function draaiBord(zwart) {
+  const frame = document.querySelector('.board-frame');
+  if (frame) frame.classList.toggle('flip', zwart);
+  zetCoords(zwart);
+}
+/* iOS 15 kent geen dvh, en 100vh is in een Safari-tab hoger dan wat je ziet */
+function setAppH() { document.documentElement.style.setProperty('--app-h', innerHeight + 'px'); }
+addEventListener('resize', setAppH);
+/* direct na het draaien meldt iOS nog de oude innerHeight */
+addEventListener('orientationchange', () => setTimeout(setAppH, 300)); /* compat-allow api.HTMLBodyElement.orientationchange_event: waar hij ontbreekt vangt resize het al op */
+setAppH();
 
 const BD = { mode: 'off', sel: null, dots: new Set(), marks: new Set(), last: null,
   check: null, glow: new Set(), spy: new Set(), result: null, arrows: [] };
@@ -1994,7 +2001,7 @@ function animateMove(m, done) {
   const fr = fromEl.getBoundingClientRect(), tr = toEl.getBoundingClientRect();
   const g = document.createElement('span');
   g.className = 'ghost';
-  g.style.width = fr.width + 'px'; g.style.height = fr.height + 'px';
+  g.style.width = fr.width + 'px'; g.style.height = fr.height + 'px'; g.style.fontSize = (fr.width * .72) + 'px';
   /* schermcoordinaten op document.body (position: fixed): rotatie-
      onafhankelijk, dus ook goed onder .board-frame.flip */
   g.style.left = fr.left + 'px'; g.style.top = fr.top + 'px';
@@ -2032,8 +2039,18 @@ function playMove(m, cb) {
 
 /* ---------- panel helpers ---------- */
 function say(txt) { $('bubble').innerHTML = txt; }
-function setTask(html) {
+/* de strook laat een ding tegelijk zien: de voorspelvraag, de denkwolk of Turbo's zin */
+function strookModus(m) {
+  $('strook').classList.toggle('predict', m === 'predict');
+  $('strook').classList.toggle('cloud', m === 'cloud');
+  $('predictBar').classList.toggle('hidden', m !== 'predict');
+  $('cloudBar').classList.toggle('hidden', m !== 'cloud');
+}
+/* de uitleg na een antwoord staat onder het bord, met Volgende erboven;
+   de openingsles zet er ook de opdracht van de volgende zet, zonder Volgende */
+function setTask(html, uitleg) {
   const t = $('taskBox');
+  $('onder').classList.toggle('uitleg', html != null && uitleg !== false);
   if (html == null) { t.classList.add('hidden'); return; }
   t.innerHTML = html;
   t.classList.remove('hidden');
@@ -2048,7 +2065,6 @@ const actionBtns = {};
 function setActions(list) {
   const row = $('actionRow');
   row.innerHTML = '';
-  row.classList.remove('onderaan'); /* standaard vlak onder het bord; mp zet hem laag */
   for (const k in actionBtns) delete actionBtns[k];
   for (const a of list) {
     const b = document.createElement('button');
@@ -2150,12 +2166,14 @@ document.addEventListener('pointerdown', e => {
 function showScreen(name) {
   $('scr-home').classList.toggle('hidden', name !== 'home');
   $('scr-play').classList.toggle('hidden', name !== 'play');
+  document.body.classList.toggle('speelt', name === 'play');
+  $('play').classList.toggle('task', name === 'play' && !!session && session.kind !== 'game');
+  setAppH();
   try { window.scrollTo(0, 0); } catch (e) {}
   if (name === 'play') {
     $('backBtn').textContent = session && session.online ? '← Home' : '‹ Pauze';
     $('bewaard').classList.add('hidden');
     terugTab = laatsteTab;
-    try { $('board').scrollIntoView({ block: 'nearest' }); } catch (e) {}
   }
 }
 
@@ -2268,9 +2286,8 @@ function goHome(tab) {
   clearBD();
   closeModal();
   spin(false);
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
   $('patience').classList.add('hidden');
-  $('cloudBar').classList.add('hidden');
   $('meters').classList.add('hidden');
   const cloudFrame = document.querySelector('.board-frame');
   if (cloudFrame) cloudFrame.classList.remove('cloud', 'flip');
@@ -2462,9 +2479,8 @@ function startDrill(kind) {
   session = { kind, S: null, round: verder ? verder.round : 0, earned: verder ? verder.earned : 0, task: null, phase: 'idle', lastType: null };
   showScreen('play');
   $('modeTitle').textContent = MODE_TITLES[kind];
-  $('gameInfo').classList.add('hidden');
   $('patience').classList.add('hidden');
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
   $('drillStars').classList.remove('hidden');
   setTask(null); setOptions(null);
   updateDrillStars();
@@ -2475,9 +2491,8 @@ function startDrill(kind) {
 function updateDrillStars() {
   if (!session || session.kind === 'game') return;
   const vorm = vormTxt(session.kind);
-  $('drillStars').innerHTML = '⭐ Sterren dit rondje: <b>' + session.earned + '</b>' +
-    (P.streak >= 2 ? ' &nbsp;·&nbsp; 🔥 <b>' + P.streak + '</b> op een rij!' : '') +
-    (vorm ? ' &nbsp;·&nbsp; ' + vorm : '');
+  $('drillStars').innerHTML = '⭐ ' + session.earned + (P.streak >= 2 ? ' · 🔥 ' + P.streak + ' op een rij' : '') +
+    (vorm ? ' · ' + vorm : '');
 }
 
 function nextRound() {
@@ -2486,6 +2501,7 @@ function nextRound() {
   session.S = null;
   renderBoard();
   setOptions(null);
+  setTask(null);
   session.round++;
   if (session.round > 5) { drillSummary(); return; }
   $('roundChip').textContent = 'Opdracht ' + session.round + ' van 5';
@@ -2548,11 +2564,7 @@ function buildTrucs() {
   BD.mode = 'puzzle';
   renderBoard();
   const tx = TRUC_TEXTS[task.type];
-  setTask('<b>' + tx[0] + '</b><div class="sub">' + tx[1] + '<br>' + PATTERNS[task.type].e + ' ' +
-    PATTERNS[task.type].les + '</div>');
-  say(pick(['Deze truc zit verstopt in het bord. Vind hem! 🎒',
-    'Echte schakers zien deze meteen… jij straks ook! 🐢',
-    'Speur rustig. De truc is er, beloofd!']));
+  say('<b>' + tx[0] + '</b> ' + tx[1] + ' ' + PATTERNS[task.type].e + ' ' + PATTERNS[task.type].les);
   setActions([{ label: '💡 Hint', cls: 'plain small', fn: trucHint, id: 'hint' }]);
   return true;
 }
@@ -2733,8 +2745,7 @@ function buildScan() {
     main = 'Welk groen stuk kun je met WINST slaan? Tik het aan!';
     sub = 'Helemaal gratis is het mooiste! Maar een goede ruil telt ook: dan win jij méér punten dan Turbo terugpakt. Soms zijn er twee!';
   }
-  setTask('<b>' + main + '</b><div class="sub">' + sub + '</div>');
-  say(pick(['Speuren maar! Neem rustig de tijd. 🔍', 'Kijk het héle bord rond, hoekje voor hoekje!', 'Echte speurneuzen missen niks! 👀']));
+  say('<b>' + main + '</b> ' + sub);
   setActions([{ label: 'Klaar! ✔', cls: 'leaf', fn: scanCheck }]);
   return true;
 }
@@ -2764,7 +2775,8 @@ function scanCheck() {
     setTask('<b>Zo zit het:</b><div class="sub">' +
       expl.map(e => '<div class="expl-line">' + e + '</div>').join('') + '</div>');
   }
-  awardRound(stars, msgs[stars]);
+  /* de eerste reden staat ook boven het bord, ook als de uitleg eronder nog moet scrollen */
+  awardRound(stars, msgs[stars] + (expl.length ? ' ' + expl[0].replace(/^[^A-Za-zÀ-ÿ<]+/, '') : ''));
 }
 
 /* Kid points from centipawns, consistent with the Puntenwijzer (queen 950 -> 9). */
@@ -2881,9 +2893,7 @@ function buildSafe() {
   BD.mode = 'off';
   BD.arrows = [{ from: task.move.from, to: task.move.to, cls: 'a-sun' }];
   renderBoard();
-  setTask('Jij (wit) wilt deze zet doen:<br><b>' + moveNameNL(task.S, task.move) + '</b>' +
-    '<div class="sub">Denk éérst vooruit: wat kan Turbo dáárna allemaal doen?</div>');
-  say('Is dit veilig? Of pakt Turbo dan iets van je af? 🤔');
+  say('Jij (wit) wilt deze zet doen: <b>' + moveNameNL(task.S, task.move) + '</b>. Is dit veilig? Of pakt Turbo dan iets van je af? 🤔');
   setOptions('<div class="answer-row">' +
     '<button id="ansSafe" class="btn leaf">✅ Veilig!</button>' +
     '<button id="ansTrap" class="btn coral">⚠️ Valstrik!</button></div>');
@@ -2946,9 +2956,7 @@ function buildBest3() {
   session.diff = Math.min(1, Math.max(.2, 1 - (gap - 180) / 1200));
   BD.mode = 'off';
   renderBoard();
-  setTask('<b>Welke zet is de BESTE voor wit?</b>' +
-    '<div class="sub">Tik een zet aan om hem op het bord te zien. Denk bij élke zet: wat doet Turbo daarna? Kies pas als je alle drie hebt bekeken!</div>');
-  say('Kijk eerst alle drie! Pas kiezen als je zeker bent. 🐢');
+  say('<b>Welke zet is de BESTE voor wit?</b> Tik een zet aan om hem op het bord te zien. Denk bij élke zet: wat doet Turbo daarna?');
   let h = '';
   task.options.forEach((o, i) => {
     h += '<button class="opt-btn" data-i="' + i + '"><span class="opt-tag">' + 'ABC'[i] + '</span><span>' +
@@ -3127,9 +3135,7 @@ function buildKoning() {
   if (task.type !== 'stuk') BD.check = task.S.kings.w;
   renderBoard();
   const tx = KONING_TEXTS[task.type];
-  setTask('<b>' + tx[0] + '</b><div class="sub">' + tx[1] + '</div>');
-  say(task.type === 'stuk' ? 'Kijk eerst: welk stuk van jou wordt aangevallen, en door wie? 🐢' :
-    'Kijk eerst: welk stuk van mij valt aan? En waar kan je koning nog heen? 🐢');
+  say('<b>' + tx[0] + '</b> ' + tx[1]);
   setActions([{ label: '💡 Hint', cls: 'plain small', fn: koningHint, id: 'hint' }]);
   return true;
 }
@@ -3361,9 +3367,8 @@ function startOpening(mode, pad) {
     diff: mode === 'pad' ? .5 : .6, t0: Date.now() };
   showScreen('play');
   $('modeTitle').textContent = '📖 ' + (pad ? pad.naam : 'De vier regels');
-  $('gameInfo').classList.add('hidden');
   $('patience').classList.add('hidden');
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
   $('drillStars').classList.remove('hidden');
   $('meters').classList.toggle('hidden', mode !== 'coach');
   setTask(null); setOptions(null);
@@ -3399,10 +3404,10 @@ function kidOpeningTurn() {
   if (actionBtns.hint) actionBtns.hint.disabled = false;
   /* na een zet blijft de uitleg van die zet staan; de volgende tip staat in het taakvak */
   if (session.mode === 'pad') {
-    setTask('<b>Zet ' + (session.kidMoves + 1) + '</b><div class="sub">' + session.pad.hint[session.kidMoves] + '</div>');
+    setTask('<b>Zet ' + (session.kidMoves + 1) + '</b><div class="sub">' + session.pad.hint[session.kidMoves] + '</div>', false);
     if (session.kidMoves === 0) say('Speel het pad na. Bij elke zet vertel ik waarom hij goed is. 📖');
   } else {
-    setTask('<b>Jouw zet</b><div class="sub">Midden pakken, een stuk naar buiten, of je koning veilig. Kijk ook wat Turbo dreigt!</div>');
+    setTask('<b>Jouw zet</b><div class="sub">Midden pakken, een stuk naar buiten, of je koning veilig. Kijk ook wat Turbo dreigt!</div>', false);
     if (session.kidMoves === 0) say('Speel maar! Ik geef sterren voor elke zet die iets opbouwt. 🧭');
   }
 }
@@ -3600,17 +3605,15 @@ function startGame(level, bewaard) {
     pending: null, drawAsked: bewaard ? bewaard.r.drawAsked : null, started: bewaard ? bewaard.r.started : Date.now(),
     patXP: bewaard ? bewaard.r.patXP || 0 : 0 };
   showScreen('play');
-  $('modeTitle').textContent = MODE_TITLES.game;
-  $('roundChip').textContent = TURBO_NAMES[level];
+  $('modeTitle').textContent = TURBO_NAMES[level];
+  $('roundChip').textContent = '';
   clearBD();
   renderBoard();
   setTask(null); setOptions(null);
   $('drillStars').classList.add('hidden');
-  $('gameInfo').classList.remove('hidden');
   $('patience').classList.remove('hidden');
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
   updateTrays();
-  updateToggles();
   gameActions();
   const laatste = session.S.hist[session.S.hist.length - 1];
   if (laatste) BD.last = [laatste.m.from, laatste.m.to];
@@ -3624,11 +3627,9 @@ function startGame(level, bewaard) {
 
 function gameActions() {
   setActions([
-    { label: '☁️ Denkwolk', cls: 'plain small', fn: enterCloud, id: 'cloudBtn' },
-    { label: '↩ Zet terug', cls: 'plain small', fn: undoMove, id: 'undo' },
-    { label: '👀 Speurbril (' + session.tips + ')', cls: 'plain small', fn: useTip, id: 'tip' },
-    { label: '🤝 Remise?', cls: 'plain small', fn: offerDraw, id: 'drawBtn' },
-    { label: '🏳️ Opgeven', cls: 'plain small', fn: resignAsk, id: 'resignBtn' }
+    { label: '☁️ Denkwolk', cls: 'plain small helper', fn: enterCloud, id: 'cloudBtn' },
+    { label: '👀 Speurbril (' + session.tips + ')', cls: 'plain small helper', fn: useTip, id: 'tip' },
+    { label: '↩ Zet terug', cls: 'plain small helper', fn: undoMove, id: 'undo' }
   ]);
   if (actionBtns.tip) actionBtns.tip.title = 'Laat alle aangevallen stukken even oplichten. Drie keer per potje.';
   if (actionBtns.cloudBtn) actionBtns.cloudBtn.title = 'Oefenbord: probeer zetten uit zonder dat het telt.';
@@ -3733,7 +3734,7 @@ function enterCloud() {
   BD.mode = 'cloud';
   const frame = document.querySelector('.board-frame');
   if (frame) frame.classList.add('cloud');
-  $('cloudBar').classList.remove('hidden');
+  strookModus('cloud');
   updateCloudBar();
   renderBoard();
   cloudActions();
@@ -3806,7 +3807,7 @@ function exitCloud() {
   BD.mode = 'move';
   const frame = document.querySelector('.board-frame');
   if (frame) frame.classList.remove('cloud');
-  $('cloudBar').classList.add('hidden');
+  strookModus(null);
   renderBoard();
   gameActions();
   say('En, plan klaar? Doe je zet in het écht! 🐢');
@@ -3981,6 +3982,7 @@ function onKidMove(m) {
 
 function commitKid(m) {
   if (!session || session.kind !== 'game') return;
+  BD.spy.clear();
   stopPatience();
   if (!session.online && patFull) {
     addXP(5, 'Denk-bonus! 🐢');
@@ -4037,30 +4039,21 @@ function turboTurn() {
   }, 80);
 }
 
-/* Non-blocking predict window: guessing is optional, Turbo plays by himself
-   when the timer runs out. Tapping a green piece counts as the prediction. */
-const PREDICT_MS = 4000;
+/* De voorspelvraag wacht: een tik op een groen stuk is de voorspelling,
+   "Speel maar" slaat hem over. Er loopt geen klok die de zet afpakt. */
 function askPredict(m) {
   session.pending = m;
   BD.mode = 'predict';
-  $('predictBar').classList.remove('hidden');
-  say('Denk vooruit: wat is Turbo van plan? 🔮');
-  const t = $('predictTimer');
-  t.style.transition = 'none';
-  t.style.width = '100%';
-  void t.offsetWidth;
-  t.style.transition = 'width ' + PREDICT_MS + 'ms linear';
-  t.style.width = '0%';
-  session.predictTimer = later(() => resolvePredict(null), PREDICT_MS + 100);
+  strookModus('predict');
+  say('Denk vooruit: wat is Turbo van plan? Tik zijn stuk aan. 🔮');
 }
 
 function resolvePredict(sq) {
   if (!session || session.kind !== 'game' || !session.pending) return;
-  clearTimeout(session.predictTimer);
   const m = session.pending;
   session.pending = null;
   BD.mode = 'off';
-  $('predictBar').classList.add('hidden');
+  strookModus(null);
   if (sq != null) {
     if (sq === m.from) {
       addXP(15, 'Goed voorspeld! 🔮');
@@ -4107,7 +4100,7 @@ function startPatience() {
   const step = () => {
     const f = Math.min(1, (performance.now() - patT0) / PAT_MS);
     $('patFill').style.width = (f * 100) + '%';
-    $('patTurtle').style.left = 'calc(' + (f * 100) + '% - ' + Math.round(f * 28) + 'px)';
+    $('patTurtle').style.left = 'calc(' + (f * 100) + '% - ' + Math.round(f * 16) + 'px)';
     if (f >= 1) { patFull = true; track.classList.add('full'); return; }
     patRAF = requestAnimationFrame(step);
   };
@@ -4146,8 +4139,7 @@ function useTip() {
   }
   BD.spy = spy;
   renderBoard();
-  say('Paarse randjes = die stukken worden aangevallen! Kijk snel, hij werkt maar even! 👀');
-  later(() => { BD.spy.clear(); if (session && session.kind === 'game') renderBoard(); }, 4500);
+  say('Paarse randjes = die stukken worden aangevallen! Ze blijven staan tot je zet. 👀');
 }
 
 const PTS = { p: 1, n: 3, b: 3, r: 5, q: 9 };
@@ -4164,16 +4156,56 @@ function updateTrays() {
     if (isWhitePiece(u.cap) === mijnWit) { tur += glyph; dt += PTS[t] || 0; }
     else { kid += glyph; dk += PTS[t] || 0; }
   }
-  $('trayKid').innerHTML = kid || '<span style="opacity:.4">nog niks</span>';
-  $('trayTurbo').innerHTML = tur || '<span style="opacity:.4">nog niks</span>';
-  const diff = dk - dt;
-  $('matKid').textContent = diff > 0 ? '+' + diff + ' punten! 😃' : '';
-  $('matTurbo').textContent = diff < 0 ? '+' + (-diff) + ' punten 😬' : '';
+  session.geslagen = { kid, tur };
+  /* uit de stukken die er staan, niet uit wat geslagen is: zo telt een promotie mee */
+  let mat = 0;
+  for (let sq = 0; sq < 128; sq++) {
+    const p = (sq & 0x88) ? null : S.board[sq];
+    if (p) mat += (PTS[p.toLowerCase()] || 0) * (isWhitePiece(p) === mijnWit ? 1 : -1);
+  }
+  session.verschil = mat;
+  $('verschil').textContent = mat > 0 ? '♟ Jij +' + mat : mat < 0 ? '♟ ' + tegenNaam() + ' +' + (-mat) : '';
 }
-
-function updateToggles() {
-  $('tglGuard').classList.toggle('on', P.guard);
-  $('tglPredict').classList.toggle('on', P.predict);
+function tegenNaam() { return session && session.online ? mpNaam() : 'Turbo'; }
+function punten(n) { return n + (n === 1 ? ' punt' : ' punten'); }
+/* het blad met geslagen stukken: wat het getal in de balk betekent */
+function openMateriaal() {
+  if (!session || session.kind !== 'game') return;
+  updateTrays();
+  const d = session.verschil, wie = escHtml(tegenNaam()), g = session.geslagen;
+  showModal('<h2>' + (d > 0 ? 'Jij pakte ' + punten(d) + ' meer dan ' + wie + '.' :
+    d < 0 ? wie + ' pakte ' + punten(-d) + ' meer dan jij.' : 'Jullie hebben evenveel punten.') + '</h2>' +
+    '<p>Pion 1, paard 3, loper 3, toren 5, dame 9.</p>' +
+    '<div class="tray">Jij pakte:<div class="tray-pcs">' + (g.kid || 'nog niks') + '</div></div>' +
+    '<div class="tray">' + wie + ' pakte:<div class="tray-pcs">' + (g.tur || 'nog niks') + '</div></div>' +
+    '<div class="m-btns"><button class="btn sun" id="matOk">Oké</button></div>', () => {
+      $('matOk').addEventListener('click', closeModal);
+    }, true);
+}
+function puntenwijzer() {
+  showModal('<h2>🏅 Puntenwijzer</h2><div class="points-row">' +
+    [['♟︎', 1], ['♞︎', 3], ['♝︎', 3], ['♜︎', 5], ['♛︎', 9], ['♚︎', '∞']].map(c =>
+      '<span class="pt-chip"><span class="pt-glyph">' + c[0] + '</span>' + c[1] + '</span>').join('') + '</div>' +
+    '<p>Evenveel punten = eerlijke ruil. Paard tegen loper? Allebei 3, prima! ' +
+    'Minder punten geven dan pakken = winst. En de koning ruil je nooit. 😉</p>' +
+    '<div class="m-btns"><button class="btn sun" id="pwOk">Oké</button></div>', () => {
+      $('pwOk').addEventListener('click', closeModal);
+    }, true);
+}
+/* ⋯: wat je maar af en toe nodig hebt */
+function openMeer() {
+  if (!session) return;
+  const potje = session.kind === 'game' && !session.over;
+  const knoppen = (potje ? [['meerRemise', '🤝 Remise aanbieden'], ['meerOpgeven', '🏳️ Opgeven']] : [])
+    .concat([['meerPunten', '🏅 Puntenwijzer']])
+    .concat(potje && !session.online ? [['meerHulp', '⚙️ Hulp aan of uit']] : []);
+  showModal('<div class="m-btns">' + knoppen.map(k => '<button class="btn plain" id="' + k[0] + '">' + k[1] + '</button>').join('') + '</div>', () => {
+    const doe = (id, fn) => { if ($(id)) $(id).addEventListener('click', () => { closeModal(); fn(); }); };
+    doe('meerRemise', offerDraw);
+    doe('meerOpgeven', resignAsk);
+    doe('meerPunten', puntenwijzer);
+    doe('meerHulp', openSettings);
+  }, true);
 }
 
 /* einde van een online potje: neutrale taal (geen Turbo), geen XP (dat
@@ -4684,9 +4716,18 @@ function showHomeTab(name) {
    op het startscherm en maakten het druk */
 function openSettings() {
   showModal('<div class="m-emoji">⚙️</div><h2>Instellingen</h2>' +
-    '<div class="m-btns"><button class="btn sun" id="setLink">🔑 Speel op een ander apparaat</button>' +
+    '<div class="m-btns"><button class="btn plain tgl" id="tglGuard">🛡️ Blunder-alarm</button>' +
+    '<button class="btn plain tgl" id="tglPredict">🔮 Voorspellen</button>' +
+    '<button class="btn sun" id="setLink">🔑 Speel op een ander apparaat</button>' +
     '<button class="btn plain" id="setReset">🗑️ Alles wissen</button>' +
     '<button class="btn plain" id="setClose">Klaar</button></div>', () => {
+      const schakel = () => {
+        $('tglGuard').classList.toggle('on', P.guard);
+        $('tglPredict').classList.toggle('on', P.predict);
+      };
+      schakel();
+      $('tglGuard').addEventListener('click', () => { setPref('guard', !P.guard); schakel(); });
+      $('tglPredict').addEventListener('click', () => { setPref('predict', !P.predict); schakel(); });
       $('setLink').addEventListener('click', () => { closeModal(); linkShareFlow(); });
       $('setReset').addEventListener('click', () => { closeModal(); confirmReset(); });
       $('setClose').addEventListener('click', closeModal);
@@ -4751,8 +4792,8 @@ function confirmReset() {
 }
 $('sndBtn').addEventListener('click', () => { setPref('sound', !P.sound); updateHud(); if (P.sound) snd.select(); });
 $('predictSkip').addEventListener('click', () => resolvePredict(null));
-$('tglGuard').addEventListener('click', () => { setPref('guard', !P.guard); updateToggles(); });
-$('tglPredict').addEventListener('click', () => { setPref('predict', !P.predict); updateToggles(); });
+$('meerBtn').addEventListener('click', openMeer);
+$('materiaal').addEventListener('click', openMateriaal);
 
 function askName() {
   showModal('<div class="m-emoji">🐢</div><h2>Hoi! Ik ben Turbo!</h2>' +

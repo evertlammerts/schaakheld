@@ -836,7 +836,7 @@ async function orakelFlow() {
 
   /* ================= increment 2 ================= */
 
-  await nogNiet('[2.3] ⋯ houdt Remise aanbieden, Opgeven en de Puntenwijzer; de hulpjes staan onder het bord', async function (check) {
+  await regel('[2.3] ⋯ houdt Remise aanbieden, Opgeven en de Puntenwijzer; de hulpjes staan onder het bord', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5']) });
     a.tik('verderKaart');
     await wacht();
@@ -851,7 +851,7 @@ async function orakelFlow() {
     check('achter ⋯', /Remise aanbieden/.test(menu) && /Opgeven/.test(menu) && /Puntenwijzer/.test(menu));
   });
 
-  await nogNiet('[2.3] de schakelaars voor blunderalarm en voorspellen staan in Instellingen en houden hun waarde', async function (check) {
+  await regel('[2.3] de schakelaars voor blunderalarm en voorspellen staan in Instellingen en houden hun waarde', async function (check) {
     const a = nieuwKind();
     a.ev('setPref("predict", false); setPref("guard", true)');
     check('niet meer op het speelscherm', !/tglPredict|tglGuard/.test(a.els['scr-play']._html || ''));
@@ -868,7 +868,7 @@ async function orakelFlow() {
     ['Turbo staat een pion voor', ['e2e4', 'd7d5', 'd2d3', 'd5e4'], /Turbo \+1/, /Turbo pakte 1 punt meer dan jij\./]
   ];
   for (const geval of materiaal) {
-    await nogNiet('[2.3] het materiaalverschil in de balk: ' + geval[0], async function (check) {
+    await regel('[2.3] het materiaalverschil in de balk: ' + geval[0], async function (check) {
       const a = nieuwKind({ opslag: opslagMetPotje(1, geval[1]) });
       a.tik('verderKaart');
       await wacht();
@@ -879,7 +879,7 @@ async function orakelFlow() {
     });
   }
 
-  await nogNiet('[2.3] bij gelijk materiaal staat er geen verschil', async function (check) {
+  await regel('[2.3] bij gelijk materiaal staat er geen verschil', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5']) });
     a.tik('verderKaart');
     await wacht();
@@ -925,7 +925,7 @@ async function orakelFlow() {
     check('na herladen nog gekozen', herlaad(a).get('P.theme') === 'bos');
   });
 
-  await nogNiet('[2.8] de voorspelvraag neemt de zet niet af: Turbo wacht op een tik', async function (check) {
+  await regel('[2.8] de voorspelvraag neemt de zet niet af: Turbo wacht op een tik', async function (check) {
     const echt = Math.random;
     Math.random = function () { return 0.1; };
     try {
@@ -942,7 +942,7 @@ async function orakelFlow() {
     } finally { Math.random = echt; }
   });
 
-  await nogNiet('[2.8] de voorspelvraag: een tik op een stuk van Turbo is het antwoord, en dan zet Turbo', async function (check) {
+  await regel('[2.8] de voorspelvraag: een tik op een stuk van Turbo is het antwoord, en dan zet Turbo', async function (check) {
     const echt = Math.random;
     Math.random = function () { return 0.1; };
     try {
@@ -958,7 +958,7 @@ async function orakelFlow() {
     } finally { Math.random = echt; }
   });
 
-  await nogNiet('[2.8] de Speurbril-randjes blijven tot je volgende zet', async function (check) {
+  await regel('[2.8] de Speurbril-randjes blijven tot je volgende zet', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5', 'g1f3', 'b8c6']) });
     a.tik('verderKaart');
     await wacht();
