@@ -16,17 +16,26 @@ var ORAKEL = { nogNiet: 0, gebouwd: 0, apps: [], uit: function (t) { print(t); }
 function maakApparaat(naam, opties) {
   opties = opties || {};
   const doc = maakDocument(), opslag = opties.opslag || maakOpslag(), loc = opties.locatie || maakLocatie();
+  /* het netwerk hoort bij het apparaat, niet bij de app: het blijft bij een herstart */
+  const netwerk = opties.netwerk || { uit: false };
   const leven = { dood: false, sockets: [] };
   /* de timers en sockets van een gestorven instantie lopen niet door, net als
      bij een echte herstart; zonder dit schreef een oude Turbo-zet nog in de
      opslag van de nieuwe */
   const eigenTimer = function (fn, ms) { return setTimeout(function () { if (!leven.dood) fn(); }, ms); };
-  const EigenSocket = function (url) { const s = new WebSocket(url); leven.sockets.push(s); return s; };
-  const maak = new Function('document', 'localStorage', 'location', 'history', '__els', 'setTimeout', 'WebSocket',
+  const EigenSocket = function (url) {
+    const s = netwerk.uit ? new GeenNetSocket(url) : new WebSocket(url);
+    leven.sockets.push(s);
+    return s;
+  };
+  const eigenFetch = function (url, o) {
+    return netwerk.uit ? Promise.reject(new TypeError('Load failed')) : fetch(url, o);
+  };
+  const maak = new Function('document', 'localStorage', 'location', 'history', '__els', 'setTimeout', 'WebSocket', 'fetch',
     __APP_SRC + '\n;return function (code) { return eval(code); };');
-  const ev = maak(doc, opslag, loc, loc.__history, doc.__els, eigenTimer, EigenSocket);
+  const ev = maak(doc, opslag, loc, loc.__history, doc.__els, eigenTimer, EigenSocket, eigenFetch);
   const app = {
-    naam, doc, els: doc.__els, opslag, location: loc, ev, leven,
+    naam, doc, els: doc.__els, opslag, location: loc, ev, leven, netwerk,
     get(expr) { return ev('(' + expr + ')'); },
     el(id) { return doc.getElementById(id); },
     modal() { return doc.getElementById('modalBox').innerHTML; },
@@ -53,8 +62,16 @@ function stopApparaat(app) {
 
 function herlaad(app) {
   stopApparaat(app);
-  return maakApparaat(app.naam, { opslag: app.opslag, locatie: app.location, herstart: true });
+  return maakApparaat(app.naam, { opslag: app.opslag, locatie: app.location, netwerk: app.netwerk, herstart: true });
 }
+
+/* het netwerk van dit apparaat valt weg: open lijnen breken zonder
+   sluitbericht, nieuwe gaan niet open, fetch faalt */
+function geenNetwerk(app) {
+  app.netwerk.uit = true;
+  app.leven.sockets.forEach(function (s) { if (s.verbreek) s.verbreek(); });
+}
+function weerNetwerk(app) { app.netwerk.uit = false; }
 
 /* de wereld een stukje vooruit: timers en de microtaakwachtrij */
 async function wacht(venster) {
@@ -309,6 +326,18 @@ async function orakelZelftest() {
     naOnverwacht === f0 + 1 && regels[2].indexOf('FAIL') === 0);
   ok('orakel: een gebouwde regel die faalt, maakt de suite rood', naKapot === f0 + 2);
   harnasZelftest();
+  /* de nep-server zegt "kamer weg" zoals room.go, en dat is iets anders dan geen netwerk */
+  const s = new WebSocket('ws://test.local/v1/room/ws'), g = new GeenNetSocket('ws://test.local/v1/room/ws');
+  let open = false, dicht = null, gOpen = false, gDicht = null;
+  s.onopen = function () { open = true; s.send(JSON.stringify({ room: 'bestaat-niet', seat: 'tok' })); };
+  s.onclose = function (e) { dicht = e; };
+  g.onopen = function () { gOpen = true; };
+  g.onclose = function (e) { gDicht = e; };
+  await wacht(100);
+  ok('nep-server: een kamer die er niet is, sluit na het openen met 1008 "onbekend"',
+    open && !!dicht && dicht.code === 1008 && dicht.reason === 'onbekend' && dicht.wasClean === true);
+  ok('nep-server: zonder netwerk gaat de lijn nooit open en sluit met 1006 zonder reden',
+    !gOpen && !!gDicht && gDicht.code === 1006 && gDicht.reason === '' && gDicht.wasClean === false);
 }
 
 /* De harnas liegt niet over wat een kind ziet: bewezen op een eigen pagina,

@@ -147,7 +147,73 @@ async function orakelTwee() {
     check('allebei: het potje is gestopt', /gestopt/.test(zegt(a2)) && /gestopt/.test(zegt(b2)));
     check('allebei: het telt niet mee', /telt niet mee/.test(zegt(a2)) && /telt niet mee/.test(zegt(b2)));
     check('aan geen kant een teller veranderd', tellers(a2) === ta && tellers(b2) === tb);
+    check('en het is aan geen kant meer bewaard', opgeslagen(a2, SAMEN) === null && opgeslagen(b2, SAMEN) === null);
   });
+
+  /* Alleen het antwoord van de server dat de kamer weg is, maakt een eind aan
+     het potje. Geen netwerk is iets anders: dan blijft het staan (D15). */
+  const tellersVan = function (x) { return JSON.stringify(x.get('[P.c.gamesPlayed, P.c.winsOnline, P.xp, P.wins, P.stars]')); };
+  async function terugInHetPotje(check, x, ander, zet) {
+    weerNetwerk(x);
+    if (!x.open() && opSpeelscherm(x)) { x.tik('backBtn'); await wacht(); }
+    x.tik('verderKaart');
+    await wacht(30000);
+    const zette = await speel(x, ander, zet);
+    check('met netwerk weer verder in hetzelfde potje', !!zette && x.fen() === ander.fen() && x.get('session.S.hist.length') === 3);
+  }
+
+  await nogNiet('[4.4] valt het netwerk weg tijdens het potje, dan blijft het potje staan en gaat het daarna verder', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    await speel(a, b, 'e2e4');
+    await speel(a, b, 'e7e5');
+    const ta = tellersVan(a), tb = tellersVan(b);
+    geenNetwerk(a);
+    await wacht(5 * 60000);
+    const r = opgeslagen(a, SAMEN);
+    check('het potje staat nog bewaard, met beide zetten', !!r && Array.isArray(r.moves) && r.moves.length === 2);
+    check('het potje is niet afgelopen', !a.get('!!(session && session.over)') && !/telt niet mee|gestopt/.test(zegt(a)));
+    check('geen teller veranderd', tellersVan(a) === ta && tellersVan(b) === tb);
+    await terugInHetPotje(check, a, b, 'g1f3');
+  });
+
+  await nogNiet('[4.4] wie de app opent zonder netwerk, houdt het vriendenpotje; de kaart zegt dat er nu geen verbinding is', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    await speel(a, b, 'e2e4');
+    await speel(a, b, 'e7e5');
+    const ta = tellersVan(a);
+    stopApparaat(a);
+    a.netwerk.uit = true;
+    const a2 = herlaad(a);
+    await wacht(5 * 60000);
+    const r = opgeslagen(a2, SAMEN);
+    check('het potje staat nog bewaard, met beide zetten', !!r && Array.isArray(r.moves) && r.moves.length === 2);
+    check('de kaart noemt het potje en zegt dat er nu geen verbinding is', zichtbaar(a2, 'verder') &&
+      /Daan/.test(tekstVan(a2, 'verder')) && /geen verbinding/i.test(tekstVan(a2, 'verder')));
+    check('geen einde en geen teller veranderd', !/telt niet mee|gestopt/.test(zegt(a2)) && tellersVan(a2) === ta);
+    await terugInHetPotje(check, a2, b, 'g1f3');
+  });
+
+  const kapotSamen = [
+    ['kapotte tekst', 'kapot{'],
+    ['zonder stoel', JSON.stringify({ room: 'kamer1', host: true, myColor: 'w', gameNo: 1, moves: ['e2e4'], peerName: 'Daan', updated: 1 })]
+  ];
+  for (const geval of kapotSamen) {
+    await nogNiet('[4.1] een vriendenpotje dat niet te lezen is (' + geval[0] + ') wordt getoond, en pas het kind haalt het weg', async function (check) {
+      const o = maakOpslag();
+      o.setItem(SAMEN, geval[1]);
+      const a = maakApparaat('Fien', { opslag: o });
+      await wacht();
+      check('de Verder-kaart zegt het', zichtbaar(a, 'verder') && tekstVan(a, 'verder').indexOf('kan ik niet meer openen') >= 0);
+      const b = herlaad(a);
+      await wacht();
+      check('na herladen staat het er nog, onveranderd', b.opslag.getItem(SAMEN) === geval[1]);
+      tikTekst(b, 'Weghalen');
+      await wacht();
+      check('pas "Weghalen" haalt het weg', b.opslag.getItem(SAMEN) === null);
+    });
+  }
 
   await nogNiet('[4.5] een uitnodiging tijdens een potje komt op de Verder-kaart, vóór het potje tegen Turbo', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');

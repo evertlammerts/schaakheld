@@ -594,18 +594,21 @@ function WebSocket(url) {
     if (!self._room) {
       let join = null;
       try { join = JSON.parse(data); } catch (e) {}
-      const rm = join && __server.wsrooms[join.room];
-      if (!rm || !(join.seat in rm.seats)) { self.close(); return; }
+      if (!join || typeof join !== 'object') { self._sluit(1008, 'eerst joinen', true); return; }
+      const rm = __server.wsrooms[join.room];
+      /* room.go: een onbekende kamer en een fout token zijn hetzelfde antwoord */
+      if (!rm || !(join.seat in rm.seats)) { self._sluit(1008, 'onbekend', true); return; }
       const oud = rm.seats[join.seat];
       self._room = join.room;
       self._seat = join.seat;
       rm.seats[join.seat] = self;
-      /* zoals room.go: eerst zeggen dat het stoeltje is overgenomen, dan pas
-         sluiten, zodat de oude kant weet dat herverbinden zinloos is */
+      /* zoals room.go: eerst zeggen dat het stoeltje is overgenomen, dan de
+         lijn dicht zonder sluitbericht, zodat de oude kant weet dat
+         herverbinden zinloos is */
       if (oud && oud !== self) {
         setTimeout(function () {
           if (oud.readyState === 1 && oud.onmessage) oud.onmessage({ data: '{"t":"stoel"}' });
-          oud.close();
+          oud._sluit(1006, '', false);
         }, 0);
       }
       lever(self, '{"t":"welkom"}');
@@ -616,22 +619,49 @@ function WebSocket(url) {
     const p = peer();
     if (p) lever(p, data);
   };
-  this.close = function () {
+  /* code en reden zoals de browser ze meldt: 1008 met een reden als de server
+     de verbinding weigert (room.go), 1006 als de lijn wegvalt zonder
+     sluitbericht (CloseNow in room.go, of het netwerk), 1005 als de app zelf
+     sluit */
+  this._sluit = function (code, reden, schoon) {
     if (self.readyState === 3) return;
     self.readyState = 3;
     if (self._room) {
       const rm = __server.wsrooms[self._room];
       if (rm && rm.seats[self._seat] === self) {
         rm.seats[self._seat] = null;
-        const zoek = __server.wsrooms[self._room];
-        for (const tok in zoek.seats) {
-          const so = zoek.seats[tok];
+        for (const tok in rm.seats) {
+          const so = rm.seats[tok];
           if (so && so.readyState === 1) lever(so, '{"t":"peer","aan":false}');
         }
       }
     }
-    if (self.onclose) setTimeout(() => { if (self.onclose) self.onclose({}); }, 0);
+    setTimeout(() => {
+      if (!schoon && self.onerror) self.onerror({});
+      if (self.onclose) self.onclose({ code, reason: reden, wasClean: schoon });
+    }, 0);
   };
+  this.close = function () { self._sluit(1005, '', true); };
+  /* het netwerk van dit apparaat valt weg */
+  this.verbreek = function () { self._sluit(1006, '', false); };
+}
+
+/* Een socket zonder netwerk: hij gaat nooit open; de browser meldt een fout
+   en sluit met 1006, zonder reden. De server merkt er niets van. */
+function GeenNetSocket(url) {
+  const self = this;
+  this.url = url;
+  this.readyState = 0;
+  this.onopen = null; this.onmessage = null; this.onclose = null; this.onerror = null;
+  this.send = function () {};
+  this.close = function () { self.readyState = 3; };
+  this.verbreek = function () {};
+  setTimeout(function () {
+    if (self.readyState === 3) return;
+    self.readyState = 3;
+    if (self.onerror) self.onerror({});
+    if (self.onclose) self.onclose({ code: 1006, reason: '', wasClean: false });
+  }, 0);
 }
 
 /* Handmatige tijd. Een timer krijgt een moment op een virtuele klok en
