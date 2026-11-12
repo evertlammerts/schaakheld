@@ -89,7 +89,7 @@ pin = ("<script>try{localStorage.setItem(\"schaakheld-server\","
        "\"http://127.0.0.1:%d\")}catch(e){}</script>" % (port + 1000)).encode()
 csp = ("default-src \x27self\x27 \x27unsafe-inline\x27 data: blob: mediastream:; "
        "connect-src http://127.0.0.1:* ws://127.0.0.1:*; form-action \x27self\x27")
-head = re.compile(rb"<head[^>]*>", re.I)
+head = re.compile(rb"<head(\s[^>]*)?>", re.I)
 class H(http.server.SimpleHTTPRequestHandler):
     extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
                       ".webmanifest": "application/manifest+json"}
@@ -100,7 +100,10 @@ class H(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         path = self.translate_path(self.path)
         if os.path.isdir(path) and self.path.split("?")[0].split("#")[0].endswith("/"):
-            path = os.path.join(path, "index.html")
+            for index in ("index.html", "index.htm"):
+                if os.path.isfile(os.path.join(path, index)):
+                    path = os.path.join(path, index)
+                    break
         if not (path.lower().endswith((".html", ".htm")) and os.path.isfile(path)):
             return super().do_GET()
         body = open(path, "rb").read()
