@@ -8,7 +8,7 @@
     --leaf: #46B466; --leaf-deep: #267A41; --leaf-soft: #DFF3E3;
     --coral: #FF6F59; --coral-deep: #B83C2A; --coral-soft: #FFE3DD;
     --violet: #9B6FE8; --violet-soft: #EFE3FF; --cloud: #9DB4E8; --cloud-soft: #EAF0FF;
-    --cream: #FFF9EC; --white: #FFFFFF; --track: #E4EEF6; --accent-text: #9A5B00; --pc-green: #1F6B45;
+    --cream: #FFF9EC; --white: #FFFFFF; --track: #E4EEF6; --accent-text: #9A5B00; --pc-green: #12402C;
     --board-light: #FFF3D0; --board-dark: #58B7A6;
     --surface: var(--white); --surface-quiet: var(--cream); --surface-sunk: var(--track);
     --line: rgba(23, 69, 111, .12); --text: var(--ink); --text-quiet: var(--ink-quiet);
@@ -333,14 +333,14 @@
   .friend.wait { background: var(--leaf-soft); }
   .friend .f-rm { width: 34px; height: 34px; font-size: 14px; box-shadow: none; background: transparent; color: var(--ink-soft); }
 
-  /* openingsschool: drie meters */
-  .meters { width: 100%; display: flex; flex-direction: column; gap: 6px; background: var(--card); border-radius: 16px; padding: 8px 12px; }
+  /* openingsschool: drie meters op een rij */
+  .meters { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .meters.hidden { display: none; }
-  .meter { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-  .meter .m-l { width: 118px; font-weight: bold; }
-  .meter .m-t { flex: 1; height: 12px; background: #E4EEF6; border-radius: 99px; overflow: hidden; }
-  .meter .m-t i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #BDE8C9, var(--leaf)); transition: width .4s ease; }
-  .meter .m-v { width: 34px; text-align: right; font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .meters .m { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-cap); font-weight: var(--fw-bold); }
+  .meters .m > span:first-child { display: flex; justify-content: space-between; gap: 4px; }
+  .meters .m-v { font-weight: var(--fw-regular); color: var(--text-quiet); font-variant-numeric: tabular-nums; }
+  .meters .bar { display: block; height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
+  .meters .bar i { display: block; height: 100%; background: var(--leaf); border-radius: 999px; }
 
   /* ---------- play screen ---------- */
   .back-btn {
@@ -452,12 +452,17 @@
   .cell.hero-pc { animation: hero-glow 1.4s ease infinite; }
   @keyframes hero-glow { 0%,100% { box-shadow: inset 0 0 0 4px var(--sun) } 50% { box-shadow: inset 0 0 0 8px rgba(255,197,61,.55) } }
   .cell.check { background: radial-gradient(circle, #FF8A76 20%, #FF6F59 100%) !important; animation: pulse-miss 1s ease 3; }
+  /* de hint moet ook op de koning die schaak staat te zien zijn: zijn eigen animatie wint van die van schaak */
+  .cell.check.hero-pc { animation: hero-glow 1.4s ease infinite; }
   .cell.spy { box-shadow: inset 0 0 0 4px #9B6FE8; }
 
   #arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
   .a-sun { stroke: var(--sun-deep); fill: var(--sun-deep); }
   .a-coral { stroke: var(--coral-deep); fill: var(--coral-deep); }
   .a-leaf { stroke: var(--leaf-deep); fill: var(--leaf-deep); }
+  .a-opt-a { stroke: var(--accent-text); fill: var(--accent-text); }
+  .a-opt-b { stroke: var(--coral-deep); fill: var(--coral-deep); }
+  .a-opt-c { stroke: var(--leaf-deep); fill: var(--leaf-deep); }
   #arrows line { stroke-width: 13; stroke-linecap: round; opacity: .9; }
   #arrows polygon { opacity: .9; }
 
@@ -478,8 +483,8 @@
   .btn:active { transform: translateY(2px); }
   .btn:disabled { opacity: .45; cursor: default; }
   .btn.sun { background: var(--sun); box-shadow: 0 4px 0 var(--sun-deep); }
-  .btn.leaf { background: var(--leaf); color: #fff; box-shadow: 0 4px 0 var(--leaf-deep); }
-  .btn.coral { background: var(--coral); color: #fff; box-shadow: 0 4px 0 #D14A36; }
+  .btn.leaf { background: var(--success); color: var(--on-success); box-shadow: 0 4px 0 #1A5A2E; }
+  .btn.coral { background: var(--danger); color: var(--on-danger); box-shadow: 0 4px 0 #8A2B1E; }
   .btn.plain { background: var(--card); box-shadow: 0 4px 0 #D9E5EE; }
   .btn.small { padding: 9px 16px; font-size: 14.5px; }
 
@@ -515,8 +520,21 @@
   .opt-btn.picked { box-shadow: 0 0 0 3px var(--sun), var(--shadow); }
   .opt-btn.wrong { opacity: .45; text-decoration: line-through; pointer-events: none; }
   .opt-btn.right { box-shadow: 0 0 0 3px var(--leaf), var(--shadow); }
-  .answer-row { display: flex; gap: 10px; }
-  .answer-row .btn { flex: 1; }
+  /* De Beste Zet: drie keuzes op een rij, de letter in de kleur van zijn pijl */
+  .options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .opt {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; height: 56px; padding: 3px 4px; gap: 2px;
+    border: 2px solid rgba(23, 69, 111, .25); border-radius: var(--r-md); background: var(--surface); cursor: pointer;
+    color: var(--text); font: inherit;
+  }
+  .opt .o-letter { font-family: var(--font-display); font-weight: var(--fw-bold); font-size: 18px; line-height: 1; }
+  .opt .o-move { font-size: 13px; line-height: 1.15; color: var(--text-quiet); text-align: center; }
+  .opt.a .o-letter { color: var(--accent-text); }
+  .opt.b .o-letter { color: var(--coral-deep); }
+  .opt.c .o-letter { color: var(--leaf-deep); }
+  .opt.picked { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); background: var(--sun-soft); }
+  .opt.wrong { opacity: .45; text-decoration: line-through; pointer-events: none; }
+  .opt.right { border-color: var(--leaf-deep); box-shadow: inset 0 0 0 1px var(--leaf-deep); }
 
 
 
@@ -551,7 +569,7 @@
     row-gap: var(--gap);
     padding-top: var(--safe-t); padding-bottom: var(--safe-b);
   }
-  .play.task { --bottom-min: var(--bottom-min-task); }
+  .play.oefening { --bottom-min: var(--bottom-min-task); }
   .play-bar { grid-area: bar; display: flex; align-items: center; gap: 8px; padding: 0 var(--g); min-width: 0; }
   .tegen {
     flex: 1; min-width: 0; min-height: 44px; display: flex; flex-direction: column; justify-content: center;
@@ -575,16 +593,19 @@
   }
   .play-strip .mascot { flex: none; width: 28px; height: 28px; font-size: 18px; display: grid; place-items: center; }
   /* een hoogte in procenten houdt WebKit hier niet vast; de strook heeft een vaste hoogte, dus die telt */
-  .play-strip .s-txt { flex: 1; min-width: 0; max-height: calc(var(--strip-h) - 22px); overflow-y: auto; font-size: var(--fs-md); line-height: 1.35; }
+  /* de strook scrolt nooit: wat niet past, wordt korter */
+  .play-strip .s-txt { flex: 1; min-width: 0; max-height: calc(var(--strip-h) - 22px); overflow: hidden; font-size: var(--fs-md); line-height: 1.35; }
   @media (max-height: 659px) and (orientation: portrait) {
     .play-strip { padding: 4px 12px 12px; }
     .play-strip .s-txt { line-height: 1.3; max-height: calc(var(--strip-h) - 16px); }
   }
-  /* langere tekst scrolt in de strook; een zachte rand onderaan zegt dat er meer staat */
-  .play-strip::after { content: ''; position: absolute; left: 0; right: 0; bottom: 10px; height: 10px;
-    background: linear-gradient(rgba(255, 255, 255, 0), var(--strip-bg, #FFFFFF)); pointer-events: none; }
-  .play-strip.predict { --strip-bg: var(--violet-soft); }
-  .play-strip.cloud { --strip-bg: var(--cloud-soft); }
+  /* een spelzin die niet in twee regels past: een stap kleiner, drie regels; op een lage telefoon is de strook van een potje daarvoor 72 hoog */
+  .play-strip.klein .s-txt { font-size: var(--fs-sm); line-height: 1.2; }
+  @media (max-height: 719px) and (max-width: 559px) and (orientation: portrait) {
+    .play:not(.oefening) { --strip-h: 72px; }
+    .play:not(.oefening) .play-strip { padding: 4px 12px 10px; }
+    .play:not(.oefening) .play-strip .s-txt { max-height: calc(var(--strip-h) - 14px); }
+  }
   .play-strip.predict { background: var(--violet-soft); }
   .play-strip.cloud { background: var(--cloud-soft); border: 2px dashed var(--cloud); }
   .play-strip.cloud #bubble { display: none; }
@@ -595,7 +616,7 @@
   .pat-track { position: relative; height: 6px; background: var(--track); border-radius: 999px; }
   .pat-track i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--leaf); border-radius: 999px; }
   .pat-track.full i { background: var(--sun); }
-  .pat-turtle { position: absolute; top: -6px; left: 0; font-size: 14px; line-height: 1; transition: left .3s linear; }
+  .pat-turtle { position: absolute; top: -3px; left: 0; font-size: 12px; line-height: 1; transition: left .3s linear; }
   .play-board {
     grid-area: board; display: grid; justify-content: center;
     grid-template-columns: var(--coord) var(--board); grid-template-rows: var(--board) var(--coord);
@@ -615,7 +636,7 @@
   .eindkaart {
     grid-column: 2; grid-row: 1; z-index: 25; min-height: 0; overflow-y: auto;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-    padding: 16px; text-align: center; background: rgba(255, 255, 255, .95); border-radius: 16px;
+    padding: 16px; text-align: center; background: var(--surface); border-radius: 16px;
     box-shadow: var(--elev-2); animation: pop-in var(--dur-slow) var(--ease);
   }
   .eindkaart.hidden { display: none; }
@@ -627,14 +648,25 @@
   .ek-trofee { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .ek-badge { display: flex; flex-direction: column; align-items: center; width: 88px; font-size: var(--fs-cap); font-weight: 700; }
   .ek-be { font-size: 40px; line-height: 1.1; }
+  /* op een bord onder 400 px: zonder plaatje (Turbo praat al in de strook) en een trofee als een regel */
+  .eindkaart.klein { padding: 12px; gap: 6px; }
+  .eindkaart.klein .ek-turbo { display: none; }
+  .eindkaart.klein h2 { font-size: var(--fs-lg); }
+  .eindkaart.klein .ek-badge { flex-direction: row; gap: 6px; width: auto; }
+  .eindkaart.klein .ek-be { font-size: 28px; }
   .eindkaart .ek-btns { display: flex; flex-direction: column; gap: 8px; width: min(100%, 280px); }
   .play-bottom {
     grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
     padding: 0 var(--g) 8px;
   }
+  /* kort scherm: ook hier wijken de tussenruimtes van 8 naar 6, zodat drie regels uitleg en de knoppen in 120 passen */
+  @media (max-height: 659px) and (orientation: portrait) { .play-bottom { gap: 6px; padding-bottom: 6px; } }
   .play-bottom .action-row { margin-top: auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
   .play-bottom .action-row .btn { min-height: 48px; padding: 0 10px; white-space: nowrap; }
   .play-bottom #optionsBox { order: -1; }
+  /* de zin die de opdracht uitlegt, een hint of een poging: onder het bord, boven de knoppen */
+  .play-bottom #hulpZin { order: -2; font-size: var(--fs-sm); line-height: 1.33; }
+  .play-bottom #hulpZin.hidden, .play-bottom.uitleg #hulpZin { display: none; }
   /* na een antwoord: het oordeel en Volgende op de eerste rij, de redenen eronder */
   .play-bottom.uitleg {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr);
@@ -650,6 +682,8 @@
   .e-body p { margin: 0 0 4px; }
   .e-body ul { margin: 0; padding-left: 1.1em; }
   .e-body li { margin: 0 0 4px; }
+  /* Hint staat links met zijn eigen breedte, nooit op de plek van Volgende (rechts in de oordeelrij) */
+  .play-bottom .action-row .btn.hint { justify-self: start; padding: 0 18px; }
   .play-bottom .action-row .btn.helper {
     min-height: 52px; padding: 2px 6px; white-space: pre-line; font-size: var(--fs-cap); line-height: 1.2;
   }
@@ -904,7 +938,7 @@
         <button id="backBtn" class="back-btn">‹ Pauze</button>
         <button id="materiaal" class="tegen" type="button">
           <span id="modeTitle" class="tegen-naam"></span>
-          <span class="tegen-sub"><span id="roundChip"></span><span id="bewaard" class="bewaard hidden">✔ bewaard</span><span id="drillStars" class="hidden"></span><span id="verschil"></span></span>
+          <span class="tegen-sub"><span id="roundChip"></span><span id="drillStars" class="hidden"></span><span id="bewaard" class="bewaard hidden">✔ bewaard</span><span id="verschil"></span></span>
         </button>
         <button id="meerBtn" class="meer-btn" aria-label="Meer: remise, opgeven, puntenwijzer">⋯</button>
       </div>
@@ -924,6 +958,7 @@
         <div id="eindkaart" class="eindkaart hidden"></div>
       </div>
       <div id="onder" class="play-bottom">
+        <div id="hulpZin" class="hidden"></div>
         <div id="actionRow" class="action-row"></div>
         <div id="taskBox" class="task hidden"></div>
         <div id="optionsBox" class="hidden"></div>

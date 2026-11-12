@@ -257,18 +257,19 @@ function maakDocument(vast) {
   }
   /* de keten van ouders, binnenste eerst, of null als het element nergens meer hangt */
   function pad(el) {
-    const keten = [];
+    const keten = [], tags = [];
     let verborgen = verborgenZelf(el), nu = el;
     for (let i = 0; i < 60 && nu !== body; i++) {
       const o = ouderVan(nu);
       if (!o || o.los) return null;
       if (o.omhullend.some(tagVerborgen)) verborgen = true;
+      for (const t of o.omhullend) tags.push(t.tag);
       for (let j = o.omhullend.length - 1; j >= 0; j--) if (o.omhullend[j].k) keten.push(o.omhullend[j].k);
       nu = o.ouder;
       keten.push(nu);
       if (nu !== body && verborgenZelf(nu)) verborgen = true;
     }
-    return nu === body ? { keten, verborgen } : null;
+    return nu === body ? { keten, verborgen, tags } : null;
   }
   /* de tekst die een kind ziet: zonder tags, zonder verborgen delen, en met de
      huidige inhoud van elk element met een id (de app kan die later hebben
@@ -479,19 +480,83 @@ var crypto = {
 /* Nep-fetch met dezelfde semantiek als de Go-server (koppelcodes eenmalig,
    profielblobs met bearer secret, kamers en wederzijdse paren), zodat de
    flows end-to-end testbaar zijn. */
-var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, klok: 0, teller: 0 };
-/* grenzen en TTL uit bus.go; __server.klok schuift de nep-klok vooruit zodat
-   een flowtest een bus kan laten verlopen */
+var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, potjes: {}, klok: 0, teller: 0 };
+/* grenzen en TTL uit bus.go, room.go en server.go; __server.klok schuift de
+   klok van de nep-server vooruit zodat een test een bus, een kamer of een
+   koppelcode kan laten verlopen */
 var BUS_TTL = 10 * 60000, MAX_BUSES = 512, MAX_BUS_BLOB = 4 << 10, MAX_BUS_CHECK = 64;
+var POTJE_TTL = 30 * 24 * 3600000, MAX_POTJES = 1024;
+var LINK_TTL = 10 * 60000, MAX_LINKS = 8192;
+var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000, MAX_KAMERS = 64, KAMER_RUST = 3000;
 function __busNu() { return Date.now() + __server.klok; }
 function __veegBussen() {
   for (var id in __server.buses) if (__server.buses[id].tot <= __busNu()) delete __server.buses[id];
 }
+function __veegPotjes() {
+  for (var id in __server.potjes) if (__server.potjes[id].tot <= __busNu()) delete __server.potjes[id];
+}
+function __sha256hex(tekst) {
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(tekst)).then(function (d) {
+    var hex = '', bytes = new Uint8Array(d);
+    for (var i = 0; i < 32; i++) hex += (bytes[i] >> 4).toString(16) + (bytes[i] & 15).toString(16);
+    return hex;
+  });
+}
+/* zoals busGeldig na readJSON: de velden zijn tekst (null of weg telt als
+   leeg) en de grens telt bytes, zoals len in Go */
+function __busGeldig(body, hex) {
+  const tekst = v => v == null || typeof v === 'string';
+  return tekst(body.bus) && tekst(body.bewijs) && tekst(body.blob) &&
+    /^[a-f0-9]{64}$/.test(body.bus) && hex === body.bus && /^[A-Za-z0-9_-]{8,64}$/.test(body.bewijs) &&
+    new TextEncoder().encode(body.blob == null ? '' : body.blob).length <= MAX_BUS_BLOB;
+}
+/* een herstart van de server: alles wat alleen in het geheugen staat is weg
+   en elke open lijn breekt; de profielen op schijf blijven */
+function __herstartServer() {
+  for (const id in __server.wsrooms) {
+    const rm = __server.wsrooms[id];
+    for (const tok in rm.seats) if (rm.seats[tok] && rm.seats[tok].verbreek) rm.seats[tok].verbreek();
+  }
+  __server.links = {};
+  __server.wsrooms = {};
+  __server.pending = {};
+  __server.buses = {};
+  __server.potjes = {};
+}
+/* zoals room.go: een kamer heeft een potje zodra beide stoeltjes ooit
+   verbonden waren; stil is pas stil als er niemand verbonden is */
+function __heeftPotje(rm) { return rm.order.every(tok => rm.joined[tok]); }
+function __kamerBezet(rm) { return rm.order.some(tok => rm.seats[tok] && rm.seats[tok].readyState === 1); }
+function __veegKamers() {
+  const nu = __busNu();
+  for (const id in __server.wsrooms) {
+    const rm = __server.wsrooms[id];
+    const potje = __heeftPotje(rm);
+    if (nu - rm.created >= (potje ? POTJE_MAX : KAMER_MAX)) { delete __server.wsrooms[id]; continue; }
+    if (nu - rm.touched < (potje ? POTJE_STIL : KAMER_STIL)) continue;
+    if (!__kamerBezet(rm)) delete __server.wsrooms[id];
+  }
+}
+/* zoals evictRoomLocked: alleen een kamer zonder iemand erin en ouder dan
+   KAMER_RUST wijkt, eerst een zonder potje, dan de langst stille */
+function __maakPlaats() {
+  const nu = __busNu();
+  let weg = null;
+  for (const id in __server.wsrooms) {
+    const rm = __server.wsrooms[id], w = weg && __server.wsrooms[weg];
+    if (__kamerBezet(rm) || nu - rm.created < KAMER_RUST) continue;
+    if (!w || (__heeftPotje(rm) !== __heeftPotje(w) ? !__heeftPotje(rm) : rm.touched < w.touched)) weg = id;
+  }
+  if (weg) delete __server.wsrooms[weg];
+  return !!weg;
+}
 function __nieuwToken() { return 'tok' + (++__server.teller) + 'x'.repeat(16); }
 function __nieuweKamer() {
+  __veegKamers();
+  if (Object.keys(__server.wsrooms).length >= MAX_KAMERS && !__maakPlaats()) return null;
   const id = 'kamer' + (++__server.teller) + 'k'.repeat(12);
-  const host = __nieuwToken(), gast = __nieuwToken();
-  __server.wsrooms[id] = { seats: {}, order: [host, gast] };
+  const host = __nieuwToken(), gast = __nieuwToken(), nu = __busNu();
+  __server.wsrooms[id] = { seats: {}, order: [host, gast], joined: {}, created: nu, touched: nu };
   __server.wsrooms[id].seats[host] = null;
   __server.wsrooms[id].seats[gast] = null;
   return { id, host, gast };
@@ -504,23 +569,30 @@ var fetch = function (url, opts) {
     const hdrs = opts.headers || {};
     const auth = hdrs.Authorization || hdrs.authorization || '';
     const secret = auth.indexOf('Bearer ') === 0 ? auth.slice(7) : '';
-    const body = typeof opts.body === 'string' ? JSON.parse(opts.body) : opts.body;
     const res = (status, data) => resolve({
       status,
       json: () => Promise.resolve(data),
       arrayBuffer: () => Promise.resolve(data instanceof Uint8Array ? data.buffer.slice(0) : new ArrayBuffer(0))
     });
-    if (m === 'POST' && path === '/v1/link') { __server.links[body.code] = body.payload; res(204); }
+    /* zoals readJSON: een json-body die niet parseert (ook tekst na het
+       object) is 400; POST /v1/room leest geen body */
+    let body = opts.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch (e) { if (!(m === 'POST' && path === '/v1/room')) { res(400); return; } }
+    }
+    if (m === 'POST' && path === '/v1/link') {
+      /* zoals server.go: vol is vol, ook voor een code die er al staat */
+      for (const c in __server.links) if (__server.links[c].tot <= __busNu()) delete __server.links[c];
+      if (Object.keys(__server.links).length >= MAX_LINKS) { res(429); return; }
+      __server.links[body.code] = { payload: body.payload, tot: __busNu() + LINK_TTL };
+      res(204);
+    }
     else if (m === 'POST' && path === '/v1/bus') {
       /* zelfde regels als bus.go: bus = sha256(bewijs), leeg blob wist, een
          bus houdt het briefje BUS_TTL lang, en vol is vol (een bestaande bus
          mag wel vervangen worden) */
-      crypto.subtle.digest('SHA-256', new TextEncoder().encode(body.bewijs)).then(function (d) {
-        var hex = '';
-        var bytes = new Uint8Array(d);
-        for (var i = 0; i < 32; i++) hex += (bytes[i] >> 4).toString(16) + (bytes[i] & 15).toString(16);
-        if (!/^[a-f0-9]{64}$/.test(body.bus) || hex !== body.bus || !/^[A-Za-z0-9_-]{8,64}$/.test(body.bewijs) ||
-          String(body.blob == null ? '' : body.blob).length > MAX_BUS_BLOB) { res(400); return; }
+      __sha256hex(body.bewijs).then(function (hex) {
+        if (!__busGeldig(body, hex)) { res(400); return; }
         __veegBussen();
         if (body.blob === '') { delete __server.buses[body.bus]; res(204); return; }
         if (!(body.bus in __server.buses) && Object.keys(__server.buses).length >= MAX_BUSES) { res(429); return; }
@@ -528,24 +600,54 @@ var fetch = function (url, opts) {
         res(204);
       });
     }
+    else if (m === 'POST' && path === '/v1/potje') {
+      /* zoals handlePotjePost: de regels van een bus, maar dertig dagen na het
+         laatste schrijven, een volle tabel laat de langst niet geschreven bus
+         plaatsmaken, dezelfde bytes verlengen alleen, en alleen bus, bewijs
+         en blob mogen erin staan */
+      if (!body || typeof body !== 'object' ||
+        Object.keys(body).some(function (k) { return ['bus', 'bewijs', 'blob'].indexOf(k) < 0; })) { res(400); return; }
+      __sha256hex(body.bewijs).then(function (hex) {
+        if (!__busGeldig(body, hex)) { res(400); return; }
+        __veegPotjes();
+        const blob = body.blob == null ? '' : String(body.blob), nu = __busNu();
+        if (blob === '') { delete __server.potjes[body.bus]; res(204); return; }
+        const oud = __server.potjes[body.bus];
+        if (!oud && Object.keys(__server.potjes).length >= MAX_POTJES) {
+          let weg = null;
+          for (const id in __server.potjes) if (weg === null || __server.potjes[id].tot < __server.potjes[weg].tot) weg = id;
+          delete __server.potjes[weg];
+        }
+        __server.potjes[body.bus] = { blob: blob, tot: nu + POTJE_TTL, veranderd: oud && oud.blob === blob ? oud.veranderd : nu };
+        res(204);
+      });
+    }
     else if (m === 'POST' && path === '/v1/bus/check') {
       var vraag = body.bussen || [];
       if (vraag.length > MAX_BUS_CHECK) { res(400); return; }
       __veegBussen();
-      var blobs = {};
+      __veegPotjes();
+      var blobs = {}, ongewijzigd = {}, nuC = __busNu();
       vraag.forEach(function (id) {
-        if (/^[a-f0-9]{64}$/.test(id) && (id in __server.buses)) blobs[id] = __server.buses[id].blob;
+        if (!/^[a-f0-9]{64}$/.test(id)) return;
+        if (id in __server.buses) blobs[id] = __server.buses[id].blob;
+        if (id in __server.potjes) {
+          blobs[id] = __server.potjes[id].blob;
+          ongewijzigd[id] = Math.floor((nuC - __server.potjes[id].veranderd) / 1000);
+        }
       });
-      res(200, { blobs: blobs });
+      res(200, { blobs: blobs, ongewijzigd: ongewijzigd });
     }
     else if (m === 'POST' && path === '/v1/room') {
       const k = __nieuweKamer();
+      if (!k) { res(429); return; }
       res(200, { room: k.id, seat: k.host, guest: k.gast });
     }
     else if (m === 'POST' && path === '/v1/pair') {
       /* zelfde validatie als room.go: zelfde-code of rare tekens is 400 */
       if (body.mine === body.theirs || !/^[A-Za-z0-9_-]{8,64}$/.test(body.mine) ||
         !/^[A-Za-z0-9_-]{8,64}$/.test(body.theirs)) { res(400); return; }
+      __veegKamers();
       const lo = body.mine < body.theirs ? body.mine : body.theirs;
       const hi = body.mine < body.theirs ? body.theirs : body.mine;
       const key = lo + '|' + hi;
@@ -559,6 +661,7 @@ var fetch = function (url, opts) {
       else if (p.dirA === body.mine) res(204);
       else {
         const k = __nieuweKamer();
+        if (!k) { res(429); return; }
         p.room = k.id;
         p.seatA = k.host;
         p.seatB = k.gast;
@@ -568,7 +671,7 @@ var fetch = function (url, opts) {
     else if (m === 'POST' && path === '/v1/link/redeem') {
       const p = __server.links[body.code];
       delete __server.links[body.code];
-      p === undefined ? res(404) : res(200, { payload: p });
+      (p === undefined || p.tot <= __busNu()) ? res(404) : res(200, { payload: p.payload });
     } else if (path.indexOf('/v1/profile/') === 0) {
       const id = path.slice('/v1/profile/'.length);
       const prof = __server.profiles[id];
@@ -606,6 +709,10 @@ function WebSocket(url) {
   this.readyState = 0;
   this._room = null;
   this._seat = null;
+  /* de kamer zelf, niet het id: zoals room.go gaan berichten tussen twee
+     verbonden stoeltjes door, ook als de kamer om zijn leeftijd uit de tabel
+     ging */
+  this._rm = null;
   this.onopen = null; this.onmessage = null; this.onclose = null;
   setTimeout(() => {
     if (self.readyState !== 0) return;
@@ -616,7 +723,7 @@ function WebSocket(url) {
     if (sock.readyState === 1 && sock.onmessage) sock.onmessage({ data });
   }, 0);
   const peer = () => {
-    const rm = __server.wsrooms[self._room];
+    const rm = self._rm;
     if (!rm) return null;
     for (const tok in rm.seats) {
       const so = rm.seats[tok];
@@ -630,13 +737,16 @@ function WebSocket(url) {
       let join = null;
       try { join = JSON.parse(data); } catch (e) {}
       if (!join || typeof join !== 'object') { self._sluit(1008, 'eerst joinen', true); return; }
+      __veegKamers();
       const rm = __server.wsrooms[join.room];
       /* room.go: een onbekende kamer en een fout token zijn hetzelfde antwoord */
       if (!rm || !(join.seat in rm.seats)) { self._sluit(1008, 'onbekend', true); return; }
       const oud = rm.seats[join.seat];
       self._room = join.room;
+      self._rm = rm;
       self._seat = join.seat;
       rm.seats[join.seat] = self;
+      rm.joined[join.seat] = true;
       /* zoals room.go: eerst zeggen dat het stoeltje is overgenomen, dan de
          lijn dicht zonder sluitbericht, zodat de oude kant weet dat
          herverbinden zinloos is */
@@ -661,10 +771,11 @@ function WebSocket(url) {
   this._sluit = function (code, reden, schoon) {
     if (self.readyState === 3) return;
     self.readyState = 3;
-    if (self._room) {
-      const rm = __server.wsrooms[self._room];
-      if (rm && rm.seats[self._seat] === self) {
+    if (self._rm) {
+      const rm = self._rm;
+      if (rm.seats[self._seat] === self) {
         rm.seats[self._seat] = null;
+        rm.touched = __busNu();
         for (const tok in rm.seats) {
           const so = rm.seats[tok];
           if (so && so.readyState === 1) lever(so, '{"t":"peer","aan":false}');

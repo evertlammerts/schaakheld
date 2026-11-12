@@ -9,6 +9,7 @@ package main
 //   - de server ziet alleen versleutelde bytes, nooit inhoud
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
@@ -28,10 +29,35 @@ import (
 )
 
 const (
-	linkTTL    = 5 * time.Minute
+	linkTTL    = 10 * time.Minute
 	maxPayload = 4 << 10  // versleutelde credentials in een koppelcode
 	maxBlob    = 64 << 10 // versleuteld profielblob
 )
+
+// Registreren gaat door defaultSlots plekken die elk defaultDelay bezet
+// zijn, dus er leven hoogstens linkTTL/defaultDelay*defaultSlots codes
+// tegelijk (6000). defaultMaxLinks ligt daarboven: anders houdt een spuiter
+// de tabel vol en krijgt een echt kind 429.
+const (
+	defaultDelay    = 200 * time.Millisecond
+	defaultSlots    = 2
+	defaultMaxLinks = 8192
+)
+
+// hoogstensInVenster: zoveel verzoeken kan een pad met slots plekken die
+// elk delay bezet zijn, hoogstens afmaken binnen een venster van die lengte
+func hoogstensInVenster(venster, delay time.Duration, slots int) int {
+	return int((venster+delay-1)/delay) * slots
+}
+
+// linkTabelTeKlein: kan iedereen samen, zo snel als de rem toelaat, de
+// tabel met koppelcodes vol houden? Dan krijgt een echt kind 429.
+func linkTabelTeKlein(delay time.Duration, slots, maxLinks int) bool {
+	if delay <= 0 {
+		return true
+	}
+	return hoogstensInVenster(linkTTL, delay, slots) >= maxLinks
+}
 
 var (
 	codeRe = regexp.MustCompile(`^[a-z0-9-]{4,64}$`)
@@ -58,12 +84,13 @@ type server struct {
 	cfg config
 	mux *http.ServeMux
 
-	mu       sync.Mutex // beschermt links, accounts, rooms, pending en de profielbestanden
+	mu       sync.Mutex // beschermt alle tabellen hieronder en de profielbestanden
 	links    map[string]linkEntry
 	accounts int // aantal profielbestanden, begrensd door maxAccounts
 	rooms    map[string]*room
 	pending  map[string]*pendingPair
 	buses    map[string]busEntry
+	potjes   map[string]potjeEntry
 
 	// losse semaforen (elk cfg.redeemSlots breed) voor de
 	// onge-authenticeerde schrijfpaden, zodat een vloed op het ene pad
@@ -74,6 +101,7 @@ type server struct {
 	roomC   chan struct{}
 	pairC   chan struct{}
 	busC    chan struct{}
+	potjeC  chan struct{}
 
 	wsActive atomic.Int32 // gelijktijdige websocket-verbindingen, begrensd door maxWsConns
 }
@@ -83,10 +111,10 @@ func newServer(cfg config) (*server, error) {
 		cfg.now = time.Now
 	}
 	if cfg.redeemSlots <= 0 {
-		cfg.redeemSlots = 2
+		cfg.redeemSlots = defaultSlots
 	}
 	if cfg.maxLinks <= 0 {
-		cfg.maxLinks = 4096
+		cfg.maxLinks = defaultMaxLinks
 	}
 	if cfg.maxAccounts <= 0 {
 		cfg.maxAccounts = 64
@@ -103,12 +131,14 @@ func newServer(cfg config) (*server, error) {
 		rooms:   map[string]*room{},
 		pending: map[string]*pendingPair{},
 		buses:   map[string]busEntry{},
+		potjes:  map[string]potjeEntry{},
 		redeemC: make(chan struct{}, cfg.redeemSlots),
 		linkC:   make(chan struct{}, cfg.redeemSlots),
 		putC:    make(chan struct{}, cfg.redeemSlots),
 		roomC:   make(chan struct{}, cfg.redeemSlots),
 		pairC:   make(chan struct{}, cfg.redeemSlots),
 		busC:    make(chan struct{}, cfg.redeemSlots),
+		potjeC:  make(chan struct{}, cfg.redeemSlots),
 	}
 	entries, err := os.ReadDir(cfg.dataDir)
 	if err != nil {
@@ -133,6 +163,7 @@ func newServer(cfg config) (*server, error) {
 	mux.HandleFunc("GET /v1/room/ws", s.handleRoomWS)
 	mux.HandleFunc("POST /v1/bus", s.handleBusPost)
 	mux.HandleFunc("POST /v1/bus/check", s.handleBusCheck)
+	mux.HandleFunc("POST /v1/potje", s.handlePotjePost)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "ok\n")
 	})
@@ -467,6 +498,24 @@ func readJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) bool {
 		return false
 	}
 	if err := json.Unmarshal(body, v); err != nil {
+		http.Error(w, "geen geldige json", http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+// readJSONStrict weigert ook een veld dat v niet kent en alles na het
+// object: wat de server niet nodig heeft, hoort hij niet te krijgen.
+func readJSONStrict(w http.ResponseWriter, r *http.Request, limit int64, v any) bool {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
+	if err != nil {
+		http.Error(w, "body te groot", http.StatusRequestEntityTooLarge)
+		return false
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.DisallowUnknownFields()
+	// json.Valid en niet dec.More: More ziet tekst die met } of ] begint niet
+	if !json.Valid(body) || dec.Decode(v) != nil {
 		http.Error(w, "geen geldige json", http.StatusBadRequest)
 		return false
 	}
