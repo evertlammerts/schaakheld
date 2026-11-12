@@ -2023,6 +2023,16 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('potje: ongewijzigd loopt door bij dezelfde bytes en begint opnieuw bij andere bytes of na wissen',
     oZelfde === 7200 && oAnders === 0 && oHalf === 1800 && !oGewist && oVers === 0);
   __server.klok = klokP;
+  __server.potjes = {};
+  await pSchrijf(pa, 'zet-1');
+  /* geen check tussendoor: die veegt ook, en verbergt dan een schrijven dat niet veegt */
+  __server.klok += 30 * 24 * 3600000 + 3600000;
+  await pSchrijf(pa, 'zet-1');
+  __server.klok += 5000;
+  var oTerug = await pLees([pa.bus]);
+  ok('potje: verlopen en met dezelfde bytes terug, dan begint ongewijzigd opnieuw',
+    oTerug.blobs[pa.bus] === 'zet-1' && oTerug.ongewijzigd[pa.bus] === 5);
+  __server.klok = klokP;
 
   __server.potjes = {};
   var pVol = [];

@@ -30,3 +30,20 @@ func TestPotjeHerschrijvenBijVolDuwtNiemandWeg(t *testing.T) {
 		t.Fatalf("%d bussen, de oudste aanwezig: %v; wil %d en ja", n, oudste, maxPotjes)
 	}
 }
+
+func TestPotjeVerlopenEnTerugMetDezelfdeBytesBegintVers(t *testing.T) {
+	s, clk := newTestServer(t, nil)
+	bewijs, bus := potjeBus("a")
+	if c := schrijfPotje(s, bewijs, bus, "zet-1"); c != 204 {
+		t.Fatalf("schrijven: %d", c)
+	}
+	// geen check tussendoor: die veegt ook, en verbergt dan een schrijven dat niet veegt
+	clk.advance(potjeTTL + time.Hour)
+	if c := schrijfPotje(s, bewijs, bus, "zet-1"); c != 204 {
+		t.Fatalf("opnieuw schrijven na het verlopen: %d", c)
+	}
+	clk.advance(5 * time.Second)
+	if g := leesPotjes(s, bus); g.Blobs[bus] != "zet-1" || g.Ongewijzigd[bus] != 5 {
+		t.Fatalf("verlopen en met dezelfde bytes terug: %+v, wil 5 seconden", g)
+	}
+}
