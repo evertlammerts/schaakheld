@@ -583,6 +583,7 @@ var fetch = function (url, opts) {
       /* zelfde validatie als room.go: zelfde-code of rare tekens is 400 */
       if (body.mine === body.theirs || !/^[A-Za-z0-9_-]{8,64}$/.test(body.mine) ||
         !/^[A-Za-z0-9_-]{8,64}$/.test(body.theirs)) { res(400); return; }
+      __veegKamers();
       const lo = body.mine < body.theirs ? body.mine : body.theirs;
       const hi = body.mine < body.theirs ? body.theirs : body.mine;
       const key = lo + '|' + hi;
@@ -644,6 +645,10 @@ function WebSocket(url) {
   this.readyState = 0;
   this._room = null;
   this._seat = null;
+  /* de kamer zelf, niet het id: zoals room.go gaan berichten tussen twee
+     verbonden stoeltjes door, ook als de kamer om zijn leeftijd uit de tabel
+     ging */
+  this._rm = null;
   this.onopen = null; this.onmessage = null; this.onclose = null;
   setTimeout(() => {
     if (self.readyState !== 0) return;
@@ -654,7 +659,7 @@ function WebSocket(url) {
     if (sock.readyState === 1 && sock.onmessage) sock.onmessage({ data });
   }, 0);
   const peer = () => {
-    const rm = __server.wsrooms[self._room];
+    const rm = self._rm;
     if (!rm) return null;
     for (const tok in rm.seats) {
       const so = rm.seats[tok];
@@ -668,15 +673,16 @@ function WebSocket(url) {
       let join = null;
       try { join = JSON.parse(data); } catch (e) {}
       if (!join || typeof join !== 'object') { self._sluit(1008, 'eerst joinen', true); return; }
+      __veegKamers();
       const rm = __server.wsrooms[join.room];
       /* room.go: een onbekende kamer en een fout token zijn hetzelfde antwoord */
       if (!rm || !(join.seat in rm.seats)) { self._sluit(1008, 'onbekend', true); return; }
       const oud = rm.seats[join.seat];
       self._room = join.room;
+      self._rm = rm;
       self._seat = join.seat;
       rm.seats[join.seat] = self;
       rm.joined[join.seat] = true;
-      rm.touched = __busNu();
       /* zoals room.go: eerst zeggen dat het stoeltje is overgenomen, dan de
          lijn dicht zonder sluitbericht, zodat de oude kant weet dat
          herverbinden zinloos is */
@@ -691,8 +697,6 @@ function WebSocket(url) {
       if (p) lever(p, '{"t":"peer","aan":true}');
       return;
     }
-    const rm = __server.wsrooms[self._room];
-    if (rm) rm.touched = __busNu();
     const p = peer();
     if (p) lever(p, data);
   };
@@ -703,11 +707,11 @@ function WebSocket(url) {
   this._sluit = function (code, reden, schoon) {
     if (self.readyState === 3) return;
     self.readyState = 3;
-    if (self._room) {
-      const rm = __server.wsrooms[self._room];
-      if (rm) rm.touched = __busNu();
-      if (rm && rm.seats[self._seat] === self) {
+    if (self._rm) {
+      const rm = self._rm;
+      if (rm.seats[self._seat] === self) {
         rm.seats[self._seat] = null;
+        rm.touched = __busNu();
         for (const tok in rm.seats) {
           const so = rm.seats[tok];
           if (so && so.readyState === 1) lever(so, '{"t":"peer","aan":false}');

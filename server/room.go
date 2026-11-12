@@ -65,7 +65,10 @@ type seat struct {
 	token string
 	live  atomic.Bool // heeft dit stoeltje een levende verbinding? (lockvrij leesbaar)
 
-	mu   sync.Mutex // serialiseert schrijvers (relay en peer-signalen)
+	// beschermt conn en houdt live gelijk met conn. Nooit vastgehouden
+	// tijdens netwerkverkeer, dus mag hij onder s.mu genomen worden; s.mu
+	// onder mu nemen mag nooit.
+	mu   sync.Mutex
 	conn *websocket.Conn
 }
 
@@ -95,14 +98,13 @@ type room struct {
 	id      string
 	seats   [2]*seat
 	created time.Time
-	touched time.Time // laatste aanmelding, relaybericht of vertrek
+	touched time.Time // aanmaak of laatste vertrek; stil telt alleen als er niemand in zit
 	joined  [2]bool   // per stoeltje: ooit verbonden geweest
 }
 
 func (r *room) hasGame() bool { return r.joined[0] && r.joined[1] }
 
-// live lockvrij lezen: seat.mu onder s.mu nemen zou een trage schrijver de
-// hele server laten bevriezen
+// live verandert alleen onder s.mu, dus onder s.mu is dit exact
 func (r *room) occupied() bool { return r.seats[0].live.Load() || r.seats[1].live.Load() }
 
 func (r *room) lifetimes() (idle, maxAge time.Duration) {
@@ -344,8 +346,11 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.mu.Lock()
+	// verlopen is verlopen, ook als er sindsdien geen kamer bij kwam
+	s.sweepRoomsLocked()
 	rm := s.rooms[join.Room]
 	var mine, peer *seat
+	var old *websocket.Conn
 	if rm != nil {
 		if rm.seats[0].token == join.Seat {
 			mine, peer = rm.seats[0], rm.seats[1]
@@ -354,7 +359,16 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 			mine, peer = rm.seats[1], rm.seats[0]
 			rm.joined[1] = true
 		}
-		rm.touched = s.cfg.now()
+	}
+	if mine != nil {
+		// stoel innemen onder s.mu: anders telt de kamer even als leeg en
+		// kan hij precies dan plaats moeten maken. Een oude verbinding (tab
+		// kwijt, wifi weg) wordt vervangen door de nieuwe.
+		mine.mu.Lock()
+		old = mine.conn
+		mine.conn = c
+		mine.live.Store(true)
+		mine.mu.Unlock()
 	}
 	s.mu.Unlock()
 	if mine == nil {
@@ -362,14 +376,6 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 		c.Close(websocket.StatusPolicyViolation, "onbekend")
 		return
 	}
-
-	// stoel innemen; een oude verbinding (tab kwijt, wifi weg) wordt
-	// vervangen door de nieuwe
-	mine.mu.Lock()
-	old := mine.conn
-	mine.conn = c
-	mine.live.Store(true)
-	mine.mu.Unlock()
 	if old != nil {
 		// zeg erbij waarom we sluiten. Zonder dat kan de oude kant niet
 		// zien of zijn wifi hikte of dat een ander apparaat het stoeltje
@@ -418,27 +424,24 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 		if typ != websocket.MessageText {
 			continue
 		}
-		s.mu.Lock()
-		rm.touched = s.cfg.now()
-		s.mu.Unlock()
 		peer.write(data)
 	}
 	close(stopPing)
 
-	// de stille tijd telt vanaf het vertrek, niet vanaf de laatste zet: een
-	// kind dat lang nadenkt en dan de app sluit, verliest die tijd niet
+	// alleen opruimen als het stoeltje nog van deze verbinding is; een
+	// verbinding die al vervangen is, raakt niets meer aan
 	s.mu.Lock()
-	rm.touched = s.cfg.now()
-	s.mu.Unlock()
-
-	// alleen opruimen als het stoeltje nog van deze verbinding is
 	mine.mu.Lock()
 	nog := mine.conn == c
 	if nog {
 		mine.conn = nil
 		mine.live.Store(false)
+		// de stille tijd telt vanaf het vertrek, niet vanaf de laatste zet:
+		// een kind dat lang nadenkt en dan de app sluit, verliest die tijd niet
+		rm.touched = s.cfg.now()
 	}
 	mine.mu.Unlock()
+	s.mu.Unlock()
 	if nog {
 		peer.write([]byte(`{"t":"peer","aan":false}`))
 	}

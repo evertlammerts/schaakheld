@@ -43,6 +43,15 @@ const (
 	defaultMaxLinks = 8192
 )
 
+// linkTabelTeKlein: kan iedereen samen, zo snel als de rem toelaat, de
+// tabel met koppelcodes vol houden? Dan krijgt een echt kind 429.
+func linkTabelTeKlein(delay time.Duration, slots, maxLinks int) bool {
+	if delay <= 0 {
+		return true
+	}
+	return int(linkTTL/delay)*slots >= maxLinks
+}
+
 var (
 	codeRe = regexp.MustCompile(`^[a-z0-9-]{4,64}$`)
 	idRe   = regexp.MustCompile(`^[A-Za-z0-9_-]{8,64}$`)

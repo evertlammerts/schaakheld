@@ -325,7 +325,7 @@ func vertrek(t *testing.T, s *server, room, seat string, c *websocket.Conn) {
 	for i := 0; i < 400; i++ {
 		s.mu.Lock()
 		r := s.rooms[room]
-		klaar := r == nil
+		klaar := false
 		if r != nil {
 			for _, st := range r.seats {
 				if st.token == seat && !st.live.Load() {
@@ -334,6 +334,9 @@ func vertrek(t *testing.T, s *server, room, seat string, c *websocket.Conn) {
 			}
 		}
 		s.mu.Unlock()
+		if r == nil {
+			t.Fatalf("de kamer verdween terwijl een stoeltje vertrok")
+		}
 		if klaar {
 			return
 		}
@@ -631,6 +634,48 @@ func TestKamerVolBezetteKamerWijktNooit(t *testing.T) {
 	}
 	if n := aantalKamers(s); n != maxRooms {
 		t.Fatalf("%d kamers, wil %d: een ander potje hoort te wijken", n, maxRooms)
+	}
+}
+
+func TestKamerFoutTokenRaaktStilteNiet(t *testing.T) {
+	// wie het kamer-id kent maar geen stoeltoken, houdt de kamer niet in leven
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	room, seat, _ := nieuweKamer(s)
+	vertrek(t, s, room, seat, verbind(t, ctx, ts, room, seat))
+	clk.advance(10 * time.Minute)
+	geweigerd(t, ctx, ts, room, "heelverkeerdtoken")
+	clk.advance(6 * time.Minute)
+	veeg(t, s)
+	if kamerBestaat(s, room) {
+		t.Fatalf("16 minuten na het vertrek hoort de kamer weg te zijn, ook na een poging met een fout token")
+	}
+}
+
+func TestKamerVerlopenOokZonderNieuweKamer(t *testing.T) {
+	// verlopen is verlopen, ook als er sindsdien geen kamer bij kwam om op
+	// te ruimen
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	leeg, leegSeat, _ := nieuweKamer(s)
+	potje, seat := pauzePotje(t, ctx, s, ts)
+	clk.advance(16 * time.Minute)
+	if code, reden := sluitAntwoord(t, ctx, ts, leeg, leegSeat); code != websocket.StatusPolicyViolation || reden != "onbekend" {
+		t.Fatalf("een kamer zonder potje na 16 minuten stil: %v %q, wil 1008 onbekend", code, reden)
+	}
+	clk.advance(11*time.Hour + 34*time.Minute)
+	vertrek(t, s, potje, seat, verbind(t, ctx, ts, potje, seat))
+	clk.advance(12*time.Hour + 10*time.Minute)
+	if code, reden := sluitAntwoord(t, ctx, ts, potje, seat); code != websocket.StatusPolicyViolation || reden != "onbekend" {
+		t.Fatalf("een potje na 12 uur 10 stil: %v %q, wil 1008 onbekend", code, reden)
 	}
 }
 
