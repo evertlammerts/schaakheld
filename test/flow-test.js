@@ -2057,6 +2057,12 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   __server.buses = {};
   for (j = 0; j < MAX_BUSES; j++) __server.buses[j.toString(16).padStart(64, '0')] = { blob: 'x', tot: __busNu() + BUS_TTL };
   ok('potje: een volle tabel met uitnodigingen houdt een potje niet tegen', await pSchrijf(pa, 'x') === 204);
+  var uId = (0).toString(16).padStart(64, '0'), lUP = await pLees([uId, pa.bus]);
+  ok('potje: alleen een potjesbus krijgt een ongewijzigd, een uitnodiging niet',
+    lUP.blobs[uId] === 'x' && (pa.bus in lUP.ongewijzigd) && !(uId in lUP.ongewijzigd));
+  for (j = 1; j < 1023; j++) __server.potjes['f' + j.toString(16).padStart(63, '0')] = { blob: 'x', tot: __busNu() + POTJE_TTL, veranderd: __busNu() };
+  ok('potje: de uitnodigingen tellen niet mee voor de 1024 potjesbussen',
+    await pSchrijf(pb, 'x') === 204 && Object.keys(__server.potjes).length === 1024 && (pa.bus in __server.potjes));
 
   __server.links = { 'een-code': { payload: 'x', tot: __busNu() + LINK_TTL } };
   __server.wsrooms = {};

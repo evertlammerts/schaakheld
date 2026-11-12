@@ -47,3 +47,64 @@ func TestPotjeVerlopenEnTerugMetDezelfdeBytesBegintVers(t *testing.T) {
 		t.Fatalf("verlopen en met dezelfde bytes terug: %+v, wil 5 seconden", g)
 	}
 }
+
+func TestPotjeTabelTeltUitnodigingenNietMee(t *testing.T) {
+	s, clk := newTestServer(t, nil)
+	for i := 0; i < maxBuses; i++ {
+		b := fmt.Sprintf("uitnodiging-%04d-0123456789abcdef", i)
+		if c := busPost(t, s, busID(b), b, "x"); c != 204 {
+			t.Fatalf("uitnodiging %d: %d", i, c)
+		}
+	}
+	var eerste string
+	for i := 0; i < maxPotjes; i++ {
+		b, id := potjeBus(fmt.Sprintf("v%04d", i))
+		if c := schrijfPotje(s, b, id, "x"); c != 204 {
+			t.Fatalf("potje %d: %d", i, c)
+		}
+		if i == 0 {
+			eerste = id
+		}
+		clk.advance(time.Second)
+	}
+	s.mu.Lock()
+	n := len(s.potjes)
+	s.mu.Unlock()
+	if g := leesPotjes(s, eerste); n != maxPotjes || g.Blobs[eerste] != "x" {
+		t.Fatalf("naast %d uitnodigingen: %d potjes, het eerste nog leesbaar: %v; wil %d en ja",
+			maxBuses, n, g.Blobs[eerste] == "x", maxPotjes)
+	}
+}
+
+func TestPotjeAlleenEenJSONObject(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	bewijs, bus := potjeBus("a")
+	goed := string(jsonBody(t, map[string]string{"bus": bus, "bewijs": bewijs, "blob": "x"}))
+	for _, staart := range []string{" x", `{"naam":"Fien"}`, "}", `]{"naam":"Fien"}`} {
+		if c := do(t, s, "POST", "/v1/potje", "", []byte(goed+staart)).Code; c != 400 {
+			t.Errorf("met %q erachter: %d, wil 400", staart, c)
+		}
+	}
+	if g := leesPotjes(s, bus); len(g.Blobs) != 0 {
+		t.Fatalf("een geweigerd verzoek schreef toch: %+v", g)
+	}
+	if c := do(t, s, "POST", "/v1/potje", "", []byte(goed+" \n")).Code; c != 204 {
+		t.Fatalf("met alleen witruimte erachter: %d, wil 204", c)
+	}
+}
+
+func TestPotjeLeeftijdAlleenVoorPotjesbussen(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	u := "uitnodiging-0123456789abcdef"
+	bewijs, bus := potjeBus("a")
+	if busPost(t, s, busID(u), u, "x") != 204 || schrijfPotje(s, bewijs, bus, "y") != 204 {
+		t.Fatalf("schrijven lukt niet")
+	}
+	g := leesPotjes(s, busID(u), bus)
+	if g.Blobs[busID(u)] != "x" || g.Blobs[bus] != "y" {
+		t.Fatalf("lezen: %+v", g)
+	}
+	if _, heeft := g.Ongewijzigd[busID(u)]; heeft || len(g.Ongewijzigd) != 1 {
+		t.Fatalf("alleen de potjesbus krijgt een leeftijd: %+v", g.Ongewijzigd)
+	}
+}

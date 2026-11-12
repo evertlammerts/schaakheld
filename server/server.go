@@ -504,8 +504,8 @@ func readJSON(w http.ResponseWriter, r *http.Request, limit int64, v any) bool {
 	return true
 }
 
-// readJSONStrict weigert ook een veld dat v niet kent: wat de server niet
-// nodig heeft, hoort hij niet te krijgen.
+// readJSONStrict weigert ook een veld dat v niet kent en alles na het
+// object: wat de server niet nodig heeft, hoort hij niet te krijgen.
 func readJSONStrict(w http.ResponseWriter, r *http.Request, limit int64, v any) bool {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil {
@@ -514,7 +514,8 @@ func readJSONStrict(w http.ResponseWriter, r *http.Request, limit int64, v any) 
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
-	if dec.Decode(v) != nil || dec.More() {
+	// json.Valid en niet dec.More: More ziet tekst die met } of ] begint niet
+	if !json.Valid(body) || dec.Decode(v) != nil {
 		http.Error(w, "geen geldige json", http.StatusBadRequest)
 		return false
 	}
