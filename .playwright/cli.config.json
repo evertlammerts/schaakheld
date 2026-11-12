@@ -1,0 +1,12 @@
+{
+  "browser": {
+    "browserName": "webkit",
+    "isolated": true,
+    "initScript": ["dev-init.js"]
+  },
+  "network": {
+    "allowedOrigins": ["http://127.0.0.1:*"],
+    "blockedOrigins": ["https://schaak.bottledbits.com", "https://evert.lammerts.online"]
+  },
+  "outputDir": "out"
+}

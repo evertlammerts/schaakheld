@@ -4,3 +4,7 @@
 .tmp-sw.js
 tools/.wordlist-cache/
 server/data/
+.dev/
+.playwright/out/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
