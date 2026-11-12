@@ -327,6 +327,7 @@ ok('safe: wrong scores 0', session.earned === earnedBefore);
 ok('safe: review phase after wrong', session.phase === 'review');
 
 /* ---------- best3 drill ---------- */
+wisRondje('best3'); /* [1.6] het rondje hierboven is bewaard; deze test wil een vers rondje */
 startDrill('best3');
 drainTimers();
 ok('best3: task built', !!(session.task && session.task.options.length === 3));
@@ -497,15 +498,17 @@ ok('wolk: dromer-trofee', !!P.badges.wolk);
 exitCloud();
 ok('wolk: terug naar echt, bord intact', session.S === realS && toFEN(session.S) === realFen &&
   BD.mode === 'move' && !session.cloud && realS.hist.length === 0);
-/* ← in de wolk is geen opgeven: eerst het echte bord terug, pas daarna weglopen */
+/* Pauze in de wolk: eerst het echte bord terug, dan naar huis zonder vraag; het droombord blijft niet bewaard */
 enterCloud();
+onCell(sqFromAlg('e4')); onCell(sqFromAlg('d5'));
+drainTimers();
+var droomZetten = session.S.hist.length;
 fire(__els.backBtn, 'click');
-ok('wolk: ← brengt terug naar echt en het potje loopt door', !!session && session.kind === 'game' &&
-  !session.cloud && !session.over && BD.mode === 'move' && __els.overlay.classList.contains('hidden'));
-fire(__els.backBtn, 'click');
-ok('wolk: nog een ← vraagt gewoon om opgeven', __els.modalBox.innerHTML.indexOf('Opgeven?') >= 0 &&
-  !!session && !session.over);
-fire(__els.rsNee, 'click');
+ok('[1.2] wolk: Pauze vraagt niets, gaat naar huis en bewaart het echte bord, niet het droombord', droomZetten === 1 &&
+  session === null && __els.overlay.classList.contains('hidden') && !!leesPotje() && leesPotje().r.moves.length === 0);
+fire(document.getElementById('verderKaart'), 'click');
+ok('[1.2] wolk: verder spelen geeft het echte bord terug en het potje loopt door', !!session &&
+  session.kind === 'game' && !session.cloud && !session.over && BD.mode === 'move' && session.S.hist.length === 0);
 /* patroon-duiding in de partij: kid speelt een vork, Turbo benoemt hem */
 P.guard = false; P.predict = false;
 session.S = parseFEN('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1');
@@ -1978,10 +1981,10 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('turbo: remise meteen aan het begin wordt afgewimpeld', session.over !== true &&
     __els.bubble.innerHTML.indexOf('net begonnen') >= 0);
   fire(__els.backBtn, 'click');
-  ok('turbo: ← Home midden in een potje vraagt om opgeven',
-    __els.modalBox.innerHTML.indexOf('Opgeven?') >= 0 && session !== null);
-  fire(__els.rsNee, 'click');
-  ok('turbo: nee = doorspelen', session !== null && session.over !== true && __els.overlay.classList.contains('hidden'));
+  ok('[1.2] turbo: Pauze midden in een potje vraagt niets en bewaart het potje',
+    session === null && __els.overlay.classList.contains('hidden') && !!leesPotje() && !leesPotje().kapot);
+  fire(document.getElementById('verderKaart'), 'click');
+  ok('[1.2] turbo: verder spelen = doorspelen', session !== null && session.over !== true && __els.overlay.classList.contains('hidden'));
   var gpT = P.c.gamesPlayed, xpT = P.xp;
   fire(actionBtns.resignBtn, 'click');
   fire(__els.rsJa, 'click');
@@ -2020,6 +2023,20 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   closeModal();
   goHome();
   ok('offline: na afloop gaat ← Home gewoon naar huis', session === null && __els.overlay.classList.contains('hidden'));
+
+  /* een rondje is af bij het vijfde antwoord: wie dan weggaat, laat geen opdracht 6 achter */
+  var vijf = nieuwKind();
+  vijf.ev('setPref("weekGoal", { kind: "top", n: 2, game: "scan" })');
+  await startOefening(vijf, 'scan');
+  await rondjeGoed(vijf, 5);
+  for (var lv = 0; lv < 8 && vijf.ziet('LEVEL OMHOOG'); lv++) vijf.tik('lvlOk');
+  vijf.tik('backBtn');
+  await wacht();
+  ok('[1.6] Pauze na het vijfde antwoord: het rondje is af, de melding zegt het en er blijft niets staan',
+    opgeslagen(vijf, RONDJES) === null && /Rondje klaar/.test(toastTekst(vijf)) && tekstVan(vijf, 'verder') === '');
+  ok('[1.6] en de topronde telt meteen', /1\s*(\/|van)\s*2/.test(wekelijks(vijf)));
+  await startOefening(vijf, 'scan');
+  ok('[1.6] een nieuw rondje begint bij opdracht 1', /Opdracht 1 van 5/.test(tekstVan(vijf, 'roundChip')));
 
   await orakelZelftest();
   await orakelFlow();

@@ -324,6 +324,27 @@
     border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: bold;
   }
   #modeTitle { font-size: 19px; font-weight: bold; }
+  .bewaard { font-size: 13px; font-weight: bold; color: var(--ink-soft); white-space: nowrap; }
+
+  /* ---------- Verder: wat er bezig is ---------- */
+  .verder { margin: 0 0 14px; }
+  .verder-kaart {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%;
+    border: none; cursor: pointer; text-align: left; font-family: var(--font); color: var(--ink);
+    background: var(--card); border-radius: 22px; padding: 14px 16px; box-shadow: var(--shadow);
+  }
+  .verder-kaart .vk-titel { font-size: 18px; font-weight: bold; }
+  .verder-kaart .vk-zin { font-size: 14.5px; color: var(--ink-soft); }
+  .verder-kaart .vk-knop {
+    align-self: flex-end; margin-top: 4px; background: var(--sun); border-radius: 999px;
+    padding: 8px 16px; font-weight: bold; font-size: 15px;
+  }
+  .verder-kaart.kapot { cursor: default; }
+  .verder-ook {
+    display: block; width: 100%; margin-top: 6px; border: none; background: none; cursor: pointer;
+    font-family: var(--font); font-size: 14px; color: var(--ink); text-align: left; padding: 8px 16px;
+  }
+  .verder-bewaard { margin: 6px 16px 0; font-size: 12.5px; color: var(--ink-soft); }
   #roundChip {
     margin-left: auto; background: var(--card); border-radius: 999px; padding: 7px 14px;
     font-size: 14px; box-shadow: var(--shadow); font-variant-numeric: tabular-nums;
@@ -601,20 +622,18 @@
   .lvl-btn .l-emoji { font-size: 30px; }
   .lvl-btn .l-sub { display: block; font-size: 12.5px; font-weight: normal; opacity: .85; }
 
+  /* onderaan, boven de tabbalk, zodat hij nooit over de Verder-kaart valt;
+     tikken gaan erdoorheen */
   .toast {
-    position: fixed; top: 18%; left: 50%; transform: translateX(-50%); z-index: 80;
-    background: var(--coral); color: #fff; font-size: 25px; font-weight: bold;
-    padding: 14px 30px; border-radius: 999px; box-shadow: 0 10px 30px rgba(0,0,0,.25);
-    animation: toast-pop 1.6s ease forwards; pointer-events: none; white-space: nowrap;
+    position: fixed; left: 16px; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    margin: 0 auto; max-width: 440px; z-index: 96; text-align: center;
+    background: var(--coral); color: #fff; font-size: 19px; font-weight: bold; line-height: 1.35;
+    padding: 12px 18px; border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    animation: toast-in .25s ease; pointer-events: none;
   }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
   .toast.gold { background: var(--sun); color: var(--ink); }
   .toast.hidden { display: none; }
-  @keyframes toast-pop {
-    0% { transform: translateX(-50%) scale(.6); opacity: 0 }
-    12% { transform: translateX(-50%) scale(1.08); opacity: 1 }
-    22% { transform: translateX(-50%) scale(1); }
-    80% { opacity: 1 } 100% { opacity: 0 }
-  }
   .xp-float {
     position: fixed; z-index: 85; font-size: 17px; font-weight: bold; color: var(--sun-deep);
     background: var(--card); padding: 7px 14px; border-radius: 999px; box-shadow: var(--shadow);
@@ -677,6 +696,7 @@
   <section id="scr-home" class="screen">
     <!-- Tab 1: Spelen — alleen kiezen wat je gaat doen -->
     <div id="view-spelen" class="home-view">
+      <div id="verder" class="verder hidden"></div>
       <div class="hero">
         <div class="hero-turtle">🐢</div>
         <div class="hero-txt">
@@ -788,8 +808,9 @@
 
   <section id="scr-play" class="screen hidden">
     <div class="playbar">
-      <button id="backBtn" class="back-btn">← Home</button>
+      <button id="backBtn" class="back-btn" aria-label="Even weg, je potje blijft bewaard">‹ Pauze</button>
       <span id="modeTitle"></span>
+      <span id="bewaard" class="bewaard hidden">✔ bewaard</span>
       <span id="roundChip"></span>
     </div>
     <div class="play-wrap">
@@ -4406,6 +4427,7 @@ function playMove(m, cb) {
     BD.last = [m.from, m.to];
     BD.check = inCheck(S) ? S.kings[S.turn] : null;
     renderBoard();
+    if (mine.kind === 'game' && !mine.cloud) bewaarPotje();
     if (cb) cb();
   });
 }
@@ -4459,6 +4481,7 @@ function renderModal(html, setup, cancelable, key) {
   if (setup) setup();
 }
 function showModal(html, setup, cancelable, key) {
+  $('toast').classList.add('hidden');
   if (modalOpen) { modalQueue.push([html, setup, cancelable, key]); return; }
   modalOpen = true;
   $('overlay').classList.remove('hidden');
@@ -4506,17 +4529,36 @@ $('overlay').addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && modalOpen && modalCancelable) closeModal();
 });
-function showToast(txt, gold) {
+let toastTimer = 0;
+function showToast(txt, gold, ms) {
   const t = $('toast');
   const n = t.cloneNode(false);
   n.textContent = txt;
   n.className = 'toast' + (gold ? ' gold' : '');
+  /* de tabbalk is hoger dan de vaste afstand in de opmaak en groeit met de veilige rand */
+  n.style.bottom = $('scr-home').classList.contains('hidden') ? '' :
+    (innerHeight - document.querySelector('.tabbar').getBoundingClientRect().top + 8) + 'px';
   t.replaceWith(n);
-  setTimeout(() => n.classList.add('hidden'), 1700);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => n.classList.add('hidden'), ms || 4000);
 }
+/* de melding vangt geen tikken; een tik die op hem valt, sluit hem wel */
+document.addEventListener('pointerdown', e => {
+  const t = $('toast');
+  if (t.classList.contains('hidden')) return;
+  const r = t.getBoundingClientRect();
+  if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) t.classList.add('hidden');
+}, true);
 function showScreen(name) {
   $('scr-home').classList.toggle('hidden', name !== 'home');
   $('scr-play').classList.toggle('hidden', name !== 'play');
+  try { window.scrollTo(0, 0); } catch (e) {}
+  if (name === 'play') {
+    $('backBtn').textContent = session && session.online ? '← Home' : '‹ Pauze';
+    $('bewaard').classList.add('hidden');
+    terugTab = laatsteTab;
+    try { $('board').scrollIntoView({ block: 'nearest' }); } catch (e) {}
+  }
 }
 
 /* ---------- copy ---------- */
@@ -4621,7 +4663,7 @@ function renderPatBook() {
 /* ---------- session ---------- */
 let session = null;
 
-function goHome() {
+function goHome(tab) {
   if (INV) inviteClear(); /* wie wegloopt laat geen briefje liggen */
   if (MP) mpStop(); /* weglopen uit een online potje = netjes gedag zeggen */
   session = null;
@@ -4636,16 +4678,145 @@ function goHome() {
   if (cloudFrame) cloudFrame.classList.remove('cloud', 'flip');
   stopPatience();
   showScreen('home');
-  showHomeTab('spelen'); /* terug op het startscherm sta je weer op Spelen */
+  showHomeTab(typeof tab === 'string' ? tab : 'spelen');
   $('homeBubble').textContent = pick(HOME_LINES);
   renderHome();
   friendPollSoon(800); /* thuis: snel kijken of er een uitnodiging ligt */
 }
 
+/* ---------- bewaard: een potje tegen Turbo en de rondjes, op dit apparaat ----------
+   Buiten het profiel, zodat het CRDT-document niet verandert. Een potje is
+   de lijst zetten; nagespeeld door legalMoves geeft die altijd dezelfde
+   stand. Wat niet te lezen is, blijft staan tot het kind kiest. */
+const POTJE_KEY = 'schaakheld-potje', RONDJES_KEY = 'schaakheld-rondjes';
+function opslag(k, v) {
+  try {
+    if (v === undefined) return localStorage.getItem(k);
+    if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v);
+  } catch (e) {}
+  return null;
+}
+function leesPotje() {
+  const ruw = opslag(POTJE_KEY);
+  if (ruw == null) return null;
+  try {
+    const r = JSON.parse(ruw);
+    if (!r || r.v !== 1 || ![1, 2, 3].includes(r.level) || !Array.isArray(r.moves)) return { kapot: true };
+    const S = newGame();
+    for (const k of r.moves) {
+      const m = legalMoves(S).find(x => moveKey(x) === k);
+      if (!m) return { kapot: true };
+      makeMove(S, m);
+    }
+    return gameStatus(S).over ? { kapot: true } : { r, S };
+  } catch (e) { return { kapot: true }; }
+}
+function bewaarPotje() {
+  if (!session || session.kind !== 'game' || session.online || session.over) return;
+  const S = session.cloud ? session.cloud.realS : session.S;
+  opslag(POTJE_KEY, JSON.stringify({ v: 1, level: session.level, moves: S.hist.map(h => moveKey(h.m)),
+    tips: session.tips, drawAsked: session.drawAsked == null ? null : session.drawAsked,
+    started: session.started, updated: Date.now() }));
+  $('bewaard').classList.remove('hidden');
+}
+function leesRondjes() {
+  try { return JSON.parse(opslag(RONDJES_KEY)) || {}; } catch (e) { return {}; }
+}
+/* een rondje is af bij het vijfde antwoord, ook als het kind daarna meteen weggaat */
+function bewaarRondje() {
+  if (!session || session.kind === 'game' || session.kind === 'opening') return;
+  if (session.round >= 5) {
+    session.af = true;
+    wisRondje(session.kind);
+    if (session.earned >= 12) bumpWeek('top.' + session.kind, 1);
+  } else {
+    const r = leesRondjes();
+    r[session.kind] = { round: session.round, earned: session.earned };
+    opslag(RONDJES_KEY, JSON.stringify(r));
+  }
+  $('bewaard').classList.remove('hidden');
+}
+function wisRondje(kind) {
+  const r = leesRondjes();
+  delete r[kind];
+  opslag(RONDJES_KEY, Object.keys(r).length ? JSON.stringify(r) : null);
+}
+/* de zet die nu aan de beurt is, zoals in de partijnotatie */
+function zetNummer(S) { return Math.floor(S.hist.length / 2) + 1; }
+function apparaatNaam() {
+  const ua = navigator.userAgent || '';
+  if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'iPad';
+  if (/iPhone|iPod/.test(ua)) return 'iPhone';
+  return /Android|Mobile/.test(ua) ? 'telefoon' : 'computer';
+}
+
+/* Pauze: nooit een vraag, het potje of rondje blijft staan */
+function pauze() {
+  if (session && session.cloud) exitCloud();
+  let melding = null;
+  if (session && session.kind === 'game' && !session.over) {
+    bewaarPotje();
+    melding = 'Bewaard. Je kunt later verder bij zet ' + zetNummer(session.S) + '.';
+  } else if (session && session.kind === 'opening') {
+    melding = 'Je sterren zijn bewaard. De les begint de volgende keer opnieuw.';
+  } else if (session && session.kind !== 'game') {
+    const r = leesRondjes()[session.kind];
+    melding = session.af ? 'Rondje klaar! Je sterren zijn bewaard.' :
+      r ? 'Bewaard. Je kunt later verder bij opdracht ' + (r.round + 1) + '.' : 'Dit rondje was nog niet begonnen.';
+  }
+  goHome(terugTab);
+  if (melding) showToast(melding, false, 6000);
+}
+
+/* De Verder-kaart: wat er bezig is, het bewaarde potje eerst */
+function renderVerder() {
+  const el = $('verder');
+  const items = [];
+  const b = leesPotje();
+  if (b && b.kapot) items.push({ kapot: true });
+  else if (b) {
+    const naam = TURBO_NAMES[b.r.level];
+    items.push({ titel: 'Verder: je potje tegen ' + naam, wat: 'potje', knop: 'Speel verder',
+      zin: 'Zet ' + zetNummer(b.S) + '. ' + (b.S.turn === 'w' ? 'Jij bent aan zet.' : 'Turbo is aan zet.'),
+      ook: 'je potje tegen ' + naam + ', zet ' + zetNummer(b.S), doe: hervatPotje });
+  }
+  const rj = leesRondjes();
+  for (const k of DRILL_KINDS) {
+    if (!rj[k]) continue;
+    items.push({ titel: 'Verder: ' + DRILLS[k].naam, wat: 'rondje', knop: 'Ga verder',
+      zin: 'Opdracht ' + (rj[k].round + 1) + ' van 5. Je sterren van dit rondje staan er nog.',
+      ook: 'je rondje ' + DRILLS[k].naam + ', opdracht ' + (rj[k].round + 1) + ' van 5', doe: () => startDrill(k) });
+  }
+  el.classList.toggle('hidden', !items.length);
+  if (!items.length) { el.innerHTML = ''; return; }
+  const eerste = items[0];
+  let h = eerste.kapot ?
+    '<div class="verder-kaart kapot"><span class="vk-titel">Dit potje kan ik niet meer openen.</span>' +
+    '<span class="vk-zin">Het is misschien kapot, of van een nieuwere SchaakHeld.</span>' +
+    '<button class="btn plain small" id="verderWeg">Weghalen</button></div>' :
+    '<button class="verder-kaart" id="verderKaart"><span class="vk-titel">' + eerste.titel + '</span>' +
+    '<span class="vk-zin">' + eerste.zin + '</span><span class="vk-knop">▶ ' + eerste.knop + '</span></button>';
+  items.slice(1).forEach((it, i) => {
+    h += '<button class="verder-ook" data-ook="' + (i + 1) + '">Ook nog: ' + it.ook + ' ›</button>';
+  });
+  if (!eerste.kapot) h += '<div class="verder-bewaard">✔ Je ' + eerste.wat + ' blijft staan op deze ' + apparaatNaam() +
+    ', ook als je de app dichtdoet.</div>';
+  el.innerHTML = h;
+  if (eerste.kapot) $('verderWeg').addEventListener('click', () => { opslag(POTJE_KEY, null); renderVerder(); });
+  else $('verderKaart').addEventListener('click', eerste.doe);
+  el.querySelectorAll('.verder-ook').forEach(o => o.addEventListener('click', () => items[+o.dataset.ook].doe()));
+}
+
+function hervatPotje() {
+  const b = leesPotje();
+  if (b && !b.kapot) startGame(b.r.level, b);
+}
+
 /* ---------- drills ---------- */
 function startDrill(kind) {
   if (kind === 'opening') { openingChooser(); return; }
-  session = { kind, S: null, round: 0, earned: 0, task: null, phase: 'idle', lastType: null };
+  const verder = leesRondjes()[kind];
+  session = { kind, S: null, round: verder ? verder.round : 0, earned: verder ? verder.earned : 0, task: null, phase: 'idle', lastType: null };
   showScreen('play');
   $('modeTitle').textContent = MODE_TITLES[kind];
   $('gameInfo').classList.add('hidden');
@@ -4654,6 +4825,7 @@ function startDrill(kind) {
   $('drillStars').classList.remove('hidden');
   setTask(null); setOptions(null);
   updateDrillStars();
+  if (verder) $('bewaard').classList.remove('hidden');
   nextRound();
 }
 
@@ -5431,6 +5603,7 @@ function scoreTask(stars) {
   checkBadges();
   updateDrillStars();
   updateHud();
+  bewaarRondje();
 }
 function awardRound(stars, msg) {
   if (!session || session.kind === 'game') return;
@@ -5444,7 +5617,7 @@ function drillSummary() {
   const emoji = e >= 12 ? '🤩' : (e >= 7 ? '😃' : '🙂');
   const line = e >= 12 ? 'WAUW! Jij hebt echte speurogen!' :
     (e >= 7 ? 'Lekker bezig! Je wordt steeds sterker.' : 'Goed geoefend! Oefenen maakt je supersterk.');
-  if (e >= 12) { snd.win(); celebrate(); bumpWeek('top.' + session.kind, 1); } else snd.good();
+  if (e >= 12) { snd.win(); celebrate(); } else snd.good();
   const kind = session.kind;
   showModal('<div class="m-emoji">' + emoji + '</div><h2>Rondje klaar!</h2>' +
     '<p>Je verdiende <b>' + e + '</b> van de 15 sterren.<br>' + line + '</p>' +
@@ -5743,19 +5916,45 @@ function gameWinXP(level) {
 }
 
 function startGameFlow() {
-  showModal('<div class="m-emoji">🐢</div><h2>Tegen wie speel je?</h2><div class="m-btns">' +
+  const b = leesPotje();
+  const kies = lvl => (b && !b.kapot ? vraagNieuwPotje(lvl) : startGame(lvl));
+  const bovenaan = !b ? '' : b.kapot ?
+    '<p>Je oude potje kan ik niet meer openen. Een nieuw potje haalt het weg.</p>' :
+    '<div class="m-btns"><button class="btn sun" id="kiesVerder">▶ Verder spelen</button></div>' +
+    '<p>Je potje tegen ' + TURBO_NAMES[b.r.level] + ', zet ' + zetNummer(b.S) + ', ' +
+    (b.S.turn === 'w' ? 'jij bent aan zet' : 'Turbo is aan zet') + '.<br>Een nieuw potje? Dan stopt dit potje, en telt het als opgegeven.</p>';
+  showModal('<div class="m-emoji">🐢</div><h2>Tegen wie speel je?</h2>' + bovenaan + '<div class="m-btns">' +
     '<button class="btn plain lvl-btn" data-lvl="1"><span class="l-emoji">🍼</span><span><b>Baby Turbo</b><span class="l-sub">Doet soms een dutje. Lekker oefenen!</span></span></button>' +
     '<button class="btn plain lvl-btn" data-lvl="2"><span class="l-emoji">🐢</span><span><b>Turbo</b><span class="l-sub">Denkt al best goed na.</span></span></button>' +
     '<button class="btn plain lvl-btn" data-lvl="3"><span class="l-emoji">🚀</span><span><b>Super Turbo</b><span class="l-sub">Kijkt ver vooruit. Pittig!</span></span></button>' +
     '</div>', () => {
-      document.querySelectorAll('.lvl-btn').forEach(b => {
-        b.addEventListener('click', () => { closeModal(); startGame(+b.dataset.lvl); });
+      if (b && !b.kapot) $('kiesVerder').addEventListener('click', () => { closeModal(); hervatPotje(); });
+      document.querySelectorAll('.lvl-btn').forEach(k => {
+        k.addEventListener('click', () => { closeModal(); kies(+k.dataset.lvl); });
       });
     }, true);
 }
+function vraagNieuwPotje(lvl) {
+  showModal('<div class="m-emoji">🐢</div><h2>Dit potje opgeven en een nieuw potje beginnen?</h2>' +
+    '<p>Een nieuw potje? Dan stopt dit potje, en telt het als opgegeven.</p>' +
+    '<div class="m-btns"><button class="btn sun" id="nieuwNee">↩️ Nee, verder spelen</button>' +
+    '<button class="btn plain" id="nieuwJa">Ja, een nieuw potje</button></div>', () => {
+      $('nieuwNee').addEventListener('click', () => { closeModal(); hervatPotje(); });
+      $('nieuwJa').addEventListener('click', () => { closeModal(); geefBewaardOp(); startGame(lvl); });
+    }, true);
+}
+/* telt precies als opgeven met de knop: met dezelfde eindafrekening */
+function geefBewaardOp() {
+  const b = leesPotje();
+  if (!b || b.kapot) { opslag(POTJE_KEY, null); return; }
+  session = { kind: 'game', S: b.S, level: b.r.level, tips: b.r.tips, over: false, pending: null };
+  endGame({ over: true, result: 'b', reason: 'opgave' }, true);
+  session = null;
+}
 
-function startGame(level) {
-  session = { kind: 'game', S: newGame(), level, tips: 3, over: false, pending: null };
+function startGame(level, bewaard) {
+  session = { kind: 'game', S: bewaard ? bewaard.S : newGame(), level, tips: bewaard ? bewaard.r.tips : 3, over: false,
+    pending: null, drawAsked: bewaard ? bewaard.r.drawAsked : null, started: bewaard ? bewaard.r.started : Date.now() };
   showScreen('play');
   $('modeTitle').textContent = MODE_TITLES.game;
   $('roundChip').textContent = TURBO_NAMES[level];
@@ -5769,7 +5968,10 @@ function startGame(level) {
   updateTrays();
   updateToggles();
   gameActions();
-  kidTurn();
+  const laatste = session.S.hist[session.S.hist.length - 1];
+  if (laatste) { BD.last = [laatste.m.from, laatste.m.to]; renderBoard(); }
+  bewaarPotje();
+  if (session.S.turn === 'w') kidTurn(); else { BD.mode = 'off'; turboTurn(); }
 }
 
 function gameActions() {
@@ -6373,11 +6575,12 @@ function endGameOnline(st, drawTxt) {
     });
 }
 
-function endGame(st) {
+function endGame(st, stil) {
   /* een potje eindigt precies één keer: een zet-animatie die nog uitloopt
      of een laat relay-bericht mag geen tweede einde inluiden */
   if (!session || session.kind !== 'game' || session.over) return;
   session.over = true;
+  if (!session.online) opslag(POTJE_KEY, null);
   BD.mode = 'off';
   stopPatience();
   renderBoard();
@@ -6416,6 +6619,7 @@ function endGame(st) {
   if (xp) addXP(xp, st.result === 'w' ? 'Gewonnen! 🏆' : 'Goed gespeeld!');
   checkBadges();
   saveP();
+  if (stil) return;
   const lvl = session.level;
   later(() => {
     showModal('<div class="m-emoji">' + emoji + '</div><h2>' + h + '</h2><p>' + p + '</p>' +
@@ -6797,6 +7001,7 @@ function renderLevelPath() {
 }
 
 function renderHome() {
+  renderVerder();
   updateHud();
   renderPatBook();
   renderWeek();
@@ -6810,8 +7015,10 @@ function renderHome() {
 /* drie tabs op het startscherm: Spelen (kiezen wat je doet), Vrienden
    (uitnodigen of samen spelen) en Ik (week, vorm, trofeeën). */
 const HOME_TABS = { spelen: 'tabSpelen', vrienden: 'tabVrienden', ik: 'tabIk' };
+let laatsteTab = 'spelen', terugTab = 'spelen';
 function showHomeTab(name) {
   if (!HOME_TABS[name]) name = 'spelen';
+  laatsteTab = name;
   for (const t in HOME_TABS) {
     $('view-' + t).classList.toggle('hidden', t !== name);
     $(HOME_TABS[t]).classList.toggle('on', t === name);
@@ -6856,22 +7063,23 @@ $('friendList').addEventListener('click', e => {
   else if (d.remove && P.friends[d.remove]) removeFriendAsk(d.remove);
 });
 $('backBtn').addEventListener('click', () => {
-  /* in de denkwolk brengt ← je eerst terug naar het echte bord; midden in
-     een potje is weglopen opgeven en dat vraagt eerst */
-  if (session && session.cloud) { exitCloud(); return; }
-  if (session && session.kind === 'game' && !session.over) { resignAsk(); return; }
-  goHome();
+  /* een potje met een vriend blijft tot increment 4 zoals het was */
+  if (session && session.online && !session.over) { resignAsk(); return; }
+  pauze();
 });
 $('setBtn').addEventListener('click', openSettings);
 for (const t in HOME_TABS) $(HOME_TABS[t]).addEventListener('click', () => showHomeTab(t));
 function confirmReset() {
   showModal('<div class="m-emoji">🗑️</div><h2>Alles wissen?</h2>' +
-    '<p>Je naam, je <b>' + P.stars + '</b> sterren, je level en je trofeeën gaan dan weg.<br>Weet je het heel zeker?</p>' +
+    '<p>Je naam, je XP, je sterren, je level, je trofeeën en een potje dat bezig is gaan weg van dit apparaat.' +
+    (ACC ? '<br>Op je andere apparaat blijft alles staan.' : '') + '<br>Weet je het heel zeker?</p>' +
     '<div class="m-btns"><button class="btn coral" id="rstGo">Ja, wis alles</button>' +
     '<button class="btn plain" id="rstNo">Nee, bewaren!</button></div>', () => {
       $('rstNo').addEventListener('click', closeModal);
       $('rstGo').addEventListener('click', () => {
         try { localStorage.removeItem('schaakheld1'); } catch (e) {}
+        opslag(POTJE_KEY, null);
+        opslag(RONDJES_KEY, null);
         /* wissen is lokaal: dit apparaat ontkoppelt en begint blanco.
            Andere apparaten en de server houden het profiel, dus een
            vergissing is herstelbaar door opnieuw te koppelen. Zonder
