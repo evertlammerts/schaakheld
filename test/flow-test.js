@@ -9,6 +9,9 @@ function ok(name, cond) {
 ok('init: name modal open', !__els.overlay.classList.contains('hidden'));
 P.name = 'Testkind'; closeModal();
 
+/* iOS 15.0 kent crypto.randomUUID niet (de shim ook niet): dan maakt de terugval het apparaat-id */
+ok('apparaat-id: zonder randomUUID 32 hex-tekens', typeof crypto.randomUUID === 'undefined' && /^[0-9a-f]{32}$/.test(DEV));
+
 /* close any queued LEVEL OMHOOG modals so later modal assertions see past them */
 function closeLevelUps() {
   var guard = 0;

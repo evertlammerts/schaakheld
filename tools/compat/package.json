@@ -1,0 +1,21 @@
+{
+  "name": "schaakheld-compat",
+  "private": true,
+  "description": "Compatibiliteitspoort voor de gebouwde app; alleen ontwikkelgereedschap, de app zelf gebruikt geen npm",
+  "type": "module",
+  "scripts": {
+    "gate": "node gate.mjs",
+    "selftest": "node selftest.mjs"
+  },
+  "devDependencies": {
+    "@mdn/browser-compat-data": "^8.1.8",
+    "doiuse": "^6.0.6",
+    "eslint": "^10.14.0",
+    "eslint-plugin-compat": "^7.0.2",
+    "eslint-plugin-es-x": "^10.1.0",
+    "parse5": "^8.1.1",
+    "postcss": "^8.5.32",
+    "postcss-selector-parser": "^7.2.0",
+    "postcss-value-parser": "^4.2.0"
+  }
+}

@@ -86,6 +86,16 @@ assert json.loads(js[js.index('['):js.rindex(']')+1]) == words, 'words.js loopt 
 " || { echo "FAIL words-nl.txt"; exit 1; }
 echo "woordlijst ok"
 
+# Compatibiliteitspoort: de gebouwde index.html en sw.js tegen de oudste
+# browsers (iOS Safari 15.0 en verder, zie tools/compat/gate.mjs). Nooit
+# overslaan: niets anders bewaakt de oude iPhone, dus zonder node faalt dit.
+command -v node >/dev/null 2>&1 || { echo "FAIL compat: node ontbreekt, en zonder node draait de compatibiliteitspoort niet"; exit 1; }
+if [ ! -f tools/compat/node_modules/.package-lock.json ] || [ tools/compat/package-lock.json -nt tools/compat/node_modules/.package-lock.json ]; then
+  (cd tools/compat && npm ci --no-audit --no-fund) || { echo "FAIL compat: npm ci in tools/compat mislukte"; exit 1; }
+fi
+node tools/compat/gate.mjs || exit 1
+node tools/compat/selftest.mjs || { echo "FAIL compat-selftest"; exit 1; }
+
 # Go-server-suite: draait alleen met een go-toolchain (op de laptop
 # ontbreekt die; de devbox draait hem via nix shell nixpkgs#go).
 if command -v go >/dev/null 2>&1; then
