@@ -300,7 +300,14 @@ async function orakelTwee() {
     const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
     await mees.ev('linkShareFlow()');
     await wacht();
-    const woorden = mees.modal().replace(/<[^>]*>/g, ' ').split(/[^a-z]+/).filter(function (w) { return WOORDEN.indexOf(w) >= 0; }).slice(0, 4);
+    /* de code is de eerste rij van vier lijstwoorden achter elkaar: een los
+       lijstwoord in de zin eromheen ("vier", "tien") telt niet mee */
+    const tekens = mees.scherm().toLowerCase().split(/[^a-z]+/).filter(Boolean);
+    let woorden = [];
+    for (let i = 0; i + 4 <= tekens.length && !woorden.length; i++) {
+      const rij = tekens.slice(i, i + 4);
+      if (rij.every(function (w) { return WOORDEN.indexOf(w) >= 0; })) woorden = rij;
+    }
     check('testopzet: vier woorden op het scherm', woorden.length === 4);
     ipad.ev('linkEntryFlow()');
     await wacht();
@@ -329,6 +336,20 @@ async function orakelTwee() {
       __server.klok += 10 * 3600000;
       await veeg();
       check('na ruim 12 uur stil is ook de kamer met een potje weg', !(kamer in __server.wsrooms));
+    } finally { __server.klok = klok; }
+  });
+
+  /* zelfde grenzen als de Go-test van 4.10: na 9,5 minuten nog wel, na 10,5 niet meer */
+  await nogNiet('[4.10] de nep-server: een koppelcode werkt tien minuten, daarna niet meer', async function (check) {
+    const klok = __server.klok;
+    const post = function (pad, body) { return fetch('https://test.local' + pad, { method: 'POST', body: JSON.stringify(body) }); };
+    try {
+      await post('/v1/link', { code: 'orakel-een', payload: 'p1' });
+      __server.klok += 9.5 * 60000;
+      check('na 9,5 minuten werkt hij nog', (await post('/v1/link/redeem', { code: 'orakel-een' })).status === 200);
+      await post('/v1/link', { code: 'orakel-twee', payload: 'p2' });
+      __server.klok += 10.5 * 60000;
+      check('na 10,5 minuten niet meer', (await post('/v1/link/redeem', { code: 'orakel-twee' })).status === 404);
     } finally { __server.klok = klok; }
   });
 }
