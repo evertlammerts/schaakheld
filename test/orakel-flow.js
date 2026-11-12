@@ -282,7 +282,7 @@ async function orakelFlow() {
     check('rondje: Pauze zegt niet "Bewaard"', toastTekst(b) !== '' && !/Bewaard/.test(toastTekst(b)));
   });
 
-  await nogNiet('[1.2] lukt bewaren later niet meer, dan blijft het laatst bewaarde staan en zegt Pauze waar het staat', async function (check) {
+  await regel('[1.2] lukt bewaren later niet meer, dan blijft het laatst bewaarde staan en zegt Pauze waar het staat', async function (check) {
     const weigerLater = function (sleutel) {
       const o = maakOpslag(), schrijf = o.setItem;
       o.weiger = false;

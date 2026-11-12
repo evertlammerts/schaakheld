@@ -4740,8 +4740,6 @@ function bewaarPotje() {
   const gelukt = opslag(POTJE_KEY, JSON.stringify({ v: 1, level: session.level, moves: S.hist.map(h => moveKey(h.m)),
     tips: session.tips, drawAsked: session.drawAsked == null ? null : session.drawAsked,
     started: session.started, updated: Date.now(), patXP: session.patXP || 0 }));
-  /* een oudere stand mag niet blijven staan alsof hij de laatste is */
-  if (!gelukt) opslag(POTJE_KEY, null);
   toonBewaard(gelukt);
 }
 /* De sterren van een rondje staan al in het profiel; een rondje dat niet te
@@ -4771,9 +4769,7 @@ function bewaarRondje() {
   } else {
     const r = leesRondjes();
     r[session.kind] = { round: session.round, earned: session.earned };
-    const gelukt = opslag(RONDJES_KEY, JSON.stringify(r));
-    if (!gelukt) wisRondje(session.kind);
-    toonBewaard(gelukt);
+    toonBewaard(opslag(RONDJES_KEY, JSON.stringify(r)));
   }
 }
 function wisRondje(kind) {
@@ -4793,21 +4789,28 @@ function ditApparaat() {
   return 'dit apparaat';
 }
 
+/* Lukt bewaren niet, dan blijft het laatst bewaarde staan: liever een zet
+   terug dan een potje kwijt. De melding zegt waar het dan staat. */
 const POTJE_NIET_BEWAARD = 'Dit potje kon ik niet bewaren, dus het is weg. Wat al bewaard was, blijft staan.';
 const RONDJE_NIET_BEWAARD = 'Dit rondje kon ik niet bewaren. Wat al bewaard was, blijft staan.';
+const POTJE_DEELS_BEWAARD = zet => 'Niet alles kon ik bewaren. Je kunt later verder bij zet ' + zet + '.';
+const RONDJE_DEELS_BEWAARD = k => 'Niet alles kon ik bewaren. Je kunt later verder bij opdracht ' + k + '.';
 /* Pauze: nooit een vraag, het potje of rondje blijft staan */
 function pauze() {
   if (session && session.cloud) exitCloud();
   let melding = null;
   if (session && session.kind === 'game' && !session.over) {
     bewaarPotje();
+    const eerder = session.nietBewaard ? leesPotje() : null;
     melding = !session.S.hist.length ? 'Dit potje was nog niet begonnen.' :
-      session.nietBewaard ? POTJE_NIET_BEWAARD : '✔ Bewaard. Je kunt later verder bij zet ' + zetNummer(session.S) + '.';
+      !session.nietBewaard ? '✔ Bewaard. Je kunt later verder bij zet ' + zetNummer(session.S) + '.' :
+      eerder && !eerder.kapot ? POTJE_DEELS_BEWAARD(zetNummer(eerder.S)) : POTJE_NIET_BEWAARD;
   } else if (session && session.kind === 'opening') {
     melding = '✔ Je sterren zijn bewaard. De les begint de volgende keer opnieuw.';
   } else if (session && session.kind !== 'game') {
     const r = leesRondjes()[session.kind];
-    melding = session.af ? 'Rondje klaar! Je sterren zijn bewaard.' : session.nietBewaard ? RONDJE_NIET_BEWAARD :
+    melding = session.af ? 'Rondje klaar! Je sterren zijn bewaard.' :
+      session.nietBewaard ? (r ? RONDJE_DEELS_BEWAARD(r.round + 1) : RONDJE_NIET_BEWAARD) :
       r ? '✔ Bewaard. Je kunt later verder bij opdracht ' + (r.round + 1) + '.' : 'Dit rondje was nog niet begonnen.';
   }
   goHome(terugTab);
