@@ -263,7 +263,8 @@
     position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; min-height: 88px;
     padding: 10px 4px 8px; border: none; border-radius: var(--r-sm); background: var(--surface-quiet); cursor: pointer;
     font: inherit; font-size: 13px; font-weight: 700; line-height: 1.2; text-align: center; color: var(--text);
-    overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto;
+    /* alleen afbreken waar een zacht afbreekstreepje staat: automatisch maakte het "met-een" van "meteen" */
+    overflow-wrap: break-word; -webkit-hyphens: manual; hyphens: manual;
   }
   .badge-tile .b-e { font-size: 28px; line-height: 1; }
   .badge-tile .b-slot { position: absolute; top: 4px; right: 5px; font-size: 12px; }
@@ -6984,14 +6985,14 @@ const BADGES = [
   { id: 'winst', e: '🏆', n: 'Winnaar', d: 'Win een potje van Turbo', chk: () => P.wins >= 1 },
   { id: 'turbo2', e: '🐢', n: 'Turbo-temmer', d: 'Versla de echte Turbo', chk: () => P.c.winsL2 >= 1 },
   { id: 'raket', e: '🚀', n: 'Raket-temmer', d: 'Versla Super Turbo', chk: () => P.c.winsL3 >= 1 },
-  { id: 'speurneus', e: '🔍', n: 'Superspeurneus', d: '10 perfecte speurrondes', chk: () => P.c.perfectScans >= 10 },
-  { id: 'detective', e: '🕵️', n: 'Meesterdetective', d: 'Raad 10 valstrikken goed', chk: () => P.c.safeCorrect >= 10 },
+  { id: 'speurneus', e: '🔍', n: 'Super\u00adspeurneus', d: '10 perfecte speurrondes', chk: () => P.c.perfectScans >= 10 },
+  { id: 'detective', e: '🕵️', n: 'Meester\u00addetective', d: 'Raad 10 valstrikken goed', chk: () => P.c.safeCorrect >= 10 },
   { id: 'goudzoeker', e: '🥇', n: 'Goudzoeker', d: '10 keer meteen de beste zet', chk: () => P.c.best3Gold >= 10 },
   { id: 'orakel', e: '🔮', n: 'Orakel', d: 'Voorspel 5 zetten van Turbo', chk: () => P.c.predictHits >= 5 },
-  { id: 'zen', e: '🧘', n: 'Denkmeester', d: 'Verdien 20 denk-bonussen', chk: () => P.c.patienceBonus >= 20 },
+  { id: 'zen', e: '🧘', n: 'Denk\u00admeester', d: 'Verdien 20 denk-bonussen', chk: () => P.c.patienceBonus >= 20 },
   { id: 'wolk', e: '☁️', n: 'Dromer', d: 'Denk vooruit in de denkwolk', chk: () => (P.c.cloudUsed || 0) >= 1 },
-  { id: 'trucs', e: '🎒', n: 'Trucenmeester', d: 'Spot 10 trucs (vork, penning, spies…)', chk: () => Object.values(P.c.pat || {}).reduce((a, b) => a + b, 0) >= 10 },
-  { id: 'sterren', e: '🌟', n: 'Sterrenregen', d: 'Verzamel 100 sterren', chk: () => P.stars >= 100 },
+  { id: 'trucs', e: '🎒', n: 'Trucen\u00admeester', d: 'Spot 10 trucs, zoals een vork of een penning', chk: () => Object.values(P.c.pat || {}).reduce((a, b) => a + b, 0) >= 10 },
+  { id: 'sterren', e: '🌟', n: 'Sterren\u00adregen', d: 'Verzamel 100 sterren', chk: () => P.stars >= 100 },
   { id: 'vlam', e: '🔥', n: 'Vuurpijl', d: '25 opdrachten met 3 sterren', chk: () => P.c.drie >= 25 },
   { id: 'koning', e: '👑', n: 'Koningskind', d: 'Bereik level Koning', chk: () => levelIdx(P.xp) >= 5 }
 ];
@@ -7028,15 +7029,17 @@ function renderBadges() {
   if (!grid) return;
   const got = BADGES.filter(b => P.badges[b.id]), rest = BADGES.filter(b => !P.badges[b.id]);
   $('badgeKop').textContent = '🏆 Trofeeën ' + got.length + ' van ' + BADGES.length;
-  grid.innerHTML = got.map(b => '<button class="badge-tile" data-badge="' + b.id + '"><span class="b-e">' + b.e + '</span>' + b.n + '</button>')
+  grid.innerHTML = got.map(b => '<button class="badge-tile verdiend" data-badge="' + b.id + '"><span class="b-e">' + b.e + '</span>' + b.n + '</button>')
     .concat(rest.map(b => '<button class="badge-tile locked" data-badge="' + b.id + '"><span class="b-slot">🔒</span>' +
       '<span class="b-e">' + b.e + '</span>' + b.d + '</button>')).join('');
   grid.querySelectorAll('.badge-tile').forEach(t => t.addEventListener('click', () => toonTrofee(t.dataset.badge)));
 }
 function toonTrofee(id) {
   const b = BADGES.find(x => x.id === id);
+  /* de trofeeteksten zijn opdrachten; met een hoofdletter na "Verdiend!" leest het alsof het kind ze nog moet doen */
+  const wat = b.d.charAt(0).toLowerCase() + b.d.slice(1);
   showModal('<div class="m-emoji">' + b.e + '</div><h2>' + b.n + '</h2><p>' +
-    (P.badges[id] ? '✔ Verdiend! ' + b.d + '.' : 'Nog niet verdiend. Zo krijg je hem: ' + b.d + '.') + '</p>' +
+    (P.badges[id] ? '✔ Verdiend! De opdracht was: ' + wat + '.' : 'Nog niet verdiend. Zo krijg je hem: ' + wat + '.') + '</p>' +
     '<div class="m-btns"><button class="btn sun" id="trofeeOk">Oké</button></div>', () => $('trofeeOk').addEventListener('click', closeModal), true);
 }
 

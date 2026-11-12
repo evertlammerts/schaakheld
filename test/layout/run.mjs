@@ -281,6 +281,41 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
       }` });
 }
 
+/* visual.md 11.6: een tegel breekt een woord alleen bij een zacht afbreekstreepje, en niets loopt over */
+{
+  const n = '[3.11] 360x640: de trofeetegels, met alle namen en met alle opdrachten: niets loopt over en "meteen" blijft heel';
+  const alles = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: { potje: true, winst: true, turbo2: true, raket: true, speurneus: true,
+    detective: true, goudzoeker: true, orakel: true, zen: true, wolk: true, trucs: true, sterren: true, vlam: true, koning: true } },
+    lww: { name: { v: 'Mees', t: 1 } }, max: { best: 0, goal: {} }, friends: {}, loc: {} });
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const meet = async () => page.evaluate(() => [...document.querySelectorAll('#badgeGrid .badge-tile')]
+        .filter(t => t.scrollWidth > t.clientWidth + 1 || t.scrollHeight > t.clientHeight + 1).map(t => t.dataset.badge));
+      await vers(360, 640, { schaakheld1: ${JSON.stringify(alles)} });
+      await klik('#tabIk');
+      await page.waitForTimeout(300);
+      check(n, 'testopzet: alle veertien verdiend', await page.evaluate(() => document.querySelectorAll('#badgeGrid .badge-tile.verdiend').length) === 14);
+      let over = await meet();
+      check(n, 'met de namen loopt niets over' + (over.length ? ': ' + over.join(', ') : ''), over.length === 0);
+      await vers(360, 640);
+      await klik('#tabIk');
+      await page.waitForTimeout(300);
+      over = await meet();
+      check(n, 'met de opdrachten loopt niets over' + (over.length ? ': ' + over.join(', ') : ''), over.length === 0);
+      const heel = await page.evaluate(() => {
+        const t = document.querySelector('#badgeGrid [data-badge="goudzoeker"]');
+        const w = document.createTreeWalker(t, NodeFilter.SHOW_TEXT);
+        for (let x = w.nextNode(); x; x = w.nextNode()) {
+          const i = x.data.indexOf('meteen');
+          if (i < 0) continue;
+          const z = document.createRange(); z.setStart(x, i); z.setEnd(x, i + 6);
+          return new Set([...z.getClientRects()].filter(r => r.width > 0).map(r => Math.round(r.top))).size === 1;
+        }
+        return false;
+      });
+      check(n, '"meteen" op één regel', heel);` });
+}
+
 /* plan.md 1.8: een speelscherm opent met het hele bord in beeld, ook als het
    kind op Spelen eerst naar beneden scrolde (B03: het speelscherm erfde die
    scroll); tot increment 2 mag dat door het bord in beeld te scrollen. Op

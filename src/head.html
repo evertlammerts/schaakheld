@@ -250,7 +250,8 @@
     position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; min-height: 88px;
     padding: 10px 4px 8px; border: none; border-radius: var(--r-sm); background: var(--surface-quiet); cursor: pointer;
     font: inherit; font-size: 13px; font-weight: 700; line-height: 1.2; text-align: center; color: var(--text);
-    overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto;
+    /* alleen afbreken waar een zacht afbreekstreepje staat: automatisch maakte het "met-een" van "meteen" */
+    overflow-wrap: break-word; -webkit-hyphens: manual; hyphens: manual;
   }
   .badge-tile .b-e { font-size: 28px; line-height: 1; }
   .badge-tile .b-slot { position: absolute; top: 4px; right: 5px; font-size: 12px; }

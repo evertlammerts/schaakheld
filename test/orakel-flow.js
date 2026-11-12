@@ -1779,10 +1779,18 @@ async function orakelFlow() {
     const tegels = Array.prototype.slice.call(a.el('badgeGrid').querySelectorAll('[data-badge]'));
     check('veertien tegels, de verdiende eerst', tegels.length === 14 &&
       ['raket', 'vlam'].indexOf(tegels[0].dataset.badge) >= 0 && ['raket', 'vlam'].indexOf(tegels[1].dataset.badge) >= 0);
+    check('een verdiende tegel is als verdiend te lezen, een tegel op slot niet', tegels[0].classList.contains('verdiend') &&
+      !tegels[13].classList.contains('verdiend') && tegels[13].classList.contains('locked'));
+    /* een naam mag een zacht afbreekstreepje hebben: dat ziet een kind niet zolang hij past */
+    const lees = function (t) { return t.replace(/\u00ad/g, ''); };
     const speur = tegels.filter(function (t) { return t.dataset.badge === 'speurneus'; })[0];
-    check('een tegel op slot zegt wat hij vraagt', !!speur && /10 perfecte speurrondes/.test(a.doc.__tekst(speur)) && !/Superspeurneus/.test(a.doc.__tekst(speur)));
+    check('een tegel op slot zegt wat hij vraagt', !!speur && /10 perfecte speurrondes/.test(a.doc.__tekst(speur)) && !/Superspeurneus/.test(lees(a.doc.__tekst(speur))));
     tikEl(a, speur, 'de tegel Superspeurneus');
-    check('een tik: de naam en wat hij vraagt', a.open() && /Superspeurneus/.test(a.scherm()) && /10 perfecte speurrondes/.test(a.scherm()));
+    check('een tik: de naam, en hoe je hem krijgt', a.open() && /Superspeurneus/.test(lees(a.scherm())) &&
+      /Nog niet verdiend\. Zo krijg je hem: 10 perfecte speurrondes\./.test(a.scherm()));
+    a.ev('closeModal()');
+    tikEl(a, tegels.filter(function (t) { return t.dataset.badge === 'raket'; })[0], 'de tegel Raket-temmer');
+    check('een verdiende: de opdracht met een kleine letter', /✔ Verdiend! De opdracht was: versla Super Turbo\./.test(a.scherm()));
   });
 
   await regel('[3.11] een bordkleur op slot zegt vanaf welk level, en een gekozen kleur zegt dat hij gekozen is', async function (check) {
