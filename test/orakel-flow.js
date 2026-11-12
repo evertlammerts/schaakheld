@@ -1727,6 +1727,18 @@ async function orakelFlow() {
     check('het doel op Ik met wat een topronde is', /Mijn doel: 1 topronde bij Speurogen \(12 sterren of meer\)/.test(tekstVan(a, 'weekCard')));
   });
 
+  await regel('tekst: de weekdoelkiezer begint bij 3 potjes tegen de Turbo die bij het kind past', async function (check) {
+    const niveau = async function (extra) {
+      const a = nieuwKind();
+      a.ev(extra + '; goalFlow()');
+      await wacht();
+      const aan = a.el('goalSub').innerHTML.match(/chip on" data-lvl="(\d)"/);
+      return [/chip on" data-kind="potjes"/.test(a.el('goalKinds').innerHTML), /chip on big" data-n="3"/.test(a.el('goalNs').innerHTML), aan ? +aan[1] : null];
+    };
+    check('een nieuw kind: Slaapkop Turbo', JSON.stringify(await niveau('setPref("start", "nieuw")')) === '[true,true,1]');
+    check('wie Super Turbo versloeg: Super Turbo', JSON.stringify(await niveau('bump("wins", 1); bump("c.winsL3", 1)')) === '[true,true,3]');
+  });
+
   await regel('[3.11] een tik op de weekregel opent Ik bij "Deze week"', async function (check) {
     const a = nieuwKind();
     a.ev('setPref("weekGoal", { kind: "opdr", n: 10 })');
