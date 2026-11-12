@@ -11,9 +11,10 @@ OUT=$(cd "${1:-$(dirname "$0")}" && pwd)
 cd "$(dirname "$0")"
 n=$(grep -n '</style>' src/head.html | head -1 | cut -d: -f1)
 {
-  printf '<!doctype html>\n<html lang="nl">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+  printf '<!doctype html>\n<html lang="nl">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
   printf '<link rel="manifest" href="manifest.webmanifest">\n'
   printf '<meta name="theme-color" content="#BCE4F6">\n'
+  printf '<meta name="color-scheme" content="light">\n'
   printf '<link rel="icon" href="icon-192.png">\n'
   printf '<link rel="apple-touch-icon" href="icon-180.png">\n'
   printf '<meta name="apple-mobile-web-app-capable" content="yes">\n'

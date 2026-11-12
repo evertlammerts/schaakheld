@@ -1,5 +1,5 @@
-/* Orakel, tweeapparatentests: de regels van plan.md voor increment 4, die
-   pas te zien zijn als beide kanten echt draaien. Elke testnaam begint met
+/* Orakel, tweeapparatentests: de regels van plan.md die pas te zien zijn
+   als beide kanten echt draaien. Elke testnaam begint met
    zijn regelnummer. Gebruikt de helpers van test/harnas.js en de
    tweeapparatensuite (samenSpelen, speel, scanQR). */
 
@@ -36,6 +36,127 @@ async function nodigUit(van) {
 }
 
 async function orakelTwee() {
+  /* ================= increment 2 ================= */
+
+  /* regel 2.5: op een speelscherm staat geen melding; een antwoord of een fout na een vriendenpotje staat in de strook */
+  await regel('[2.5] na een vriendenpotje: "Nu niet" op de vriendschapsvraag staat in de strook van wie vroeg, en zijn knop is weer als eerst', async function (check) {
+    const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
+    await samenSpelen(daan, fien);
+    await geefOp(aanZet(daan, fien));
+    tikTekst(daan, 'Vrienden worden');
+    await wacht();
+    check('testopzet: Fien kan "Nu niet" zeggen', kanTikken(fien, 'Nu niet'));
+    tikTekst(fien, 'Nu niet');
+    await wacht();
+    check('Daan leest het antwoord in de strook', /Fien wil nu even niet/.test(tekstVan(daan, 'bubble')));
+    check('de knop van Daan is weer als eerst', kanTikken(daan, 'Vrienden worden') && !/Gevraagd/.test(tekstVan(daan, 'eindkaart')));
+  });
+
+  await regel('[2.5] na een vriendenpotje: lukt de vraag of het ja niet, dan staat dat in de strook en is de knop weer als eerst', async function (check) {
+    const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
+    await samenSpelen(daan, fien);
+    await geefOp(aanZet(daan, fien));
+    const echt = crypto.subtle.generateKey;
+    const kapot = function () { return Promise.reject(new Error('geen sleutel')); };
+    try {
+      crypto.subtle.generateKey = kapot;
+      tikTekst(daan, 'Vrienden worden');
+      await wacht();
+      check('Daan leest in de strook dat het hier niet lukt', /Dat lukt hier niet/.test(tekstVan(daan, 'bubble')));
+      check('de knop van Daan is weer als eerst', kanTikken(daan, 'Vrienden worden') && !/Gevraagd/.test(tekstVan(daan, 'eindkaart')));
+      crypto.subtle.generateKey = echt;
+      tikTekst(fien, 'Vrienden worden');
+      await wacht();
+      check('testopzet: Daan krijgt de vraag van Fien', kanTikken(daan, 'Ja'));
+      crypto.subtle.generateKey = kapot;
+      tikTekst(daan, 'Ja');
+      await wacht();
+      check('Daan leest in de strook dat het niet lukte', /Dat lukte niet/.test(tekstVan(daan, 'bubble')));
+    } finally { crypto.subtle.generateKey = echt; }
+  });
+
+  /* D34: een sync telt als getoond wat van het andere apparaat kwam; wat hier verdiend is en wacht, blijft wachten */
+  await regel('[2.5] twee gekoppelde apparaten: een sync midden in een rondje laat het level en de trofee van hier wachten, en toont die van daar niet', async function (check) {
+    const tablet = maakApparaat('Mees');
+    let telefoon = maakApparaat(null);
+    tablet.ev('setPref("predict", false); setPref("guard", false)');
+    await tablet.ev('ensureAccount(); syncNow()');
+    await wacht();
+    /* koppelen zoals het eind van de koppelstap: hetzelfde account, en het profiel van de server erbij */
+    telefoon.ev('finishLink(' + tablet.get('JSON.stringify(ACC)') + ', null)');
+    await wacht();
+    check('testopzet: een profiel op twee apparaten', telefoon.get('P.name') === 'Mees' && telefoon.get('ACC.id') === tablet.get('ACC.id'));
+    /* op de telefoon de trofee Orakel, en die staat daarna op de server */
+    telefoon.ev('bump("c.predictHits", 5); checkBadges()');
+    await telefoon.ev('syncNow()');
+    await wacht();
+    tablet.ev('bump("xp", 140); bump("stars", 99)');
+    await startOefening(tablet, 'scan');
+    await scanGoed(tablet);
+    check('testopzet: op de tablet wachten level Paard en Sterrenregen', tablet.get('levelIdx(P.xp)') === 1 && tablet.get('!!P.badges.sterren'));
+    await tablet.ev('syncNow()');
+    await wacht();
+    check('testopzet: de sync bracht Orakel naar de tablet', tablet.get('!!P.badges.orakel'));
+    for (let i = 0; i < 4; i++) { tikTekst(tablet, 'Volgende'); await wacht(); await scanGoed(tablet); }
+    tikTekst(tablet, 'Volgende');
+    await wacht();
+    const kaart = tablet.scherm();
+    check('de kaart van het rondje toont het level en de trofee van de tablet', /Level Paard/.test(kaart) && /Sterrenregen/.test(zonderZacht(kaart)));
+    check('en niet de trofee van de telefoon', !/Orakel/.test(kaart));
+    tikTekst(tablet, 'Naar huis');
+    await wacht();
+    check('thuis het level', tablet.ziet('Level omhoog'));
+    tablet.tik('lvlOk');
+    check('thuis geen trofee van de telefoon', !tablet.ziet('Orakel'));
+    await tablet.ev('syncNow()');
+    await wacht();
+    await telefoon.ev('syncNow()');
+    await wacht();
+    telefoon = herlaad(telefoon);
+    await wacht();
+    check('de telefoon toont bij het openen zijn eigen Orakel', telefoon.ziet('Orakel'));
+    check('en niet de Sterrenregen van de tablet', !/Sterrenregen/.test(zonderZacht(telefoon.scherm())));
+  });
+
+  /* ================= increment 3 ================= */
+
+  await regel('[3.2] een potje met een vriend telt als gezien, op beide apparaten', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    for (const x of [a, b]) x.ev('P.lastSeen = "2026-11-07"; saveP()');
+    await samenSpelen(a, b);
+    check('testopzet: samen in een potje', a.get('!!(session && session.online)') && b.get('!!(session && session.online)'));
+    for (const x of [a, b]) {
+      const d = opgeslagen(x, 'schaakheld1');
+      check('vandaag gezien bij ' + x.naam, !!d && d.loc.lastSeen === '2026-11-12');
+    }
+  });
+
+  await regel('[3.5] na echt koppelen zegt Ik op beide apparaten dat alles ook op het andere staat', async function (check) {
+    /* Mees heeft nog niets verdiend: de iPad weet het dan alleen doordat hij overnam */
+    const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    const code = (mees.modal().match(/<b>([a-z]+-[a-z]+-[a-z]+-[a-z]+)<\/b>/) || [])[1];
+    check('testopzet: vier woorden', !!code);
+    mees.tik('linkDone');
+    ipad.ev('linkEntryFlow()');
+    typ(ipad, 'wordInp', code.split('-'));
+    ipad.tik('linkGo');
+    await wacht();
+    ipad.tik('linkYes');
+    await wacht();
+    ipad.tik('tabIk');
+    check('de iPad nam het profiel over', ipad.get('P.name') === 'Mees' && /andere apparaat/.test(tekstVan(ipad, 'ikBewaard')));
+    ipad.ev('bump("xp", 10)');
+    await ipad.ev('syncNow()');
+    await wacht();
+    await mees.ev('syncNow()');
+    await wacht();
+    mees.tik('tabIk');
+    check('Mees kreeg iets van de iPad en zegt het ook', mees.get('P.xp') === 10 && /andere apparaat/.test(tekstVan(mees, 'ikBewaard')));
+  });
+
   /* ================= increment 4 ================= */
 
   /* regel 1.4: niets anders haalt het bewaarde potje tegen Turbo weg, ook niet
@@ -183,6 +304,50 @@ async function orakelTwee() {
     const zette = await speel(x, ander, zet);
     check('met netwerk weer verder in hetzelfde potje', !!zette && x.fen() === ander.fen() && x.get('session.S.hist.length') === 3);
   }
+
+  /* hetzelfde einde als een verdwenen kamer, maar nu moest de kamer
+     plaatsmaken op een volle server; de server geeft hetzelfde antwoord */
+  await nogNiet('[4.4] moest de kamer plaatsmaken op een volle server, dan zien beiden hetzelfde einde', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    await speel(a, b, 'e2e4');
+    await speel(a, b, 'e7e5');
+    const kamer = a.get('MP.room');
+    const ta = tellersVan(a), tb = tellersVan(b);
+    stopApparaat(a);
+    stopApparaat(b);
+    await wacht();
+    const klok = __server.klok, vuller = [], lijnen = [];
+    try {
+      /* een minuut later: de kamer is ouder dan de drie seconden waarin een
+         kamer van net nooit plaatsmaakt. Andere kinderen maken kamers en
+         zitten erin, tot de server vol is. */
+      __server.klok += 60000;
+      for (let i = 0; i < 2 * MAX_KAMERS && (kamer in __server.wsrooms); i++) {
+        const r = await fetch('https://test.local/v1/room', { method: 'POST' });
+        if (r.status !== 200) break;
+        const k = await r.json();
+        vuller.push(k.room);
+        const ws = new WebSocket('wss://test.local/v1/room/ws');
+        ws.onopen = function () { ws.send(JSON.stringify({ room: k.room, seat: k.seat })); };
+        lijnen.push(ws);
+        await wacht(0);
+      }
+      check('testopzet: de kamer moest plaatsmaken', !(kamer in __server.wsrooms));
+      const a2 = herlaad(a), b2 = herlaad(b);
+      await wacht();
+      a2.tik('verderKaart');
+      b2.tik('verderKaart');
+      await wacht(30000);
+      check('allebei: het potje is gestopt', /gestopt/.test(zegt(a2)) && /gestopt/.test(zegt(b2)));
+      check('allebei: het telt niet mee', /telt niet mee/.test(zegt(a2)) && /telt niet mee/.test(zegt(b2)));
+      check('aan geen kant een teller veranderd', tellersVan(a2) === ta && tellersVan(b2) === tb);
+    } finally {
+      lijnen.forEach(function (ws) { ws.close(); });
+      vuller.forEach(function (id) { delete __server.wsrooms[id]; });
+      __server.klok = klok;
+    }
+  });
 
   await nogNiet('[4.4] valt het netwerk weg tijdens het potje, dan blijft het potje staan en gaat het daarna verder', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
@@ -340,7 +505,7 @@ async function orakelTwee() {
     check('het profiel van Mees is gevonden', /Mees/.test(ipad.scherm()));
   });
 
-  await nogNiet('[4.9] de nep-server: een kamer met een potje leeft 12 uur stil, een lege kamer een kwartier', async function (check) {
+  await regel('[4.9] de nep-server: een kamer met een potje leeft 12 uur stil, een lege kamer een kwartier', async function (check) {
     const klok = __server.klok;
     try {
       const a = maakApparaat('Fien'), b = maakApparaat('Daan');
@@ -363,7 +528,7 @@ async function orakelTwee() {
   });
 
   /* zelfde grenzen als de Go-test van 4.10: na 9,5 minuten nog wel, na 10,5 niet meer */
-  await nogNiet('[4.10] de nep-server: een koppelcode werkt tien minuten, daarna niet meer', async function (check) {
+  await regel('[4.10] de nep-server: een koppelcode werkt tien minuten, daarna niet meer', async function (check) {
     const klok = __server.klok;
     const post = function (pad, body) { return fetch('https://test.local' + pad, { method: 'POST', body: JSON.stringify(body) }); };
     try {

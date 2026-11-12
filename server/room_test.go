@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http/httptest"
 	"strings"
@@ -169,15 +170,51 @@ func TestPairValidatie(t *testing.T) {
 	}
 }
 
+func aantalKamers(s *server) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.rooms)
+}
+
 func TestKamerCap(t *testing.T) {
-	s, _ := newTestServer(t, nil)
-	for i := 0; i < maxRooms; i++ {
-		if w := do(t, s, "POST", "/v1/room", "", nil); w.Code != 200 {
-			t.Fatalf("kamer %d: status %d", i, w.Code)
-		}
+	// vol is niet dicht: een kamer zonder iemand erin maakt plaats, en pas
+	// als in elke kamer iemand zit, krijgt een nieuwe kamer 429
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	eerste, _, _ := nieuweKamer(s)
+	for aantalKamers(s) < maxRooms {
+		clk.advance(time.Second)
+		nieuweKamer(s)
+	}
+	if w := do(t, s, "POST", "/v1/room", "", nil); w.Code != 200 {
+		t.Fatalf("volle tabel met lege kamers: status %d, wil 200", w.Code)
+	}
+	if n := aantalKamers(s); n != maxRooms {
+		t.Fatalf("%d kamers, de grens is %d", n, maxRooms)
+	}
+	if kamerBestaat(s, eerste) {
+		t.Fatalf("de langst stille lege kamer hoort plaats te maken")
+	}
+
+	var stoelen [][2]string
+	s.mu.Lock()
+	for id, r := range s.rooms {
+		stoelen = append(stoelen, [2]string{id, r.seats[0].token})
+	}
+	s.mu.Unlock()
+	for _, st := range stoelen {
+		c := verbind(t, ctx, ts, st[0], st[1])
+		defer c.CloseNow()
 	}
 	if w := do(t, s, "POST", "/v1/room", "", nil); w.Code != 429 {
-		t.Fatalf("boven de limiet: status %d, wil 429", w.Code)
+		t.Fatalf("in elke kamer zit iemand: status %d, wil 429", w.Code)
+	}
+	if n := aantalKamers(s); n != maxRooms {
+		t.Fatalf("%d kamers na een weigering, wil %d", n, maxRooms)
 	}
 }
 
@@ -267,6 +304,478 @@ func TestRelay(t *testing.T) {
 		t.Fatalf("gast2 verwacht peer-weg, kreeg %q", got)
 	}
 	gast2.Close(websocket.StatusNormalClosure, "")
+}
+
+/* ---------- hoe lang een kamer leeft ---------- */
+
+func verbind(t *testing.T, ctx context.Context, ts *httptest.Server, room, seat string) *websocket.Conn {
+	t.Helper()
+	c := wsDial(t, ctx, ts, room, seat)
+	if got := wsRead(t, ctx, c); !strings.Contains(got, "welkom") {
+		t.Fatalf("verwacht welkom, kreeg %q", got)
+	}
+	return c
+}
+
+// wacht tot de server het vertrek verwerkt heeft, anders loopt de nep-klok
+// voor op het vertrek
+func vertrek(t *testing.T, s *server, room, seat string, c *websocket.Conn) {
+	t.Helper()
+	c.CloseNow()
+	for i := 0; i < 400; i++ {
+		s.mu.Lock()
+		r := s.rooms[room]
+		klaar := false
+		if r != nil {
+			for _, st := range r.seats {
+				if st.token == seat && !st.live.Load() {
+					klaar = true
+				}
+			}
+		}
+		s.mu.Unlock()
+		if r == nil {
+			t.Fatalf("de kamer verdween terwijl een stoeltje vertrok")
+		}
+		if klaar {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("het stoeltje bleef verbonden")
+}
+
+func geweigerd(t *testing.T, ctx context.Context, ts *httptest.Server, room, seat string) {
+	t.Helper()
+	c := wsDial(t, ctx, ts, room, seat)
+	if _, _, err := c.Read(ctx); err == nil {
+		t.Fatalf("de server hoort dit stoeltje te weigeren")
+	}
+}
+
+func TestKamerTweedeStoelLaatMaarOpTijd(t *testing.T) {
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	room, seat, guest := nieuweKamer(s)
+	vertrek(t, s, room, seat, verbind(t, ctx, ts, room, seat))
+	clk.advance(10 * time.Minute)
+	vertrek(t, s, room, guest, verbind(t, ctx, ts, room, guest))
+	clk.advance(2 * time.Hour)
+	veeg(t, s)
+	if !kamerBestaat(s, room) {
+		t.Fatalf("een tweede stoel na 10 minuten maakt er een kamer met een potje van; na 2 uur stil hoort hij er nog te zijn")
+	}
+}
+
+func TestKamerTweedeStoelTeLaat(t *testing.T) {
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	room, seat, guest := nieuweKamer(s)
+	vertrek(t, s, room, seat, verbind(t, ctx, ts, room, seat))
+	clk.advance(16 * time.Minute)
+	veeg(t, s)
+	if kamerBestaat(s, room) {
+		t.Fatalf("een kamer met een stoel is na 16 minuten stil weg")
+	}
+	geweigerd(t, ctx, ts, room, guest)
+}
+
+func TestKamerZelfdeStoelTweeKeerIsGeenPotje(t *testing.T) {
+	// alleen beide stoeltjes samen maken een potje: twee keer dezelfde
+	// stoel, of een poging met een fout token, telt niet
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	room, seat, _ := nieuweKamer(s)
+	vertrek(t, s, room, seat, verbind(t, ctx, ts, room, seat))
+	vertrek(t, s, room, seat, verbind(t, ctx, ts, room, seat))
+	geweigerd(t, ctx, ts, room, "heelverkeerdtoken")
+	clk.advance(14 * time.Minute)
+	veeg(t, s)
+	if !kamerBestaat(s, room) {
+		t.Fatalf("na 14 minuten stil hoort de kamer er nog te zijn")
+	}
+	clk.advance(2 * time.Minute)
+	veeg(t, s)
+	if kamerBestaat(s, room) {
+		t.Fatalf("na 16 minuten stil hoort een kamer zonder potje weg te zijn")
+	}
+}
+
+func TestKamerZonderPotjeHoogstensDrieUur(t *testing.T) {
+	// ook met een stoel die de hele tijd verbonden blijft
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	room, seat, _ := nieuweKamer(s)
+	host := verbind(t, ctx, ts, room, seat)
+	defer host.CloseNow()
+	clk.advance(2*time.Hour + 50*time.Minute)
+	veeg(t, s)
+	if !kamerBestaat(s, room) {
+		t.Fatalf("na 2 uur 50 met de host erin hoort de kamer er nog te zijn")
+	}
+	clk.advance(20 * time.Minute)
+	veeg(t, s)
+	if kamerBestaat(s, room) {
+		t.Fatalf("na 3 uur 10 hoort een kamer zonder potje weg te zijn, ook met de host erin")
+	}
+}
+
+func TestKamerMetPotjeVerbondenHoogstens48Uur(t *testing.T) {
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	room, seat, guest := nieuweKamer(s)
+	host := verbind(t, ctx, ts, room, seat)
+	defer host.CloseNow()
+	vertrek(t, s, room, guest, verbind(t, ctx, ts, room, guest))
+	clk.advance(47*time.Hour + 50*time.Minute)
+	veeg(t, s)
+	if !kamerBestaat(s, room) {
+		t.Fatalf("na 47 uur 50 met de host erin hoort de kamer er nog te zijn")
+	}
+	clk.advance(20 * time.Minute)
+	veeg(t, s)
+	if kamerBestaat(s, room) {
+		t.Fatalf("na 48 uur 10 hoort hij weg te zijn, ook met de host erin")
+	}
+}
+
+func TestKamerStilVanafVertrek(t *testing.T) {
+	// de 12 uur stilte tellen vanaf het moment dat de laatste vertrekt,
+	// niet vanaf het laatste bericht
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	room, seat, guest := nieuweKamer(s)
+	host := verbind(t, ctx, ts, room, seat)
+	vertrek(t, s, room, guest, verbind(t, ctx, ts, room, guest))
+	clk.advance(13 * time.Hour)
+	vertrek(t, s, room, seat, host)
+	clk.advance(11*time.Hour + 50*time.Minute)
+	veeg(t, s)
+	if !kamerBestaat(s, room) {
+		t.Fatalf("11 uur 50 na het vertrek hoort de kamer er nog te zijn")
+	}
+	clk.advance(20 * time.Minute)
+	veeg(t, s)
+	if kamerBestaat(s, room) {
+		t.Fatalf("12 uur 10 na het vertrek hoort hij weg te zijn")
+	}
+}
+
+func TestKamerHerverbindenNaUren(t *testing.T) {
+	// een stoeltoken neemt zijn stoel ook na uren terug, en het potje gaat
+	// gewoon verder
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	room, seat, guest := nieuweKamer(s)
+	host := verbind(t, ctx, ts, room, seat)
+	gast := verbind(t, ctx, ts, room, guest)
+	vertrek(t, s, room, seat, host)
+	vertrek(t, s, room, guest, gast)
+
+	clk.advance(11 * time.Hour)
+	veeg(t, s)
+	gast = verbind(t, ctx, ts, room, guest)
+	defer gast.CloseNow()
+	clk.advance(11 * time.Hour)
+	veeg(t, s)
+	host = verbind(t, ctx, ts, room, seat)
+	defer host.CloseNow()
+	if got := wsRead(t, ctx, gast); !strings.Contains(got, `"aan":true`) {
+		t.Fatalf("de gast hoort te horen dat de host terug is, kreeg %q", got)
+	}
+	host.Write(ctx, websocket.MessageText, []byte(`{"t":"zet","from":12,"to":28}`))
+	if got := wsRead(t, ctx, gast); got != `{"t":"zet","from":12,"to":28}` {
+		t.Fatalf("de zet kwam niet aan na 22 uur: %q", got)
+	}
+}
+
+/* ---------- wie plaats maakt als de tabel vol is ---------- */
+
+// beide stoeltjes waren er en zijn weer weg
+func pauzePotje(t *testing.T, ctx context.Context, s *server, ts *httptest.Server) (room, seat string) {
+	t.Helper()
+	room, seat, guest := nieuweKamer(s)
+	vertrek(t, s, room, seat, verbind(t, ctx, ts, room, seat))
+	vertrek(t, s, room, guest, verbind(t, ctx, ts, room, guest))
+	return room, seat
+}
+
+// stappen van een seconde, zodat de volgorde vastligt en niets verloopt
+func vulMetPotjes(t *testing.T, ctx context.Context, s *server, ts *httptest.Server, clk *fakeClock) {
+	t.Helper()
+	for aantalKamers(s) < maxRooms {
+		clk.advance(time.Second)
+		pauzePotje(t, ctx, s, ts)
+	}
+}
+
+// een nieuwe kamer met de host erin, zodat hij zelf niet de volgende is die wijkt
+func bezet(t *testing.T, ctx context.Context, s *server, ts *httptest.Server) *websocket.Conn {
+	t.Helper()
+	w := do(t, s, "POST", "/v1/room", "", nil)
+	if w.Code != 200 {
+		t.Fatalf("nieuwe kamer bij een volle tabel: status %d, wil 200", w.Code)
+	}
+	var rm struct{ Room, Seat string }
+	json.Unmarshal(w.Body.Bytes(), &rm)
+	return verbind(t, ctx, ts, rm.Room, rm.Seat)
+}
+
+func sluitAntwoord(t *testing.T, ctx context.Context, ts *httptest.Server, room, seat string) (websocket.StatusCode, string) {
+	t.Helper()
+	_, _, err := wsDial(t, ctx, ts, room, seat).Read(ctx)
+	var ce websocket.CloseError
+	if !errors.As(err, &ce) {
+		t.Fatalf("verwacht een sluitbericht van de server, kreeg %v", err)
+	}
+	return ce.Code, ce.Reason
+}
+
+func TestKamerVolLegeUitnodigingVoorPotje(t *testing.T) {
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	potje, _ := pauzePotje(t, ctx, s, ts)
+	clk.advance(time.Second)
+	leeg, seat, _ := nieuweKamer(s)
+	vertrek(t, s, leeg, seat, verbind(t, ctx, ts, leeg, seat))
+	vulMetPotjes(t, ctx, s, ts, clk)
+
+	c := bezet(t, ctx, s, ts)
+	defer c.CloseNow()
+	if kamerBestaat(s, leeg) {
+		t.Fatalf("een uitnodiging zonder antwoord hoort eerst plaats te maken")
+	}
+	if !kamerBestaat(s, potje) {
+		t.Fatalf("het gepauzeerde potje is ouder, maar blijft zolang er een lege kamer kan wijken")
+	}
+	c2 := bezet(t, ctx, s, ts)
+	defer c2.CloseNow()
+	if kamerBestaat(s, potje) {
+		t.Fatalf("zonder lege kamer wijkt het langst stille potje")
+	}
+}
+
+func TestKamerVolLangstStilPotjeEerst(t *testing.T) {
+	// het langst stil, niet het langst bestaand
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	oud, oudSeat := pauzePotje(t, ctx, s, ts)
+	clk.advance(time.Second)
+	jong, _ := pauzePotje(t, ctx, s, ts)
+	clk.advance(time.Second)
+	vertrek(t, s, oud, oudSeat, verbind(t, ctx, ts, oud, oudSeat))
+	vulMetPotjes(t, ctx, s, ts, clk)
+
+	c := bezet(t, ctx, s, ts)
+	defer c.CloseNow()
+	if kamerBestaat(s, jong) {
+		t.Fatalf("het potje dat het langst stil ligt hoort plaats te maken")
+	}
+	if !kamerBestaat(s, oud) {
+		t.Fatalf("het oudste potje kreeg net bezoek en hoort te blijven")
+	}
+}
+
+func TestKamerVolBezetteKamerWijktNooit(t *testing.T) {
+	// een kind wacht in zijn potje terwijl het vriendje even weg is: de
+	// oudste en stilste kamer, maar er zit iemand in
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	wacht, seat, guest := nieuweKamer(s)
+	host := verbind(t, ctx, ts, wacht, seat)
+	defer host.CloseNow()
+	vertrek(t, s, wacht, guest, verbind(t, ctx, ts, wacht, guest))
+	vulMetPotjes(t, ctx, s, ts, clk)
+
+	c := bezet(t, ctx, s, ts)
+	defer c.CloseNow()
+	if !kamerBestaat(s, wacht) {
+		t.Fatalf("een kamer waar iemand in zit, hoort nooit plaats te maken")
+	}
+	if n := aantalKamers(s); n != maxRooms {
+		t.Fatalf("%d kamers, wil %d: een ander potje hoort te wijken", n, maxRooms)
+	}
+}
+
+func TestKamerVerseKamerKrijgtTijd(t *testing.T) {
+	// tussen het uitdelen van een kamer en het verbinden van de eerste stoel
+	// zit even tijd; zonder rust is de verse kamer zonder potje de eerste
+	// die wijkt in een tabel vol gepauzeerde potjes
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	vulMetPotjes(t, ctx, s, ts, clk)
+	clk.advance(time.Minute)
+	vers, _, _ := nieuweKamer(s)
+	clk.advance(evictMinAge - time.Second)
+	c := bezet(t, ctx, s, ts)
+	defer c.CloseNow()
+	if !kamerBestaat(s, vers) {
+		t.Fatalf("een kamer van net hoort niet plaats te maken")
+	}
+	clk.advance(time.Second)
+	c2 := bezet(t, ctx, s, ts)
+	defer c2.CloseNow()
+	if kamerBestaat(s, vers) {
+		t.Fatalf("na de rust gaat een lege kamer zonder potje weer eerst")
+	}
+}
+
+func TestKamerVolMetAlleenVerseKamers(t *testing.T) {
+	s, clk := newTestServer(t, nil)
+	for aantalKamers(s) < maxRooms {
+		nieuweKamer(s)
+	}
+	if w := do(t, s, "POST", "/v1/room", "", nil); w.Code != 429 {
+		t.Fatalf("alleen kamers van net: status %d, wil 429", w.Code)
+	}
+	clk.advance(evictMinAge)
+	if w := do(t, s, "POST", "/v1/room", "", nil); w.Code != 200 {
+		t.Fatalf("na de rust: status %d, wil 200", w.Code)
+	}
+}
+
+func TestKamerRustPastInDeTabel(t *testing.T) {
+	// kamers die in de rust vallen mogen de tabel niet kunnen vullen, anders
+	// geeft een vloed van verse kamers iedereen 429
+	if kamerTabelTeKlein(defaultDelay, defaultSlots) {
+		t.Fatalf("met de standaardinstellingen vult een vloed van verse kamers de tabel")
+	}
+	// wie de vlaggen zelf zet, krijgt bij het starten een waarschuwing
+	for _, geval := range []struct {
+		delay   time.Duration
+		slots   int
+		teKlein bool
+	}{
+		{defaultDelay, 3, true},
+		{150 * time.Millisecond, defaultSlots, true},
+		{250 * time.Millisecond, defaultSlots, false},
+		{0, defaultSlots, true},
+	} {
+		if got := kamerTabelTeKlein(geval.delay, geval.slots); got != geval.teKlein {
+			t.Errorf("%v, %d plekken: te klein %v, wil %v", geval.delay, geval.slots, got, geval.teKlein)
+		}
+	}
+}
+
+func TestKamerFoutTokenRaaktStilteNiet(t *testing.T) {
+	// wie het kamer-id kent maar geen stoeltoken, houdt de kamer niet in leven
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	room, seat, _ := nieuweKamer(s)
+	vertrek(t, s, room, seat, verbind(t, ctx, ts, room, seat))
+	clk.advance(10 * time.Minute)
+	geweigerd(t, ctx, ts, room, "heelverkeerdtoken")
+	clk.advance(6 * time.Minute)
+	veeg(t, s)
+	if kamerBestaat(s, room) {
+		t.Fatalf("16 minuten na het vertrek hoort de kamer weg te zijn, ook na een poging met een fout token")
+	}
+}
+
+func TestKamerVerlopenOokZonderNieuweKamer(t *testing.T) {
+	// verlopen is verlopen, ook als er sindsdien geen kamer bij kwam om op
+	// te ruimen
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	leeg, leegSeat, _ := nieuweKamer(s)
+	potje, seat := pauzePotje(t, ctx, s, ts)
+	clk.advance(16 * time.Minute)
+	if code, reden := sluitAntwoord(t, ctx, ts, leeg, leegSeat); code != websocket.StatusPolicyViolation || reden != "onbekend" {
+		t.Fatalf("een kamer zonder potje na 16 minuten stil: %v %q, wil 1008 onbekend", code, reden)
+	}
+	clk.advance(11*time.Hour + 34*time.Minute)
+	vertrek(t, s, potje, seat, verbind(t, ctx, ts, potje, seat))
+	clk.advance(12*time.Hour + 10*time.Minute)
+	if code, reden := sluitAntwoord(t, ctx, ts, potje, seat); code != websocket.StatusPolicyViolation || reden != "onbekend" {
+		t.Fatalf("een potje na 12 uur 10 stil: %v %q, wil 1008 onbekend", code, reden)
+	}
+}
+
+func TestKamerWeggemaaktZelfdeAntwoordAlsVerlopen(t *testing.T) {
+	// de app kent een verlopen kamer al (het gewone einde zonder uitslag);
+	// een kamer die plaats moest maken mag daar niet van verschillen
+	s, clk := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	weg, wegSeat := pauzePotje(t, ctx, s, ts)
+	clk.advance(time.Second)
+	oud, oudSeat := pauzePotje(t, ctx, s, ts)
+	vulMetPotjes(t, ctx, s, ts, clk)
+	c := bezet(t, ctx, s, ts)
+	defer c.CloseNow()
+	if kamerBestaat(s, weg) || !kamerBestaat(s, oud) {
+		t.Fatalf("testopzet: het oudste potje hoort plaats te hebben gemaakt, het tweede niet")
+	}
+	codeWeg, redenWeg := sluitAntwoord(t, ctx, ts, weg, wegSeat)
+
+	clk.advance(12*time.Hour + time.Minute)
+	veeg(t, s)
+	if kamerBestaat(s, oud) {
+		t.Fatalf("testopzet: na 12 uur stil hoort het tweede potje verlopen te zijn")
+	}
+	codeOud, redenOud := sluitAntwoord(t, ctx, ts, oud, oudSeat)
+
+	if codeWeg != codeOud || redenWeg != redenOud {
+		t.Fatalf("weggemaakt: %v %q, verlopen: %v %q; dat hoort hetzelfde te zijn", codeWeg, redenWeg, codeOud, redenOud)
+	}
+	if codeWeg != websocket.StatusPolicyViolation || redenWeg != "onbekend" {
+		t.Fatalf("een verdwenen kamer geeft 1008 onbekend, zoals een onbekende kamer altijd deed; kreeg %v %q", codeWeg, redenWeg)
+	}
 }
 
 func TestRelayFoutToken(t *testing.T) {

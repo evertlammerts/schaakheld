@@ -285,14 +285,14 @@ async function orakelFlow5() {
     ['ruil na een zet', '4k3/8/4b3/2n5/2B5/8/8/6K1 w - - 0 1', 'c4e6', 'Ruil: je loper slaat de loper (3 punten); Turbo slaat terug (3 punten).'],
     ['de aanvaller slaan', '6k1/8/8/3p4/2P1N3/8/8/6K1 w - - 0 1', 'c4d5', 'Je slaat de aanvaller.'],
     ['ertussen', '6k1/8/3q4/8/7B/8/5P1R/5K2 w - - 0 1', 'h4g3', 'Ertussen: je loper staat nu tussen de dame en je toren.'],
-    ['gedekt', '4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1', 'd2d3', 'Gedekt: slaat Turbo, dan pak jij terug.'],
+    ['gedekt', '4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1', 'd2d3', 'Gedekt: slaat Turbo, dan pak jij terug.', true],
     ['het stuk slaat zelf', '3rk3/8/8/8/1n6/8/3Q4/6K1 w - - 0 1', 'd2b4', 'Je dame slaat het paard (3 punten) en staat daar veilig.'],
     ['het stuk slaat zelf een pion', 'r1b1kb1r/1pp2ppp/p1npq3/3N4/3PpQ2/2P5/PP2PPPP/1R2KBNR w - - 0 1', 'd5c7', 'Je paard slaat de pion (1 punt) en staat daar veilig.'],
     ['tegenaanval', '1r2k1nr/ppp1pp1N/4q1p1/8/4n3/N4Q2/PPPP1PPP/R1B2K1R w - - 0 1', 'd2d3', 'Tegenaanval: Turbo heeft nu zelf iets te redden.'],
     ['schaak', '2kr1b1r/ppp2ppp/n2q1n2/3pp3/3N1QbP/3BP3/PPPP1PP1/RNB3KR w - - 0 1', 'd3f5', 'Schaak! Daarmee win je tijd: Turbo moet eerst zijn koning redden.']
   ];
   for (const g of RED) {
-    await nogNiet('[5.5] Red je stuk, ' + g[0] + ': "' + g[3] + '"', async function (check) {
+    await (g[4] ? regel : nogNiet)('[5.5] Red je stuk, ' + g[0] + ': "' + g[3] + '"', async function (check) {
       const a = nieuwKind();
       await startOefening(a, 'koning');
       zetOpdracht(a, g[1], 'stuk', [g[2]], HANG5);
@@ -573,7 +573,7 @@ async function orakelFlow5() {
 
   /* Lf5-d7 is mat; Td1-e1 geeft geen schaak */
   const MAT1T5 = ['1N2kq1r/1pp2ppp/p2b4/3p1BQ1/3P4/4B3/PPP2PPP/3R1RK1 w - - 0 1', 'f5d7', 'd1e1'];
-  await nogNiet('[5.5] Trucendoos, mat in één gevonden: "Turbo\'s koning kan zich niet meer redden."', async function (check) {
+  await regel('[5.5] Trucendoos, mat in één gevonden: "Turbo\'s koning kan zich niet meer redden."', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
     zetOpdracht(a, MAT1T5[0], 'mat1', [MAT1T5[1]]);
@@ -657,7 +657,7 @@ async function orakelFlow5() {
   const SPEUR5 = '(function () { var S = parseFEN("6k1/8/8/8/8/2b5/8/R5K1 w - - 0 1"); session.S = S;' +
     'session.task = { S: S, type: "attacked", targets: attackedPieces(S, "w"), extra: null, details: null };' +
     'session.phase = "marking"; BD.marks.clear(); BD.mode = "mark"; renderBoard(); })()';
-  await nogNiet('[5.5] Speurogen, gemist: "Gemist: jouw toren op a1 wordt aangevallen door de loper op c3."', async function (check) {
+  await regel('[5.5] Speurogen, gemist: "Gemist: jouw toren op a1 wordt aangevallen door de loper op c3."', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'scan');
     a.ev(SPEUR5);
@@ -718,7 +718,7 @@ async function orakelFlow5() {
   /* ---------- 5.5: na een foute poging zegt de zin wat Turbo's antwoord doet ---------- */
 
   /* de coach: na Tb1-a1 antwoordt Turbo vaak rustig (Lf5-g4 pent de dame); wat hij ook speelt, de zin past erbij */
-  await nogNiet('[5.5] Red je stuk, een foute poging: slaat Turbo, dan "Turbo speelt {zet} en pakt je {stuk} op {veld}."; anders "Turbo speelt {zet}, en het gevaar is er nog."', async function (check) {
+  await regel('[5.5] Red je stuk, een foute poging: slaat Turbo, dan "Turbo speelt {zet} en pakt je {stuk} op {veld}."; anders "Turbo speelt {zet}, en het gevaar is er nog."', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'koning');
     const fen = '2kr3r/ppp2ppp/n2qp3/3p1b2/1b1P4/P2BPQ2/1PPNKnPP/1RB3NR w - - 0 1';
