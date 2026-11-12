@@ -2024,20 +2024,6 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   goHome();
   ok('offline: na afloop gaat ← Home gewoon naar huis', session === null && __els.overlay.classList.contains('hidden'));
 
-  /* een rondje is af bij het vijfde antwoord: wie dan weggaat, laat geen opdracht 6 achter */
-  var vijf = nieuwKind();
-  vijf.ev('setPref("weekGoal", { kind: "top", n: 2, game: "scan" })');
-  await startOefening(vijf, 'scan');
-  await rondjeGoed(vijf, 5);
-  for (var lv = 0; lv < 8 && vijf.ziet('LEVEL OMHOOG'); lv++) vijf.tik('lvlOk');
-  vijf.tik('backBtn');
-  await wacht();
-  ok('[1.6] Pauze na het vijfde antwoord: het rondje is af, de melding zegt het en er blijft niets staan',
-    opgeslagen(vijf, RONDJES) === null && /Rondje klaar/.test(toastTekst(vijf)) && tekstVan(vijf, 'verder') === '');
-  ok('[1.6] en de topronde telt meteen', /1\s*(\/|van)\s*2/.test(wekelijks(vijf)));
-  await startOefening(vijf, 'scan');
-  ok('[1.6] een nieuw rondje begint bij opdracht 1', /Opdracht 1 van 5/.test(tekstVan(vijf, 'roundChip')));
-
   await orakelZelftest();
   await orakelFlow();
   print('\norakel: ' + ORAKEL.nogNiet + ' nog niet gebouwd, ' + ORAKEL.gebouwd + ' gebouwd');
