@@ -716,7 +716,7 @@ var gSave = { xp: P.xp, ps: P.c.perfectScans, w2: P.c.winsL2, w3: P.c.winsL3 };
 P.xp = 10000; P.c.perfectScans = 0; P.c.winsL2 = 0; P.c.winsL3 = 0;
 ok('gate: zonder proeven blijf je Paard', levelIdx(P.xp) === 1);
 ok('[3.5] gate: de stand van elke meesterproef heet "a van b", op Ik en op de kaart', LEVELS.filter(function (L) { return L.gate; })
-  .every(function (L) { return /^0 van \d$/.test(L.gate.prog()); }));
+  .every(function (L) { return /^0 van \d$/.test(L.gate.prog(P)); }));
 P.c.perfectScans = 5;
 ok('gate: Loper na 5 perfecte rondes', levelIdx(P.xp) === 2);
 P.c.winsL2 = 1;

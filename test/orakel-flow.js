@@ -1083,6 +1083,12 @@ async function orakelFlow() {
   async function stap(a, ctx) {
     return a.get('nextStep(P, ' + JSON.stringify(Object.assign({ now: NU, potje: null, rondjes: null, samen: null, uitnodiging: null, moment: null }, ctx || {})) + ')');
   }
+  /* nextStep met een profiel als JSON-tekst, los van het profiel van de app zelf */
+  async function stapMet(a, profiel, ctx) {
+    return a.get('nextStep(JSON.parse(' + JSON.stringify(profiel) + '), ' +
+      JSON.stringify(Object.assign({ now: NU, potje: null, rondjes: null, samen: null, uitnodiging: null, moment: null }, ctx || {})) + ')');
+  }
+  const kaartVan = function (r) { return JSON.stringify([r.rule, r.title, r.text, r.button, r.action]); };
 
   await regel('[3.1] geval 1: nieuw, antwoord "nieuw": R6, Speurogen, "Nieuw voor jou."', async function (check) {
     zetDatum('2026-11-12T16:00:00');
@@ -1392,6 +1398,240 @@ async function orakelFlow() {
     check('de nieuwe teller c.drie staat in het document', !!opgeslagen1.cnt['c.drie']);
     check('lastSeen per apparaat in het document', !!opgeslagen1.loc && 'lastSeen' in opgeslagen1.loc);
     check('de oude tellers staan er nog', !!opgeslagen1.cnt['c.pat.penning'] && !!opgeslagen1.cnt['c.winsL3']);
+  });
+
+  /* ---------- increment 3, na de review: spelen, herladen, de kaart lezen ---------- */
+
+  const opgeslagenLoc = function (a) { const d = opgeslagen(a, 'schaakheld1'); return (d && d.loc) || {}; };
+
+  await regel('[3.2] een rondje met minder dan 12 sterren: lastKind staat meteen in de opslag, en na herladen stelt de kaart een potje voor', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game"; saveP()');
+    await startOefening(a, 'scan');
+    for (let i = 0; i < 5; i++) {
+      tikTekst(a, 'Klaar');
+      await wacht();
+      if (i < 4) await volgende(a);
+    }
+    check('testopzet: minder dan 12 sterren', a.get('session.earned') < 12);
+    check('na het vijfde antwoord staat "scan" in de opslag', opgeslagenLoc(a).lastKind === 'scan');
+    const b = herlaad(a);
+    await wacht();
+    const r = await stap(b);
+    check('na herladen: een potje, geen oefening', b.get('P.lastKind') === 'scan' && r.rule === 'R7' &&
+      tekstVan(b, 'verder').indexOf(r.title) >= 0);
+  });
+
+  await regel('[3.2] een openingsles: lastKind staat meteen in de opslag, en zonder les verandert er niets', async function (check) {
+    const a = nieuwKind();
+    a.ev('startOpening("coach", null)');
+    await wacht();
+    a.ev('openingEnd()');
+    await wacht();
+    check('"opening" in de opslag', opgeslagenLoc(a).lastKind === 'opening');
+    const b = nieuwKind();
+    b.ev('openingEnd()');
+    check('openingEnd zonder les zet niets', b.get('P.lastKind') === null && !opgeslagenLoc(b).lastKind);
+  });
+
+  await regel('[3.2] een potje: lastKind "game" staat in de opslag, gewonnen of meteen opgegeven', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
+    a.ev('P.lastKind = "scan"; saveP()');
+    a.tik('verderKaart');
+    await wacht();
+    await zetEnWacht(a, 'd1h5');
+    await wacht(2000);
+    check('testopzet: gewonnen', a.get('session.over') === true && a.get('P.wins') === 1);
+    check('na een gewonnen potje "game" in de opslag', opgeslagenLoc(a).lastKind === 'game');
+    const b = nieuwKind();
+    b.ev('P.lastKind = "scan"; saveP()');
+    await startPotje(b, 1);
+    await geefOp(b);
+    check('testopzet: opgegeven', b.get('session.over') === true);
+    check('na meteen opgeven ook "game" in de opslag', opgeslagenLoc(b).lastKind === 'game');
+  });
+
+  await regel('[3.2] een potje beginnen zet lastSeen in de opslag', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(5)) + '; saveP()');
+    await startPotje(a, 1);
+    check('vandaag in de opslag', opgeslagenLoc(a).lastSeen === '2026-11-12');
+  });
+
+  await regel('[3.1] nextStep is puur: de meesterproeven komen uit het profiel dat het krijgt', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind(), leeg = nieuwKind();
+    a.ev('bump("xp", 950); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "scan"');
+    const p = a.get('JSON.stringify(P)');
+    const zelf = await stap(a);
+    check('testopzet: de app zelf zegt "Win je, dan word je Toren"', zelf.rule === 'R7' && /Win je, dan word je Toren/.test(zelf.text));
+    check('hetzelfde profiel op een lege app geeft dezelfde kaart', kaartVan(await stapMet(leeg, p)) === kaartVan(zelf));
+  });
+
+  await regel('[3.1] nextStep is puur: de vorm en de dagen komen uit het profiel en ctx.now, niet uit de app en haar klok', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game";' +
+      '["scan", "koning", "best3", "opening"].forEach(function (k) { logResult(k, 0.5, 20000, 3); }); logResult("trucs", 0.5, 20000, 0)');
+    const p = a.get('JSON.stringify(P)');
+    const zelf = await stap(a);
+    check('testopzet: de app zelf kiest de Trucendoos, die gaat het minst goed', zelf.rule === 'R6' && zelf.action.kind === 'trucs');
+    const leeg = nieuwKind();
+    check('op een app zonder log dezelfde kaart', kaartVan(await stapMet(leeg, p)) === kaartVan(zelf));
+    zetDatum('2026-12-02T16:00:00');
+    check('en ook als de klok van de app drie weken verder staat', kaartVan(await stapMet(leeg, p)) === kaartVan(zelf));
+  });
+
+  await regel('[3.1] nextStep is puur: het weekdoel telt in de week van ctx.now, en gehaald is wat het profiel zegt', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "scan";' +
+      'setPref("weekGoal", { kind: "potjes", n: 3, lvl: 1 }); bumpWeek("potjes1", 2)');
+    const p = a.get('JSON.stringify(P)');
+    const zelf = await stap(a);
+    check('testopzet: R4, nog 1 potje', zelf.rule === 'R4' && /^Nog 1 potje /.test(zelf.text));
+    const week = await stapMet(a, p, { now: NU + 8 * 86400000 });
+    check('met ctx.now een week later telt die week, en daar staat nog niets', week.rule !== 'R4');
+    zetDatum('2026-11-20T16:00:00');
+    check('met de klok van de app een week later en ctx.now van nu: dezelfde kaart', kaartVan(await stapMet(a, p)) === kaartVan(zelf));
+    zetDatum('2026-11-12T16:00:00');
+    const b = nieuwKind();
+    b.ev('setPref("weekGoal", { kind: "opdr", n: 1 }); bumpWeek("opdr", 1)');
+    check('testopzet: de app zelf heeft haar weekdoel gehaald', b.get('goalDoneWeek(curWeek())') === true);
+    check('het profiel zegt niet gehaald: dezelfde kaart', kaartVan(await stapMet(b, p)) === kaartVan(zelf));
+  });
+
+  await regel('[3.5] Ik: "Speel op een ander apparaat" openen en sluiten maakt nog geen ander apparaat', async function (check) {
+    const a = nieuwKind();
+    a.tik('tabIk');
+    check('testopzet: alles staat op dit apparaat', /Alles staat op/.test(tekstVan(a, 'ikBewaard')));
+    a.tik('ikKoppel');
+    await wacht();
+    check('testopzet: de koppelcode staat open', a.open() && /koppelen/i.test(a.scherm()));
+    a.tik('linkDone');
+    await wacht();
+    const b = herlaad(a);
+    await wacht();
+    b.tik('tabIk');
+    check('na sluiten en herladen nog steeds alleen dit apparaat', /Alles staat op/.test(tekstVan(b, 'ikBewaard')) &&
+      !/andere apparaat/.test(tekstVan(b, 'ikBewaard')));
+  });
+
+  await regel('[3.10] compat: een gekoppeld apparaat van nu zegt na de update nog dat alles ook op het andere apparaat staat', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const o = maakOpslag();
+    o.setItem('schaakheld-dev', '11112222-3333-4444-5555-666677778888');
+    o.setItem('schaakheld1', JSON.stringify(docVan('Daan', { xp: 2710, stars: 70 })));
+    o.setItem('schaakheld-acc', JSON.stringify({ id: 'abcdefgh12345678', secret: 'geheim-geheim-geheim' }));
+    const a = maakApparaat(null, { opslag: o, herstart: true });
+    await wacht();
+    a.ev('closeModal()');
+    a.tik('tabIk');
+    check('het account en alles van vroeger blijft', a.get('ACC.id') === 'abcdefgh12345678' && a.get('P.xp') === 2710);
+    check('Ik zegt: ook op het andere apparaat', /andere apparaat/.test(tekstVan(a, 'ikBewaard')));
+  });
+
+  await regel('[3.5] Ik: met XP te gaan "Nog N XP" met een balk, en die balk staat nooit vol', async function (check) {
+    const a = nieuwKind();
+    const balk = function () { return +((a.el('lpNext').innerHTML.match(/width:\s*([\d.]+)%/) || [])[1]); };
+    a.ev('bump("xp", 300); renderHome()');
+    a.tik('tabIk');
+    check('300 XP: "Nog 100 XP" en de balk op 60%', /Nog 100 XP/.test(tekstVan(a, 'lpNext')) && balk() === 60);
+    a.ev('bump("xp", 99); renderHome()');
+    check('399 XP: "Nog 1 XP" en de balk niet vol', /Nog 1 XP/.test(tekstVan(a, 'lpNext')) && balk() <= 95);
+  });
+
+  await regel('[3.5] de balk in de kop staat nooit vol zolang er iets te doen is', async function (check) {
+    const a = nieuwKind();
+    const kop = function () { return parseFloat(a.get('$("xpFill").style.width')); };
+    a.ev('bump("xp", 399); updateHud()');
+    check('399 van 400 XP, de proef open: 95%', kop() === 95);
+    a.ev('bump("xp", 551); bump("c.perfectScans", 5); updateHud()');
+    check('genoeg XP voor Toren maar Turbo niet verslagen: 95%', a.get('P.xp') === 950 && kop() === 95);
+  });
+
+  await regel('[3.2] het weekdoel is de uitzondering: toprondes Speurogen, net een rondje Speurogen, de kaart zegt Speurogen', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 950); setPref("weekGoal", { kind: "top", n: 2, game: "scan" }); bumpWeek("top.scan", 1); P.lastKind = "scan"');
+    const r = await stap(a);
+    check('R4 met Speurogen', r.rule === 'R4' && r.action.kind === 'scan' && /Speurogen/.test(r.button));
+  });
+
+  await regel('[3.2] een weekdoel opdrachten stelt nooit de oefening voor die net af is', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "scan";' +
+      'setPref("weekGoal", { kind: "opdr", n: 10 }); bumpWeek("opdr", 9)');
+    const r = await stap(a);
+    check('R4 met een andere oefening dan Speurogen', r.rule === 'R4' && r.action.go === 'oefening' && r.action.kind !== 'scan');
+  });
+
+  await regel('[3.1] het stadium "nieuw" eindigt bij 150 XP', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 149)');
+    let r = await stap(a);
+    check('149 XP: nog nieuw, een oefening', r.rule === 'R6');
+    a.ev('bump("xp", 1)');
+    r = await stap(a);
+    check('150 XP: een potje', r.rule === 'R7');
+  });
+
+  await regel('[3.1] twee keer winnen op niveau 1 maakt het voorgestelde niveau 2', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 40); bump("wins", 1); bump("c.gamesPlayed", 1); P.lastKind = "scan"');
+    let r = await stap(a);
+    check('een keer gewonnen: niveau 1', r.rule === 'R7' && r.action.level === 1);
+    a.ev('bump("xp", 40); bump("wins", 1); bump("c.gamesPlayed", 1)');
+    r = await stap(a);
+    check('twee keer: niveau 2', r.rule === 'R7' && r.action.level === 2);
+  });
+
+  /* de kaart voor een weekdoel, met `gedaan` al gehaald deze week */
+  async function doelKaart(doel, sleutel, gedaan, extra) {
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game"; setPref("weekGoal", ' +
+      JSON.stringify(doel) + ')' + (gedaan ? '; bumpWeek(' + JSON.stringify(sleutel) + ', ' + gedaan + ')' : '') + (extra || ''));
+    return stap(a);
+  }
+  const VRIEND = '; setFriend("v1", { k: "' + 'a'.repeat(43) + '", naam: "Fien", since: 1 })';
+
+  await regel('[3.11] "Bijna je weekdoel!" alleen met iets gedaan en precies één te gaan', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    let r = await doelKaart({ kind: 'potjes', n: 3, lvl: 2 }, 'potjes2', 2);
+    check('2 van 3: Bijna', r.rule === 'R4' && r.title === 'Bijna je weekdoel!' && r.text === 'Nog 1 potje tegen Turbo en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'potjes', n: 2, lvl: 2 }, 'potjes2', 1);
+    check('1 van 2: Bijna', r.rule === 'R4' && r.title === 'Bijna je weekdoel!');
+    r = await doelKaart({ kind: 'potjes', n: 3, lvl: 2 }, 'potjes2', 1);
+    check('1 van 3: het doel, zonder bijna', r.rule === 'R4' && r.title === 'Je weekdoel' && r.text === 'Nog 2 potjes tegen Turbo en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'wins', n: 1, lvl: 3 }, 'wins3', 0);
+    check('0 van 1: het doel, zonder bijna', r.rule === 'R4' && r.title === 'Je weekdoel' &&
+      r.text === 'Nog 1 keer winnen van Super Turbo en je weekdoel is gehaald.');
+    r = await doelKaart({ kind: 'potjes', n: 5, lvl: 2 }, 'potjes2', 2);
+    check('3 te gaan: geen weekdoelkaart', r.rule !== 'R4');
+    r = await doelKaart({ kind: 'vriend', n: 2 }, 'online', 1);
+    check('een vriendendoel zonder vriend: geen weekdoelkaart', r.rule !== 'R4');
+    r = await doelKaart({ kind: 'vriend', n: 2 }, 'online', 1, VRIEND);
+    check('met een vriend wel', r.rule === 'R4' && r.text === 'Nog 1 potje met een vriend en je weekdoel is gehaald.');
+  });
+
+  await regel('[3.11] op maandag staat achter de kaart van de nieuwe week de stand van de nieuwe week', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = nieuwKind();
+    a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game";' +
+      'setPref("weekGoal", { kind: "top", n: 2, game: "scan" }); bumpWeek("top.scan", 1)');
+    const a2 = herlaad(a);
+    await wacht();
+    zetDatum('2026-11-16T08:00:00');
+    const b = herlaad(a2);
+    await wacht();
+    check('testopzet: de kaart van de nieuwe week staat open', b.open() && /Nieuwe week/.test(b.scherm()));
+    const kaart = tekstVan(b, 'verder');
+    check('erachter: het doel met 2 te gaan, zonder bijna', /Je weekdoel/.test(kaart) && /Nog 2 toprondes/.test(kaart) && !/Bijna/.test(kaart));
   });
 
   /* ================= increment 4 (wat op een apparaat te zien is) ================= */

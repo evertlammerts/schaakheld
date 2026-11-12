@@ -1,5 +1,5 @@
-/* Orakel, tweeapparatentests: de regels van plan.md voor increment 4, die
-   pas te zien zijn als beide kanten echt draaien. Elke testnaam begint met
+/* Orakel, tweeapparatentests: de regels van plan.md die pas te zien zijn
+   als beide kanten echt draaien. Elke testnaam begint met
    zijn regelnummer. Gebruikt de helpers van test/harnas.js en de
    tweeapparatensuite (samenSpelen, speel, scanQR). */
 
@@ -36,6 +36,45 @@ async function nodigUit(van) {
 }
 
 async function orakelTwee() {
+  /* ================= increment 3 ================= */
+
+  await regel('[3.2] een potje met een vriend telt als gezien, op beide apparaten', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    for (const x of [a, b]) x.ev('P.lastSeen = "2026-11-07"; saveP()');
+    await samenSpelen(a, b);
+    check('testopzet: samen in een potje', a.get('!!(session && session.online)') && b.get('!!(session && session.online)'));
+    for (const x of [a, b]) {
+      const d = opgeslagen(x, 'schaakheld1');
+      check('vandaag gezien bij ' + x.naam, !!d && d.loc.lastSeen === '2026-11-12');
+    }
+  });
+
+  await regel('[3.5] na echt koppelen zegt Ik op beide apparaten dat alles ook op het andere staat', async function (check) {
+    /* Mees heeft nog niets verdiend: de iPad weet het dan alleen doordat hij overnam */
+    const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    const code = (mees.modal().match(/<b>([a-z]+-[a-z]+-[a-z]+-[a-z]+)<\/b>/) || [])[1];
+    check('testopzet: vier woorden', !!code);
+    mees.tik('linkDone');
+    ipad.ev('linkEntryFlow()');
+    typ(ipad, 'wordInp', code.split('-'));
+    ipad.tik('linkGo');
+    await wacht();
+    ipad.tik('linkYes');
+    await wacht();
+    ipad.tik('tabIk');
+    check('de iPad nam het profiel over', ipad.get('P.name') === 'Mees' && /andere apparaat/.test(tekstVan(ipad, 'ikBewaard')));
+    ipad.ev('bump("xp", 10)');
+    await ipad.ev('syncNow()');
+    await wacht();
+    await mees.ev('syncNow()');
+    await wacht();
+    mees.tik('tabIk');
+    check('Mees kreeg iets van de iPad en zegt het ook', mees.get('P.xp') === 10 && /andere apparaat/.test(tekstVan(mees, 'ikBewaard')));
+  });
+
   /* ================= increment 4 ================= */
 
   /* regel 1.4: niets anders haalt het bewaarde potje tegen Turbo weg, ook niet

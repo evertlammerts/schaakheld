@@ -31,7 +31,7 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 function defaultP() {
   return { name: '', xp: 0, sound: true, guard: true, predict: true, weekGoal: null, start: '',
     wins: 0, stars: 0, streak: 0, best: 0, lastLevel: null, lastKind: null, lastSeen: null,
-    theme: 'munt', badges: {}, day: null, weekSeen: null, wk: {}, log: {}, friends: {},
+    theme: 'munt', badges: {}, day: null, weekSeen: null, wk: {}, log: {}, friends: {}, goalDone: {},
     c: { gamesPlayed: 0, winsL2: 0, winsL3: 0, winsOnline: 0, perfectScans: 0,
       safeCorrect: 0, best3Gold: 0, predictHits: 0, patienceBonus: 0,
       cloudUsed: 0, drie: 0, pat: {}, pad: {} } };
@@ -292,6 +292,7 @@ function viewFromDoc(d) {
   p.log = d.log;
   p.friends = d.friends;
   p.best = +d.max.best || 0;
+  p.goalDone = d.max.goal;
   for (const wk in d.max.goal) p.xp += d.max.goal[wk];
   p.streak = +d.loc.streak || 0;
   p.lastLevel = d.loc.lastLevel == null ? null : d.loc.lastLevel;
@@ -619,8 +620,14 @@ async function fetchRemoteProfile(acc) {
     return await openJSON(acc.secret, 'profiel', new Uint8Array(await r.arrayBuffer()));
   } catch (e) { return null; }
 }
+/* een account bestaat al zodra de koppelcode open stond; een ander apparaat pas als
+   dit apparaat een profiel overnam, of een sync iets binnenbracht dat een ander schreef */
+function anderApparaat() {
+  return !!ACC && (ACC.overgenomen === true ||
+    Object.keys(DOC.cnt).some(pad => Object.keys(DOC.cnt[pad]).some(d => d !== DEV)));
+}
 function finishLink(acc, remote) {
-  ACC = { id: acc.id, secret: acc.secret };
+  ACC = { id: acc.id, secret: acc.secret, overgenomen: true };
   saveAcc();
   if (remote) applyRemoteDoc(remote);
   refreshAfterSync();
@@ -1013,6 +1020,7 @@ function mpOnStart(m) {
 }
 
 function mpBeginGame() {
+  gezien();
   MP.revMine = MP.revTheirs = false;
   session = { kind: 'game', online: true, S: newGame(), level: 0, tips: 0,
     over: false, pending: null, myColor: MP.myColor };
@@ -1765,29 +1773,34 @@ const LEVELS = [
   { n: 'Pion', g: '♟︎', xp: 0 },
   { n: 'Paard', g: '♞︎', xp: 150 },
   { n: 'Loper', g: '♝︎', xp: 400,
-    gate: { txt: '5 perfecte speurrondes', done: () => P.c.perfectScans >= 5,
-      prog: () => Math.min(P.c.perfectScans, 5) + ' van 5' } },
+    gate: { oef: 'scan', txt: '5 perfecte speurrondes', done: p => p.c.perfectScans >= 5,
+      prog: p => Math.min(p.c.perfectScans, 5) + ' van 5' } },
   { n: 'Toren', g: '♜︎', xp: 900,
-    gate: { lvl: 2, txt: 'versla Turbo 🐢', done: () => P.c.winsL2 >= 1,
-      prog: () => Math.min(P.c.winsL2, 1) + ' van 1' } },
+    gate: { lvl: 2, txt: 'versla Turbo 🐢', done: p => p.c.winsL2 >= 1,
+      prog: p => Math.min(p.c.winsL2, 1) + ' van 1' } },
   { n: 'Dame', g: '♛︎', xp: 1800,
-    gate: { lvl: 2, txt: 'versla Turbo 🐢 3 keer', done: () => P.c.winsL2 >= 3,
-      prog: () => Math.min(P.c.winsL2, 3) + ' van 3' } },
+    gate: { lvl: 2, txt: 'versla Turbo 🐢 3 keer', done: p => p.c.winsL2 >= 3,
+      prog: p => Math.min(p.c.winsL2, 3) + ' van 3' } },
   { n: 'Koning', g: '♚︎', xp: 3200,
-    gate: { lvl: 3, txt: 'versla Super Turbo 🚀', done: () => P.c.winsL3 >= 1,
-      prog: () => Math.min(P.c.winsL3, 1) + ' van 1' } },
+    gate: { lvl: 3, txt: 'versla Super Turbo 🚀', done: p => p.c.winsL3 >= 1,
+      prog: p => Math.min(p.c.winsL3, 1) + ' van 1' } },
   { n: 'Grootmeester', g: '🏆', xp: 5500,
-    gate: { lvl: 3, txt: 'versla Super Turbo 🚀 5 keer', done: () => P.c.winsL3 >= 5,
-      prog: () => Math.min(P.c.winsL3, 5) + ' van 5' } }
+    gate: { lvl: 3, txt: 'versla Super Turbo 🚀 5 keer', done: p => p.c.winsL3 >= 5,
+      prog: p => Math.min(p.c.winsL3, 5) + ' van 5' } }
 ];
-function levelIdx(xp) {
+function levelIdx(xp, p = P) {
   let i = 0;
   for (let k = 1; k < LEVELS.length; k++) {
     const L = LEVELS[k];
-    if (xp >= L.xp && (!L.gate || L.gate.done())) i = k;
+    if (xp >= L.xp && (!L.gate || L.gate.done(p))) i = k;
     else break;
   }
   return i;
+}
+/* een balk staat nooit vol zolang het volgende level er nog niet is: niet bij de laatste XP en niet bij een open meesterproef */
+function levelBalk(p) {
+  const i = levelIdx(p.xp, p), L = LEVELS[i], N = LEVELS[i + 1];
+  return N ? Math.min(95, (p.xp - L.xp) / (N.xp - L.xp) * 100) : 100;
 }
 
 /* Level-up kan ook zonder XP-verandering (een meesterproef halen), dus we
@@ -1810,11 +1823,10 @@ function checkLevelUp() {
 
 function updateHud() {
   $('xpNum').textContent = P.xp;
-  const li = levelIdx(P.xp), L = LEVELS[li], next = LEVELS[li + 1];
+  const L = LEVELS[levelIdx(P.xp)];
   $('lvlGlyph').textContent = L.g;
   $('lvlName').textContent = L.n;
-  /* een balk staat nooit vol zolang er nog iets te doen is (de meesterproef) */
-  $('xpFill').style.width = (next ? Math.min(next.gate && !next.gate.done() ? 95 : 100, (P.xp - L.xp) / (next.xp - L.xp) * 100) : 100) + '%';
+  $('xpFill').style.width = levelBalk(P) + '%';
   $('statStars').textContent = P.stars;
   $('statWins').textContent = P.wins;
   $('heyName').textContent = P.name || 'kampioen';
@@ -2381,7 +2393,7 @@ function bewaarRondje() {
   if (!session || session.kind === 'game' || session.kind === 'opening') return;
   if (session.round >= 5) {
     session.af = true;
-    P.lastKind = session.kind;
+    afgemaakt(session.kind);
     wisRondje(session.kind);
     if (session.earned >= 12) bumpWeek('top.' + session.kind, 1);
     toonBewaard(true);
@@ -2437,8 +2449,9 @@ function pauze() {
   if (melding) showToast(melding, false, 6000);
 }
 
-/* Wat een kind nu het best kan doen (learning.md 1.4): eerst wat bezig is, dan
-   een voorstel. Puur: alles komt uit P en ctx, zodat elke regel te toetsen is. */
+/* Wat een kind nu het best kan doen: eerst wat bezig is, dan een voorstel.
+   Puur: alles komt uit het meegegeven profiel en ctx (ook de tijd, ctx.now),
+   nooit uit het profiel of de klok van de app, zodat elke regel te toetsen is. */
 const LEERVOLGORDE = ['scan', 'koning', 'best3', 'trucs', 'opening'];
 const OEFENZIN = {
   scan: 'Kijk of jij alles ziet wat er aangevallen wordt.',
@@ -2461,15 +2474,15 @@ function turboVoorstel(P, st) {
 }
 /* de oefening die het langst niet gedaan is en het minst goed gaat; nooit de laatste */
 function kiesOefening(P, st, now) {
-  const volgend = LEVELS[levelIdx(P.xp) + 1];
-  if (volgend && volgend.gate && !volgend.gate.done() && /speurrondes/.test(volgend.gate.txt) && P.lastKind !== 'scan') return { kind: 'scan', reden: null };
+  const volgend = LEVELS[levelIdx(P.xp, P) + 1], poort = volgend && volgend.gate;
+  if (poort && poort.oef && !poort.done(P) && P.lastKind !== poort.oef) return { kind: poort.oef, reden: null };
   let beste = null;
   for (const k of LEERVOLGORDE) {
     if (k === P.lastKind || (st === 'nieuw' && !['scan', 'koning', 'opening'].includes(k))) continue;
     const rows = Object.values((P.log && P.log[k]) || {});
     const laatst = rows.length ? Math.max.apply(null, rows.map(r => r[0])) : null;
     const dagen = laatst == null ? 14 : Math.min(14, Math.floor((now - laatst) / 86400000));
-    const v = vormInfo(k), vorm = v ? v.score : 50;
+    const v = vormInfo(k, P, now), vorm = v ? v.score : 50;
     const score = dagen + (100 - vorm) / 10;
     if (!beste || score > beste.score) beste = { kind: k, score, nooit: laatst == null, dagen, vorm };
   }
@@ -2500,26 +2513,27 @@ function nextStep(P, ctx) {
       ook: 'je rondje ' + DRILLS[k].naam + ', opdracht ' + (r.round + 1) + ' van 5', action: { go: 'rondje', kind: k } });
   }
   if (bezig.length) return Object.assign({}, bezig[0], { ook: bezig.slice(1).map(b => b.ook), bezig });
-  const st = stadium(P), ls = turboVoorstel(P, st), lvl = LEVELS[levelIdx(P.xp)];
+  const st = stadium(P), ls = turboVoorstel(P, st), li = levelIdx(P.xp, P), lvl = LEVELS[li];
   const uit = (rule, title, text, button, action) => ({ rule, title, text, button, action, ook: [], bezig });
   if (P.lastSeen && dagenSinds(P.lastSeen, ctx.now) >= 3) {
     return uit('R3', 'Welkom terug, ' + P.name + '!', 'Je bent nog steeds ' + lvl.n + ' ' + lvl.g + '. Zin in een potje tegen ' +
       turboNaam(ls) + '?', 'Speel een potje', { go: 'game', level: ls });
   }
-  const g = P.weekGoal;
-  if (g && !goalDoneWeek(curWeek())) {
-    const rest = g.n - goalProgress(g);
-    const meer = rest === 2;
+  const g = P.weekGoal, W = isoWeek(ctx.now);
+  if (g && !goalDoneWeek(W, P)) {
+    const gedaan = goalProgress(g, W, P), rest = g.n - gedaan, meer = rest > 1;
     if (rest >= 1 && rest <= 2 && (g.kind !== 'vriend' || Object.keys(P.friends || {}).some(id => !P.friends[id].weg))) {
       const oef = g.kind === 'opdr' ? kiesOefening(P, st, ctx.now).kind : g.game;
       const R4 = {
-        opdr: [meer ? 'opdrachten' : 'opdracht', 'Begin', { go: 'oefening', kind: oef }],
-        potjes: [(meer ? 'potjes' : 'potje') + ' tegen ' + (g.lvl ? turboNaam(g.lvl) : ''), 'Potje tegen ' + turboNaam(g.lvl || ls), { go: 'game', level: g.lvl || ls }],
-        wins: ['keer winnen van ' + (g.lvl ? turboNaam(g.lvl) : ''), 'Potje tegen ' + turboNaam(g.lvl || ls), { go: 'game', level: g.lvl || ls }],
-        vriend: [(meer ? 'potjes' : 'potje') + ' met een vriend', 'Naar Vrienden', { go: 'vrienden' }],
-        top: [(meer ? 'toprondes' : 'topronde') + ' bij ' + (oef ? DRILLS[oef].naam : ''), oef ? DRILLS[oef].naam : '', { go: 'oefening', kind: oef }]
-      }[g.kind];
-      if (R4) return uit('R4', 'Bijna je weekdoel!', 'Nog ' + rest + ' ' + R4[0] + ' en je weekdoel is gehaald.', R4[1], R4[2]);
+        opdr: () => [meer ? 'opdrachten' : 'opdracht', 'Begin', { go: 'oefening', kind: oef }],
+        potjes: () => [(meer ? 'potjes' : 'potje') + ' tegen ' + turboNaam(g.lvl), 'Potje tegen ' + turboNaam(g.lvl), { go: 'game', level: g.lvl }],
+        wins: () => ['keer winnen van ' + turboNaam(g.lvl), 'Potje tegen ' + turboNaam(g.lvl), { go: 'game', level: g.lvl }],
+        vriend: () => [(meer ? 'potjes' : 'potje') + ' met een vriend', 'Naar Vrienden', { go: 'vrienden' }],
+        top: () => [(meer ? 'toprondes' : 'topronde') + ' bij ' + DRILLS[oef].naam, DRILLS[oef].naam, { go: 'oefening', kind: oef }]
+      }[g.kind]();
+      /* "bijna" alleen als het kind er zelf dichtbij kwam: iets gedaan en precies één te gaan */
+      const titel = gedaan >= 1 && rest === 1 ? 'Bijna je weekdoel!' : 'Je weekdoel';
+      return uit('R4', titel, 'Nog ' + rest + ' ' + R4[0] + ' en je weekdoel is gehaald.', R4[1], R4[2]);
     }
   }
   if (ctx.moment) return uit('R5', 'Oefen wat er misging', 'In je potje ' + ctx.moment.zin + ' In ' + DRILLS[ctx.moment.kind].naam +
@@ -2528,11 +2542,11 @@ function nextStep(P, ctx) {
     const o = kiesOefening(P, st, ctx.now);
     return uit('R6', DRILLS[o.kind].naam, (o.reden ? o.reden + ' ' : '') + OEFENZIN[o.kind], 'Begin', { go: 'oefening', kind: o.kind });
   }
-  const volgend = LEVELS[levelIdx(P.xp) + 1], poort = volgend && volgend.gate && !volgend.gate.done() ? volgend.gate : null;
+  const volgend = LEVELS[li + 1], poort = volgend && volgend.gate && !volgend.gate.done(P) ? volgend.gate : null;
   const level = poort && poort.lvl ? poort.lvl : ls;
   const gewonnen = level === 1 ? P.wins - P.c.winsL2 - P.c.winsL3 : level === 2 ? P.c.winsL2 : P.c.winsL3;
   const zin = poort && poort.lvl && P.xp >= volgend.xp ? 'Win je, dan word je ' + volgend.n + ' ' + volgend.g + '!' :
-    poort && poort.lvl ? 'Dat is je volgende meesterproef: ' + poort.txt + ' (' + poort.prog() + ').' :
+    poort && poort.lvl ? 'Dat is je volgende meesterproef: ' + poort.txt + ' (' + poort.prog(P) + ').' :
     P.start === 'sterk' && P.c.winsL2 === 0 ? 'Win je van Turbo, dan wacht Super Turbo.' :
     gewonnen > 0 ? 'Je hebt ' + turboNaam(level) + ' al ' + gewonnen + ' keer verslagen. Lukt het nog een keer?' : 'Die past nu bij jou.';
   return uit('R7', 'Speel een potje', zin, 'Potje tegen ' + turboNaam(level), { go: 'game', level });
@@ -2577,6 +2591,8 @@ function hervatPotje() {
 /* ---------- drills ---------- */
 /* de dag waarop het kind voor het laatst iets begon: daaraan ziet de kaart wie terugkomt */
 function gezien() { P.lastSeen = new Date().toISOString().slice(0, 10); saveP(); }
+/* wat het kind net afmaakte: daaraan wisselt de kaart tussen een potje en oefenen */
+function afgemaakt(kind) { P.lastKind = kind; saveP(); }
 function startDrill(kind) {
   if (kind === 'opening') { openingChooser(); return; }
   gezien();
@@ -3623,8 +3639,8 @@ function openingTurbo() {
   playMove(m, () => { if (session && session.kind === 'opening') kidOpeningTurn(); });
 }
 function openingEnd() {
-  P.lastKind = 'opening';
   if (!session || session.kind !== 'opening') return;
+  afgemaakt('opening');
   BD.mode = 'off';
   const e = session.earned, max = session.maxMoves * 3;
   const top = e >= Math.round(max * .8);
@@ -4374,7 +4390,7 @@ function endGame(st, stil) {
   /* opgeven of remise vlak na het begin telt nergens voor mee */
   const telt = (st.reason !== 'opgave' && st.reason !== 'remise') || session.S.hist.length >= MIN_PLIES_TELT;
   if (telt) bump('c.gamesPlayed', 1);
-  if (!stil) P.lastKind = 'game';
+  if (!stil) afgemaakt('game');
   if (session.online) { if (telt) bumpWeek('online', 1); endGameOnline(st, drawTxt); return; }
   if (telt) bumpWeek('potjes' + session.level, 1);
   let h, p, xp;
@@ -4541,7 +4557,7 @@ const DAG_NAMEN = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
 const GOAL_XP = 60;
 function curWeek() { return isoWeek(); }
 function dagIdx() { return (new Date().getDay() + 6) % 7; }
-function wkGet(week, key) { return (P.wk && P.wk[week] && +getPath(P.wk[week], key)) || 0; }
+function wkGet(week, key, p = P) { return (p.wk && p.wk[week] && +getPath(p.wk[week], key)) || 0; }
 function bumpWeek(key, n) {
   const W = curWeek();
   bump('wk.' + W + '.' + key, n);
@@ -4550,18 +4566,17 @@ function bumpWeek(key, n) {
 }
 /* "op niveau L" telt L en sterker mee: wie Super Turbo verslaat heeft het
    doel "versla Turbo" ook gehaald */
-function goalProgress(g, week) {
-  week = week || curWeek();
+function goalProgress(g, week = curWeek(), p = P) {
   const K = GOAL_KINDS[g.kind];
   if (K.lvl) {
     let s = 0;
-    for (let l = g.lvl; l <= 3; l++) s += wkGet(week, (g.kind === 'potjes' ? 'potjes' : 'wins') + l);
+    for (let l = g.lvl; l <= 3; l++) s += wkGet(week, (g.kind === 'potjes' ? 'potjes' : 'wins') + l, p);
     return s;
   }
-  return wkGet(week, K.key(g));
+  return wkGet(week, K.key(g), p);
 }
 function goalText(g) { return GOAL_KINDS[g.kind].txt(g); }
-function goalDoneWeek(W) { return !!(DOC.max.goal && DOC.max.goal[W]); }
+function goalDoneWeek(W, p = P) { return !!(p.goalDone && p.goalDone[W]); }
 function checkGoal() {
   const g = P.weekGoal;
   if (!g) return;
@@ -4741,8 +4756,8 @@ function checkNewWeek() {
    oefent, over de laatste 14 dagen, met de 14 dagen ervoor als vergelijking.
    Tempo telt zacht mee: binnen de richttijd is vol, drie keer zo lang is
    nog 0,3. Langzaam denken blijft dus lonen, alleen eindeloos treuzelen niet. */
-function vormWindow(kind, from, to) {
-  const rows = Object.values((P.log && P.log[kind]) || {}).filter(r => r[0] >= from && r[0] < to);
+function vormWindow(kind, from, to, p) {
+  const rows = Object.values((p.log && p.log[kind]) || {}).filter(r => r[0] >= from && r[0] < to);
   if (!rows.length) return null;
   const ref = DRILLS[kind].ref;
   let hit = 0, diff = 0, tempo = 0, nd = 0;
@@ -4755,11 +4770,11 @@ function vormWindow(kind, from, to) {
   const score = 100 * (0.45 * hit / n + 0.25 * (nd ? diff / nd : 0) + 0.15 * tempo / n + 0.15 * Math.min(1, n / 20));
   return { score: Math.round(score), n };
 }
-function vormInfo(kind) {
-  const now = Date.now(), d14 = 14 * 86400000;
-  const cur = vormWindow(kind, now - d14, now + 1);
+function vormInfo(kind, p = P, now = Date.now()) {
+  const d14 = 14 * 86400000;
+  const cur = vormWindow(kind, now - d14, now + 1, p);
   if (!cur) return null;
-  const prev = vormWindow(kind, now - 2 * d14, now - d14);
+  const prev = vormWindow(kind, now - 2 * d14, now - d14, p);
   return { score: cur.score, n: cur.n, delta: prev ? cur.score - prev.score : null };
 }
 function renderVorm() {
@@ -4790,16 +4805,16 @@ function renderLevelPath() {
     return;
   }
   /* elke eis een eigen regel met een eigen vinkje: nooit een balk die vol staat terwijl er nog iets open is */
-  const N = LEVELS[cur + 1], L = LEVELS[cur];
+  const N = LEVELS[cur + 1];
   nxt.innerHTML = '<div class="lp-kop">Volgende: ' + N.g + ' <b>' + N.n + '</b></div>' +
     (P.xp >= N.xp ? '<div class="lp-eis klaar">✔ ' + N.xp + ' XP</div>' :
       '<div class="lp-eis">Nog ' + (N.xp - P.xp) + ' XP <span class="lp-balk"><i style="width:' +
-      Math.round((P.xp - L.xp) / (N.xp - L.xp) * 100) + '%"></i></span></div>') +
-    (!N.gate ? '' : N.gate.done() ? '<div class="lp-eis klaar">✔ ' + N.gate.txt + '</div>' :
-      '<div class="lp-eis">Nog te doen: ' + N.gate.txt + ' (' + N.gate.prog() + ')</div>');
+      Math.round(levelBalk(P)) + '%"></i></span></div>') +
+    (!N.gate ? '' : N.gate.done(P) ? '<div class="lp-eis klaar">✔ ' + N.gate.txt + '</div>' :
+      '<div class="lp-eis">Nog te doen: ' + N.gate.txt + ' (' + N.gate.prog(P) + ')</div>');
 }
 function renderIkBewaard() {
-  $('ikBewaard').innerHTML = (ACC ? '✔ Bewaard op dit apparaat en je andere apparaat.' :
+  $('ikBewaard').innerHTML = (anderApparaat() ? '✔ Bewaard op dit apparaat en je andere apparaat.' :
     'Alles staat op ' + ditApparaat() + '. Speel je ook ergens anders? Koppel het, dan is alles dubbel bewaard.' +
     '<br><button class="btn plain small" id="ikKoppel">🔑 Speel op een ander apparaat</button>') +
     '<small>Een potje of rondje dat nog bezig is, blijft op dit apparaat.</small>';
@@ -4899,7 +4914,7 @@ for (const t in HOME_TABS) $(HOME_TABS[t]).addEventListener('click', () => showH
 function confirmReset() {
   showModal('<div class="m-emoji">🗑️</div><h2>Alles wissen?</h2>' +
     '<p>Je naam, je XP, je sterren, je level, je trofeeën en een potje dat bezig is gaan weg van dit apparaat.' +
-    (ACC ? '<br>Op je andere apparaat blijft alles staan.' : '') + '<br>Weet je het heel zeker?</p>' +
+    (anderApparaat() ? '<br>Op je andere apparaat blijft alles staan.' : '') + '<br>Weet je het heel zeker?</p>' +
     '<div class="m-btns"><button class="btn coral" id="rstGo">Ja, wis alles</button>' +
     '<button class="btn plain" id="rstNo">Nee, bewaren!</button></div>', () => {
       $('rstNo').addEventListener('click', closeModal);
