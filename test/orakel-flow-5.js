@@ -49,6 +49,24 @@ async function naarVolgende5(a, soort) {
   await startOefening(a, soort);
 }
 
+/* De Beste Zet wisselt een keuze uit drie af met de valstrik-vraag: kies tot de
+   keuze klaar is (een verkeerde keuze laat de opdracht open), dan Volgende */
+async function keuzeUitDrie5(a) {
+  for (let k = 0; k < 3 && a.get('!!session && !!session.task && !!session.task.options && session.phase !== "review"'); k++) {
+    const keuzes = a.el('optionsBox').querySelectorAll('button');
+    if (!keuzes[k]) break;
+    await wacht(1000);
+    tikEl(a, keuzes[k]);
+    await wacht();
+    if (kanTikken(a, 'Deze kies ik')) { tikTekst(a, 'Deze kies ik'); await wacht(6000); }
+  }
+}
+async function naarValstrikVraag5(a) {
+  for (let i = 0; i < 4 && !a.get('!!session.task && !!session.task.move'); i++) {
+    await keuzeUitDrie5(a);
+    await naarVolgende5(a, 'best3');
+  }
+}
 /* een voorraad tijdelijk vervangen; de app leest hem pas als hij hem nodig heeft */
 async function metVoorraad5(pool, regels, blok) {
   const bewaar = pool.slice();
@@ -406,14 +424,7 @@ async function orakelFlow5() {
       await startOefening(a, 'best3');
       for (let i = 0; i < 3; i++) {
         check('opdracht ' + (i + 1) + ' staat klaar, zonder Oeps', a.get('!!session.task && !!session.task.options') && !/Oeps/.test(norm5(tekstVan(a, 'bubble'))));
-        const keuzes = a.el('optionsBox').querySelectorAll('button');
-        if (keuzes.length) {
-          await wacht(1000);
-          tikEl(a, keuzes[0]);
-          await wacht();
-          if (kanTikken(a, 'Deze kies ik')) tikTekst(a, 'Deze kies ik');
-          await wacht(6000);
-        }
+        await keuzeUitDrie5(a);
         await naarVolgende5(a, 'best3');
       }
     } finally { genSafeTask = echt; }
@@ -628,16 +639,7 @@ async function orakelFlow5() {
         try {
           const a = nieuwKind();
           await startOefening(a, 'best3');
-          for (let i = 0; i < 3 && !a.get('!!session.task && !!session.task.move'); i++) {
-            const keuzes = a.el('optionsBox').querySelectorAll('button');
-            if (keuzes.length) {
-              await wacht(1000);
-              tikEl(a, keuzes[0]);
-              await wacht();
-              if (kanTikken(a, 'Deze kies ik')) { tikTekst(a, 'Deze kies ik'); await wacht(6000); }
-            }
-            await naarVolgende5(a, 'best3');
-          }
+          await naarValstrikVraag5(a);
           if (!check('testopzet: de valstrik-vraag staat klaar', a.get('!!session.task && !!session.task.move') && kanTikken(a, zei))) return;
           tikTekst(a, zei);
           await wacht(6000);
@@ -673,6 +675,97 @@ async function orakelFlow5() {
     tikTekst(a, 'Klaar');
     await wacht();
     check('de reden (' + redenen5(a).join(' / ') + ')', redenen5(a).indexOf('De loper op c3 is van Turbo. Tik jouw eigen stukken aan.') >= 0);
+  });
+
+  /* ---------- 5.5: de reden bij een veilige zet past bij de stelling, niet bij het antwoord ---------- */
+
+  /* Kg1-f1: daarna kan Turbo niets slaan. h2-h3: Turbo kan Pxd4, maar c3xd4 slaat terug. */
+  const VEILIG5 = [
+    ['Turbo kan niets slaan', '6k1/8/8/8/8/8/5PPP/6K1 w - - 0 1', 'g1f1', 'Veilig: Turbo kan niets van je slaan.'],
+    ['elke slag wordt teruggeslagen', '6k1/8/8/5n2/3N4/2P5/5PPP/6K1 w - - 0 1', 'h2h3', 'Veilig: elk stuk dat Turbo pakt, pak jij terug.']
+  ];
+  for (const g of VEILIG5) {
+    for (const zei of ['Veilig', 'Valstrik']) {
+      await nogNiet('[5.5] Veilig of valstrik, ' + g[0] + ', het kind zei ' + zei + ': "' + g[3] + '"', async function (check) {
+        const S = parseFEN(g[1]);
+        const taak = { S: S, move: legalMoves(S).find(function (x) { return moveKey(x) === g[2]; }), trap: false, loss: 0 };
+        const echt = genSafeTask;
+        genSafeTask = function () { return taak; };
+        try {
+          const a = nieuwKind();
+          await startOefening(a, 'best3');
+          await naarValstrikVraag5(a);
+          if (!check('testopzet: de valstrik-vraag staat klaar', a.get('!!session.task && !!session.task.move') && kanTikken(a, zei))) return;
+          tikTekst(a, zei);
+          await wacht(6000);
+          check('de reden (' + redenen5(a).join(' / ') + ')', redenen5(a).indexOf(g[3]) >= 0);
+        } finally { genSafeTask = echt; }
+      });
+    }
+  }
+
+  /* ---------- 5.5: Red je stuk, de stukken ruilen terwijl het stuk verloren is ---------- */
+
+  await nogNiet('[5.5] Red je stuk, het stuk is niet te redden maar het kind pakt evenveel: "Je loper is niet te redden, maar jij pakt de loper (3 tegen 3 punten)."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    zetOpdracht(a, 'r2q1k1r/ppp2ppp/2nb1n2/3pp3/4PBb1/3P2Q1/PPPNBPPP/2R2K1R w - - 0 1', 'stuk', ['e2g4'], HANG5);
+    zet(a, 'e2g4');
+    await wacht(5000);
+    check('de reden (' + redenen5(a).join(' / ') + ')', redenen5(a).indexOf('Je loper is niet te redden, maar jij pakt de loper (3 tegen 3 punten).') >= 0);
+  });
+
+  /* ---------- 5.5: na een foute poging zegt de zin wat Turbo's antwoord doet ---------- */
+
+  /* de coach: na Tb1-a1 antwoordt Turbo vaak rustig (Lf5-g4 pent de dame); wat hij ook speelt, de zin past erbij */
+  await nogNiet('[5.5] Red je stuk, een foute poging: slaat Turbo, dan "Turbo speelt {zet} en pakt je {stuk} op {veld}."; anders "Turbo speelt {zet}, en het gevaar is er nog."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    const fen = '2kr3r/ppp2ppp/n2qp3/3p1b2/1b1P4/P2BPQ2/1PPNKnPP/1RB3NR w - - 0 1';
+    zetOpdracht(a, fen, 'stuk', ['e2f2', 'f3f2'], HANG5);
+    const h0 = a.get('session.S.hist.length');
+    let antwoord = null;
+    zet(a, 'b1a1');
+    await zagOoit(function () {
+      if (!antwoord && a.get('session.S.hist.length') === h0 + 2) antwoord = a.get('moveKey(session.S.hist[' + (h0 + 1) + '].m)');
+      return !!antwoord;
+    }, 6000);
+    await wacht(4000);
+    if (!check('testopzet: Turbo antwoordde', !!antwoord)) return;
+    const S = parseFEN(fen);
+    makeMove(S, legalMoves(S).find(function (x) { return moveKey(x) === 'b1a1'; }));
+    const m = legalMoves(S).find(function (x) { return moveKey(x) === antwoord; });
+    const naam = moveNameNL(S, m);
+    if (isCapture(S, m)) {
+      const stuk = NAME_NL[S.board[m.to].toLowerCase()];
+      check('Turbo slaat (' + onder5(a) + ')', onder5(a).indexOf('Turbo speelt ' + naam + ' en pakt') === 0 && onder5(a).indexOf(stuk + ' op ' + alg(m.to)) >= 0);
+    } else {
+      check('Turbo slaat niets (' + onder5(a) + ')', onder5(a) === 'Turbo speelt ' + naam + ', en het gevaar is er nog. Probeer nog een zet.');
+    }
+  });
+
+  /* ---------- 5.5: na twee missers zegt de app wat de redding of de truc was ---------- */
+
+  await nogNiet('[5.5] Koning ontsnapt, na twee missers: "De redding was {zet}." en hoe', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    zetOpdracht(a, SCHAAK5[0], 'schaak', [SCHAAK5[1]]);
+    const S = parseFEN(SCHAAK5[0]);
+    const zin = 'De redding was ' + moveNameNL(S, legalMoves(S).find(function (x) { return moveKey(x) === SCHAAK5[1]; })) + '.';
+    await foutTotAntwoord5(a);
+    check('de redding en hoe (' + redenen5(a).join(' / ') + ')', redenen5(a).indexOf(zin) >= 0 && redenen5(a).indexOf('Je koning loopt weg.') >= 0);
+  });
+
+  await nogNiet('[5.5] Trucendoos, na twee missers: "De truc was {zet}." en wat de vork doet', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'trucs');
+    zetOpdracht(a, VORK5[0], 'vork', [VORK5[1]]);
+    const S = parseFEN(VORK5[0]);
+    const zin = 'De truc was ' + moveNameNL(S, legalMoves(S).find(function (x) { return moveKey(x) === VORK5[1]; })) + '.';
+    await foutTotAntwoord5(a);
+    const r = redenen5(a);
+    check('de truc (' + r.join(' / ') + ')', r.indexOf(zin) >= 0);
+    check('en wat hij doet', r.indexOf('Vork! Je pion valt de dame en het paard tegelijk aan.') >= 0 || r.indexOf('Vork! Je pion valt het paard en de dame tegelijk aan.') >= 0);
   });
 }
 function witAanZet5(a) { return a.get('session.S.turn === "w"'); }
