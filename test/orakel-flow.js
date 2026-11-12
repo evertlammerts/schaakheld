@@ -1266,7 +1266,7 @@ async function orakelFlow() {
     return a;
   }
 
-  await nogNiet('[3.5] Ik: XP en de meesterproef als twee aparte controles (Mees)', async function (check) {
+  await regel('[3.5] Ik: XP en de meesterproef als twee aparte controles (Mees)', async function (check) {
     const a = await kindUitDoc(docVan('Mees', { xp: 1800, stars: 69, wins: 6, 'c.winsL2': 2, 'c.perfectScans': 8, 'c.gamesPlayed': 25 },
       { max: { best: 10, goal: { '2026-W42': 60, '2026-W43': 60, '2026-W44': 60, '2026-W45': 60 } } }));
     a.tik('tabIk');
@@ -1275,7 +1275,7 @@ async function orakelFlow() {
     check('de proef staat nog open, 2 van 3', /Nog te doen[^]*versla Turbo[^]*2 van 3/.test(t));
   });
 
-  await nogNiet('[3.5] Ik: XP en de meesterproef als twee aparte controles (Lotte)', async function (check) {
+  await regel('[3.5] Ik: XP en de meesterproef als twee aparte controles (Lotte)', async function (check) {
     const a = await kindUitDoc(docVan('Lotte', { xp: 2565, stars: 230, wins: 1, 'c.perfectScans': 13, 'c.gamesPlayed': 7 }));
     a.tik('tabIk');
     const t = tekstVan(a, 'levelPath') + ' ' + tekstVan(a, 'lpNext');
@@ -1283,7 +1283,7 @@ async function orakelFlow() {
     check('de proef staat nog open, 0 van 1', /Nog te doen[^]*versla Turbo[^]*0 van 1/.test(t));
   });
 
-  await nogNiet('[3.5] Ik zegt wat er bewaard is en waar', async function (check) {
+  await regel('[3.5] Ik zegt wat er bewaard is en waar', async function (check) {
     const a = nieuwKind();
     a.tik('tabIk');
     check('de bewaard-regel', /bewaard|staat op deze/i.test(tekstVan(a, 'ikBewaard')) &&

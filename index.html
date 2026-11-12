@@ -180,7 +180,15 @@
   .pat-row .pat-count { font-size: 12px; font-weight: bold; color: var(--leaf-deep); white-space: nowrap; }
   .pat-row.pat-locked { opacity: .6; }
   .pat-row.pat-locked .pat-count { color: var(--ink-soft); font-weight: normal; }
-  .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .ik-bewaard { margin: 12px 4px 0; font-size: var(--fs-sm); line-height: 1.4; }
+  .ik-bewaard small { display: block; margin-top: 4px; font-size: var(--fs-cap); color: var(--text-quiet); }
+  .ik-bewaard .btn { margin-top: 6px; }
+  .lp-kop { font-family: var(--font-display); font-size: var(--fs-md); margin: 4px 0; }
+  .lp-eis { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); margin: 4px 0; }
+  .lp-eis.klaar { color: var(--success); font-weight: 700; }
+  .lp-balk { flex: 1; height: 8px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .lp-balk i { display: block; height: 100%; background: var(--sun); }
   .stat-chip {
     background: var(--card); border-radius: 999px; padding: 8px 16px;
     box-shadow: var(--shadow); font-size: 14.5px;
@@ -820,9 +828,23 @@
 
     <!-- Tab 3: Ik — week, vorm, voortgang, trofeeën -->
     <div id="view-ik" class="home-view hidden">
+      <div class="home-card">
+        <div class="card-title">🗺️ Jouw level</div>
+        <div id="levelPath" class="level-path"></div>
+        <div id="lpNext" class="lp-next"></div>
+      </div>
+      <div id="ikBewaard" class="ik-bewaard"></div>
       <div class="stats-row">
         <span class="stat-chip">⭐ Sterren: <b id="statStars">0</b></span>
         <span class="stat-chip">🏆 Potjes gewonnen: <b id="statWins">0</b></span>
+      </div>
+      <div class="home-card">
+        <div class="card-title">🏆 Trofeeënkast</div>
+        <div id="badgeGrid" class="badge-grid"></div>
+      </div>
+      <div class="home-card">
+        <div class="card-title">🎨 Bordkleuren <span class="card-sub">(nieuw bord bij elk level!)</span></div>
+        <div id="themeRow" class="theme-row"></div>
       </div>
       <div class="home-card">
         <div class="card-title">📅 Deze week</div>
@@ -833,21 +855,8 @@
         <div id="vormList"></div>
       </div>
       <div class="home-card">
-        <div class="card-title">🗺️ Jouw weg naar Grootmeester</div>
-        <div id="levelPath" class="level-path"></div>
-        <div id="lpNext" class="lp-next"></div>
-      </div>
-      <div class="home-card">
-        <div class="card-title">🏆 Trofeeënkast</div>
-        <div id="badgeGrid" class="badge-grid"></div>
-      </div>
-      <div class="home-card">
         <div class="card-title">📖 Trucenboekje <span class="card-sub">(spot ze in het echt!)</span></div>
         <div id="patBook"></div>
-      </div>
-      <div class="home-card">
-        <div class="card-title">🎨 Bordkleuren <span class="card-sub">(nieuw bord bij elk level!)</span></div>
-        <div id="themeRow" class="theme-row"></div>
       </div>
     </div>
 
@@ -7212,7 +7221,7 @@ function renderLevelPath() {
   path.innerHTML = LEVELS.map((L, i) => {
     const cls = i < cur ? 'done' : (i === cur ? 'current' : 'locked');
     return '<div class="lp-node ' + cls + '"><span class="lp-g">' + L.g + '</span>' +
-      '<span>' + L.n + '</span><span class="lp-xp">' + (i <= cur ? '✔' : L.xp + ' ⭐') + '</span></div>';
+      '<span>' + L.n + '</span><span class="lp-xp">' + (i <= cur ? '✔' : L.xp + ' XP') + '</span></div>';
   }).join('');
   const nxt = $('lpNext');
   if (!nxt) return;
@@ -7220,12 +7229,21 @@ function renderLevelPath() {
     nxt.innerHTML = '🏆 Jij bent Grootmeester. Hoger bestaat niet!';
     return;
   }
-  const N = LEVELS[cur + 1];
-  const parts = [];
-  if (P.xp < N.xp) parts.push('nog <b>' + (N.xp - P.xp) + '</b> ⭐');
-  if (N.gate && !N.gate.done()) parts.push('meesterproef: <b>' + N.gate.txt + '</b> (' + N.gate.prog() + ')');
-  nxt.innerHTML = 'Volgende: ' + N.g + ' <b>' + N.n + '</b>. ' +
-    (parts.length ? 'Daarvoor moet je: ' + parts.join(' én ') + '.' : 'Je bent er bijna!');
+  /* elke eis een eigen regel met een eigen vinkje: nooit een balk die vol staat terwijl er nog iets open is */
+  const N = LEVELS[cur + 1], L = LEVELS[cur];
+  nxt.innerHTML = '<div class="lp-kop">Volgende: ' + N.g + ' <b>' + N.n + '</b></div>' +
+    (P.xp >= N.xp ? '<div class="lp-eis klaar">✔ ' + N.xp + ' XP</div>' :
+      '<div class="lp-eis">Nog ' + (N.xp - P.xp) + ' XP <span class="lp-balk"><i style="width:' +
+      Math.round((P.xp - L.xp) / (N.xp - L.xp) * 100) + '%"></i></span></div>') +
+    (!N.gate ? '' : N.gate.done() ? '<div class="lp-eis klaar">✔ ' + N.gate.txt + '</div>' :
+      '<div class="lp-eis">Nog te doen: ' + N.gate.txt + ' (' + N.gate.prog().replace('/', ' van ') + ')</div>');
+}
+function renderIkBewaard() {
+  $('ikBewaard').innerHTML = (ACC ? '✔ Bewaard op dit apparaat en je andere apparaat.' :
+    'Alles staat op ' + ditApparaat() + '. Speel je ook op een ander apparaat? Koppel het, dan is alles dubbel bewaard.' +
+    '<br><button class="btn plain small" id="ikKoppel">Ander apparaat</button>') +
+    '<small>Een potje of rondje dat nog bezig is, blijft op dit apparaat.</small>';
+  if ($('ikKoppel')) $('ikKoppel').addEventListener('click', linkShareFlow);
 }
 
 function renderHome() {
@@ -7236,6 +7254,7 @@ function renderHome() {
   renderWeekStrip();
   renderVorm();
   renderLevelPath();
+  renderIkBewaard();
   renderThemes();
   renderBadges();
 }

@@ -4790,7 +4790,7 @@ function renderLevelPath() {
   path.innerHTML = LEVELS.map((L, i) => {
     const cls = i < cur ? 'done' : (i === cur ? 'current' : 'locked');
     return '<div class="lp-node ' + cls + '"><span class="lp-g">' + L.g + '</span>' +
-      '<span>' + L.n + '</span><span class="lp-xp">' + (i <= cur ? '✔' : L.xp + ' ⭐') + '</span></div>';
+      '<span>' + L.n + '</span><span class="lp-xp">' + (i <= cur ? '✔' : L.xp + ' XP') + '</span></div>';
   }).join('');
   const nxt = $('lpNext');
   if (!nxt) return;
@@ -4798,12 +4798,21 @@ function renderLevelPath() {
     nxt.innerHTML = '🏆 Jij bent Grootmeester. Hoger bestaat niet!';
     return;
   }
-  const N = LEVELS[cur + 1];
-  const parts = [];
-  if (P.xp < N.xp) parts.push('nog <b>' + (N.xp - P.xp) + '</b> ⭐');
-  if (N.gate && !N.gate.done()) parts.push('meesterproef: <b>' + N.gate.txt + '</b> (' + N.gate.prog() + ')');
-  nxt.innerHTML = 'Volgende: ' + N.g + ' <b>' + N.n + '</b>. ' +
-    (parts.length ? 'Daarvoor moet je: ' + parts.join(' én ') + '.' : 'Je bent er bijna!');
+  /* elke eis een eigen regel met een eigen vinkje: nooit een balk die vol staat terwijl er nog iets open is */
+  const N = LEVELS[cur + 1], L = LEVELS[cur];
+  nxt.innerHTML = '<div class="lp-kop">Volgende: ' + N.g + ' <b>' + N.n + '</b></div>' +
+    (P.xp >= N.xp ? '<div class="lp-eis klaar">✔ ' + N.xp + ' XP</div>' :
+      '<div class="lp-eis">Nog ' + (N.xp - P.xp) + ' XP <span class="lp-balk"><i style="width:' +
+      Math.round((P.xp - L.xp) / (N.xp - L.xp) * 100) + '%"></i></span></div>') +
+    (!N.gate ? '' : N.gate.done() ? '<div class="lp-eis klaar">✔ ' + N.gate.txt + '</div>' :
+      '<div class="lp-eis">Nog te doen: ' + N.gate.txt + ' (' + N.gate.prog().replace('/', ' van ') + ')</div>');
+}
+function renderIkBewaard() {
+  $('ikBewaard').innerHTML = (ACC ? '✔ Bewaard op dit apparaat en je andere apparaat.' :
+    'Alles staat op ' + ditApparaat() + '. Speel je ook op een ander apparaat? Koppel het, dan is alles dubbel bewaard.' +
+    '<br><button class="btn plain small" id="ikKoppel">Ander apparaat</button>') +
+    '<small>Een potje of rondje dat nog bezig is, blijft op dit apparaat.</small>';
+  if ($('ikKoppel')) $('ikKoppel').addEventListener('click', linkShareFlow);
 }
 
 function renderHome() {
@@ -4814,6 +4823,7 @@ function renderHome() {
   renderWeekStrip();
   renderVorm();
   renderLevelPath();
+  renderIkBewaard();
   renderThemes();
   renderBadges();
 }
