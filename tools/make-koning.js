@@ -5,8 +5,13 @@
    soundness-controle is duur), dus dit gebeurt vooraf. Elke redding wordt
    hier nog eens dieper nagerekend (diepte 8, met tijdslimiet) dan in de
    generator zelf; puzzels met een lek worden weggegooid.
+   Een puzzel heeft minstens een zet die fout is (de schaakcoach): goed is een
+   antwoord of een zet die het potje meteen beëindigt, zoals de app oordeelt.
+   Zonder foute zet krijgt een kind drie sterren voor de enige zet die er is.
    Draaien: node tools/make-koning.js [aantal] [uitvoerbestand]; parallel: meerdere
    werkers met elk een eigen uitvoerbestand, daarna samenvoegen (zie merge onderaan).
+   Samenvoegen houdt ook de regel van de foute zet, dus de bestaande voorraad
+   opnieuw nalopen is: node tools/make-koning.js merge src/koning.js
    Op de devbox: nix shell nixpkgs#nodejs_22 -c node tools/make-koning.js 20 deel-1.json */
 'use strict';
 const fs = require('fs');
@@ -27,6 +32,7 @@ while (pool.length < want) {
   if ((counts[k.type] || 0) >= perType) continue;
   const fen = E.toFEN(k.S);
   if (seen.has(fen)) continue;
+  if (!heeftFouteZet(fen, k.answers.map(a => E.moveKey(a.m)))) continue;
   let leak = false;
   for (const a of k.answers) {
     E.makeMove(k.S, a.m);
@@ -50,13 +56,31 @@ function writePool(pool) {
     "if (typeof module !== 'undefined') module.exports = { KONING_POOL };\n";
   fs.writeFileSync(path.join(__dirname, '..', 'src', 'koning.js'), out);
 }
-/* samenvoegen: node tools/make-koning.js merge deel-*.json */
+function heeftFouteZet(fen, answers) {
+  const S = E.parseFEN(fen);
+  return E.legalMoves(S).some(m => {
+    if (answers.indexOf(E.moveKey(m)) >= 0) return false;
+    E.makeMove(S, m);
+    const eindigt = E.gameStatus(S).over;
+    E.unmakeMove(S);
+    return !eindigt;
+  });
+}
+/* samenvoegen: node tools/make-koning.js merge <bron> ...; een bron is een
+   deel.json van een werker of src/koning.js zelf */
 function mergeOnly() {
   const seen = new Set(), all = [];
-  for (const f of process.argv.slice(3)) for (const p of JSON.parse(fs.readFileSync(f, 'utf8'))) {
-    if (!seen.has(p.fen)) { seen.add(p.fen); all.push(p); }
+  let zonder = 0;
+  for (const f of process.argv.slice(3)) {
+    const lijst = /\.js$/.test(f) ? require(path.resolve(f)).KONING_POOL : JSON.parse(fs.readFileSync(f, 'utf8'));
+    for (const p of lijst) {
+      if (seen.has(p.fen)) continue;
+      seen.add(p.fen);
+      if (heeftFouteZet(p.fen, p.answers)) all.push(p);
+      else zonder++;
+    }
   }
   writePool(all);
-  process.stderr.write('samengevoegd: ' + all.length + ' puzzels\n');
+  process.stderr.write('samengevoegd: ' + all.length + ' puzzels, ' + zonder + ' weg zonder foute zet\n');
 }
 process.stderr.write('klaar: ' + pool.length + ' puzzels ' + JSON.stringify(counts) + ' in ' + Math.round((Date.now() - t0) / 1000) + 's\n');

@@ -241,6 +241,22 @@
     check('cxd5 slaat de aanvaller van het paard (' + JSON.stringify(r) + ')', r.kind === 'aanvaller' && r.took === 'pion');
   });
 
+  /* de coach (schaak.md, de laatste sectie): goed is een antwoord of een zet die het potje meteen beëindigt, zoals de app oordeelt */
+  regel('[5.5] Koning ontsnapt: elke puzzel in de voorraad heeft een zet die fout is, dus "Er is één goede zet" betekent nooit "er is maar één zet"', function (check) {
+    if (!check('er is een voorraad KONING_POOL', typeof KONING_POOL !== 'undefined' && KONING_POOL.length > 0)) return;
+    const zonder = KONING_POOL.filter(function (p) {
+      const S = E.parseFEN(p.fen);
+      return !E.legalMoves(S).some(function (m) {
+        if (p.answers.indexOf(E.moveKey(m)) >= 0) return false;
+        E.makeMove(S, m);
+        const eindigt = E.gameStatus(S).over;
+        E.unmakeMove(S);
+        return !eindigt;
+      });
+    });
+    check('geen puzzel zonder foute zet (' + zonder.length + ' van ' + KONING_POOL.length + (zonder.length ? ', zoals ' + zonder[0].fen : '') + ')', zonder.length === 0);
+  });
+
   /* ---------- 5.1: de voorraad trucs ---------- */
 
   const TYPES = ['vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat2'];
