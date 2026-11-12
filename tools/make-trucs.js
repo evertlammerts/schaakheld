@@ -18,10 +18,12 @@
    3. hij geen gewone slag is (een stuk dat je zo kunt pakken is Speurogen);
    4. de winst bij het patroon hoort: na de truc, zwarts beste antwoord en
       wits beste antwoord slaat wit op een veld van de vork, de penning, de
-      spies of de aftrekaanval.
+      spies of de aftrekaanval;
+   5. geen zet die geen antwoord is, bij diep rekenen een punt beter scoort.
    Mat in een en mat in twee komen van genMate1Task en genMate2Task, die exact
-   zijn. Red je stuk komt van pieceTaskFrom, met de nacontrole van regel 5.3
-   en een diepere: elke redding blijft binnen een pion van de beste. */
+   zijn. Red je stuk komt van pieceTaskFrom, met de vijf toetsen van regel 5.3
+   (checkPieceTask) bij het kiezen en nog eens met 300.000 knopen.
+   herzie haalt een bestaande voorraad door de toetsen van nu. */
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -29,7 +31,7 @@ const E = require(path.join(__dirname, '..', 'src', 'engine.js'));
 
 const TYPES = ['vork', 'penning', 'spies', 'aftrek', 'mat1', 'mat2', 'stuk'];
 const DOEL = { vork: 150, penning: 80, spies: 40, aftrek: 60, mat1: 120, mat2: 120, stuk: 120 };
-const LIJN_KNOPEN = 150000, DIEP_KNOPEN = 600000;
+const LIJN_KNOPEN = 150000, DIEP_KNOPEN = 600000, STUK_KNOPEN = 300000;
 
 function mulberry32(a) {
   return function () {
@@ -136,7 +138,18 @@ function zoekPatroon(rng, types) {
     const extra = slag(m) >= 200 ? slag(m) : 0;
     if (r.depth < 5 || -r.score - extra < basis + 150) return null;
   }
+  if (!geenBetere(S, antwoorden)) return null;
   return { bord: bord(S), type, antwoorden: antwoorden.map(E.moveKey) };
+}
+
+/* De truc is ook de beste zet: geen zet die geen antwoord is, scoort bij
+   diep rekenen een punt of meer beter (de coach, A1). */
+function geenBetere(S, antwoorden) {
+  const sleutels = antwoorden.map(E.moveKey);
+  const anders = E.legalMoves(S).filter(m => sleutels.indexOf(E.moveKey(m)) < 0);
+  if (!anders.length) return true;
+  const goed = E.think(S, 60000, 10, { nodes: DIEP_KNOPEN, root: antwoorden }).score;
+  return E.think(S, 60000, 10, { nodes: DIEP_KNOPEN, root: anders }).score - goed < 100;
 }
 
 function zoekMat1(rng) {
@@ -149,20 +162,46 @@ function zoekMat1(rng) {
   return { bord: bord(S), type: 'mat1', antwoorden: antwoorden.map(E.moveKey) };
 }
 
+/* Eerst de toetsen van het kiezen (25.000 knopen, goedkoop afkeuren), dan
+   dezelfde vijf toetsen met het budget van de voorraad. */
 function zoekStuk(rng) {
   const S = zonderRechten(E.randomPosition({ noise: 260, minPlies: 8, maxPlies: 24, maxImbalance: 600 }, rng));
   const t = E.pieceTaskFrom(S);
-  if (!t || t.answers.some(a => bijzonder(a.m)) || !E.checkPieceTask(t)) return null;
-  const scores = t.answers.map(a => {
-    E.makeMove(S, a.m);
-    const st = E.gameStatus(S);
-    const r = st.over ? { score: st.reason === 'mat' ? -E.MATE : 0, depth: 99 } : E.think(S, 60000, 10, { nodes: DIEP_KNOPEN });
-    E.unmakeMove(S);
-    return { wit: -r.score, diep: r.depth };
-  });
-  const best = Math.max(...scores.map(x => x.wit));
-  if (scores.some(x => x.diep < 5 || best - x.wit > 100)) return null;
+  if (!t || t.answers.some(a => bijzonder(a.m)) || !E.checkPieceTask(t) || !E.checkPieceTask(t, STUK_KNOPEN)) return null;
   return { bord: bord(S), type: 'stuk', antwoorden: t.answers.map(a => E.moveKey(a.m)) };
+}
+
+/* Een regel van de voorraad opnieuw door de toetsen van nu: Red je stuk met
+   de vijf toetsen, de patronen met "geen betere zet"; mat in een en in twee
+   zijn exact en blijven staan. */
+function houdtStand(p) {
+  const t = E.trucTask(p.bord + '|' + p.type + '|' + p.antwoorden.join(','));
+  if (!t) return false;
+  if (p.type === 'stuk') return !!E.checkPieceTask(t, STUK_KNOPEN);
+  if (p.type === 'mat1' || p.type === 'mat2') return true;
+  return geenBetere(t.S, t.answers.map(a => a.m));
+}
+/* herzie <uitvoer.json> <bron> ...: een bron is een deel.json van een werker
+   of src/trucs.js zelf; wat de toetsen van nu doorstaat gaat naar de uitvoer */
+function herzie(uitvoer, bronnen) {
+  const lijst = [];
+  for (const f of bronnen) {
+    if (/\.js$/.test(f)) {
+      const v = require(path.resolve(f));
+      for (const r of v.TRUC_POOL.concat(v.STUK_POOL)) {
+        const d = r.split('|');
+        lijst.push({ bord: d[0], type: d[1], antwoorden: d[2].split(',') });
+      }
+    } else lijst.push(...JSON.parse(fs.readFileSync(f, 'utf8')));
+  }
+  const goed = [], weg = {};
+  lijst.forEach((p, i) => {
+    if (houdtStand(p)) goed.push(p);
+    else { weg[p.type] = (weg[p.type] || 0) + 1; process.stderr.write('weg: ' + p.bord + '|' + p.type + '|' + p.antwoorden + '\n'); }
+    if (i % 20 === 19) { fs.writeFileSync(uitvoer, JSON.stringify(goed)); process.stderr.write((i + 1) + ' van ' + lijst.length + '\n'); }
+  });
+  fs.writeFileSync(uitvoer, JSON.stringify(goed));
+  process.stderr.write('herzien: ' + goed.length + ' van ' + lijst.length + ' blijven; weg: ' + JSON.stringify(weg) + '\n');
 }
 
 function zoekMat2(rng) {
@@ -223,4 +262,5 @@ function merge(bestanden) {
 const [opdracht, ...rest] = process.argv.slice(2);
 if (opdracht === 'zoek') zoek(+rest[0], +rest[1], rest[2], (rest[3] || 'vork,penning,spies,aftrek').split(','));
 else if (opdracht === 'merge') merge(rest);
-else { process.stderr.write('gebruik: zoek <seconden> <zaad> <uitvoer.json> [types, of mat2] | merge <deel.json> ...\n'); process.exit(1); }
+else if (opdracht === 'herzie') herzie(rest[0], rest.slice(1));
+else { process.stderr.write('gebruik: zoek <seconden> <zaad> <uitvoer.json> [types, of mat2] | merge <deel.json> ... | herzie <uitvoer.json> <bron> ...\n'); process.exit(1); }

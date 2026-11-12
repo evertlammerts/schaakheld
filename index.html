@@ -1209,10 +1209,15 @@ function orderMoves(S, moves) {
   return moves.map(m => ({ m, k: mvvLva(S, m) })).sort((a, b) => b.k - a.k).map(x => x.m);
 }
 
+/* Every position any search looks at, counted, so a test can bound the work
+   of a generator by what it does and not by how busy the machine is. */
+let NODES = 0;
+function nodesSearched() { return NODES; }
+
 /* tick: optional deadline probe from the timed search, so a capture storm at a
    leaf cannot run past the budget unnoticed */
 function quiesce(S, alpha, beta, depth, evalFn, tick) {
-  if (tick && tick()) return alpha;
+  if (tick) { if (tick()) return alpha; } else NODES++;
   const stand = evalFn(S);
   if (stand >= beta) return beta;
   if (stand > alpha) alpha = stand;
@@ -1230,6 +1235,7 @@ function quiesce(S, alpha, beta, depth, evalFn, tick) {
 
 function search(S, depth, alpha, beta, ply) {
   if (depth === 0) return quiesce(S, alpha, beta, 6, evalSTM);
+  NODES++;
   const moves = orderMoves(S, legalMoves(S));
   if (moves.length === 0) return inCheck(S) ? -MATE + ply : 0;
   if (S.half >= 100) return 0;
@@ -1370,8 +1376,14 @@ function earlierPositions(S, keyOf) {
   for (let i = back.length - 1; i >= 0; i--) makeMove(S, back[i]);
   return out;
 }
-/* board, side to move, castling and en passant: the first four FEN fields */
-function positionKey(S) { return toFEN(S).split(' ').slice(0, 4).join(' '); }
+/* Board, side to move, castling and en passant, as the rules of chess count
+   them: the en passant square only when a pawn can really capture there, so
+   the position right after a double step equals the same board later. */
+function positionKey(S) {
+  const f = toFEN(S).split(' ');
+  if (f[3] !== '-' && !legalMoves(S).some(m => m.flags === 'e')) f[3] = '-';
+  return f.slice(0, 4).join(' ');
+}
 /* How often the current position stood on the board before in this game;
    2 means this is the third time, a draw by repetition. */
 function repetitions(S) {
@@ -1390,12 +1402,13 @@ function think(S, budgetMs, maxDepth, opts) {
   const t0 = Date.now(), deadline = t0 + (budgetMs || 1000);
   maxDepth = maxDepth || 8;
   const maxNodes = opts && opts.nodes ? opts.nodes : Infinity;
-  let nodes = 0, aborted = false;
+  let nodes = 0, aborted = false, finish = false;
   const killers = [], hist = new Map();
   if (TT.size > TT_MAX) TT.clear();
   const tick = () => {
     if (aborted) return true;
-    if ((++nodes & 255) === 0 && (nodes >= maxNodes || Date.now() > deadline)) aborted = true;
+    NODES++;
+    if ((++nodes & 255) === 0 && !finish && (nodes >= maxNodes || Date.now() > deadline)) aborted = true;
     return aborted;
   };
   const earlier = new Set(earlierPositions(S, hashOf)), path = new Set();
@@ -1466,27 +1479,34 @@ function think(S, budgetMs, maxDepth, opts) {
     TT.set(key, { d: depth, s: toTT(best, ply), f: best <= alpha0 ? 2 : (best >= beta ? 1 : 0), m: bestM, v: low });
     return best;
   }
-  const rootMoves = legalMoves(S);
+  /* opts.root limits the moves searched at the root: the best of a few moves,
+     or of all moves but a few, with the same search as the whole position */
+  const rootMoves = opts && opts.root ? opts.root : legalMoves(S);
   if (!rootMoves.length) return { m: null, score: 0, depth: 0, nodes: 0 };
   path.add(hashOf(S));
   let bestMove = null, bestScore = 0, done = 0;
-  for (let d = 1; d <= maxDepth; d++) {
-    if (Math.abs(bestScore) >= MATE - 100) break;
+  const iteration = d => {
     let alpha = -Infinity, rootBest = null, rootScore = -Infinity;
     for (const m of order(rootMoves, bestMove, 0)) {
       makeMove(S, m);
       const sc = -ab(d - 1, -Infinity, -alpha, 1);
       unmakeMove(S);
-      if (aborted) break;
+      if (aborted) return false;
       if (sc > rootScore) { rootScore = sc; rootBest = m; }
       if (sc > alpha) alpha = sc;
     }
-    if (aborted) break;
     bestMove = rootBest; bestScore = rootScore; done = d;
-    if (Math.abs(rootScore) >= MATE - 100) break;
+    return true;
+  };
+  for (let d = 1; d <= maxDepth; d++) {
+    if (Math.abs(bestScore) >= MATE - 100) break;
+    if (!iteration(d)) break;
+    if (Math.abs(bestScore) >= MATE - 100) break;
     if (Date.now() - t0 > budgetMs / 2 || nodes >= maxNodes / 2) break;
   }
-  if (!bestMove) bestMove = rootScores(S, 1)[0].m;
+  /* a budget too small for one iteration still gets a searched and counted
+     move: depth 1 is finished whatever the budget */
+  if (!done) { aborted = false; finish = true; iteration(1); }
   return { m: bestMove, score: bestScore, depth: done, nodes };
 }
 
@@ -1755,32 +1775,69 @@ function genScanTask(type, rng) {
 /* The checks when a task is picked look deeper than forcedMaterial, which
    sees captures only: a quiet fork or a mate threat counts too. */
 const CHECK_NODES = 25000;
-/* White's score after move m, by the search with the check budget. */
-function scoreAfter(S, m) {
+/* White's move m in S played out: Black's best reply and White's best reply
+   at the budget, then the captures resolved. white is White's score after m
+   (the value V of the chess coach's measures), material what White has won
+   or lost along that line (L; a fork or a pin shows here, positional points
+   do not), reply Black's reply, mateNext whether Black mates at once. */
+function lineAfter(S, m, nodes) {
+  const m0 = material(S), back = [m];
   makeMove(S, m);
-  const st = gameStatus(S);
-  const r = st.over ? { score: st.reason === 'mat' ? -MATE : 0, m: null } : think(S, 60000, 8, { nodes: CHECK_NODES });
-  const mateNext = !st.over && !!mateReply(S);
-  unmakeMove(S);
-  return { white: -r.score, reply: r.m, mateNext };
+  let st = gameStatus(S);
+  const out = { white: st.over ? (st.reason === 'mat' ? MATE : 0) : 0, reply: null, material: 0, mateNext: false };
+  if (!st.over) {
+    out.mateNext = !!mateReply(S);
+    const r = think(S, 60000, 8, { nodes });
+    out.white = -r.score;
+    out.reply = r.m;
+    makeMove(S, r.m); back.push(r.m);
+    st = gameStatus(S);
+    if (!st.over) { const w = think(S, 60000, 8, { nodes }).m; makeMove(S, w); back.push(w); }
+  }
+  out.material = (gameStatus(S).over ? material(S) : forcedMaterial(S)) - m0;
+  for (let i = back.length; i > 0; i--) unmakeMove(S);
+  return out;
 }
-/* Veilig of valstrik: a "veilig" move loses at most a pawn against the best
-   move and allows no mate in one; a "valstrik" loses at least 2.5 pawns, and
-   its punishment is Black's real best reply. Returns the task or null. */
-function checkSafeTask(task) {
+/* Veilig of valstrik (plan rule 5.3, decision D31). A "veilig" move loses no
+   pawn along its line, allows no mate in one, and is at most 2 points below
+   the best move; a "valstrik" loses 2.5 points or more along its line, is
+   at least 2.5 points below the best move, and is punished by a capture,
+   Black's first move of that line. A move on which the line and the score
+   disagree is neither: a piece that is lost after every move is no trap set
+   by this one. Returns the task or null. */
+function checkSafeTask(task, nodes) {
+  nodes = nodes || CHECK_NODES;
+  clearTT();
   const S = task.S;
-  const best = think(S, 60000, 8, { nodes: CHECK_NODES }).score;
-  const after = scoreAfter(S, task.move);
-  const loss = best - after.white;
-  if (!task.trap) return loss <= 100 && !after.mateNext ? task : null;
-  if (loss < 250 || !after.reply) return null;
-  return Object.assign({}, task, { punish: after.reply });
+  const best = think(S, 60000, 8, { nodes }).score;
+  const line = lineAfter(S, task.move, nodes);
+  if (!task.trap) return line.material >= -90 && !line.mateNext && best - line.white <= 200 ? task : null;
+  if (line.material > -250 || best - line.white < 250 || !line.reply || !isCaptureAfter(S, task.move, line.reply)) return null;
+  return Object.assign({}, task, { punish: line.reply });
 }
-/* Red je stuk: every accepted save is within a pawn of the best save. */
-function checkPieceTask(task) {
-  const scores = task.answers.map(a => scoreAfter(task.S, a.m).white);
-  const best = Math.max(...scores);
-  return scores.every(v => best - v <= 100) ? task : null;
+/* Red je stuk (plan rule 5.3): exactly one threat; the piece can be saved,
+   best play losing at most a pawn against the position as it stands; every
+   answer within half a pawn of the best and losing no pawn along its line;
+   every other move at least 1.5 points below the lowest answer, so a move
+   about as good is never called wrong; one to four answers. */
+function checkPieceTask(task, nodes) {
+  nodes = nodes || CHECK_NODES;
+  clearTT();
+  const S = task.S;
+  if (task.answers.length < 1 || task.answers.length > 4) return null;
+  if (threatDetails(S).filter(t => t.gain >= 90).length !== 1) return null;
+  const v0 = think(S, 60000, 8, { nodes }).score;
+  if (v0 < evalWhite(S) - 100) return null;
+  let lowest = Infinity;
+  for (const a of task.answers) {
+    const line = lineAfter(S, a.m, nodes);
+    if (line.white < v0 - 50 || line.material < -90) return null;
+    lowest = Math.min(lowest, line.white);
+  }
+  const keys = task.answers.map(a => moveKey(a.m));
+  const others = legalMoves(S).filter(m => keys.indexOf(moveKey(m)) < 0);
+  if (others.length && think(S, 60000, 8, { nodes, root: others }).score > lowest - 150) return null;
+  return task;
 }
 
 /* How move m saves White's hanging piece on hangSq, for the explanation of
@@ -1796,21 +1853,25 @@ function saveKind(S, m, hangSq) {
   const sliders = piecesOf(S, 'b').filter(a => 'brq'.includes(S.board[a].toLowerCase()) && pieceAttacksSq(S, a, hangSq));
   makeMove(S, m);
   const at = moved ? m.to : hangSq;
-  const back = seeSquare(S, at), safe = back === 0, attackedNow = attacked(S, at, 'b');
+  const check = inCheck(S), attackedNow = attacked(S, at, 'b');
+  /* in check Black may not capture for one move, so seeSquare reads 0 for a
+     piece that is not safe at all: in check only an unattacked piece is safe */
+  const back = attackedNow ? seeSquare(S, at) : 0, safe = !attackedNow || (!check && back === 0);
   const blocked = !moved && sliders.some(a => S.board[a] && !pieceAttacksSq(S, a, hangSq) && between(a, hangSq, m.to));
-  const check = inCheck(S);
-  const threatens = !took && piecesOf(S, 'b').some(t => S.board[t] !== 'k' && pieceAttacksSq(S, m.to, t) && VAL[S.board[t].toLowerCase()] >= hangVal);
+  const threatens = piecesOf(S, 'b').some(t => S.board[t] !== 'k' && pieceAttacksSq(S, m.to, t) && VAL[S.board[t].toLowerCase()] >= hangVal);
   unmakeMove(S);
   const backPts = Math.round(back / 100) >= 9 ? 9 : Math.round(back / 100);
   const out = (kind, extra) => Object.assign({ kind, sq: alg(at) }, tookOne, extra || {});
   if (takerOfHang && safe) return out('aanvaller');
+  if (moved && took && safe) return out('slaat');
+  if (moved && !attackedNow) return out('weg');
+  if (check && attackedNow) return out('schaak');
   if (moved) {
-    if (!attackedNow) return out('weg');
     if (safe) return out('weg-gedekt');
     if (took && VAL[took] >= back) return out('ruil', { b: backPts });
   } else if (safe) return out(blocked ? 'ertussen' : 'gedekt');
   else if (took && VAL[took] >= back) return out('ruil', { b: backPts });
-  if (!took && (check || threatens)) return out('tegenaanval');
+  if (!took && threatens) return out('tegenaanval');
   return out('anders');
 }
 /* Is square c strictly on the straight line between a and b? */
@@ -2272,8 +2333,9 @@ function genPieceTask(rng) {
    (STUK_POOL) is made from this too. */
 function pieceTaskFrom(S) {
   if (S.turn !== 'w' || inCheck(S)) return null;
-  const th = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250);
-  if (th.length !== 1) return null;
+  /* one threat only, a pawn included: with two the child cannot save both */
+  const threats = threatDetails(S).filter(t => t.gain >= 90), th = threats.filter(t => t.victim >= 300 && t.gain >= 250);
+  if (threats.length !== 1 || th.length !== 1) return null;
   const base = forcedMaterial(S);
   const saves = [];
   for (const m of legalMoves(S)) {
@@ -2392,11 +2454,20 @@ function keyMoment(S) {
 /* A type serves only with this many verified puzzles: fewer, and a child who
    plays daily recognises the positions within a week (decision D24). */
 const TRUC_MIN = 15;
+/* "<board> <side>": eight rows of eight squares and one king of each colour,
+   so parseFEN never meets a board it cannot read */
+function boardOk(s) {
+  const m = /^([1-8pnbrqkPNBRQK]+(\/[1-8pnbrqkPNBRQK]+){7}) [wb]$/.exec(s);
+  if (!m) return false;
+  const rows = m[1].split('/');
+  if (!rows.every(r => r.replace(/[1-8]/g, d => '.'.repeat(+d)).length === 8)) return false;
+  return (m[1].match(/K/g) || []).length === 1 && (m[1].match(/k/g) || []).length === 1;
+}
 /* "<board> <side>|<type>|<answer>[,<answer>]" as a task, or null; a Red je
    stuk task (STUK_POOL) gets its hanging piece too. */
 function trucTask(line) {
   const parts = String(line).split('|');
-  if (parts.length !== 3) return null;
+  if (parts.length !== 3 || !boardOk(parts[0])) return null;
   const S = parseFEN(parts[0] + ' - - 0 1');
   const legal = legalMoves(S);
   const answers = parts[2].split(',').map(k => legal.find(m => moveKey(m) === k));
@@ -2442,7 +2513,7 @@ if (typeof module !== 'undefined') {
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
     winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
-    repetitions, positionKey, SUPER_NODES, CHECK_NODES, checkSafeTask, checkPieceTask,
+    repetitions, positionKey, SUPER_NODES, CHECK_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
     POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };
 }
 'use strict';
