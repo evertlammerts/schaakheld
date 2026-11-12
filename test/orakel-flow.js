@@ -282,6 +282,42 @@ async function orakelFlow() {
     check('rondje: Pauze zegt niet "Bewaard"', toastTekst(b) !== '' && !/Bewaard/.test(toastTekst(b)));
   });
 
+  await nogNiet('[1.2] lukt bewaren later niet meer, dan blijft het laatst bewaarde staan en zegt Pauze waar het staat', async function (check) {
+    const weigerLater = function (sleutel) {
+      const o = maakOpslag(), schrijf = o.setItem;
+      o.weiger = false;
+      o.setItem = function (k, v) { if (k === sleutel && o.weiger) throw new Error('vol'); return schrijf.call(this, k, v); };
+      return o;
+    };
+    const oa = weigerLater(POTJE);
+    const a = nieuwKind({ opslag: oa });
+    await startPotje(a, 1);
+    await zetEnWacht(a, 'e2e4');
+    const voor = opgeslagen(a, POTJE);
+    check('testopzet: twee halve zetten bewaard', !!voor && voor.moves.length === 2);
+    oa.weiger = true;
+    await zetEnWacht(a, 'd2d4');
+    check('de balk zegt niet bewaard', zichtbaar(a, 'bewaard') && /niet/.test(tekstVan(a, 'bewaard')) && !/✔/.test(tekstVan(a, 'bewaard')));
+    check('het laatst bewaarde staat er nog', JSON.stringify(opgeslagen(a, POTJE)) === JSON.stringify(voor));
+    a.tik('backBtn');
+    await wacht(500);
+    check('Pauze zegt waar het potje staat, zonder "Bewaard."', /zet 2\b/.test(toastTekst(a)) && !/Bewaard\./.test(toastTekst(a)));
+    check('de Verder-kaart toont wat er echt bewaard is', /Zet 2\b/.test(tekstVan(a, 'verder')));
+    const ob = weigerLater(RONDJES);
+    const b = nieuwKind({ opslag: ob });
+    await startOefening(b, 'scan');
+    await scanGoed(b);
+    check('testopzet: opdracht 1 bewaard', !!opgeslagen(b, RONDJES) && opgeslagen(b, RONDJES).scan.round === 1);
+    ob.weiger = true;
+    await volgende(b);
+    await scanGoed(b);
+    check('rondje: de balk zegt niet bewaard', /niet/.test(tekstVan(b, 'bewaard')) && !/✔/.test(tekstVan(b, 'bewaard')));
+    check('rondje: opdracht 1 staat er nog', opgeslagen(b, RONDJES).scan.round === 1);
+    b.tik('backBtn');
+    await wacht(500);
+    check('rondje: Pauze zegt bij welke opdracht het verder gaat', /opdracht 2\b/.test(toastTekst(b)) && !/Bewaard\./.test(toastTekst(b)));
+  });
+
   await nogNiet('[1.2] een rondje zonder antwoord zegt bij Pauze dat het nog niet begonnen was', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'scan');
