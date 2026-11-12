@@ -1761,7 +1761,7 @@ async function orakelFlow() {
     ['geplakt, met komma\'s', 'lang, beloven, kaal, neer']
   ];
   for (const geval of koppelInvoer) {
-    await nogNiet('[4.8] koppelwoorden ' + geval[0] + ': vier genummerde woorden, ook het laatste, en Koppel! werkt', async function (check) {
+    await regel('[4.8] koppelwoorden ' + geval[0] + ': vier genummerde woorden, ook het laatste, en Koppel! werkt', async function (check) {
       const a = nieuwKind();
       a.ev('linkEntryFlow()');
       await wacht();
@@ -1773,7 +1773,7 @@ async function orakelFlow() {
   }
 
   /* typen zoals een kind: een woord, Enter, het volgende woord achter wat er al staat */
-  await nogNiet('[4.8] koppelwoorden met Enter na elk woord: vier genummerde woorden, en Koppel! werkt', async function (check) {
+  await regel('[4.8] koppelwoorden met Enter na elk woord: vier genummerde woorden, en Koppel! werkt', async function (check) {
     const a = nieuwKind();
     a.ev('linkEntryFlow()');
     await wacht();
@@ -1787,7 +1787,7 @@ async function orakelFlow() {
     check('de knop staat aan', heeftKlik(a, 'linkGo') && !a.el('linkGo').disabled && !tikbaar(a, a.el('linkGo')));
   });
 
-  await nogNiet('[4.8] een woord dat niet in de lijst staat, wordt genoemd', async function (check) {
+  await regel('[4.8] een woord dat niet in de lijst staat, wordt genoemd', async function (check) {
     const a = nieuwKind();
     a.ev('linkEntryFlow()');
     await wacht();
@@ -1796,7 +1796,7 @@ async function orakelFlow() {
     check('"\'lamq\' ken ik niet"', /'lamq' ken ik niet/.test(a.scherm()));
   });
 
-  await nogNiet('[4.8] het veld staat boven de knop en heeft geen lengtegrens', async function (check) {
+  await regel('[4.8] het veld staat boven de knop en heeft geen lengtegrens', async function (check) {
     const a = nieuwKind();
     a.ev('linkEntryFlow()');
     await wacht();
@@ -1805,7 +1805,7 @@ async function orakelFlow() {
     check('geen maxlength', !/id="wordInp"[^>]*maxlength/.test(h));
   });
 
-  await nogNiet('[4.8] dezelfde woordinvoer voor vrienden: twee woorden in een keer', async function (check) {
+  await regel('[4.8] dezelfde woordinvoer voor vrienden: twee woorden in een keer', async function (check) {
     const a = nieuwKind();
     a.ev('mpWordFlow()');
     await wacht();
@@ -1815,7 +1815,7 @@ async function orakelFlow() {
     check('Verbind! staat aan', heeftKlik(a, 'mpKoppel') && !a.el('mpKoppel').disabled && !tikbaar(a, a.el('mpKoppel')));
   });
 
-  await nogNiet('[4.10] de koppelcode zegt in hele minuten hoe lang hij werkt, en biedt daarna een nieuwe', async function (check) {
+  await regel('[4.10] de koppelcode zegt in hele minuten hoe lang hij werkt, en biedt daarna een nieuwe', async function (check) {
     /* met een vaste datum loopt de klok van Date mee met de timers, zoals op een
        echt apparaat; een app die de tijd leest in plaats van tikken telt, ziet hem */
     zetDatum('2026-11-12T16:00:00');

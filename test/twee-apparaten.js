@@ -285,14 +285,14 @@ async function alles() {
   evert.ev('mpWordFlow()');
   oscar.ev('mpWordFlow()');
   await tik();
-  const codeE = (evert.modal().match(/<b>([a-z]+-[a-z]+)<\/b>/) || [])[1];
-  const codeO = (oscar.modal().match(/<b>([a-z]+-[a-z]+)<\/b>/) || [])[1];
+  /* de eigen woorden staan genummerd: "Jouw woorden: 1 wild 2 duizend" (regel 4.8) */
+  const eigen = function (app) { const m = app.modal().match(/Jouw woorden: <b>1 ([a-z]+) &nbsp; 2 ([a-z]+)<\/b>/); return m ? m[1] + '-' + m[2] : undefined; };
+  const codeE = eigen(evert), codeO = eigen(oscar);
   ok('woorden: allebei twee woorden om voor te lezen', !!codeE && !!codeO && codeE !== codeO);
   typ(evert, 'mpInp', codeO.split('-'));
   typ(oscar, 'mpInp', codeE.split('-'));
-  ok('woorden: allebei de twee woorden van de ander ingetypt',
-    evert.el('mpChips').textContent === codeO.split('-').join(' - ') &&
-    oscar.el('mpChips').textContent === codeE.split('-').join(' - '));
+  const blokjes = function (app, code) { const w = code.split('-'); return new RegExp('1\\s*' + w[0] + '[^]*2\\s*' + w[1]).test(app.doc.__tekst(app.el('mpChips'))); };
+  ok('woorden: allebei de twee woorden van de ander ingetypt', blokjes(evert, codeO) && blokjes(oscar, codeE));
   evert.tik('mpKoppel');
   oscar.tik('mpKoppel');
   /* elk pollt om de 2,5 s; de nepklok springt naar de eerstvolgende timer, dus wacht op de koppeling zelf */
@@ -317,7 +317,9 @@ async function alles() {
   const ipad = maakApparaat(null);
   await evert.ev('linkShareFlow()');
   await tik();
-  const code4 = (evert.modal().match(/<b>([a-z]+-[a-z]+-[a-z]+-[a-z]+)<\/b>/) || [])[1];
+  /* de code staat als vier genummerde woorden (regel 4.8) */
+  const vier = (evert.modal().match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
+  const code4 = vier.length === 4 ? vier.join('-') : undefined;
   ok('koppelen: Evert krijgt vier woorden om over te typen', !!code4);
   evert.tik('linkDone');
   ipad.ev('linkEntryFlow()');

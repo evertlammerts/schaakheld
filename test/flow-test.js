@@ -1059,9 +1059,10 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await linkShareFlow();
   ok('link A: account aangemaakt', !!ACC && geldigAcc(ACC));
   var mHtml = __els.modalBox.innerHTML;
-  ok('link A: QR en woordcode getoond', mHtml.indexOf('<svg') >= 0 &&
-    /[a-z]+-[a-z]+-[a-z]+-[a-z]+/.test(mHtml));
-  var code = mHtml.match(/([a-z]+-[a-z]+-[a-z]+-[a-z]+)/)[1];
+  /* de code staat als vier genummerde woorden, nooit met streepjes aan elkaar (regel 4.8) */
+  var linkWoorden = (mHtml.match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
+  ok('link A: QR en woordcode getoond', mHtml.indexOf('<svg') >= 0 && linkWoorden.length === 4);
+  var code = linkWoorden.join('-');
   var urlA = linkURL();
   var accA = ACC;
   fire(__els.linkDone, 'click');

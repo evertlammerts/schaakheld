@@ -364,7 +364,7 @@ async function orakelTwee() {
       daan.get('Object.keys(P.friends).length') === 1);
   });
 
-  await nogNiet('[4.8] een apparaat koppelen met de vier woorden, getypt met spaties', async function (check) {
+  await regel('[4.8] een apparaat koppelen met de vier woorden, getypt met spaties', async function (check) {
     const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
     await mees.ev('linkShareFlow()');
     await wacht();

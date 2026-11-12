@@ -717,6 +717,16 @@
     color: var(--ink); margin-bottom: 14px;
   }
   .modal input:focus { outline: none; border-color: var(--sun); }
+  /* de woordinvoer: genummerde woorden als blokjes, een tik haalt er een weg */
+  .w-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 44px; margin: 0 0 8px; }
+  .w-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px;
+    border: 1.5px solid rgba(23, 69, 111, .25); background: var(--surface); font: inherit; font-weight: 700; color: var(--text); }
+  .w-chip b { color: var(--text-quiet); pointer-events: none; }
+  .modal .btn.hidden { display: none; }
+  .w-fout { flex-basis: 100%; color: var(--danger); font-weight: 700; font-size: var(--fs-sm); }
+  .w-suggs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 44px; }
+  .w-sugg { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--sky); background: var(--surface);
+    font: inherit; color: var(--text); }
   .lvl-btn { display: flex; align-items: center; gap: 12px; text-align: left; }
   .lvl-btn .l-emoji { font-size: 30px; }
   .lvl-btn .l-sub { display: block; font-size: 12.5px; font-weight: normal; opacity: .85; }

@@ -730,6 +730,16 @@
     color: var(--ink); margin-bottom: 14px;
   }
   .modal input:focus { outline: none; border-color: var(--sun); }
+  /* de woordinvoer: genummerde woorden als blokjes, een tik haalt er een weg */
+  .w-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 44px; margin: 0 0 8px; }
+  .w-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px;
+    border: 1.5px solid rgba(23, 69, 111, .25); background: var(--surface); font: inherit; font-weight: 700; color: var(--text); }
+  .w-chip b { color: var(--text-quiet); pointer-events: none; }
+  .modal .btn.hidden { display: none; }
+  .w-fout { flex-basis: 100%; color: var(--danger); font-weight: 700; font-size: var(--fs-sm); }
+  .w-suggs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 44px; }
+  .w-sugg { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--sky); background: var(--surface);
+    font: inherit; color: var(--text); }
   .lvl-btn { display: flex; align-items: center; gap: 12px; text-align: left; }
   .lvl-btn .l-emoji { font-size: 30px; }
   .lvl-btn .l-sub { display: block; font-size: 12.5px; font-weight: normal; opacity: .85; }
@@ -3039,8 +3049,11 @@ function linkURL() {
 
 /* oud apparaat: account (zo nodig) aanmaken, woordcode registreren,
    profiel naar de server, en QR plus woorden tonen */
+const LINK_MS = 10 * 60000; /* linkTTL in server.go */
+let linkKlok = 0;
 async function linkShareFlow() {
   ensureAccount();
+  clearTimeout(linkKlok);
   const w = [];
   for (let i = 0; i < 4; i++) {
     const b = randBytes(2);
@@ -3059,15 +3072,112 @@ async function linkShareFlow() {
     } catch (e) {}
   }
   syncNow();
+  const tot = Date.now() + LINK_MS;
   showModal('<div class="m-emoji">🔑</div><h2>Nieuw apparaat koppelen</h2>' +
-    '<p>Scan deze QR met de camera van het nieuwe apparaat:</p>' +
-    '<div style="width:190px;max-width:60vw;margin:8px auto">' + QR.qrSvg(linkURL()) + '</div>' +
     (serverOk
-      ? '<p>Lukt scannen niet? Kies daar <b>Ik heb al een profiel</b> en typ:<br><b>' + code +
-        '</b><br><small>(5 minuten geldig, eenmalig)</small></p>'
+      ? '<p>Typ deze vier woorden in de app. Of scan de code.</p>' +
+        '<div class="w-chips">' + w.map((x, i) => '<span class="w-chip"><b>' + (i + 1) + '</b> ' + x + '</span>').join('') + '</div>' +
+        '<p id="linkTijd"></p>'
       : '<p><small>Geen verbinding met de server: alleen de QR-route werkt nu.</small></p>') +
-    '<div class="m-btns"><button class="btn sun" id="linkDone">Klaar</button></div>',
-    () => $('linkDone').addEventListener('click', closeModal));
+    '<div style="width:170px;max-width:50vw;margin:8px auto">' + QR.qrSvg(linkURL()) + '</div>' +
+    '<div class="m-btns"><button class="btn sun hidden" id="linkNieuw">Nieuwe code</button>' +
+    '<button class="btn plain" id="linkDone">Klaar</button></div>', () => {
+      $('linkDone').addEventListener('click', () => { clearTimeout(linkKlok); closeModal(); });
+      $('linkNieuw').addEventListener('click', () => { closeModal(); linkShareFlow(); });
+      if (!serverOk) return;
+      /* hele minuten, nooit tikkende seconden: de tijd telt mee met de klok van het apparaat */
+      const toon = () => {
+        if (!$('linkTijd')) return;
+        const over = tot - Date.now();
+        if (over <= 0) {
+          $('linkTijd').textContent = 'Deze code is op.';
+          $('linkNieuw').classList.remove('hidden');
+          return;
+        }
+        const min = Math.ceil(over / 60000);
+        $('linkTijd').textContent = 'Werkt nog ' + min + (min === 1 ? ' minuut.' : ' minuten.');
+        linkKlok = setTimeout(toon, (over % 60000) || 60000);
+      };
+      toon();
+    });
+}
+
+/* Eén woordinvoer voor koppelen (vier woorden) en voor vrienden (twee): elk scheidingsteken en
+   plakken werkt, er is geen lengtegrens, elk woord wordt een genummerd blokje, en het laatste
+   woord telt zonder tik als het precies een woord van de lijst is. ids: {chips, inp, sugg, knop} */
+function woordVeld(id) {
+  return '<input id="' + id + '" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" ' +
+    'enterkeyhint="done" placeholder="typ de woorden…">';
+}
+function woordInvoer(n, ids) {
+  const gekozen = [];
+  let fout = '';
+  const norm = w => w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  /* een heel woord, of een begin van minstens vier letters dat maar bij één woord past */
+  const vind = w => {
+    const x = norm(w);
+    if (WOORDEN.includes(x)) return x;
+    const past = x.length >= 4 ? WOORDEN.filter(k => k.startsWith(x)) : [];
+    return past.length === 1 ? past[0] : null;
+  };
+  const teken = () => {
+    $(ids.chips).innerHTML = gekozen.map((w, i) => '<button class="w-chip" data-i="' + i + '"><b>' + (i + 1) + '</b> ' + w + '</button>').join('') +
+      (fout ? '<div class="w-fout">' + fout + '</div>' : '');
+    $(ids.knop).disabled = gekozen.length !== n;
+  };
+  const suggest = rest => {
+    const x = norm(rest);
+    const sugg = x && gekozen.length < n ? WOORDEN.filter(w => w.startsWith(x)).slice(0, 6) : [];
+    $(ids.sugg).innerHTML = sugg.map(w => '<button class="w-sugg" data-w="' + w + '">' + w + '</button>').join('');
+  };
+  /* klaar: Enter of de knop, dan telt ook het woord dat nog in het veld staat */
+  const verwerk = klaar => {
+    const veld = $(ids.inp);
+    const delen = veld.value.split(/[\s,;.\-]+/);
+    let rest = delen.pop();
+    fout = '';
+    while (delen.length && gekozen.length < n) {
+      const d = delen.shift();
+      if (!d) continue;
+      const w = vind(d);
+      if (!w) { fout = "'" + escHtml(d) + "' ken ik niet. Kijk nog eens op het andere scherm."; delen.unshift(d); break; }
+      gekozen.push(w);
+    }
+    if (!fout && rest && gekozen.length < n) {
+      const x = norm(rest);
+      const exact = WOORDEN.includes(x) && gekozen.length === n - 1;
+      if (klaar || exact) {
+        const w = vind(rest);
+        if (w) { gekozen.push(w); rest = ''; }
+        else fout = "'" + escHtml(rest) + "' ken ik niet. Kijk nog eens op het andere scherm.";
+      } else if (!WOORDEN.some(k => k.startsWith(x))) fout = "'" + escHtml(rest) + "' ken ik niet. Kijk nog eens op het andere scherm.";
+    }
+    veld.value = delen.concat(rest ? [rest] : []).join(' ');
+    suggest(fout ? '' : rest);
+    teken();
+  };
+  $(ids.inp).addEventListener('input', () => verwerk(false));
+  $(ids.inp).addEventListener('keydown', e => {
+    if (e.key === 'Enter') verwerk(true);
+    else if (e.key === 'Backspace' && !$(ids.inp).value && gekozen.length) { gekozen.pop(); teken(); }
+  });
+  $(ids.sugg).addEventListener('click', e => {
+    const w = e.target && e.target.dataset ? e.target.dataset.w : null;
+    if (!w || gekozen.length >= n) return;
+    gekozen.push(w);
+    $(ids.inp).value = '';
+    suggest('');
+    teken();
+  });
+  $(ids.chips).addEventListener('click', e => {
+    const i = e.target && e.target.dataset ? e.target.dataset.i : null;
+    if (i != null) { gekozen.splice(+i, 1); teken(); }
+  });
+  teken();
+  return {
+    woorden: () => { verwerk(true); return gekozen.length === n ? gekozen.slice() : null; },
+    wis: () => { gekozen.length = 0; fout = ''; teken(); }
+  };
 }
 
 /* nieuw apparaat: woorden inwisselen bij de server en ontsleutelen */
@@ -3149,51 +3259,23 @@ function checkLinkFragment() {
 /* woordroute: kiezer met suggesties uit de (publieke) lijst; dat kost
    geen entropie en voorkomt typefouten */
 function linkEntryFlow() {
-  const gekozen = [];
   showModal('<div class="m-emoji">🔑</div><h2>Profiel ophalen</h2>' +
     '<p>Vraag op het andere apparaat een koppelcode (🔑 onderaan het startscherm).</p>' +
-    '<div class="m-btns"><button class="btn sun" id="linkScan">📷 Scan de QR</button></div>' +
-    '<p>…of typ hier de vier woorden:</p>' +
-    '<div id="wordChips" style="min-height:1.5em;font-weight:700"></div>' +
-    '<input id="wordInp" maxlength="10" autocomplete="off" placeholder="typ een woord…">' +
-    '<div id="wordSugg" style="min-height:2.2em"></div>' +
+    '<p>Typ hier de vier woorden:</p>' + woordVeld('wordInp') +
+    '<div id="wordChips" class="w-chips"></div><div id="wordSugg" class="w-suggs"></div>' +
     '<div class="m-btns"><button class="btn sun" id="linkGo" disabled>Koppel! 🔑</button>' +
+    '<button class="btn plain" id="linkScan">📷 Of scan de QR</button>' +
     '<button class="btn plain" id="linkTerug">Terug</button></div>', () => {
       $('linkScan').addEventListener('click', () => { closeModal(); openScanner('link'); });
-      const upd = () => {
-        $('wordChips').textContent = gekozen.join(' - ');
-        $('linkGo').disabled = gekozen.length !== 4;
-      };
-      const kies = w => {
-        if (gekozen.length < 4 && WOORDEN.includes(w)) { gekozen.push(w); $('wordInp').value = ''; suggest(); upd(); }
-      };
-      const suggest = () => {
-        const v = $('wordInp').value.trim().toLowerCase();
-        const sugg = v && gekozen.length < 4 ? WOORDEN.filter(w => w.startsWith(v)).slice(0, 6) : [];
-        $('wordSugg').innerHTML = sugg.map(w =>
-          '<button class="btn plain" data-w="' + w + '" style="margin:2px;padding:4px 10px">' + w + '</button>').join('');
-      };
-      $('wordInp').addEventListener('input', suggest);
-      $('wordInp').addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-          const v = $('wordInp').value.trim().toLowerCase();
-          const past = WOORDEN.filter(w => w.startsWith(v));
-          if (past.length) kies(past[0]);
-        } else if (e.key === 'Backspace' && !$('wordInp').value && gekozen.length) {
-          gekozen.pop(); upd();
-        }
-      });
-      $('wordSugg').addEventListener('click', e => {
-        const w = e.target && e.target.dataset ? e.target.dataset.w : null;
-        if (w) kies(w);
-      });
+      const invoer = woordInvoer(4, { chips: 'wordChips', inp: 'wordInp', sugg: 'wordSugg', knop: 'linkGo' });
       $('linkGo').addEventListener('click', async () => {
+        const woorden = invoer.woorden();
+        if (!woorden) return;
         $('linkGo').disabled = true;
-        const acc = await redeemWords(gekozen.join('-'));
+        const acc = await redeemWords(woorden.join('-'));
         if (!acc) {
           showToast('Die code klopt niet (meer). Vraag een nieuwe! 🔑');
-          gekozen.length = 0;
-          upd();
+          invoer.wis();
           return;
         }
         closeModal();
@@ -3203,7 +3285,6 @@ function linkEntryFlow() {
         closeModal();
         if (!P.name && !ACC) askWelcome();
       });
-      upd();
     });
 }
 
@@ -4345,50 +4426,24 @@ function mpWordFlow() {
     mijn.push(WOORDEN[(b[0] << 8 | b[1]) % WOORDEN.length]);
   }
   const mijnCode = mijn.join('-');
-  const gekozen = [];
   let bezig = false, gestopt = false;
   showModal('<div class="m-emoji">🎈</div><h2>Samen spelen op afstand</h2>' +
-    '<p>Zeg deze twee woorden tegen je maatje:</p>' +
-    '<p style="font-size:1.3em"><b>' + mijnCode + '</b></p>' +
-    '<p>En typ hier de twee woorden van je maatje:</p>' +
-    '<div id="mpChips" style="min-height:1.5em;font-weight:700"></div>' +
-    '<input id="mpInp" maxlength="10" autocomplete="off" placeholder="typ een woord…">' +
-    '<div id="mpSugg" style="min-height:2.2em"></div>' +
+    '<p>Jouw woorden: <b>' + mijn.map((w, i) => (i + 1) + ' ' + w).join(' &nbsp; ') + '</b>. Zeg ze tegen je maatje.</p>' +
+    '<p>Typ hier de woorden van je maatje:</p>' + woordVeld('mpInp') +
+    '<div id="mpChips" class="w-chips"></div><div id="mpSugg" class="w-suggs"></div>' +
     '<div class="m-btns"><button class="btn sun" id="mpKoppel" disabled>🤝 Verbind!</button>' +
     '<button class="btn plain" id="mpStopW">Terug</button></div>', () => {
-      const upd = () => {
-        $('mpChips').textContent = gekozen.join(' - ');
-        $('mpKoppel').disabled = bezig || gekozen.length !== 2;
-      };
-      const kies = w => {
-        if (gekozen.length < 2 && WOORDEN.includes(w)) { gekozen.push(w); $('mpInp').value = ''; suggest(); upd(); }
-      };
-      const suggest = () => {
-        const v = $('mpInp').value.trim().toLowerCase();
-        const sugg = v && gekozen.length < 2 ? WOORDEN.filter(w => w.startsWith(v)).slice(0, 6) : [];
-        $('mpSugg').innerHTML = sugg.map(w =>
-          '<button class="btn plain" data-w="' + w + '" style="margin:2px;padding:4px 10px">' + w + '</button>').join('');
-      };
-      $('mpInp').addEventListener('input', suggest);
-      $('mpInp').addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-          const past = WOORDEN.filter(w => w.startsWith($('mpInp').value.trim().toLowerCase()));
-          if (past.length) kies(past[0]);
-        } else if (e.key === 'Backspace' && !$('mpInp').value && gekozen.length) {
-          gekozen.pop();
-          upd();
-        }
-      });
-      $('mpSugg').addEventListener('click', e => {
-        const w = e.target && e.target.dataset ? e.target.dataset.w : null;
-        if (w) kies(w);
-      });
+      const invoer = woordInvoer(2, { chips: 'mpChips', inp: 'mpInp', sugg: 'mpSugg', knop: 'mpKoppel' });
+      const upd = () => { if (bezig) $('mpKoppel').disabled = true; };
       $('mpStopW').addEventListener('click', () => { gestopt = true; closeModal(); });
       $('mpKoppel').addEventListener('click', async () => {
+        const hun = invoer.woorden();
+        if (!hun || bezig) return;
         bezig = true;
         upd();
+        $('mpKoppel').textContent = 'Wacht tot je maatje ook op Verbind! tikt…';
         const mine = await lookupCode('SHPLAY1-zoek:', mijnCode);
-        const theirs = await lookupCode('SHPLAY1-zoek:', gekozen.join('-'));
+        const theirs = await lookupCode('SHPLAY1-zoek:', hun.join('-'));
         /* pollen tot de ander ons ook aangewezen heeft (of 5 min om zijn) */
         for (let i = 0; i < 120 && !gestopt; i++) {
           try {
@@ -4412,9 +4467,9 @@ function mpWordFlow() {
         }
         if (!gestopt) showToast('Nog niemand gevonden… kloppen de woorden? 🎈');
         bezig = false;
-        upd();
+        $('mpKoppel').textContent = '🤝 Verbind!';
+        $('mpKoppel').disabled = false;
       });
-      upd();
     });
 }
 
