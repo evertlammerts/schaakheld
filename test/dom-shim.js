@@ -479,18 +479,32 @@ var crypto = {
    profielblobs met bearer secret, kamers en wederzijdse paren), zodat de
    flows end-to-end testbaar zijn. */
 var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, klok: 0, teller: 0 };
-/* grenzen en TTL uit bus.go; __server.klok schuift de nep-klok vooruit zodat
-   een flowtest een bus kan laten verlopen */
+/* grenzen en TTL uit bus.go en room.go; __server.klok schuift de klok van de
+   nep-server vooruit zodat een test een bus of een kamer kan laten verlopen */
 var BUS_TTL = 10 * 60000, MAX_BUSES = 512, MAX_BUS_BLOB = 4 << 10, MAX_BUS_CHECK = 64;
+var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000;
 function __busNu() { return Date.now() + __server.klok; }
 function __veegBussen() {
   for (var id in __server.buses) if (__server.buses[id].tot <= __busNu()) delete __server.buses[id];
 }
+/* zoals sweepRoomsLocked: een kamer heeft een potje zodra beide stoeltjes
+   ooit verbonden waren; stil is pas stil als er niemand verbonden is */
+function __veegKamers() {
+  const nu = __busNu();
+  for (const id in __server.wsrooms) {
+    const rm = __server.wsrooms[id];
+    const potje = rm.order.every(tok => rm.joined[tok]);
+    if (nu - rm.created >= (potje ? POTJE_MAX : KAMER_MAX)) { delete __server.wsrooms[id]; continue; }
+    if (nu - rm.touched < (potje ? POTJE_STIL : KAMER_STIL)) continue;
+    if (!rm.order.some(tok => rm.seats[tok] && rm.seats[tok].readyState === 1)) delete __server.wsrooms[id];
+  }
+}
 function __nieuwToken() { return 'tok' + (++__server.teller) + 'x'.repeat(16); }
 function __nieuweKamer() {
+  __veegKamers();
   const id = 'kamer' + (++__server.teller) + 'k'.repeat(12);
-  const host = __nieuwToken(), gast = __nieuwToken();
-  __server.wsrooms[id] = { seats: {}, order: [host, gast] };
+  const host = __nieuwToken(), gast = __nieuwToken(), nu = __busNu();
+  __server.wsrooms[id] = { seats: {}, order: [host, gast], joined: {}, created: nu, touched: nu };
   __server.wsrooms[id].seats[host] = null;
   __server.wsrooms[id].seats[gast] = null;
   return { id, host, gast };
@@ -636,6 +650,8 @@ function WebSocket(url) {
       self._room = join.room;
       self._seat = join.seat;
       rm.seats[join.seat] = self;
+      rm.joined[join.seat] = true;
+      rm.touched = __busNu();
       /* zoals room.go: eerst zeggen dat het stoeltje is overgenomen, dan de
          lijn dicht zonder sluitbericht, zodat de oude kant weet dat
          herverbinden zinloos is */
@@ -650,6 +666,8 @@ function WebSocket(url) {
       if (p) lever(p, '{"t":"peer","aan":true}');
       return;
     }
+    const rm = __server.wsrooms[self._room];
+    if (rm) rm.touched = __busNu();
     const p = peer();
     if (p) lever(p, data);
   };
@@ -662,6 +680,7 @@ function WebSocket(url) {
     self.readyState = 3;
     if (self._room) {
       const rm = __server.wsrooms[self._room];
+      if (rm) rm.touched = __busNu();
       if (rm && rm.seats[self._seat] === self) {
         rm.seats[self._seat] = null;
         for (const tok in rm.seats) {

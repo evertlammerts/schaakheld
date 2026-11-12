@@ -340,7 +340,7 @@ async function orakelTwee() {
     check('het profiel van Mees is gevonden', /Mees/.test(ipad.scherm()));
   });
 
-  await nogNiet('[4.9] de nep-server: een kamer met een potje leeft 12 uur stil, een lege kamer een kwartier', async function (check) {
+  await regel('[4.9] de nep-server: een kamer met een potje leeft 12 uur stil, een lege kamer een kwartier', async function (check) {
     const klok = __server.klok;
     try {
       const a = maakApparaat('Fien'), b = maakApparaat('Daan');

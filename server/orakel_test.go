@@ -182,7 +182,8 @@ func TestOrakelKamerMetPotjeLeeftTwaalfUurStil(t *testing.T) {
 	s, clk := newTestServer(t, nil)
 	ts := httptest.NewServer(s)
 	defer ts.Close()
-	nogNiet(t, "[4.9] een kamer met een potje leeft 12 uur stil", func(t tb) {
+	// [4.9] een kamer met een potje leeft 12 uur stil
+	func(t tb) {
 		id := kamerMetPotje(t, s, ts)
 		clk.advance(2 * time.Hour)
 		veeg(t, s)
@@ -199,14 +200,15 @@ func TestOrakelKamerMetPotjeLeeftTwaalfUurStil(t *testing.T) {
 		if kamerBestaat(s, id) {
 			t.Fatalf("na 12 uur 10 stil moet hij weg zijn")
 		}
-	})
+	}(t)
 }
 
 func TestOrakelKamerMetPotjeHoogstens48Uur(t *testing.T) {
 	s, clk := newTestServer(t, nil)
 	ts := httptest.NewServer(s)
 	defer ts.Close()
-	nogNiet(t, "[4.9] een kamer met een potje leeft hoogstens 48 uur", func(t tb) {
+	// [4.9] een kamer met een potje leeft hoogstens 48 uur
+	func(t tb) {
 		id := kamerMetPotje(t, s, ts)
 		// elke 10 uur even iemand terug: nooit 12 uur stil, maar de kamer wordt ouder
 		for i := 0; i < 4; i++ {
@@ -226,7 +228,7 @@ func TestOrakelKamerMetPotjeHoogstens48Uur(t *testing.T) {
 		if kamerBestaat(s, id) {
 			t.Fatalf("na 49 uur moet hij weg zijn, ook met bezoek")
 		}
-	})
+	}(t)
 }
 
 /* ---------- 4.10: een koppelcode werkt tien minuten ---------- */

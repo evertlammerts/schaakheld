@@ -41,10 +41,16 @@ func newToken() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
+// Een kamer waar beide stoeltjes ooit verbonden waren, heeft een potje en
+// overleeft het avondeten en de nacht. Een kamer zonder tweede stoel (een
+// onbeantwoorde uitnodiging, een ongebruikte speelcode) houdt het korte
+// leven, anders vullen die de maxRooms.
 const (
 	pairTTL     = 5 * time.Minute
 	roomIdle    = 15 * time.Minute
 	roomMaxAge  = 3 * time.Hour // harde bovengrens, ook voor een openbaar gehouden socket
+	gameIdle    = 12 * time.Hour
+	gameMaxAge  = 48 * time.Hour
 	maxRooms    = 64
 	maxPending  = 256
 	maxWsConns  = 160 // globale gelijktijdige websocket-verbindingen
@@ -89,7 +95,17 @@ type room struct {
 	id      string
 	seats   [2]*seat
 	created time.Time
-	touched time.Time
+	touched time.Time // laatste aanmelding, relaybericht of vertrek
+	joined  [2]bool   // per stoeltje: ooit verbonden geweest
+}
+
+func (r *room) hasGame() bool { return r.joined[0] && r.joined[1] }
+
+func (r *room) lifetimes() (idle, maxAge time.Duration) {
+	if r.hasGame() {
+		return gameIdle, gameMaxAge
+	}
+	return roomIdle, roomMaxAge
 }
 
 type pendingPair struct {
@@ -120,14 +136,15 @@ func (s *server) newRoomLocked() (*room, bool) {
 func (s *server) sweepRoomsLocked() {
 	now := s.cfg.now()
 	for id, r := range s.rooms {
+		idle, maxAge := r.lifetimes()
 		// harde bovengrens ongeacht activiteit: anders houdt een
 		// opengehouden socket zijn kamer voor eeuwig bezet en is de
 		// kamer-cap uit te putten
-		if now.Sub(r.created) >= roomMaxAge {
+		if now.Sub(r.created) >= maxAge {
 			delete(s.rooms, id)
 			continue
 		}
-		if now.Sub(r.touched) < roomIdle {
+		if now.Sub(r.touched) < idle {
 			continue
 		}
 		// live lockvrij lezen: seat.mu onder s.mu nemen zou een trage
@@ -303,8 +320,10 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 	if rm != nil {
 		if rm.seats[0].token == join.Seat {
 			mine, peer = rm.seats[0], rm.seats[1]
+			rm.joined[0] = true
 		} else if rm.seats[1].token == join.Seat {
 			mine, peer = rm.seats[1], rm.seats[0]
+			rm.joined[1] = true
 		}
 		rm.touched = s.cfg.now()
 	}
@@ -376,6 +395,12 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 		peer.write(data)
 	}
 	close(stopPing)
+
+	// de stille tijd telt vanaf het vertrek, niet vanaf de laatste zet: een
+	// kind dat lang nadenkt en dan de app sluit, verliest die tijd niet
+	s.mu.Lock()
+	rm.touched = s.cfg.now()
+	s.mu.Unlock()
 
 	// alleen opruimen als het stoeltje nog van deze verbinding is
 	mine.mu.Lock()
