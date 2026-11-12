@@ -598,7 +598,7 @@ async function orakelFlow() {
     const a = nieuwKind({ opslag: o });
     await wacht();
     check('geen venster en geen melding', !a.open() && toastTekst(a) === '');
-    check('niets op de Verder-kaart', !/kan ik niet|Speurogen/.test(tekstVan(a, 'verder')));
+    check('niets op de Verder-kaart', !/kan ik niet|Verder: |Opdracht \d van 5/.test(tekstVan(a, 'verder')));
     await startOefening(a, 'scan');
     check('Speurogen begint bij opdracht 1', opSpeelscherm(a) && /opdracht 1 van 5/i.test(tekstVan(a, 'roundChip')));
     check('de kapotte tekst is weg', a.opslag.getItem(RONDJES) !== 'kapot{');
@@ -627,7 +627,7 @@ async function orakelFlow() {
       o.setItem(RONDJES, ruw);
       const a = nieuwKind({ opslag: o });
       await wacht();
-      check(ruw + ': niets op de Verder-kaart', !/Speurogen|Opdracht/.test(tekstVan(a, 'verder')));
+      check(ruw + ': niets op de Verder-kaart', !/Verder: |Opdracht \d van 5/.test(tekstVan(a, 'verder')));
       await startOefening(a, 'scan');
       check(ruw + ': Speurogen begint bij opdracht 1', /opdracht 1 van 5/i.test(tekstVan(a, 'roundChip')));
       await scanGoed(a);
@@ -679,7 +679,7 @@ async function orakelFlow() {
     a.tik('backBtn');
     await wacht();
     check('Pauze zegt dat het rondje klaar is', /Rondje klaar/.test(toastTekst(a)));
-    check('er blijft geen rondje staan', opgeslagen(a, RONDJES) === null && tekstVan(a, 'verder') === '');
+    check('er blijft geen rondje staan', opgeslagen(a, RONDJES) === null && !/Verder: |Opdracht \d van 5/.test(tekstVan(a, 'verder')));
     check('de topronde telt meteen', /1\s*(\/|van)\s*2/.test(wekelijks(a)));
     await startOefening(a, 'scan');
     check('een nieuw rondje begint bij opdracht 1', /opdracht 1 van 5/i.test(tekstVan(a, 'roundChip')));
@@ -1084,7 +1084,7 @@ async function orakelFlow() {
     return a.get('nextStep(P, ' + JSON.stringify(Object.assign({ now: NU, potje: null, rondjes: null, samen: null, uitnodiging: null, moment: null }, ctx || {})) + ')');
   }
 
-  await nogNiet('[3.1] geval 1: nieuw, antwoord "nieuw": R6, Speurogen, "Nieuw voor jou."', async function (check) {
+  await regel('[3.1] geval 1: nieuw, antwoord "nieuw": R6, Speurogen, "Nieuw voor jou."', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('setPref("start", "nieuw")');
@@ -1093,7 +1093,7 @@ async function orakelFlow() {
     check('de reden', /Nieuw voor jou\./.test(r.text));
   });
 
-  await nogNiet('[3.1] geval 2: nieuw, antwoord "sterk": R7 tegen Turbo, niet Super Turbo', async function (check) {
+  await regel('[3.1] geval 2: nieuw, antwoord "sterk": R7 tegen Turbo, niet Super Turbo', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('setPref("start", "sterk")');
@@ -1102,7 +1102,7 @@ async function orakelFlow() {
     check('de zin', /Win je van Turbo, dan wacht Super Turbo\./.test(r.text) && !/Super Turbo/.test(r.button));
   });
 
-  await nogNiet('[3.1] geval 3: een bestaand profiel zonder start en twee keer Turbo verslagen: sterk, nooit gevraagd', async function (check) {
+  await regel('[3.1] geval 3: een bestaand profiel zonder start en twee keer Turbo verslagen: sterk, nooit gevraagd', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 1200); bump("wins", 2); bump("c.winsL2", 2); bump("c.gamesPlayed", 9)');
@@ -1113,7 +1113,7 @@ async function orakelFlow() {
     check('geen vraag hoe goed je schaakt', !/Hoe goed ken je schaken/.test(b.modal()));
   });
 
-  await nogNiet('[3.1] geval 4: wat bezig is gaat voor, in de volgorde van de kaart', async function (check) {
+  await regel('[3.1] geval 4: wat bezig is gaat voor, in de volgorde van de kaart', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(5)));
@@ -1130,7 +1130,7 @@ async function orakelFlow() {
     check('R2b bij opdracht 3', r.rule === 'R2b' && /Opdracht 3 van 5/.test(r.text));
   });
 
-  await nogNiet('[3.1] geval 5: vier dagen weg: R3 met het level', async function (check) {
+  await regel('[3.1] geval 5: vier dagen weg: R3 met het level', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.perfectScans", 5)');
@@ -1139,7 +1139,7 @@ async function orakelFlow() {
     check('R3 welkom terug met Loper', r.rule === 'R3' && /Welkom terug, Mees!/.test(r.title) && /Loper/.test(r.text));
   });
 
-  await nogNiet('[3.1] geval 6: weekdoel potjes 3, er staan er 2: R4 "Nog 1 potje tegen ..."', async function (check) {
+  await regel('[3.1] geval 6: weekdoel potjes 3, er staan er 2: R4 "Nog 1 potje tegen ..."', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); setPref("weekGoal", { kind: "potjes", n: 3, lvl: 2 }); bumpWeek("potjes2", 2)');
@@ -1147,7 +1147,7 @@ async function orakelFlow() {
     check('R4', r.rule === 'R4' && /Nog 1 potje tegen/.test(r.text));
   });
 
-  await nogNiet('[3.1] geval 7: na een potje zonder sleutelmoment: R6, niet de laatst geoefende', async function (check) {
+  await regel('[3.1] geval 7: na een potje zonder sleutelmoment: R6, niet de laatst geoefende', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); logResult("scan", 0.5, 20000, 3); P.lastKind = "game"');
@@ -1155,7 +1155,7 @@ async function orakelFlow() {
     check('R6, niet Speurogen', r.rule === 'R6' && r.action.kind !== 'scan');
   });
 
-  await nogNiet('[3.1] geval 8: na Speurogen: R7, nooit R6 Speurogen', async function (check) {
+  await regel('[3.1] geval 8: na Speurogen: R7, nooit R6 Speurogen', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.gamesPlayed", 5); P.lastKind = "scan"');
@@ -1163,7 +1163,7 @@ async function orakelFlow() {
     check('R7', r.rule === 'R7');
   });
 
-  await nogNiet('[3.1] geval 9: genoeg XP voor Toren maar Turbo niet verslagen: R7 op niveau 2, "Win je, dan word je Toren"', async function (check) {
+  await regel('[3.1] geval 9: genoeg XP voor Toren maar Turbo niet verslagen: R7 op niveau 2, "Win je, dan word je Toren"', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 950); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "scan"');
@@ -1171,7 +1171,7 @@ async function orakelFlow() {
     check('R7, niveau 2, de zin', r.rule === 'R7' && r.action.level === 2 && /Win je, dan word je Toren/.test(r.text));
   });
 
-  await nogNiet('[3.1] geval 10: twee oefeningen gelijk: de eerste in de leervolgorde', async function (check) {
+  await regel('[3.1] geval 10: twee oefeningen gelijk: de eerste in de leervolgorde', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5); P.lastKind = "game";' +
@@ -1182,7 +1182,7 @@ async function orakelFlow() {
 
   /* learning.md 1.7: zolang de poort "5 perfecte speurrondes" open is, kiest R6
      eerst Speurogen, ook als dat de laatst geoefende is; R7 speelt dan L* */
-  await nogNiet('[3.1] de poort "5 perfecte speurrondes" staat open: R6 kiest Speurogen, R7 speelt tegen Turbo', async function (check) {
+  await regel('[3.1] de poort "5 perfecte speurrondes" staat open: R6 kiest Speurogen, R7 speelt tegen Turbo', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.gamesPlayed", 5); logResult("scan", 0.5, 20000, 3); P.lastKind = "game"');
@@ -1210,18 +1210,18 @@ async function orakelFlow() {
     return b;
   }
 
-  await nogNiet('[3.1] de Verder-kaart met een potje als suggestie: één tik start het potje', async function (check) {
+  await regel('[3.1] de Verder-kaart met een potje als suggestie: één tik start het potje', async function (check) {
     const b = await kaartMetSuggestie(check, 'sterk');
     check('een potje tegen Turbo op niveau 2', opSpeelscherm(b) && b.get('session.kind') === 'game' && b.get('session.level') === 2);
   });
 
-  await nogNiet('[3.1] de Verder-kaart met een oefening als suggestie: één tik start Speurogen', async function (check) {
+  await regel('[3.1] de Verder-kaart met een oefening als suggestie: één tik start Speurogen', async function (check) {
     const b = await kaartMetSuggestie(check, 'nieuw');
     check('Speurogen begint', opSpeelscherm(b) && b.get('session.kind') === 'scan' && /opdracht 1 van 5/i.test(tekstVan(b, 'roundChip')));
   });
 
   /* learning.md 1.4: lastKind wordt gezet als een rondje af is, of het kind de kaart volgde of niet */
-  await nogNiet('[3.2] na een rondje Speurogen stelt de kaart een potje voor, niet weer Speurogen', async function (check) {
+  await regel('[3.2] na een rondje Speurogen stelt de kaart een potje voor, niet weer Speurogen', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
     a.ev('bump("xp", 500); bump("c.perfectScans", 5); bump("c.gamesPlayed", 5)');
@@ -1325,7 +1325,7 @@ async function orakelFlow() {
     check('de tekst', /25 opdrachten met 3 sterren/.test(a.get('BADGES.find(function (b) { return b.id === "vlam"; }).d')));
   });
 
-  await nogNiet('[3.7] compat: een document van nu met best 6 houdt Vuurpijl', async function (check) {
+  await regel('[3.7] compat: een document van nu met best 6 houdt Vuurpijl', async function (check) {
     const a = await kindUitDoc(docVan('Daan', { xp: 2710, stars: 70, 'c.pat.penning': 3 },
       { set: { badges: { vlam: true } }, max: { best: 6, goal: {} }, loc: { streak: 4, lastLevel: 3, weekSeen: '2026-W46' } }));
     check('Vuurpijl blijft', a.get('!!P.badges.vlam') && a.get('P.best') === 6);

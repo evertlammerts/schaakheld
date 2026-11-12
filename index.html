@@ -2476,17 +2476,17 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
    - Vrienden (friends.<id>): per vriend een LWW-register.
    - Streak, lastLevel, dag en weekSeen zijn per apparaat en mergen niet. */
 function defaultP() {
-  return { name: '', xp: 0, sound: true, guard: true, predict: true, weekGoal: null,
-    wins: 0, stars: 0, streak: 0, best: 0, lastLevel: null,
+  return { name: '', xp: 0, sound: true, guard: true, predict: true, weekGoal: null, start: '',
+    wins: 0, stars: 0, streak: 0, best: 0, lastLevel: null, lastKind: null, lastSeen: null,
     theme: 'munt', badges: {}, day: null, weekSeen: null, wk: {}, log: {}, friends: {},
     c: { gamesPlayed: 0, winsL2: 0, winsL3: 0, winsOnline: 0, perfectScans: 0,
       safeCorrect: 0, best3Gold: 0, predictHits: 0, patienceBonus: 0,
-      cloudUsed: 0, pat: {}, pad: {} } };
+      cloudUsed: 0, drie: 0, pat: {}, pad: {} } };
 }
 const COUNTERS = ['xp', 'wins', 'stars', 'c.gamesPlayed', 'c.winsL2', 'c.winsL3',
   'c.winsOnline', 'c.perfectScans', 'c.safeCorrect', 'c.best3Gold',
-  'c.predictHits', 'c.patienceBonus', 'c.cloudUsed'];
-const PREFS = ['name', 'sound', 'guard', 'predict', 'theme', 'weekGoal'];
+  'c.predictHits', 'c.patienceBonus', 'c.cloudUsed', 'c.drie'];
+const PREFS = ['name', 'sound', 'guard', 'predict', 'theme', 'weekGoal', 'start'];
 const DRILL_KINDS = ['scan', 'best3', 'trucs', 'koning', 'opening'];
 const LOG_DAYS = 28, WEEKS_KEPT = 16, MAX_LOG = 400, MAX_FRIENDS = 64;
 /* de vijf oefenspellen; ref is de richttijd (ms) per opdracht voor de vorm-score */
@@ -2529,7 +2529,7 @@ const DEV = (() => {
 function emptyDoc() {
   return { v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: {}, max: { best: 0, goal: {} },
     log: {}, friends: {},
-    loc: { streak: 0, lastLevel: null, day: null, weekSeen: null } };
+    loc: { streak: 0, lastLevel: null, day: null, weekSeen: null, lastKind: null, lastSeen: null } };
 }
 
 /* ISO-week als 'YYYY-Www', maandag als eerste dag: de week is de eenheid
@@ -2623,6 +2623,7 @@ function normDoc(raw) {
       const e = raw.lww[f];
       if (!e || typeof e !== 'object') continue;
       if (f === 'weekGoal') { if (e.v !== null && !normGoal(e.v)) continue; }
+      else if (f === 'start') { if (!['', 'nieuw', 'speelt', 'sterk'].includes(e.v)) continue; }
       else if (typeof e.v !== typeof defs[f]) continue;
       const t = +e.t;
       if (!isFinite(t) || t < 0) continue;
@@ -2677,6 +2678,8 @@ function normDoc(raw) {
     d.loc.lastLevel = raw.loc.lastLevel == null ? null : +raw.loc.lastLevel || 0;
     d.loc.day = raw.loc.day && typeof raw.loc.day === 'object' ? raw.loc.day : null;
     d.loc.weekSeen = typeof raw.loc.weekSeen === 'string' ? raw.loc.weekSeen.slice(0, 8) : null;
+    d.loc.lastKind = raw.loc.lastKind === 'game' || DRILL_KINDS.includes(raw.loc.lastKind) ? raw.loc.lastKind : null;
+    d.loc.lastSeen = /^\d{4}-\d{2}-\d{2}$/.test(raw.loc.lastSeen) ? raw.loc.lastSeen : null;
   }
   return d;
 }
@@ -2719,7 +2722,7 @@ function migrateLegacy(o, dev) {
   for (const f of PREFS) d.lww[f] = { v: o[f], t: o[f] === defs[f] ? 0 : t };
   d.max.best = +o.best || 0;
   d.loc = { streak: +o.streak || 0, lastLevel: o.lastLevel == null ? null : o.lastLevel,
-    day: o.day || null, weekSeen: null };
+    day: o.day || null, weekSeen: null, lastKind: null, lastSeen: null };
   return d;
 }
 
@@ -2741,6 +2744,8 @@ function viewFromDoc(d) {
   p.lastLevel = d.loc.lastLevel == null ? null : d.loc.lastLevel;
   p.day = d.loc.day || null;
   p.weekSeen = d.loc.weekSeen || null;
+  p.lastKind = d.loc.lastKind || null;
+  p.lastSeen = d.loc.lastSeen || null;
   return p;
 }
 
@@ -2764,6 +2769,8 @@ function saveP() {
   DOC.loc.lastLevel = P.lastLevel;
   DOC.loc.day = P.day;
   DOC.loc.weekSeen = P.weekSeen;
+  DOC.loc.lastKind = P.lastKind;
+  DOC.loc.lastSeen = P.lastSeen;
   if (P.best > DOC.max.best) DOC.max.best = P.best;
   try { localStorage.setItem('schaakheld1', JSON.stringify(DOC)); } catch (e) {}
 }
@@ -4208,16 +4215,16 @@ const LEVELS = [
     gate: { txt: '5 perfecte speurrondes', done: () => P.c.perfectScans >= 5,
       prog: () => Math.min(P.c.perfectScans, 5) + '/5' } },
   { n: 'Toren', g: '♜︎', xp: 900,
-    gate: { txt: 'versla Turbo 🐢', done: () => P.c.winsL2 >= 1,
+    gate: { lvl: 2, txt: 'versla Turbo 🐢', done: () => P.c.winsL2 >= 1,
       prog: () => Math.min(P.c.winsL2, 1) + '/1' } },
   { n: 'Dame', g: '♛︎', xp: 1800,
-    gate: { txt: 'versla Turbo 🐢 3 keer', done: () => P.c.winsL2 >= 3,
+    gate: { lvl: 2, txt: 'versla Turbo 🐢 3 keer', done: () => P.c.winsL2 >= 3,
       prog: () => Math.min(P.c.winsL2, 3) + '/3' } },
   { n: 'Koning', g: '♚︎', xp: 3200,
-    gate: { txt: 'versla Super Turbo 🚀', done: () => P.c.winsL3 >= 1,
+    gate: { lvl: 3, txt: 'versla Super Turbo 🚀', done: () => P.c.winsL3 >= 1,
       prog: () => Math.min(P.c.winsL3, 1) + '/1' } },
   { n: 'Grootmeester', g: '🏆', xp: 5500,
-    gate: { txt: 'versla Super Turbo 🚀 5 keer', done: () => P.c.winsL3 >= 5,
+    gate: { lvl: 3, txt: 'versla Super Turbo 🚀 5 keer', done: () => P.c.winsL3 >= 5,
       prog: () => Math.min(P.c.winsL3, 5) + '/5' } }
 ];
 function levelIdx(xp) {
@@ -4829,6 +4836,7 @@ function bewaarRondje() {
   if (!session || session.kind === 'game' || session.kind === 'opening') return;
   if (session.round >= 5) {
     session.af = true;
+    P.lastKind = session.kind;
     wisRondje(session.kind);
     if (session.earned >= 12) bumpWeek('top.' + session.kind, 1);
     toonBewaard(true);
@@ -4884,43 +4892,136 @@ function pauze() {
   if (melding) showToast(melding, false, 6000);
 }
 
-/* De Verder-kaart: wat er bezig is, het bewaarde potje eerst */
+/* Wat een kind nu het best kan doen (learning.md 1.4): eerst wat bezig is, dan
+   een voorstel. Puur: alles komt uit P en ctx, zodat elke regel te toetsen is. */
+const LEERVOLGORDE = ['scan', 'koning', 'best3', 'trucs', 'opening'];
+const OEFENZIN = {
+  scan: 'Kijk of jij alles ziet wat er aangevallen wordt.',
+  best3: 'Kies de beste van drie zetten. Kijk bij elke zet wat Turbo terug kan doen.',
+  trucs: 'Zoek de matzet, de vork of de penning.',
+  koning: 'Turbo valt aan. Jij vindt de redding.',
+  opening: 'Speel een opening na en leer waarom elke zet goed is.'
+};
+const turboNaam = l => TURBO_NAMES[l].replace(/^\S+\s/, '');
+function dagenSinds(datum, now) { return Math.floor((now - Date.parse(datum + 'T00:00:00Z')) / 86400000); }
+function stadium(P) {
+  if (P.c.winsL2 >= 1 || P.start === 'sterk') return 'sterk';
+  if (P.start === 'nieuw' ? P.xp < 400 && P.wins === 0 : !P.start && P.xp < 150 && P.c.gamesPlayed < 3) return 'nieuw';
+  return 'speelt';
+}
+function turboVoorstel(P, st) {
+  const winsL1 = P.wins - P.c.winsL2 - P.c.winsL3;
+  if (P.c.winsL3 >= 1 || P.c.winsL2 >= 3) return 3;
+  return P.c.winsL2 >= 1 || winsL1 >= 2 || st !== 'nieuw' ? 2 : 1;
+}
+/* de oefening die het langst niet gedaan is en het minst goed gaat; nooit de laatste */
+function kiesOefening(P, st, now) {
+  const volgend = LEVELS[levelIdx(P.xp) + 1];
+  if (volgend && volgend.gate && !volgend.gate.done() && /speurrondes/.test(volgend.gate.txt) && P.lastKind !== 'scan') return { kind: 'scan', reden: null };
+  let beste = null;
+  for (const k of LEERVOLGORDE) {
+    if (k === P.lastKind || (st === 'nieuw' && !['scan', 'koning', 'opening'].includes(k))) continue;
+    const rows = Object.values((P.log && P.log[k]) || {});
+    const laatst = rows.length ? Math.max.apply(null, rows.map(r => r[0])) : null;
+    const dagen = laatst == null ? 14 : Math.min(14, Math.floor((now - laatst) / 86400000));
+    const v = vormInfo(k), vorm = v ? v.score : 50;
+    const score = dagen + (100 - vorm) / 10;
+    if (!beste || score > beste.score) beste = { kind: k, score, nooit: laatst == null, dagen, vorm };
+  }
+  beste.reden = beste.nooit ? 'Nieuw voor jou.' : beste.dagen >= 7 ? 'Die heb je een tijdje niet gedaan.' :
+    beste.vorm < 50 ? 'Daar word je snel beter in.' : 'Goed om bij te houden.';
+  return beste;
+}
+function nextStep(P, ctx) {
+  const bezig = [];
+  if (ctx.samen) {
+    const n = (ctx.samen.moves || []).length, ikWit = ctx.samen.myColor !== 'b';
+    bezig.push({ rule: 'R1', title: 'Verder: je potje met ' + ctx.samen.peerName, button: 'Speel verder',
+      text: (n % 2 === 0) === ikWit ? 'Jij bent aan zet.' : ctx.samen.peerName + ' is aan zet.',
+      ook: 'je potje met ' + ctx.samen.peerName, action: { go: 'samen' } });
+  }
+  if (ctx.uitnodiging) bezig.push({ rule: 'R1i', title: ctx.uitnodiging.naam + ' wil spelen', button: 'Ja, spelen!',
+    text: 'De uitnodiging is nog ' + ctx.uitnodiging.minuten + ' minuten geldig.', ook: ctx.uitnodiging.naam + ' wil spelen', action: { go: 'uitnodiging' } });
+  if (ctx.potje) {
+    const n = ctx.potje.moves.length, zet = Math.floor(n / 2) + 1, naam = TURBO_NAMES[ctx.potje.level];
+    bezig.push({ rule: 'R2', title: 'Verder: je potje tegen ' + naam, button: 'Speel verder', wat: 'potje',
+      text: 'Zet ' + zet + '. ' + (n % 2 === 0 ? 'Jij bent aan zet.' : 'Turbo is aan zet.'),
+      ook: 'je potje tegen ' + naam + ', zet ' + zet, action: { go: 'verder' } });
+  }
+  for (const k of DRILL_KINDS) {
+    const r = ctx.rondjes && ctx.rondjes[k];
+    if (r) bezig.push({ rule: 'R2b', title: 'Verder: ' + DRILLS[k].naam, button: 'Ga verder', wat: 'rondje',
+      text: 'Opdracht ' + (r.round + 1) + ' van 5. Je sterren van dit rondje staan er nog.',
+      ook: 'je rondje ' + DRILLS[k].naam + ', opdracht ' + (r.round + 1) + ' van 5', action: { go: 'rondje', kind: k } });
+  }
+  if (bezig.length) return Object.assign({}, bezig[0], { ook: bezig.slice(1).map(b => b.ook), bezig });
+  const st = stadium(P), ls = turboVoorstel(P, st), lvl = LEVELS[levelIdx(P.xp)];
+  const uit = (rule, title, text, button, action) => ({ rule, title, text, button, action, ook: [], bezig });
+  if (P.lastSeen && dagenSinds(P.lastSeen, ctx.now) >= 3) {
+    return uit('R3', 'Welkom terug, ' + P.name + '!', 'Je bent nog steeds ' + lvl.n + ' ' + lvl.g + '. Zin in een potje tegen ' +
+      turboNaam(ls) + '?', 'Speel een potje', { go: 'game', level: ls });
+  }
+  const g = P.weekGoal;
+  if (g && !goalDoneWeek(curWeek())) {
+    const rest = g.n - goalProgress(g);
+    const meer = rest === 2;
+    if (rest >= 1 && rest <= 2 && (g.kind !== 'vriend' || Object.keys(P.friends || {}).some(id => !P.friends[id].weg))) {
+      const oef = g.kind === 'opdr' ? kiesOefening(P, st, ctx.now).kind : g.game;
+      const R4 = {
+        opdr: [meer ? 'opdrachten' : 'opdracht', 'Begin', { go: 'oefening', kind: oef }],
+        potjes: [(meer ? 'potjes' : 'potje') + ' tegen ' + (g.lvl ? turboNaam(g.lvl) : ''), 'Potje tegen ' + turboNaam(g.lvl || ls), { go: 'game', level: g.lvl || ls }],
+        wins: ['keer winnen van ' + (g.lvl ? turboNaam(g.lvl) : ''), 'Potje tegen ' + turboNaam(g.lvl || ls), { go: 'game', level: g.lvl || ls }],
+        vriend: [(meer ? 'potjes' : 'potje') + ' met een vriend', 'Naar Vrienden', { go: 'vrienden' }],
+        top: [(meer ? 'toprondes' : 'topronde') + ' bij ' + (oef ? DRILLS[oef].naam : ''), oef ? DRILLS[oef].naam : '', { go: 'oefening', kind: oef }]
+      }[g.kind];
+      if (R4) return uit('R4', 'Bijna je weekdoel!', 'Nog ' + rest + ' ' + R4[0] + ' en je weekdoel is gehaald.', R4[1], R4[2]);
+    }
+  }
+  if (ctx.moment) return uit('R5', 'Oefen wat er misging', 'In je potje ' + ctx.moment.zin + ' In ' + DRILLS[ctx.moment.kind].naam +
+    ' oefen je precies dat.', DRILLS[ctx.moment.kind].naam, { go: 'oefening', kind: ctx.moment.kind });
+  if (P.lastKind === 'game' || (st === 'nieuw' && P.c.gamesPlayed < 3 && !DRILL_KINDS.includes(P.lastKind))) {
+    const o = kiesOefening(P, st, ctx.now);
+    return uit('R6', DRILLS[o.kind].naam, (o.reden ? o.reden + ' ' : '') + OEFENZIN[o.kind], 'Begin', { go: 'oefening', kind: o.kind });
+  }
+  const volgend = LEVELS[levelIdx(P.xp) + 1], poort = volgend && volgend.gate && !volgend.gate.done() ? volgend.gate : null;
+  const level = poort && poort.lvl ? poort.lvl : ls;
+  const gewonnen = level === 1 ? P.wins - P.c.winsL2 - P.c.winsL3 : level === 2 ? P.c.winsL2 : P.c.winsL3;
+  const zin = poort && poort.lvl && P.xp >= volgend.xp ? 'Win je, dan word je ' + volgend.n + ' ' + volgend.g + '!' :
+    poort && poort.lvl ? 'Dat is je volgende meesterproef: ' + poort.txt + ' (' + poort.prog() + ').' :
+    P.start === 'sterk' && P.c.winsL2 === 0 ? 'Win je van Turbo, dan wacht Super Turbo.' :
+    gewonnen > 0 ? 'Je hebt ' + turboNaam(level) + ' al ' + gewonnen + ' keer verslagen. Lukt het nog een keer?' : 'Die past nu bij jou.';
+  return uit('R7', 'Speel een potje', zin, 'Potje tegen ' + turboNaam(level), { go: 'game', level });
+}
+function doeActie(a) {
+  if (a.go === 'verder') hervatPotje();
+  else if (a.go === 'rondje' || a.go === 'oefening') startDrill(a.kind);
+  else if (a.go === 'game') { if (leesPotje()) startGameFlow(); else startGame(a.level); }
+  else showHomeTab('vrienden');
+}
+
+/* De Verder-kaart: wat er bezig is, het bewaarde potje eerst; anders het voorstel */
 function renderVerder() {
   const el = $('verder');
-  const items = [];
-  const b = leesPotje();
-  if (b && b.kapot) items.push({ kapot: true });
-  else if (b) {
-    const naam = TURBO_NAMES[b.r.level];
-    items.push({ titel: 'Verder: je potje tegen ' + naam, wat: 'potje', knop: 'Speel verder',
-      zin: 'Zet ' + zetNummer(b.S) + '. ' + (b.S.turn === 'w' ? 'Jij bent aan zet.' : 'Turbo is aan zet.'),
-      ook: 'je potje tegen ' + naam + ', zet ' + zetNummer(b.S), doe: hervatPotje });
-  }
-  const rj = leesRondjes();
-  for (const k of DRILL_KINDS) {
-    if (!rj[k]) continue;
-    items.push({ titel: 'Verder: ' + DRILLS[k].naam, wat: 'rondje', knop: 'Ga verder',
-      zin: 'Opdracht ' + (rj[k].round + 1) + ' van 5. Je sterren van dit rondje staan er nog.',
-      ook: 'je rondje ' + DRILLS[k].naam + ', opdracht ' + (rj[k].round + 1) + ' van 5', doe: () => startDrill(k) });
-  }
-  el.classList.toggle('hidden', !items.length);
-  if (!items.length) { el.innerHTML = ''; return; }
-  const eerste = items[0];
-  let h = eerste.kapot ?
+  const b = leesPotje(), rj = leesRondjes();
+  const r = nextStep(P, { now: Date.now(), potje: b && !b.kapot ? b.r : null, rondjes: Object.keys(rj).length ? rj : null,
+    samen: null, uitnodiging: null, moment: null });
+  const ook = b && b.kapot ? r.bezig : r.bezig.slice(1);
+  let h = b && b.kapot ?
     '<div class="verder-kaart kapot"><span class="vk-titel">Dit potje kan ik niet meer openen. Sorry!</span>' +
     '<span class="vk-zin">Je XP, sterren en trofeeën zijn niet kwijt.</span>' +
     '<button class="btn plain small" id="verderWeg">Weghalen</button></div>' :
-    '<button class="verder-kaart" id="verderKaart"><span class="vk-titel">' + eerste.titel + '</span>' +
-    '<span class="vk-zin">' + eerste.zin + '</span><span class="vk-knop">▶ ' + eerste.knop + '</span></button>';
-  items.slice(1).forEach((it, i) => {
-    h += '<button class="verder-ook" data-ook="' + (i + 1) + '"><span>Ook nog: ' + it.ook + '</span><span class="vo-pijl">›</span></button>';
+    '<button class="verder-kaart" id="verderKaart"><span class="vk-titel">' + escHtml(r.title) + '</span>' +
+    '<span class="vk-zin">' + escHtml(r.text) + '</span><span class="vk-knop">▶ ' + escHtml(r.button) + '</span></button>';
+  ook.forEach((it, i) => {
+    h += '<button class="verder-ook" data-ook="' + i + '"><span>Ook nog: ' + it.ook + '</span><span class="vo-pijl">›</span></button>';
   });
-  if (!eerste.kapot) h += '<div class="verder-bewaard">✔ Je ' + eerste.wat + ' blijft staan op ' + ditApparaat() +
+  if (!(b && b.kapot) && r.wat) h += '<div class="verder-bewaard">✔ Je ' + r.wat + ' blijft staan op ' + ditApparaat() +
     ', ook als je de app dichtdoet.</div>';
   el.innerHTML = h;
-  if (eerste.kapot) $('verderWeg').addEventListener('click', () => { opslag(POTJE_KEY, null); renderVerder(); });
-  else $('verderKaart').addEventListener('click', eerste.doe);
-  el.querySelectorAll('.verder-ook').forEach(o => o.addEventListener('click', () => items[+o.dataset.ook].doe()));
+  el.classList.remove('hidden');
+  if (b && b.kapot) $('verderWeg').addEventListener('click', () => { opslag(POTJE_KEY, null); renderVerder(); });
+  else $('verderKaart').addEventListener('click', () => doeActie(r.action));
+  el.querySelectorAll('.verder-ook').forEach(o => o.addEventListener('click', () => doeActie(ook[+o.dataset.ook].action)));
 }
 
 function hervatPotje() {
@@ -4929,8 +5030,11 @@ function hervatPotje() {
 }
 
 /* ---------- drills ---------- */
+/* de dag waarop het kind voor het laatst iets begon: daaraan ziet de kaart wie terugkomt */
+function gezien() { P.lastSeen = new Date().toISOString().slice(0, 10); saveP(); }
 function startDrill(kind) {
   if (kind === 'opening') { openingChooser(); return; }
+  gezien();
   const verder = leesRondjes()[kind];
   session = { kind, S: null, round: verder ? verder.round : 0, earned: verder ? verder.earned : 0, task: null, phase: 'idle', lastType: null };
   showScreen('play');
@@ -5809,6 +5913,7 @@ function openingChooser() {
     }, true);
 }
 function startOpening(mode, pad) {
+  gezien();
   const color = pad ? pad.kleur : 'w';
   const maxMoves = pad ? Math.floor((pad.moves.length + (color === 'w' ? 1 : 0)) / 2) : COACH_MOVES;
   session = { kind: 'opening', mode, pad, S: newGame(), color, kidMoves: 0, maxMoves, earned: 0, round: 0,
@@ -5979,6 +6084,7 @@ function openingTurbo() {
   playMove(m, () => { if (session && session.kind === 'opening') kidOpeningTurn(); });
 }
 function openingEnd() {
+  P.lastKind = 'opening';
   if (!session || session.kind !== 'opening') return;
   BD.mode = 'off';
   const e = session.earned, max = session.maxMoves * 3;
@@ -6050,6 +6156,7 @@ function geefBewaardOp() {
 }
 
 function startGame(level, bewaard) {
+  gezien();
   session = { kind: 'game', S: bewaard ? bewaard.S : newGame(), level, tips: bewaard ? bewaard.r.tips : 3, over: false,
     pending: null, drawAsked: bewaard ? bewaard.r.drawAsked : null, started: bewaard ? bewaard.r.started : Date.now(),
     patXP: bewaard ? bewaard.r.patXP || 0 : 0 };
@@ -6728,6 +6835,7 @@ function endGame(st, stil) {
   /* opgeven of remise vlak na het begin telt nergens voor mee */
   const telt = (st.reason !== 'opgave' && st.reason !== 'remise') || session.S.hist.length >= MIN_PLIES_TELT;
   if (telt) bump('c.gamesPlayed', 1);
+  if (!stil) P.lastKind = 'game';
   if (session.online) { if (telt) bumpWeek('online', 1); endGameOnline(st, drawTxt); return; }
   if (telt) bumpWeek('potjes' + session.level, 1);
   let h, p, xp;
