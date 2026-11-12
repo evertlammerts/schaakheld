@@ -178,13 +178,16 @@ async function orakelTwee() {
     await wacht();
     check('testopzet: samen in een potje', fien.get('!!(session && session.online)') && daan.get('!!(session && session.online)'));
     await speel(fien, daan, 'e2e4');
+    const naE4 = daan.fen();
+    check('testopzet: e2e4 staat op beide borden', fien.fen() === naE4 && naE4 !== toFEN(newGame()));
     const fien2 = herlaad(fien);
     await wacht();
     await nodigUit(fien2);
     await daan.ev('friendPoll()');
     await wacht(30000);
     check('weer samen, zonder dat Daan eerst weg moest', fien2.get('!!(session && session.online)') &&
-      daan.get('!!(session && session.online)') && fien2.fen() === daan.fen());
+      daan.get('!!(session && session.online)'));
+    check('in hetzelfde potje: de stand na e2e4, op beide borden', fien2.fen() === naE4 && daan.fen() === naE4);
   });
 
   await nogNiet('[4.6] "Nu niet" op een uitnodiging bereikt wie uitnodigde', async function (check) {
@@ -216,11 +219,15 @@ async function orakelTwee() {
     await samenSpelen(daan, fien);
     await geefOp(aanZet(daan, fien));
     check('testopzet: allebei een eindkaart', /Vrienden worden/.test(zegt(daan)) && /Vrienden worden/.test(zegt(fien)));
+    check('testopzet: nog geen vraag bij Fien', !/wil vrienden worden/.test(zegt(fien)));
     tikTekst(daan, 'Vrienden worden');
     await wacht();
-    const kaart = fien.modal() + ' ' + tekstVan(fien, 'eindkaart');
-    check('Fien ziet de vraag van Daan in haar eindkaart', /Daan/.test(kaart) && /vrienden/i.test(kaart) &&
-      fien.get('modalQueue.length') === 0);
+    check('Fien ziet de vraag van Daan in haar eindkaart', /Daan wil vrienden worden/.test(zegt(fien)));
+    /* "Ja" in de kaart maakt ze vrienden: de vraag staat er niet alleen, hij werkt ook */
+    tikTekst(fien, 'Ja');
+    await wacht();
+    check('met Ja zijn ze vrienden, aan beide kanten', fien.get('Object.keys(P.friends).length') === 1 &&
+      daan.get('Object.keys(P.friends).length') === 1);
   });
 
   await nogNiet('[4.8] een apparaat koppelen met de vier woorden, getypt met spaties', async function (check) {
