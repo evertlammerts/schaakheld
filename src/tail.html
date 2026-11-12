@@ -1766,19 +1766,19 @@ const LEVELS = [
   { n: 'Paard', g: '♞︎', xp: 150 },
   { n: 'Loper', g: '♝︎', xp: 400,
     gate: { txt: '5 perfecte speurrondes', done: () => P.c.perfectScans >= 5,
-      prog: () => Math.min(P.c.perfectScans, 5) + '/5' } },
+      prog: () => Math.min(P.c.perfectScans, 5) + ' van 5' } },
   { n: 'Toren', g: '♜︎', xp: 900,
     gate: { lvl: 2, txt: 'versla Turbo 🐢', done: () => P.c.winsL2 >= 1,
-      prog: () => Math.min(P.c.winsL2, 1) + '/1' } },
+      prog: () => Math.min(P.c.winsL2, 1) + ' van 1' } },
   { n: 'Dame', g: '♛︎', xp: 1800,
     gate: { lvl: 2, txt: 'versla Turbo 🐢 3 keer', done: () => P.c.winsL2 >= 3,
-      prog: () => Math.min(P.c.winsL2, 3) + '/3' } },
+      prog: () => Math.min(P.c.winsL2, 3) + ' van 3' } },
   { n: 'Koning', g: '♚︎', xp: 3200,
     gate: { lvl: 3, txt: 'versla Super Turbo 🚀', done: () => P.c.winsL3 >= 1,
-      prog: () => Math.min(P.c.winsL3, 1) + '/1' } },
+      prog: () => Math.min(P.c.winsL3, 1) + ' van 1' } },
   { n: 'Grootmeester', g: '🏆', xp: 5500,
     gate: { lvl: 3, txt: 'versla Super Turbo 🚀 5 keer', done: () => P.c.winsL3 >= 5,
-      prog: () => Math.min(P.c.winsL3, 5) + '/5' } }
+      prog: () => Math.min(P.c.winsL3, 5) + ' van 5' } }
 ];
 function levelIdx(xp) {
   let i = 0;
@@ -2558,7 +2558,7 @@ function renderVerder() {
     '<button class="verder-kaart" id="verderKaart"><span class="vk-titel">' + escHtml(r.title) + '</span>' +
     '<span class="vk-zin">' + escHtml(r.text) + '</span><span class="vk-knop">▶ ' + escHtml(r.button) + '</span></button>';
   ook.forEach((it, i) => {
-    h += '<button class="verder-ook" data-ook="' + i + '"><span>Ook nog: ' + it.ook + '</span><span class="vo-pijl">›</span></button>';
+    h += '<button class="verder-ook" data-ook="' + i + '"><span>Ook nog: ' + escHtml(it.ook) + '</span><span class="vo-pijl">›</span></button>';
   });
   if (!(b && b.kapot) && r.wat) h += '<div class="verder-bewaard">✔ Je ' + r.wat + ' blijft staan op ' + ditApparaat() +
     ', ook als je de app dichtdoet.</div>';
@@ -4781,7 +4781,7 @@ function renderLevelPath() {
   path.innerHTML = LEVELS.map((L, i) => {
     const cls = i < cur ? 'done' : (i === cur ? 'current' : 'locked');
     return '<div class="lp-node ' + cls + '"><span class="lp-g">' + L.g + '</span>' +
-      '<span>' + L.n + '</span><span class="lp-xp">' + (i <= cur ? '✔' : L.xp + ' XP') + '</span></div>';
+      '<span>' + L.n + '</span><span class="lp-xp">' + (i <= cur ? '✔' : L.xp + ' <br>XP') + '</span></div>';
   }).join('');
   const nxt = $('lpNext');
   if (!nxt) return;
@@ -4796,7 +4796,7 @@ function renderLevelPath() {
       '<div class="lp-eis">Nog ' + (N.xp - P.xp) + ' XP <span class="lp-balk"><i style="width:' +
       Math.round((P.xp - L.xp) / (N.xp - L.xp) * 100) + '%"></i></span></div>') +
     (!N.gate ? '' : N.gate.done() ? '<div class="lp-eis klaar">✔ ' + N.gate.txt + '</div>' :
-      '<div class="lp-eis">Nog te doen: ' + N.gate.txt + ' (' + N.gate.prog().replace('/', ' van ') + ')</div>');
+      '<div class="lp-eis">Nog te doen: ' + N.gate.txt + ' (' + N.gate.prog() + ')</div>');
 }
 function renderIkBewaard() {
   $('ikBewaard').innerHTML = (ACC ? '✔ Bewaard op dit apparaat en je andere apparaat.' :
