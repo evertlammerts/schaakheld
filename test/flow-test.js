@@ -1611,13 +1611,14 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     revTheirs: false, peerName: 'Fien', open: false, weg: false };
   mpBeginGame();
   mpMsg({ t: 'remise?', gameNo: 1 });
-  ok('mp: remise-aanbod van het maatje vraagt jou', __els.modalBox.innerHTML.indexOf('Fien biedt remise aan') >= 0);
-  fire(__els.rmNee, 'click');
-  ok('mp: nee = doorspelen', session.over !== true && __els.overlay.classList.contains('hidden'));
+  ok('mp: remise-aanbod van het maatje vraagt jou, onder het bord', __els.bubble.innerHTML.indexOf('Fien biedt remise aan') >= 0 &&
+    !!actionBtns.rmJa && __els.overlay.classList.contains('hidden'));
+  fire(actionBtns.rmNee, 'click');
+  ok('mp: nee = doorspelen', session.over !== true && !actionBtns.rmJa);
   mpMsg({ t: 'remise?', gameNo: 1 });
-  fire(__els.rmJa, 'click');
+  fire(actionBtns.rmJa, 'click');
   await tikje();
-  ok('mp: ja = gelijkspel', session.over === true && __els.modalBox.innerHTML.indexOf('Gelijkspel') >= 0);
+  ok('mp: ja = gelijkspel', session.over === true && __els.eindkaart.innerHTML.indexOf('Gelijkspel') >= 0);
   closeModal();
   mpStop();
   /* ons eigen aanbod: alleen een antwoord op een echt aanbod telt */
@@ -1637,7 +1638,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   session.drawAsked = null;
   offerDraw();
   mpMsg({ t: 'remise', ok: true, gameNo: 1 });
-  ok('mp: aangenomen aanbod = gelijkspel', session.over === true && __els.modalBox.innerHTML.indexOf('Gelijkspel') >= 0);
+  ok('mp: aangenomen aanbod = gelijkspel', session.over === true && __els.eindkaart.innerHTML.indexOf('Gelijkspel') >= 0);
   closeModal();
   mpStop();
 

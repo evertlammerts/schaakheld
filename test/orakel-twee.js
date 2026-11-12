@@ -446,7 +446,7 @@ async function orakelTwee() {
     zet(wit, wit.get('moveKey(legalMoves(MP.S)[0])'));
     await wacht(2000);
     check('testopzet: wit zette', wit.get('MP.S.hist.length') === zetten + 1);
-    tikTekst(zwart, 'Ja, remise');
+    tikTekst(zwart, 'Remise aannemen');
     await wacht(2000);
     weerNetwerk(zwart);
     await wacht(60000);
@@ -671,7 +671,7 @@ async function orakelTwee() {
     weerNetwerk(wit);
     await wacht(60000);
     check('zwart krijgt de vraag', /biedt remise aan/.test(zwart.scherm()) || /biedt remise aan/.test(zegt(zwart)));
-    tikTekst(zwart, 'Nee');
+    tikTekst(zwart, 'Nee, doorspelen');
     await wacht(5000);
     check('wit hoort het antwoord', /wil doorspelen/.test(tekstVan(wit, 'bubble')));
   });
@@ -684,7 +684,7 @@ async function orakelTwee() {
     check('testopzet: de vraag komt aan', /biedt remise aan/.test(zegt(antwoordt)));
     geenNetwerk(antwoordt);
     await wacht(1000);
-    tikTekst(antwoordt, 'Ja, remise');
+    tikTekst(antwoordt, 'Remise aannemen');
     await wacht(2000);
     check('testopzet: remise bij wie ja zei', eindziet(antwoordt, 'Gelijkspel'));
     weerNetwerk(antwoordt);
@@ -1075,6 +1075,37 @@ async function orakelTwee() {
   });
 
   /* wat een kapotte bouw liet passeren (de mutaties van de review) */
+  /* regel 4.2: een remise-aanbod dat komt terwijl het kind thuis is, wacht; het antwoord staat onder het bord */
+  await regel('[4.2] een remise-aanbod terwijl het kind thuis is, wacht: de kaart zegt het, en Antwoord opent het potje met de vraag onder het bord', async function (check) {
+    const { wit, zwart } = await tweeZetten();
+    zwart.tik('backBtn');
+    await wacht();
+    await biedRemise(wit);
+    await wacht();
+    const t = tekstVan(zwart, 'verder');
+    check('thuis geen venster', opThuis(zwart) && !zwart.open());
+    check('de kaart zegt het, met Antwoord', new RegExp(wit.naam + ' biedt remise aan').test(t) && /Remise is gelijkspel: niemand wint, niemand verliest\./.test(t) &&
+      /Antwoord/.test(t));
+    check('geen regel onder de kaart', !/blijft vandaag staan/.test(t));
+    zwart.tik('verderKaart');
+    await wacht();
+    check('het potje, met de vraag in de strook en het antwoord onder het bord, zonder venster over het bord', opSpeelscherm(zwart) && !zwart.open() &&
+      /biedt remise aan/.test(tekstVan(zwart, 'bubble')) && kanTikken(zwart, 'Remise aannemen') && kanTikken(zwart, 'Nee, doorspelen'));
+    tikTekst(zwart, 'Nee, doorspelen');
+    await wacht();
+    check('nee: de vraag is weg en wit hoort het', !kanTikken(zwart, 'Remise aannemen') && /wil doorspelen/.test(tekstVan(wit, 'bubble')));
+  });
+
+  await regel('[4.2] Remise aannemen onder het bord is remise voor allebei', async function (check) {
+    const { wit, zwart } = await tweeZetten();
+    await biedRemise(wit);
+    await wacht();
+    check('testopzet: het antwoord staat onder het bord, zonder venster', kanTikken(zwart, 'Remise aannemen') && !zwart.open());
+    tikTekst(zwart, 'Remise aannemen');
+    await wacht();
+    check('remise aan beide kanten', eindziet(wit, 'Gelijkspel') && eindziet(zwart, 'Gelijkspel'));
+  });
+
   await regel('[4.2] een zet van de ander terwijl het kind thuis is: meteen bewaard, en de kaart zegt wie aan zet is', async function (check) {
     const { wit, zwart } = await tweeZetten();
     zwart.tik('backBtn');
@@ -1151,7 +1182,7 @@ async function orakelTwee() {
     await wacht(30000);
     vraagt2.tik('verderKaart');
     await wacht();
-    tikTekst(antwoordt, 'Ja, remise');
+    tikTekst(antwoordt, 'Remise aannemen');
     await wacht(30000);
     check('remise aan beide kanten', eindziet(antwoordt, 'Gelijkspel') && eindziet(vraagt2, 'Gelijkspel'));
     check('één keer geteld', telt(vraagt2) === plusEen(voorV, false) && telt(antwoordt) === plusEen(voorA, false));
@@ -1163,7 +1194,7 @@ async function orakelTwee() {
     await wacht(500);
     vraagt.tik('backBtn');
     await wacht();
-    tikTekst(antwoordt, 'Ja, remise');
+    tikTekst(antwoordt, 'Remise aannemen');
     await wacht(3000);
     check('testopzet: thuis wacht het einde', /is klaar/.test(tekstVan(vraagt, 'verder')));
     tikTekst(antwoordt, 'Naar huis');
@@ -1204,7 +1235,7 @@ async function orakelTwee() {
     check('testopzet: de vraag komt aan', /biedt remise aan/.test(zegt(zwart)));
     geenNetwerk(wit);
     await wacht(3000);
-    tikTekst(zwart, 'Nee');
+    tikTekst(zwart, 'Nee, doorspelen');
     await wacht(2000);
     weerNetwerk(wit);
     const gehoord = await zagOoit(function () { return /wil doorspelen/.test(tekstVan(wit, 'bubble')); }, 60000);
@@ -1218,16 +1249,16 @@ async function orakelTwee() {
     check('een vraag voor een andere stand komt niet', !/biedt remise aan/.test(zegt(zwart)));
     await biedRemise(wit);
     await wacht(500);
-    check('testopzet: de vraag komt aan', kanTikken(zwart, 'Ja, remise'));
+    check('testopzet: de vraag komt aan', kanTikken(zwart, 'Remise aannemen'));
     await biedRemise(wit);
     await wacht(500);
     check('een tweede aanbod zonder antwoord gaat ook weg', /Je biedt remise aan/.test(tekstVan(wit, 'bubble')) && !/net al/.test(tekstVan(wit, 'bubble')));
     zet(wit, 'g1f3');
     await wacht(2000);
-    check('testopzet: de vraag staat er nog', kanTikken(zwart, 'Ja, remise'));
-    tikTekst(zwart, 'Ja, remise');
+    check('na de zet van wit is de vraag weg', !kanTikken(zwart, 'Remise aannemen'));
+    zwart.ev('remiseJa()');
     await wacht(5000);
-    check('ja na de zet van wit is geen remise', zwart.get('session.over') === false && wit.get('session.over') === false);
+    check('en een ja dat toch nog komt, is geen remise', zwart.get('session.over') === false && wit.get('session.over') === false);
   });
 
   await regel('[4.1] wat de strook en het bord zeggen: ✔ bewaard na de zet van de ander, en een eigen zet zonder lijn', async function (check) {

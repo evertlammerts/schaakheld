@@ -262,18 +262,18 @@ async function alles() {
   const krijger = bieder === evert ? oscar : evert;
   bieder.ev('offerDraw()');
   await tik();
-  ok('remise: de ander krijgt de vraag', krijger.ziet('biedt remise aan'));
-  krijger.tik('rmNee');
+  ok('remise: de ander krijgt de vraag, onder het bord', /biedt remise aan/.test(tekstVan(krijger, 'bubble')) && kanTikken(krijger, 'Remise aannemen') && !krijger.open());
+  tikTekst(krijger, 'Nee, doorspelen');
   await tik();
   ok('remise: nee = doorspelen, allebei nog in het potje',
     evert.get('session.over') === false && oscar.get('session.over') === false && !krijger.open());
   bieder.ev('offerDraw()');
   await tik();
   ok('remise: te snel opnieuw vragen mag niet, en de vrager hoort waarom',
-    !krijger.open() && bieder.el('bubble').innerHTML.indexOf('net al remise') >= 0);
+    !krijger.open() && !kanTikken(krijger, 'Remise aannemen') && bieder.el('bubble').innerHTML.indexOf('net al remise') >= 0);
   bieder.ev('session.drawAsked = null; offerDraw()');
   await tik();
-  krijger.tik('rmJa');
+  tikTekst(krijger, 'Remise aannemen');
   await tik();
   ok('remise: ja = gelijkspel op allebei de telefoons',
     evert.get('session.over') === true && oscar.get('session.over') === true &&

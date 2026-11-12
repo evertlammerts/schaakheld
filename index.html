@@ -499,6 +499,7 @@
   .btn.leaf { background: var(--success); color: var(--on-success); box-shadow: 0 4px 0 #1A5A2E; }
   .btn.coral { background: var(--danger); color: var(--on-danger); box-shadow: 0 4px 0 #8A2B1E; }
   .btn.plain { background: var(--card); box-shadow: 0 4px 0 #D9E5EE; }
+  .btn.stil { background: transparent; box-shadow: none; }
   .btn.small { padding: 9px 16px; font-size: 14.5px; }
 
   .points-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 12px; }
@@ -3941,6 +3942,7 @@ function mpOnZet(m) {
     const st = gameStatus(S);
     if (st.over) { endGame(st); return; }
     BD.mode = 'move';
+    remiseRij();
     if (inCheck(S)) { snd.check(); say('Schaak! Red je koning. 👑'); } else say('Jij weer! Wat wordt je plan? 💭');
   });
 }
@@ -4022,7 +4024,7 @@ function mpOnSync(m) {
   /* de stand kan al uit zijn (mat tijdens het gat): dan meteen het eindscherm */
   const st = gameStatus(MP.S);
   if (st.over) { BD.mode = 'off'; endGame(st); return; }
-  if (bord) { BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off'; zegBeurt(); }
+  if (bord) { BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off'; remiseRij(); zegBeurt(); }
   if (vraag) toonRemiseVraag();
   if (nee) say(mpNaam() + ' wil doorspelen. Oké, dan gaan we door! 💪');
 }
@@ -5696,9 +5698,13 @@ function vriendItems(alle) {
     const hier = !!(MP && MP.S && MP.gameId === b.r.gameId);
     const S = hier ? MP.S : b.S, naam = (hier ? MP.peerName : b.r.peerName) || 'je maatje', kleur = hier ? MP.myColor : b.r.myColor;
     const uitslag = hier ? MP.result : b.r.result, gezien = hier ? MP.shown : b.r.shown === true;
+    const bod = hier ? remiseVraagOpen() : !!b.r.offer && b.r.offer.by !== kleur && !b.r.offer.answer && b.r.offer.ply === S.hist.length;
     /* een afgelopen potje dat dit kind al zag, wacht alleen nog tot de ander het weet: geen kaart */
     if (uitslag && !gezien) uit.push({ rule: 'R1', title: 'Je potje met ' + naam + ' is klaar', button: 'Bekijk',
       text: 'Kijk hoe het afliep.', ook: 'je potje met ' + naam, action: hier ? { go: 'samen' } : { go: 'oud', gameId: b.r.gameId } });
+    /* een remise-aanbod dat wacht: de kaart zegt het, zonder regel eronder */
+    else if (!uitslag && bod) uit.push({ rule: 'R1', title: naam + ' biedt remise aan', button: 'Antwoord', vriend: true,
+      text: 'Remise is gelijkspel: niemand wint, niemand verliest.', ook: naam + ' biedt remise aan', action: { go: 'samen' } });
     else if (!uitslag) uit.push({ rule: 'R1', title: 'Verder: je potje met ' + naam, button: 'Speel verder', vriend: true,
       /* een potje dat niet bewaard kon worden, belooft niet dat het blijft staan */
       wat: hier && MP.nietBewaard ? null : 'potje',
@@ -6945,27 +6951,31 @@ function mpOnRemiseVraag(m) {
   bewaarSamen();
   if (samenInBeeld() && !session.over) toonRemiseVraag(); else thuisVerversen();
 }
+/* De vraag over een remise-aanbod staat in de strook en het antwoord onder het bord: het kind ziet de stand
+   terwijl het kiest. Het aanbod geldt in de stand waarin het gedaan is; na een zet is de vraag weg. */
 function toonRemiseVraag() {
-  dropModal('remisevraag');
-  showModal('<div class="m-emoji">🤝</div><h2>' + escHtml(mpNaam()) + ' biedt remise aan</h2>' +
-    '<p>Gelijkspel: niemand wint, niemand verliest. Vind je dat goed?</p>' +
-    '<div class="m-btns"><button class="btn sun" id="rmJa">🤝 Ja, remise</button>' +
-    '<button class="btn plain" id="rmNee">Nee, doorspelen</button></div>', () => {
-      $('rmJa').addEventListener('click', () => {
-        closeModal();
-        if (!remiseVraagOpen() || !samenInBeeld() || session.over) return;
-        MP.result = { kind: 'remise', by: MP.offer.by, ply: MP.S.hist.length };
-        mpSend({ t: 'remise', ok: true, gameNo: MP.gameNo, ply: MP.S.hist.length });
-        endGame({ over: true, result: 'd', reason: 'remise' });
-      });
-      $('rmNee').addEventListener('click', () => {
-        closeModal();
-        if (!remiseVraagOpen()) return;
-        MP.offer.answer = 'nee';
-        bewaarSamen();
-        mpSend({ t: 'remise', ok: false, gameNo: MP.gameNo, ply: MP.S.hist.length });
-      });
-    }, false, 'remisevraag');
+  say(mpNaam() + ' biedt remise aan. Gelijkspel: niemand wint, niemand verliest. Vind je dat goed?');
+  remiseRij();
+}
+function remiseRij() {
+  if (!samenInBeeld() || session.over) return;
+  if (!remiseVraagOpen()) { if (actionBtns.rmJa) setActions([]); return; }
+  setActions([{ label: '½ Remise aannemen', cls: 'plain', fn: remiseJa, id: 'rmJa' },
+    { label: 'Nee, doorspelen', cls: 'stil', fn: remiseNee, id: 'rmNee' }]);
+}
+function remiseJa() {
+  if (!remiseVraagOpen() || !samenInBeeld() || session.over) { remiseRij(); return; }
+  MP.result = { kind: 'remise', by: MP.offer.by, ply: MP.S.hist.length };
+  mpSend({ t: 'remise', ok: true, gameNo: MP.gameNo, ply: MP.S.hist.length });
+  endGame({ over: true, result: 'd', reason: 'remise' });
+}
+function remiseNee() {
+  if (!remiseVraagOpen()) { remiseRij(); return; }
+  MP.offer.answer = 'nee';
+  bewaarSamen();
+  mpSend({ t: 'remise', ok: false, gameNo: MP.gameNo, ply: MP.S.hist.length });
+  remiseRij();
+  zegBeurt();
 }
 /* het antwoord op ons eigen aanbod */
 function mpOnRemise(m) {
@@ -7290,6 +7300,7 @@ function commitKid(m) {
     if (inCheck(S)) snd.check();
     if (session.online) {
       BD.mode = 'off';
+      remiseRij();
       /* zonder verbinding geen belofte dat de ander de zet al ziet */
       say(!session.samenBewaard ? SAMEN_NIET_BEWAARD :
         MP && MP.zetZonderNet ? 'Je zet is bewaard. Er is nu geen verbinding, dus ' + mpNaam() + ' ziet hem nog niet.' :
