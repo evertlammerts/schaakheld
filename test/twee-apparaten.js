@@ -16,26 +16,7 @@ function ok(naam, cond) {
   print((cond ? 'PASS' : 'FAIL') + '  ' + naam);
 }
 
-function maakApparaat(naam) {
-  const doc = maakDocument(), opslag = maakOpslag(), loc = maakLocatie();
-  const maak = new Function('document', 'localStorage', 'location', 'history', '__els',
-    __APP_SRC + '\n;return function (code) { return eval(code); };');
-  const ev = maak(doc, opslag, loc, loc.__history, doc.__els);
-  const app = {
-    naam, doc, els: doc.__els, opslag, location: loc, ev,
-    get(expr) { return ev('(' + expr + ')'); },
-    el(id) { return doc.getElementById(id); },
-    modal() { return doc.getElementById('modalBox').innerHTML; },
-    scherm() { return app.modal().replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90); },
-    ziet(t) { return app.open() && app.modal().indexOf(t) >= 0; },
-    open() { return !doc.getElementById('overlay').classList.contains('hidden'); },
-    tik(id) { fire(doc.getElementById(id), 'click'); },
-    fen() { return app.get('session && session.S ? toFEN(session.S) : null'); }
-  };
-  ev('closeModal()');
-  if (naam) ev('setPref("name", ' + JSON.stringify(naam) + ')');
-  return app;
-}
+/* maakApparaat(naam) staat in test/harnas.js, gedeeld met de flowsuite */
 
 /* de wereld een stukje vooruit: timers en de microtaakwachtrij van beide
    apparaten, tot alles is uitgewerkt */
@@ -496,7 +477,9 @@ async function alles() {
   await tik();
   ok('wachtkamer: en Evert is gewoon thuis', !evert.open() && evert.get('MP') === null && evert.get('session') === null);
 
+  await orakelTwee();
   print('');
+  print('orakel: ' + ORAKEL.nogNiet + ' nog niet gebouwd, ' + ORAKEL.gebouwd + ' gebouwd');
   print(fails === 0 ? 'ALL TWO-DEVICE TESTS PASSED' : (fails + ' TWO-DEVICE TESTS FAILED'));
 }
 

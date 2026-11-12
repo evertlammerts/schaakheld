@@ -327,6 +327,7 @@ ok('safe: wrong scores 0', session.earned === earnedBefore);
 ok('safe: review phase after wrong', session.phase === 'review');
 
 /* ---------- best3 drill ---------- */
+wisRondje('best3'); /* [1.6] het rondje hierboven is bewaard; deze test wil een vers rondje */
 startDrill('best3');
 drainTimers();
 ok('best3: task built', !!(session.task && session.task.options.length === 3));
@@ -497,15 +498,23 @@ ok('wolk: dromer-trofee', !!P.badges.wolk);
 exitCloud();
 ok('wolk: terug naar echt, bord intact', session.S === realS && toFEN(session.S) === realFen &&
   BD.mode === 'move' && !session.cloud && realS.hist.length === 0);
-/* ← in de wolk is geen opgeven: eerst het echte bord terug, pas daarna weglopen */
+/* Pauze in de wolk: eerst het echte bord terug, dan naar huis zonder vraag; het droombord blijft niet bewaard */
+startGame(1);
+drainTimers();
+onCell(sqFromAlg('e2')); onCell(sqFromAlg('e4'));
+drainTimers();
+var echteZetten = session.S.hist.length;
 enterCloud();
+onCell(sqFromAlg('d2')); onCell(sqFromAlg('d4'));
+drainTimers();
+var droomZetten = session.S.hist.length;
 fire(__els.backBtn, 'click');
-ok('wolk: ← brengt terug naar echt en het potje loopt door', !!session && session.kind === 'game' &&
-  !session.cloud && !session.over && BD.mode === 'move' && __els.overlay.classList.contains('hidden'));
-fire(__els.backBtn, 'click');
-ok('wolk: nog een ← vraagt gewoon om opgeven', __els.modalBox.innerHTML.indexOf('Opgeven?') >= 0 &&
-  !!session && !session.over);
-fire(__els.rsNee, 'click');
+ok('[1.2] wolk: Pauze vraagt niets, gaat naar huis en bewaart het echte bord, niet het droombord',
+  echteZetten === 2 && droomZetten === 1 && session === null && __els.overlay.classList.contains('hidden') &&
+  !!leesPotje() && leesPotje().r.moves.length === echteZetten);
+fire(document.getElementById('verderKaart'), 'click');
+ok('[1.2] wolk: verder spelen geeft het echte bord terug en het potje loopt door', !!session &&
+  session.kind === 'game' && !session.cloud && !session.over && BD.mode === 'move' && session.S.hist.length === echteZetten);
 /* patroon-duiding in de partij: kid speelt een vork, Turbo benoemt hem */
 P.guard = false; P.predict = false;
 session.S = parseFEN('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1');
@@ -557,7 +566,7 @@ fire(__els.goalKinds, 'click', { target: { dataset: { kind: 'potjes' } } });
 ok('weekdoel: potjes-sjabloon toont de drie Turbo\'s', __els.goalSub.innerHTML.indexOf('Super Turbo') >= 0);
 fire(__els.goalSub, 'click', { target: { dataset: { lvl: '1' } } });
 fire(__els.goalNs, 'click', { target: { dataset: { n: '2' } } });
-ok('weekdoel: voorbeeldzin klopt', __els.goalPreview.innerHTML.indexOf('2 potjes tegen 🍼 Baby Turbo of sterker') >= 0);
+ok('weekdoel: voorbeeldzin klopt', __els.goalPreview.innerHTML.indexOf('2 potjes tegen 😴 Slaapkop Turbo of sterker') >= 0);
 /* eerdere potjes in deze suite tellen al mee: de weektellers zijn echt.
    Daarom eerst het aantal dat het doel nodig heeft boven de huidige stand
    zetten, via de kiezer kan dat niet (vaste aantallen), dus direct. */
@@ -572,7 +581,7 @@ renderHome();
 ok('weekdoel: kaart toont doel en stand', __els.weekCard.innerHTML.indexOf('Mijn doel: ' + (potjesNu + 2) + ' potjes') >= 0 &&
   __els.weekCard.innerHTML.indexOf(potjesNu + ' / ' + (potjesNu + 2)) >= 0);
 ok('weekstrip: op Spelen zichtbaar', __els.weekStrip.innerHTML.indexOf(potjesNu + ' van ' + (potjesNu + 2)) >= 0);
-/* een potje op Super Turbo telt mee voor "Baby Turbo of sterker" */
+/* een potje op Super Turbo telt mee voor "Slaapkop Turbo of sterker" */
 bumpWeek('potjes3', 1);
 ok('weekdoel: sterkere Turbo telt mee', goalProgress(P.weekGoal) === potjesNu + 1 && P.xp === xpG);
 bumpWeek('potjes1', 1);
@@ -1978,10 +1987,13 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('turbo: remise meteen aan het begin wordt afgewimpeld', session.over !== true &&
     __els.bubble.innerHTML.indexOf('net begonnen') >= 0);
   fire(__els.backBtn, 'click');
-  ok('turbo: ← Home midden in een potje vraagt om opgeven',
-    __els.modalBox.innerHTML.indexOf('Opgeven?') >= 0 && session !== null);
-  fire(__els.rsNee, 'click');
-  ok('turbo: nee = doorspelen', session !== null && session.over !== true && __els.overlay.classList.contains('hidden'));
+  ok('[1.1] turbo: Pauze voor de eerste zet vraagt niets, bewaart niets en zegt dat het potje nog niet begonnen was',
+    session === null && __els.overlay.classList.contains('hidden') && leesPotje() === null &&
+    document.getElementById('toast').textContent.indexOf('nog niet begonnen') >= 0);
+  startGame(2);
+  drainTimers();
+  ok('[1.1] turbo: daarna begint een nieuw potje zonder vraag', session !== null && session.over !== true &&
+    __els.overlay.classList.contains('hidden'));
   var gpT = P.c.gamesPlayed, xpT = P.xp;
   fire(actionBtns.resignBtn, 'click');
   fire(__els.rsJa, 'click');
@@ -2021,5 +2033,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   goHome();
   ok('offline: na afloop gaat ← Home gewoon naar huis', session === null && __els.overlay.classList.contains('hidden'));
 
+  await orakelZelftest();
+  await orakelFlow();
+  print('\norakel: ' + ORAKEL.nogNiet + ' nog niet gebouwd, ' + ORAKEL.gebouwd + ' gebouwd');
   print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');
 })().catch(function (e) { print('ASYNC EXCEPTION: ' + e + '\n' + (e && e.stack)); print('\nFLOW SUITE ABORTED'); });
