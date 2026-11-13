@@ -339,7 +339,7 @@ async function orakelFlow5() {
 
   /* ---------- 5.8: Turbo zegt wie aanviel, en de eindkaart noemt het moment ---------- */
 
-  await nogNiet('[5.8] Turbo pakt een stuk dat niemand kan terugpakken: "Ik pak je paard op g5 (3 punten). Niemand kan terugpakken."', async function (check) {
+  await regel('[5.8] Turbo pakt een stuk dat niemand kan terugpakken: "Ik pak je paard op g5 (3 punten). Niemand kan terugpakken."', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(3, ['e2e4', 'e7e5', 'g1f3', 'd7d6']) });
     a.tik('verderKaart');
     await wacht();
@@ -357,8 +357,13 @@ async function orakelFlow5() {
   const STIL = ['e2e4', 'e7e5', 'g1f3', 'd7d6', 'a2a3', 'a7a6', 'b2b3', 'b7b6', 'c2c3', 'c7c6',
     'a3a4', 'a6a5', 'c3c4', 'c6c5', 'b1c3', 'b8c6', 'a1b1', 'a8b8', 'b1a1', 'b8a8', 'h2h3', 'h7h6'];
   for (const g of [['het paard dat onbeschermd stond', MOMENT, 'Het belangrijkste moment', 'Zet 3: je paard op g5 stond onbeschermd, en ik pakte het (3 punten).'],
-    ['een potje zonder moment', STIL, null, 'Netjes gespeeld: je gaf geen stuk weg.']]) {
-    await nogNiet('[5.8] de eindkaart na opgeven noemt ' + g[0] + ': "' + g[3] + '"', async function (check) {
+    ['een potje zonder moment', STIL, null, 'Netjes gespeeld: je gaf geen stuk weg.'],
+    /* 3.Dxe5+? Pxe5: de pion was gedekt */
+    ['een verloren ruil', ['e2e4', 'e7e5', 'd1h5', 'b8c6', 'h5e5', 'c6e5'], 'Het belangrijkste moment', 'Zet 3: je sloeg de pion op e5, maar die was gedekt. Na het terugslaan was je 8 punten kwijt.'],
+    /* 2...Dg5?? 3.d3: Pxg5 won de dame */
+    ['een gemiste dame', ['e2e4', 'e7e5', 'g1f3', 'd8g5', 'd2d3', 'g5g6'], 'Het belangrijkste moment', 'Zet 3: je kon mijn dame op g5 pakken. Dat was 9 punten winst.'],
+    ['een gewonnen dame', ['e2e4', 'e7e5', 'g1f3', 'd8g5', 'f3g5', 'f8e7'], 'Jouw beste zet', 'Zet 3: je won 9 punten.']]) {
+    await regel('[5.8] de eindkaart na opgeven noemt ' + g[0] + ': "' + g[3] + '"', async function (check) {
       const a = nieuwKind({ opslag: opslagMetPotje(2, g[1]) });
       a.tik('verderKaart');
       await wacht();
@@ -370,6 +375,19 @@ async function orakelFlow5() {
       check('de zin (' + kaart + ')', kaart.indexOf(g[3]) >= 0);
     });
   }
+
+  /* 1.f3 e5 2.g4?? Dh4 mat: het einde zelf noemt de zet */
+  await regel('[5.8] de eindkaart na mat noemt het moment: "Zet 2: na je zet kon ik mat zetten, met Dame d8 → h4."', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(3, ['f2f3', 'e7e5', 'g2g4']) });
+    a.tik('verderKaart');
+    await wacht();
+    const uit = await totDat5(function () { return a.get('!!session && session.over'); }, 30000);
+    await wacht(2000);
+    if (!check('testopzet: Turbo zette mat', uit && a.get('gameStatus(session.S).reason') === 'mat')) return;
+    const kaart = tekstVan(a, 'eindkaart');
+    check('de kop', kaart.indexOf('Het belangrijkste moment') >= 0);
+    check('de zin (' + kaart + ')', norm5(kaart).indexOf('Zet 2: na je zet kon ik mat zetten, met Dame d8 → h4.') >= 0);
+  });
 
   /* ---------- 5.9: Red je stuk uit de voorraad, zonder te zoeken ---------- */
 
@@ -465,7 +483,7 @@ async function orakelFlow5() {
      dreigregel: met naam als er een nieuwe dreiging is, de grootste, en
      anders geen dreiging die er niet is. */
   for (const g of [['tegen Turbo, een kind dat net begint', 2, null, true], ['tegen Super Turbo', 3, null, false], ['voor een kind dat al sterk is', 2, 'sterk', false]]) {
-    await nogNiet('[5.8] na Turbo\'s rustige zet ' + g[0] + ': ' + (g[3] ? '"Mijn {stuk} op {veld} valt je {stuk} op {veld} aan."' : '"Ik dreig iets. Zie je wat?"'), async function (check) {
+    await regel('[5.8] na Turbo\'s rustige zet ' + g[0] + ': ' + (g[3] ? '"Mijn {stuk} op {veld} valt je {stuk} op {veld} aan."' : '"Ik dreig iets. Zie je wat?"'), async function (check) {
       const echt = Math.random;
       Math.random = vasteKans5(58);
       try {
@@ -476,6 +494,8 @@ async function orakelFlow5() {
         await speelZelf5(a, g[1] === 3 ? 12 : 24, function (z) {
           const t = zetTelt5(z.voor, z.zet);
           if (t.slag || t.schaak) return;
+          /* een truc van Turbo gaat voor de dreigregel (learning.md 2.1, de volgorde) */
+          if (/Kijk uit/.test(z.strook)) return;
           const genoemd = /Mijn \S+ op [a-h][1-8] valt je \S+ op [a-h][1-8] aan\./.test(z.strook);
           if (!t.nieuw.length) {
             stil++;

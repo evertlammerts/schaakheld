@@ -1735,7 +1735,12 @@ async function orakelFlow() {
   await regel('[2.4] De Beste Zet: een tik op een keuze in de eerste 350 ms van een nieuwe opdracht telt niet, daarna wel', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'best3');
-    a.ev('(function () { session.round = 2; $("roundChip").textContent = "2 van 5"; setTask(null); setOptions(null); BD.arrows = []; buildSafe(); })()');
+    /* de valstrik-vraag heeft een zoekbudget en geeft soms niets: een vaste reeks toevalsgetallen */
+    const echt = Math.random;
+    Math.random = vasteKans5(24);
+    try {
+      a.ev('(function () { session.round = 2; $("roundChip").textContent = "2 van 5"; setTask(null); setOptions(null); BD.arrows = []; buildSafe(); })()');
+    } finally { Math.random = echt; }
     await wacht(500);
     check('testopzet: opdracht 2 is veilig of valstrik', kanTikken(a, 'Veilig'));
     tikTekst(a, 'Veilig');
