@@ -1139,7 +1139,8 @@ async function orakelFlow5() {
     ['SG5, en passant', '4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1', 'capture', null, [], ['Gemist: jouw pion op e5 kan de pion op d5 slaan.']],
     ['SG18, en passant', '4k3/8/8/n2pP3/8/8/8/R3K3 w - d6 0 1', 'free', null, ['a5'], ['Gemist: de pion op d5 stond gratis: niemand kan terugpakken.', 'Jouw pion op e5 kon hem pakken.']],
     ['SG20, en passant en teruggepakt', 'r1bq1rk1/ppp1bppp/2n1pn2/3pP3/3P4/3B1N2/PPPN1PPP/R1BQK2R w KQ d6 0 1', 'free', null, ['d5', 'f6'],
-      ['De pion op d5 kan je en passant slaan, maar de pion op c7 pakt terug op d6.', 'Pion slaat pion, pion slaat terug: 1 tegen 1 punt. Eerlijk, maar geen winst.']],
+      ['Je pion op e5 kan de pion op d5 en passant slaan: je pion komt dan op d6.', 'De pion op c7 pakt terug op d6.',
+        'Pion slaat pion, pion slaat terug: 1 tegen 1 punt. Eerlijk, maar geen winst.']],
     /* "staat in de weg" alleen op een lijn waar het stuk over kan: niet voor een paard, niet schuin voor een toren */
     ['SG13, het paard met een stuk ertussen', '6k1/8/8/3p4/3N4/8/8/6K1 w - - 0 1', 'mobility', 'd4', ['d6'],
       ['Zo beweegt een paard niet.', 'Het paard springt in een L: twee stappen rechtdoor en één opzij. Het springt over andere stukken heen.']],

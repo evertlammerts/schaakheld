@@ -3263,11 +3263,13 @@ function scanExplanations(task, bad, missed) {
       if (!r || !r.terug) return nietTeSlaan(sq);
       const mijn = S.board[r.m.from].toLowerCase(), zijn = S.board[sq].toLowerCase(), a = POINTS[zijn], b = POINTS[mijn];
       const wie = hetStuk(S.board[r.terug.from]) + ' op ' + alg(r.terug.from);
-      /* en passant landt naast de pion: wie terugpakt, pakt daar terug en dekte de pion zelf niet */
-      return [r.m.flags === 'e' ? hoofd(hetOp(sq)) + ' kan je en passant slaan, maar ' + wie + ' pakt terug op ' + alg(r.m.to) + '.' :
-        hoofd(hetOp(sq)) + ' is gedekt door ' + wie + '.', a === b ?
+      const ruil = a === b ?
         hoofd(NAME_NL[mijn]) + ' slaat ' + NAME_NL[zijn] + ', ' + NAME_NL[S.board[r.terug.from].toLowerCase()] + ' slaat terug: ' + a + ' tegen ' + ptsNL(b * 100) + '. Eerlijk, maar geen winst.' :
-        'Sla je ' + hetStuk(S.board[sq]) + ', dan pakt Turbo terug en verlies jij meer.'];
+        'Sla je ' + hetStuk(S.board[sq]) + ', dan pakt Turbo terug en verlies jij meer.';
+      /* en passant landt achter de pion, op een veld waar niets stond: daar wordt teruggepakt, en de pion zelf was niet gedekt */
+      if (r.m.flags === 'e') return ['Je pion op ' + alg(r.m.from) + ' kan ' + hetOp(sq) + ' en passant slaan: je pion komt dan op ' + alg(r.m.to) + '.',
+        hoofd(wie) + ' pakt terug op ' + alg(r.m.to) + '.', ruil];
+      return [hoofd(hetOp(sq)) + ' is gedekt door ' + wie + '.', ruil];
     }));
   }
   /* eerst waarom een rood kruisje fout was, dan wat het kind miste (dat laat het bord al zien met een rand); de
