@@ -255,6 +255,24 @@ function hertype(uitvoer, bronnen) {
   process.stderr.write('hergetypeerd: ' + anders.length + ' anders, ' + uit.length + ' van ' + lijst.length + ' blijven\n');
 }
 
+/* ook <uitvoer.json> <bron> ...: per Red je stuk-opdracht de zetten die het stuk ook redden en langs hun lijn niets
+   verliezen (ookGoed in de engine), als vierde veld "<zet>:<punten>:<antwoord>"; de andere regels gaan ongewijzigd mee */
+function ook(uitvoer, bronnen) {
+  const lijst = [];
+  for (const f of bronnen) lijst.push(...leesBron(f));
+  let n = 0;
+  lijst.forEach((p, i) => {
+    if (p.type !== 'stuk') return;
+    const t = E.trucTask(p.bord + '|stuk|' + p.antwoorden.join(',')), o = t ? E.ookGoed(t, STUK_KNOPEN) : [];
+    p.ook = o.length ? o.map(x => E.moveKey(x.m) + ':' + x.n + ':' + E.moveKey(x.ans)).join(',') : null;
+    if (o.length) n++;
+    process.stderr.write(p.bord + ' ' + (p.ook || '-') + '\n');
+    if (i % 10 === 9) fs.writeFileSync(uitvoer, JSON.stringify(lijst));
+  });
+  fs.writeFileSync(uitvoer, JSON.stringify(lijst));
+  process.stderr.write('ook: ' + n + ' opdrachten met een zet die het stuk ook redt\n');
+}
+
 function zoekMat2(rng) {
   const t = E.genMate2Task(rng);
   if (!t) return null;
@@ -289,7 +307,7 @@ function zoek(seconden, zaad, uitvoer, soorten) {
 function leesBron(f) {
   if (!/\.js$/.test(f)) return JSON.parse(fs.readFileSync(f, 'utf8'));
   const v = require(path.resolve(f));
-  return v.TRUC_POOL.concat(v.STUK_POOL).map(r => { const d = r.split('|'); return { bord: d[0], type: d[1], antwoorden: d[2].split(',') }; });
+  return v.TRUC_POOL.concat(v.STUK_POOL).map(r => { const d = r.split('|'); return { bord: d[0], type: d[1], antwoorden: d[2].split(','), ook: d[3] || null }; });
 }
 function merge(bestanden) {
   const perType = {}, gezien = new Set();
@@ -305,7 +323,7 @@ function merge(bestanden) {
     const lijst = (perType[type] || []).sort((a, b) => a.bord < b.bord ? -1 : 1).slice(0, DOEL[type]);
     if (lijst.length < E.TRUC_MIN) { if (lijst.length) weg.push(type + ' (' + lijst.length + ')'); continue; }
     telling[type] = lijst.length;
-    for (const p of lijst) (type === 'stuk' ? stukken : pool).push(p.bord + '|' + p.type + '|' + p.antwoorden.join(','));
+    for (const p of lijst) (type === 'stuk' ? stukken : pool).push(p.bord + '|' + p.type + '|' + p.antwoorden.join(',') + (p.ook ? '|' + p.ook : ''));
   }
   const uit = "'use strict';\n/* Gegenereerd door tools/make-trucs.js; niet met de hand bewerken. " +
     (pool.length + stukken.length) + ' geverifieerde opdrachten: ' + Object.keys(telling).map(k => k + ' ' + telling[k]).join(', ') + '. */\n' +
@@ -322,4 +340,5 @@ else if (opdracht === 'zoek') zoek(+rest[0], +rest[1], rest[2], (rest[3] || 'vor
 else if (opdracht === 'merge') merge(rest);
 else if (opdracht === 'herzie') herzie(rest[0], rest.slice(1));
 else if (opdracht === 'hertype') hertype(rest[0], rest.slice(1));
-else { process.stderr.write('gebruik: zoek <seconden> <zaad> <uitvoer.json> [types, of mat2] | merge <deel.json> ... | herzie <uitvoer.json> <bron> ... | hertype <uitvoer.json> <bron> ...\n'); process.exit(1); }
+else if (opdracht === 'ook') ook(rest[0], rest.slice(1));
+else { process.stderr.write('gebruik: zoek <seconden> <zaad> <uitvoer.json> [types, of mat2] | merge <deel.json> ... | herzie <uitvoer.json> <bron> ... | hertype <uitvoer.json> <bron> ... | ook <uitvoer.json> <bron> ...\n'); process.exit(1); }

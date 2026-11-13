@@ -154,6 +154,34 @@
     check('Pxa2, de toren (' + (t && E.moveKey(t)) + ')', !!t && E.moveKey(t) === 'c3a2');
   });
 
+  /* Red je stuk: een regel van de voorraad noemt ook de zetten die het stuk ook redden ("<zet>:<punten>:<antwoord>") */
+  regel('[5.5] Red je stuk: een regel kan de zetten noemen die het stuk ook redden, en alleen een Red je stuk-regel', function (check) {
+    const t = E.trucTask('1rbqr1k1/pppn1ppp/4p3/2npP1b1/3N1Q1P/3P1N2/PPP2PP1/R3KB1R w|stuk|f3g5|f4g3:300:f3g5,f4h2:50:f3g5');
+    check('twee zetten die ook goed zijn', !!t && t.ook.length === 2 && E.moveKey(t.ook[0].m) === 'f4g3' && t.ook[0].n === 300 && E.moveKey(t.ook[0].ans) === 'f3g5' && t.ook[1].n === 50);
+    check('zonder vierde veld: geen', E.trucTask('1rbqr1k1/pppn1ppp/4p3/2npP1b1/3N1Q1P/3P1N2/PPP2PP1/R3KB1R w|stuk|f3g5').ook.length === 0);
+    check('een zet die er niet is: de regel telt niet', E.trucTask('1rbqr1k1/pppn1ppp/4p3/2npP1b1/3N1Q1P/3P1N2/PPP2PP1/R3KB1R w|stuk|f3g5|a1a8:300:f3g5') === null);
+    check('een vierde veld bij een vork: de regel telt niet', E.trucTask('6k1/8/8/8/8/8/8/R5K1 w|vork|a1a8|a1a2:1:a1a8') === null);
+  });
+  /* wat de voorraad ook goed rekent: nooit een antwoord, altijd een echte redding, geen mat in een erna */
+  regel('[5.5] Red je stuk: een zet die ook goed is, is geen antwoord, redt het stuk echt en laat geen mat in een toe', function (check) {
+    if (!check('er is een voorraad STUK_POOL', typeof STUK_POOL !== 'undefined' && STUK_POOL.length > 0)) return;
+    let ook = 0;
+    for (const r of STUK_POOL) {
+      const t = E.trucTask(r);
+      if (!check('te lezen: ' + r.slice(0, 40), !!t)) continue;
+      for (const o of t.ook) {
+        ook++;
+        const k = E.saveKind(t.S, o.m, t.hang.sq).kind;
+        E.makeMove(t.S, o.m); const mat = !!E.mateReply(t.S); E.unmakeMove(t.S);
+        if (t.answers.some(function (a) { return E.moveKey(a.m) === E.moveKey(o.m); }) || k === 'anders' || k === 'ruil' || mat)
+          check(r.slice(0, 40) + ' ' + E.moveKey(o.m) + ' (' + k + (mat ? ', mat' : '') + ')', false);
+      }
+    }
+    check('testopzet: de voorraad heeft zulke zetten (' + ook + ')', ook >= 50);
+    const S = E.parseFEN('1rbqr1k1/pppn1ppp/4p3/2npP1b1/3N1Q1P/3P1N2/PPP2PP1/R3KB1R w - - 0 1'), l = E.lineAfter(S, zet(S, 'f3g5'), E.CHECK_NODES);
+    check('de lijn telt ook in punten van de tabel (' + l.punten + ')', typeof l.punten === 'number' && l.punten % 100 === 0);
+  });
+
   /* het alarm komt voor de zet op het bord staat: met een grens aan posities wacht het kind nooit lang; is de grens op,
      dan geen alarm voor die zet */
   regel('[5.4] het alarm kijkt naar hoogstens ALARM_NODES posities, en is de grens op, dan is er geen alarm', function (check) {
@@ -408,7 +436,7 @@
     check('met alleen Pc3-b5: afgekeurd', E.checkPieceTask(taak(['c3b5'])) === null);
     check('de stand blijft onaangeroerd', E.toFEN(S) === fen);
     const t = E.trucTask(STUK_GOED);
-    check(STUK_GOED + ': staat in de voorraad', typeof STUK_POOL !== 'undefined' && STUK_POOL.indexOf(STUK_GOED) >= 0);
+    check(STUK_GOED + ': staat in de voorraad', typeof STUK_POOL !== 'undefined' && STUK_POOL.some(function (r) { return r.split('|').slice(0, 3).join('|') === STUK_GOED; }));
     check(STUK_GOED + ': goed', !!t && !!E.checkPieceTask(t));
     check('dezelfde stand zonder redding: afgekeurd', !!t && E.checkPieceTask(Object.assign({}, t, { answers: [] })) === null);
   });

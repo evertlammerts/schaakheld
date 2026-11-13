@@ -962,7 +962,7 @@ const CHECK_NODES = 25000;
    or lost along that line (L; a fork or a pin shows here, positional points
    do not), reply Black's reply, mateNext whether Black mates at once. */
 function lineAfter(S, m, nodes) {
-  const m0 = material(S), back = [m];
+  const m0 = material(S), p0 = pointsOf(S), back = [m];
   makeMove(S, m);
   let st = gameStatus(S);
   const out = { white: st.over ? (st.reason === 'mat' ? MATE : 0) : 0, reply: null, material: 0, mateNext: false };
@@ -975,7 +975,9 @@ function lineAfter(S, m, nodes) {
     st = gameStatus(S);
     if (!st.over) { const w = think(S, 60000, 8, { nodes }).m; makeMove(S, w); back.push(w); }
   }
-  out.material = (gameStatus(S).over ? material(S) : forcedMaterial(S)) - m0;
+  const over = gameStatus(S).over;
+  out.material = (over ? material(S) : forcedMaterial(S)) - m0;
+  out.punten = (over ? pointsOf(S) : forcedPoints(S)) - p0;
   for (let i = back.length; i > 0; i--) unmakeMove(S);
   return out;
 }
@@ -1694,7 +1696,7 @@ function boardOk(s) {
    stuk task (STUK_POOL) gets its hanging piece too. */
 function trucTask(line) {
   const parts = String(line).split('|');
-  if (parts.length !== 3 || !boardOk(parts[0])) return null;
+  if (!(parts.length === 3 || (parts.length === 4 && parts[1] === 'stuk')) || !boardOk(parts[0])) return null;
   const S = parseFEN(parts[0] + ' - - 0 1');
   const legal = legalMoves(S);
   const answers = parts[2].split(',').map(k => legal.find(m => moveKey(m) === k));
@@ -1703,8 +1705,38 @@ function trucTask(line) {
   if (task.type === 'stuk') {
     task.hang = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250)[0];
     if (!task.hang) return null;
+    /* "<zet>:<punten>:<antwoord>": een zet die het stuk ook redt en niets verliest, hoeveel punten het antwoord meer
+       oplevert (de tabel van de kinderen), en welk antwoord dat is */
+    task.ook = [];
+    for (const o of parts[3] ? parts[3].split(',') : []) {
+      const [k, n, a] = o.split(':'), m = legal.find(x => moveKey(x) === k), ans = legal.find(x => moveKey(x) === a);
+      if (!m || !ans || !/^\d+$/.test(n)) return null;
+      task.ook.push({ m, n: +n, ans });
+    }
   }
   return task;
+}
+/* De zetten van een Red je stuk-opdracht die het stuk ook echt redden (geen "anders", geen ruil), langs hun lijn
+   niets verliezen (lijn en zoektocht zeggen geen verlies) en geen mat in een toelaten: die zijn ook goed. Met per zet hoeveel het beste antwoord meer oplevert. */
+function ookGoed(task, nodes) {
+  const S = task.S, uit = [], nu = evalWhite(S);
+  const lijnen = task.answers.map(a => { clearTT(); return { a: a.m, l: lineAfter(S, a.m, nodes) }; });
+  const beste = lijnen.reduce((x, y) => y.l.punten > x.l.punten ? y : x);
+  for (const m of legalMoves(S)) {
+    if (task.answers.some(a => moveKey(a.m) === moveKey(m))) continue;
+    const k = saveKind(S, m, task.hang.sq).kind;
+    if (k === 'anders' || k === 'ruil') continue;
+    makeMove(S, m);
+    const mat = !gameStatus(S).over && !!mateReply(S);
+    unmakeMove(S);
+    if (mat) continue;
+    clearTT();
+    const l = lineAfter(S, m, nodes);
+    /* verloren is alleen wat lijn en zoektocht allebei zeggen: de lijn stopt soms midden in een ruil */
+    if (Math.max(l.material, l.white - nu) <= -150) continue;
+    uit.push({ m, n: Math.max(0, beste.l.punten - l.punten), ans: beste.a });
+  }
+  return uit;
 }
 /* The trick types the stock can serve. */
 function trucTypes(pool) {
@@ -1738,7 +1770,7 @@ if (typeof module !== 'undefined') {
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
-    winnableCaptures, slagVeld, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
+    winnableCaptures, slagVeld, nullMoved, ookGoed, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
     repetitions, positionKey, pointsOf, forcedPoints, TABEL, lossStart, ALARM_NODES, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
     POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };

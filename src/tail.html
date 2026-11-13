@@ -3658,11 +3658,19 @@ function koningHoe(S, m, d) {
 }
 /* De redenen na een gered koningspuzzel: wat dreigde, en hoe het antwoord het tegenhield */
 function koningRedenen(S, t, m) {
-  if (t.type === 'stuk') return [stukHow(S, m, t.hang) || 'Turbo wint nu niets meer.'];
+  if (t.type === 'stuk') {
+    const o = (t.ook || []).find(x => sameMove(x.m, m));
+    return [stukHow(S, m, t.hang) || 'Turbo wint nu niets meer.'].concat(o ? [nogSterker(S, o)] : []);
+  }
   const d = koningDreiging(S, t.type);
   const eerst = t.type === 'schaak' ? (d ? 'Je stond schaak van ' + hetStuk(S.board[d.van]) + ' op ' + alg(d.van) + '.' : null) :
     (d && d.zet ? 'Turbo dreigde mat met ' + d.zet + '.' : null);
   return [eerst, koningHoe(S, m, d)].filter(Boolean);
+}
+/* een redding die ook goed is: wat het beste antwoord meer opleverde, onder een punt verschil alleen de zet */
+function nogSterker(S, o) {
+  const naam = moveNameNL(S, o.ans);
+  return 'Nog sterker was ' + (o.n >= 100 ? '<b>' + naam + '</b>: die levert je ' + ptsNL(o.n) + ' meer op.' : zetB(naam));
 }
 /* Na Turbo's matzet: wie schaak geeft, twee lege velden naast de koning die ook gedekt zijn, en waarom de koning het
    stuk dat schaak geeft niet slaat */
@@ -3699,7 +3707,7 @@ function koningAttempt(m) {
   makeMove(S, m);
   const eindigt = gameStatus(S).over;
   unmakeMove(S);
-  if (eindigt || t.answers.some(a => sameMove(a.m, m))) {
+  if (eindigt || t.answers.some(a => sameMove(a.m, m)) || (t.ook || []).some(o => sameMove(o.m, m))) {
     session.phase = 'review';
     BD.mode = 'off';
     BD.glow.clear();
@@ -3717,6 +3725,8 @@ function koningAttempt(m) {
   snd.bad();
   /* de zin van een vorige poging blijft niet staan naast een nieuwe zet */
   hulpZin(null);
+  /* in Red je stuk zegt een rustig antwoord van Turbo niet dat er gevaar is: de zin volgt uit de zet van het kind */
+  const redding = t.type === 'stuk' ? saveKind(S, m, t.hang.sq) : null, hangNaam = redding ? NAME_NL[S.board[t.hang.sq].toLowerCase()] : null;
   /* laat zien wat er dan gebeurt, ook bij de laatste poging: Turbo slaat toe, en het bord komt terug */
   session.phase = 'busy';
   BD.mode = 'off';
@@ -3745,7 +3755,9 @@ function koningAttempt(m) {
         const txt = st2.over && st2.reason === 'mat' ? 'Turbo speelt <b>' + replyName + '</b>: schaakmat.' + matUitleg(S) :
           mat2 ? 'Turbo speelt ' + zetB(replyName) + ' Mat is niet meer te stoppen.' :
             cap && hing ? 'Turbo speelt <b>' + replyName + '</b>: je ' + NAME_NL[cap.toLowerCase()] + ' stond nog steeds aangevallen.' :
-              cap ? 'Turbo speelt ' + zetB(replyName) : 'Turbo speelt <b>' + replyName + '</b>, en het gevaar is er nog.';
+              cap ? 'Turbo speelt ' + zetB(replyName) : !redding ? 'Turbo speelt <b>' + replyName + '</b>, en het gevaar is er nog.' :
+                'Turbo speelt ' + zetB(replyName) + ' ' + (redding.kind === 'anders' || redding.kind === 'ruil' ?
+                  'Je ' + hangNaam + ' op ' + redding.sq + ' is nog niet veilig.' : 'Een paar zetten later verlies je toch iets.');
         later(() => {
           unmakeMove(S); unmakeMove(S);
           /* de pijl van Turbo's antwoord blijft staan zolang de zin erover staat */

@@ -1554,6 +1554,54 @@ async function orakelFlow5() {
     check('de zin (' + onder5(a) + ')', /^Turbo speelt .+, slaat dame: je dame stond nog steeds aangevallen\. Probeer nog een zet\.$/.test(onder5(a)));
   });
 
+  /* Red je stuk: een echte redding die niets verliest is goed, met alle sterren en wat nog sterker was; een foute poging
+     met een rustig antwoord zegt wat de zet van het kind deed */
+  function stukUitVoorraad5(a, bord) {
+    a.ev('(function () { var t = trucTask(STUK_POOL.find(function (r) { return r.indexOf(' + JSON.stringify(bord) + ') === 0; }));' +
+      ' t.hintUsed = false; session.task = t; session.S = t.S; session.phase = "puzzle"; session.tries = 0; BD.mode = "puzzle"; renderBoard(); })()');
+  }
+  await regel('[5.5] Red je stuk: een zet die het stuk ook redt is goed, met alle sterren en "Nog sterker was {zet}: die levert je {n} meer op."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    stukUitVoorraad5(a, '1rbqr1k1/pppn1ppp/4p3/2npP1b1/3N1Q1P/3P1N2/PPP2PP1/R3KB1R w');
+    check('testopzet: Dg3 staat bij de zetten die ook goed zijn', a.get('session.task.ook.some(function (o) { return moveKey(o.m) === "f4g3"; })'));
+    const voor = a.get('session.earned');
+    zet(a, 'f4g3');
+    await wacht(3000);
+    const r = redenen5(a);
+    check('Gered! (' + tekstVan(a, 'taskBox').slice(0, 30) + ')', /Gered!/.test(tekstVan(a, 'taskBox')));
+    check('alle sterren', a.get('session.earned') === voor + 3);
+    check('de redenen (' + r.join(' / ') + ')', r.length === 2 && r[1] === 'Nog sterker was Paard f3 → g5, slaat loper: die levert je 3 punten meer op.');
+  });
+  await regel('[5.5] Red je stuk: scheelt het minder dan een punt, dan alleen "Nog sterker was {zet}."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    zetOpdracht(a, '1rbqr1k1/pppn1ppp/4p3/2npP1b1/3N1Q1P/3P1N2/PPP2PP1/R3KB1R w - - 0 1', 'stuk', ['f3g5'],
+      '{ hang: threatDetails(S).filter(function (t) { return t.victim >= 300 && t.gain >= 250; })[0], ook: [{ m: legalMoves(S).find(function (x) { return moveKey(x) === "f4g3"; }), n: 50,' +
+      ' ans: legalMoves(S).find(function (x) { return moveKey(x) === "f3g5"; }) }] }');
+    zet(a, 'f4g3');
+    await wacht(3000);
+    const r = redenen5(a);
+    check('de redenen (' + r.join(' / ') + ')', r[r.length - 1] === 'Nog sterker was Paard f3 → g5, slaat loper.');
+  });
+  await regel('[5.5] Red je stuk: een zet waarna het stuk nog hangt en Turbo rustig speelt: "Turbo speelt {zet}. Je {stuk} op {veld} is nog niet veilig."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    stukUitVoorraad5(a, '1r1qkb1r/ppp2pp1/4b1np/3p4/3pPQ2/3P3N/PPP2PPP/RN2KB1R w');
+    zet(a, 'b1a3');
+    await wacht(5000);
+    check('de zin (' + onder5(a) + ')', /^Turbo speelt .+\. Je dame op f4 is nog niet veilig\. Probeer nog een zet\.$/.test(onder5(a)));
+  });
+  await regel('[5.5] Red je stuk: een redding die later toch iets kost en Turbo rustig speelt: "Turbo speelt {zet}. Een paar zetten later verlies je toch iets."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    stukUitVoorraad5(a, '3rkb1r/pppqppp1/2n2n1p/3p4/3P2b1/3BPQ1N/PPPN1PPP/R1B2K1R w');
+    check('testopzet: Df4 is geen zet die ook goed is', !a.get('session.task.ook.some(function (o) { return moveKey(o.m) === "f3f4"; })'));
+    zet(a, 'f3f4');
+    await wacht(5000);
+    check('de zin (' + onder5(a) + ')', /^Turbo speelt .+\. Een paar zetten later verlies je toch iets\. Probeer nog een zet\.$/.test(onder5(a)));
+  });
+
   /* ---------- 5.5: Trucendoos, mat in twee (T9 tot T11) ---------- */
 
   const MAT2_5 = 'k7/8/2K5/8/8/8/8/7R w - - 0 1';
@@ -1637,7 +1685,7 @@ async function orakelFlow5() {
 
   /* de coach: na Tb1-a1 antwoordt Turbo vaak rustig (Lf5-g4 pent de dame); wat hij ook speelt, de zin past erbij */
   /* de zetnaam zegt al wat Turbo slaat ("slaat dame"); de zin zegt het niet nog eens */
-  await regel('[5.5] Red je stuk, een foute poging: pakt Turbo het stuk dat hing, dan "Turbo speelt {zet}: je {stuk} stond nog steeds aangevallen."; slaat hij iets anders, dan "Turbo speelt {zet}."; anders "Turbo speelt {zet}, en het gevaar is er nog."', async function (check) {
+  await regel('[5.5] Red je stuk, een foute poging: pakt Turbo het stuk dat hing, dan "Turbo speelt {zet}: je {stuk} stond nog steeds aangevallen."; slaat hij iets anders, dan "Turbo speelt {zet}."; anders wat de zet van het kind deed', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'koning');
     const fen = '2kr3r/ppp2ppp/n2qp3/3p1b2/1b1P4/P2BPQ2/1PPNKnPP/1RB3NR w - - 0 1';
@@ -1662,7 +1710,10 @@ async function orakelFlow5() {
     } else if (isCapture(S, m)) {
       check('Turbo slaat iets anders (' + onder5(a) + ')', onder5(a) === 'Turbo speelt ' + naam + '. Probeer nog een zet.');
     } else {
-      check('Turbo slaat niets (' + onder5(a) + ')', onder5(a) === 'Turbo speelt ' + naam + ', en het gevaar is er nog. Probeer nog een zet.');
+      const k = saveKind(parseFEN(fen), legalMoves(parseFEN(fen)).find(function (x) { return moveKey(x) === 'b1a1'; }), hing);
+      const zin = k.kind === 'anders' || k.kind === 'ruil' ? 'Je ' + NAME_NL[parseFEN(fen).board[hing].toLowerCase()] + ' op ' + k.sq + ' is nog niet veilig.' :
+        'Een paar zetten later verlies je toch iets.';
+      check('Turbo slaat niets (' + onder5(a) + ')', onder5(a) === 'Turbo speelt ' + naam + '. ' + zin + ' Probeer nog een zet.');
     }
   });
 
