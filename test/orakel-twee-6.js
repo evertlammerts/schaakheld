@@ -133,7 +133,7 @@ async function aanbodVanMees(mees, fien) {
 async function orakelTwee6() {
   /* ================= vriendenpotjes die dagen doorlopen ================= */
 
-  await nogNiet('[6.1] na een zet staat het potje in de eigen potjesbus: met K te lezen, dezelfde zetten, wit als rol en geen naam', async function (check) {
+  await regel('[6.1] na een zet staat het potje in de eigen potjesbus: met K te lezen, dezelfde zetten, wit als rol en geen naam', async function (check) {
     const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await vriendenpotje(mees, fien);
     const wit = await zetUit(RUSTIG, mees, fien);
@@ -146,7 +146,7 @@ async function orakelTwee6() {
     check('geen naam erin', !!inhoud && !/Mees|Fien/.test(JSON.stringify(inhoud)));
   });
 
-  await nogNiet('[6.1] een potjesbus is na 40 halve zetten even lang als na 2', async function (check) {
+  await regel('[6.1] een potjesbus is na 40 halve zetten even lang als na 2', async function (check) {
     const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await vriendenpotje(mees, fien);
     await potjeTot(mees, fien, 2, magZetten(mees) ? mees : fien);

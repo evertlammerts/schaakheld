@@ -919,7 +919,10 @@ function leesSamenAlles() {
 /* de vorm van een bewaard vriendenpotje, zonder de zetten na te spelen */
 function samenVorm(r, k) {
   const id = x => typeof x === 'string' && ID_RE.test(x);
-  return !!r && typeof r === 'object' && r.gameId === k && id(r.gameId) && id(r.room) && id(r.seat) &&
+  /* een potje met een vriend kan zonder kamer bestaan: begonnen als uitdaging, of de kamer is weg */
+  const kamer = (id(r && r.room) && id(r.seat)) || (!!r && r.room == null && r.seat == null && id(r.fid));
+  return !!r && typeof r === 'object' && r.gameId === k && id(r.gameId) && kamer &&
+    (r.state == null || r.state === 'potje' || r.state === 'uitdaging') &&
     typeof r.host === 'boolean' && (r.myColor === 'w' || r.myColor === 'b') && Number.isInteger(r.gameNo) &&
     Array.isArray(r.moves) && typeof r.peerName === 'string' && (r.fid === null || id(r.fid)) &&
     (r.result == null || !!geldigeUitslag(r.result)) && (r.offer == null || !!geldigAanbod(r.offer));
@@ -955,20 +958,33 @@ function leesSamen() {
    gebeurt na elke halve zet. */
 function bewaarSamen() {
   if (!MP || !MP.gameId || !MP.S) return true;
-  const games = samenRauw() || {};
+  const games = samenRauw() || {}, oud = samenVorm(games[MP.gameId], MP.gameId) ? games[MP.gameId] : null;
   for (const k in games) {
     const r = games[k];
-    if (k === MP.gameId || !samenVorm(r, k) || !(r.result && r.shown !== true)) delete games[k];
+    /* ernaast blijven ook de lopende potjes met andere vrienden: met elke vriend kan een potje lopen */
+    const blijft = samenVorm(r, k) && ((r.result && r.shown !== true) || (!r.result && !!r.fid && r.fid !== MP.viaFriend));
+    if (k === MP.gameId || !blijft) delete games[k];
   }
+  const moves = MP.S.hist.map(u => moveKey(u.m));
   if (!(MP.result && MP.shown && MP.bekend)) {
-    games[MP.gameId] = { gameId: MP.gameId, fid: MP.viaFriend || null, room: MP.room, seat: MP.seat, host: MP.host,
-      myColor: MP.myColor, gameNo: MP.gameNo, moves: MP.S.hist.map(u => moveKey(u.m)),
+    games[MP.gameId] = Object.assign({}, oud, { gameId: MP.gameId, fid: MP.viaFriend || null, room: MP.room || null,
+      seat: MP.room ? MP.seat : null, host: MP.host, myColor: MP.myColor, gameNo: MP.gameNo, moves,
       peerName: MP.peerName || '', result: MP.result || null, offer: MP.offer || null,
-      shown: !!MP.shown, updated: Date.now() };
+      shown: !!MP.shown, beurtT: oud && oud.moves.length === moves.length ? oud.beurtT : Date.now(), updated: Date.now() });
   }
   const gelukt = schrijfSamen(games);
   MP.nietBewaard = !gelukt;
+  if (gelukt && MP.viaFriend && P.friends[MP.viaFriend]) {
+    if (games[MP.gameId]) potjeNaarBus(MP.gameId); else potjeBusWeg(MP.viaFriend);
+  }
   return gelukt;
+}
+/* velden van een bewaard potje bijwerken, zonder de rest te raken */
+function bijSamen(gameId, velden) {
+  const g = samenRauw();
+  if (!g || !g[gameId]) return false;
+  g[gameId] = Object.assign({}, g[gameId], velden);
+  return schrijfSamen(g);
 }
 /* één potje weg uit de kaart; de andere blijven */
 function vergeetSamen(gameId) {
@@ -1822,13 +1838,87 @@ async function mpHerkenVriend(bewijzen) {
 /* rol a = wie de vriendschap vroeg, b = wie ja zei; elk heeft zijn eigen bus */
 function myRole(f) { return f.host ? 'a' : 'b'; }
 function theirRole(f) { return f.host ? 'b' : 'a'; }
-async function busFor(f, role) {
-  const key = f.k + ':' + role;
+async function busFor(f, role, soort = 'bus') {
+  const key = f.k + ':' + soort + role;
   if (!busCache.has(key)) {
-    const bewijs = b64url(await hkdfBits(f.k, 'bus-' + role, 32));
+    const bewijs = b64url(await hkdfBits(f.k, soort + '-' + role, 32));
     busCache.set(key, { bewijs, bus: await sha256hex(bewijs) });
   }
   return busCache.get(key);
+}
+
+/* ---------- potjesbussen: een potje met een vriend dat dagen doorloopt ----------
+   Elk kind schrijft het potje zoals het dat kent in zijn eigen potjesbus en leest die van de ander. Het adres
+   komt uit K met een eigen label, de inhoud is met K versleuteld en altijd even lang: de server ziet geen
+   naam, geen zet en niet hoe lang een potje al loopt. */
+const POTJE_LENGTE = 2048, POTJE_VERNIEUW = 7 * 86400000;
+const PROMOTIE = ['', 'q', 'r', 'b', 'n'];
+let geenPotjesbussen = false; /* een server zonder potjesbussen: vriendenpotjes gaan dan alleen via de kamer */
+const vakNr = sq => (sq >> 4) * 8 + (sq & 7), nrVak = i => (i >> 3) * 16 + (i & 7);
+/* twee bytes per halve zet: van en naar, met de promotie in de bovenste bits */
+function zettenNaarBus(keys) {
+  const b = new Uint8Array(keys.length * 2);
+  keys.forEach((k, i) => {
+    const p = Math.max(0, PROMOTIE.indexOf(k.slice(4)));
+    b[2 * i] = vakNr(sqFromAlg(k.slice(0, 2))) | (p & 3) << 6;
+    b[2 * i + 1] = vakNr(sqFromAlg(k.slice(2, 4))) | (p >> 2) << 6;
+  });
+  return b64url(b);
+}
+function potjeZetten(s) {
+  const b = typeof s === 'string' ? b64urlBytes(s) : null;
+  if (!b || b.length % 2 || b.length > 1200) return null;
+  const uit = [];
+  for (let i = 0; i < b.length; i += 2) {
+    const p = b[i] >> 6 | (b[i + 1] >> 6) << 2;
+    if (p >= PROMOTIE.length) return null;
+    uit.push(alg(nrVak(b[i] & 63)) + alg(nrVak(b[i + 1] & 63)) + PROMOTIE[p]);
+  }
+  return uit;
+}
+/* wat in de eigen potjesbus staat: het potje zonder naam, wit als rol van de vriendschap */
+function vriendBusInhoud(r) {
+  const f = P.friends[r.fid];
+  return { v: 1, gameId: r.gameId, white: r.myColor === 'w' ? myRole(f) : theirRole(f), state: r.state || 'potje',
+    moves: zettenNaarBus(r.moves), offer: r.offer && !r.offer.answer ? { by: r.offer.by, ply: r.offer.ply } : null,
+    result: r.claim || r.result || null };
+}
+async function schrijfPotjesbus(f, blob) {
+  try {
+    const to = await busFor(f, myRole(f), 'potje');
+    const r = await fetch(SYNC_URL + '/v1/potje', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob }) });
+    if (r.status === 404) geenPotjesbussen = true;
+    return r.status === 204;
+  } catch (e) { return false; }
+}
+/* Schrijft de eigen potjesbus van een bewaard vriendenpotje als de inhoud veranderde, de bus er niet is (dwing)
+   of hij lang niet geschreven is. Dezelfde inhoud gaat als dezelfde bytes: zo meet de server hoe lang een kant
+   niets nieuws zei, en daarop rust de remise na veertien dagen. Per potje één schrijfactie tegelijk. */
+const busRij = {};
+function inBusRij(fid, fn) {
+  busRij[fid] = (busRij[fid] || Promise.resolve()).then(fn).catch(() => {});
+  return busRij[fid];
+}
+function potjeNaarBus(gameId, dwing) {
+  const g = samenRauw(), r = g && g[gameId];
+  return r && r.fid ? inBusRij(r.fid, () => potjeNaarBusNu(gameId, dwing)) : Promise.resolve();
+}
+/* een potje dat voor allebei klaar is: de eigen bus mag weg */
+function potjeBusWeg(fid) {
+  return inBusRij(fid, () => {
+    const f = P.friends[fid];
+    return f && !geenPotjesbussen && netAvailable() ? schrijfPotjesbus(f, '') : false;
+  });
+}
+async function potjeNaarBusNu(gameId, dwing) {
+  const g = samenRauw(), r = g && g[gameId], f = r && r.fid && P.friends[r.fid];
+  if (!r || !f || f.weg || geenPotjesbussen || !netAvailable()) return;
+  const inhoud = JSON.stringify(vriendBusInhoud(r)), oud = r.bus && typeof r.bus === 'object' ? r.bus : null;
+  const zelfde = !!oud && oud.inhoud === inhoud && typeof oud.blob === 'string';
+  if (zelfde && !dwing && Date.now() - (+oud.t || 0) < POTJE_VERNIEUW) return;
+  const blob = zelfde ? oud.blob : b64url(await sealJSON(f.k, 'potje', vasteLengte(JSON.parse(inhoud), POTJE_LENGTE)));
+  if (await schrijfPotjesbus(f, blob)) bijSamen(gameId, { bus: { inhoud, blob, t: Date.now() } });
 }
 async function ecdhStart() {
   const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
@@ -2051,9 +2141,9 @@ function friendPollSoon(ms) {
 const BUS_BATCH = 64; /* maxBusCheck in bus.go */
 /* een uitnodiging en een "Nu niet" zijn op de lijn even lang, zodat de server ze niet uit elkaar kan houden */
 const BRIEFJE_LENGTE = 256;
-function vasteLengte(o) {
+function vasteLengte(o, lengte = BRIEFJE_LENGTE) {
   const kaal = new TextEncoder().encode(JSON.stringify(Object.assign({}, o, { pad: '' }))).length;
-  return Object.assign({}, o, { pad: 'x'.repeat(Math.max(0, BRIEFJE_LENGTE - kaal)) });
+  return Object.assign({}, o, { pad: 'x'.repeat(Math.max(0, lengte - kaal)) });
 }
 function geldigeUitnodiging(inv) {
   return !!inv && typeof inv === 'object' && inv.nee !== true && typeof inv.id === 'string' && inv.id.length <= 24 &&
