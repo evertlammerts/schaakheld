@@ -326,13 +326,14 @@ function orderMoves(S, moves) {
 
 /* Every position any search looks at, counted, so a test can bound the work
    of a generator by what it does and not by how busy the machine is. */
-let NODES = 0;
+/* NODE_GRENS: boven dit aantal geven search en quiesce zonder tick meteen terug; wie hem zet, gooit de uitkomst weg */
+let NODES = 0, NODE_GRENS = Infinity;
 function nodesSearched() { return NODES; }
 
 /* tick: optional deadline probe from the timed search, so a capture storm at a
    leaf cannot run past the budget unnoticed */
 function quiesce(S, alpha, beta, depth, evalFn, tick) {
-  if (tick) { if (tick()) return alpha; } else NODES++;
+  if (tick) { if (tick()) return alpha; } else if (++NODES > NODE_GRENS) return alpha;
   const stand = evalFn(S);
   if (stand >= beta) return beta;
   if (stand > alpha) alpha = stand;
@@ -350,7 +351,7 @@ function quiesce(S, alpha, beta, depth, evalFn, tick) {
 
 function search(S, depth, alpha, beta, ply) {
   if (depth === 0) return quiesce(S, alpha, beta, 6, evalSTM);
-  NODES++;
+  if (++NODES > NODE_GRENS) return 0;
   const moves = orderMoves(S, legalMoves(S));
   if (moves.length === 0) return inCheck(S) ? -MATE + ply : 0;
   if (S.half >= 100) return 0;
@@ -700,7 +701,19 @@ function lossAfter(S, x, now, sign) {
    the opponent's best reply (with mate: true when it mates), take the capture
    that starts the loss, points the loss by the children's table, anyway
    whether every move loses at least a pawn. */
-function blunderCheck(S, m) {
+/* Het alarm komt voordat de zet op het bord staat: met een grens aan posities (ALARM_NODES, ongeveer een seconde op
+   het traagste apparaat) wacht het kind nooit lang, en is de grens op, dan is er voor die zet geen alarm. */
+const ALARM_NODES = 40000;
+function blunderCheck(S, m, grens) {
+  if (!grens) return blunderCheckZonderGrens(S, m);
+  const vorige = NODE_GRENS;
+  NODE_GRENS = Math.min(vorige, NODES + grens);
+  try {
+    const r = blunderCheckZonderGrens(S, m);
+    return NODES > NODE_GRENS ? null : r;
+  } finally { NODE_GRENS = vorige; }
+}
+function blunderCheckZonderGrens(S, m) {
   const sign = S.turn === 'w' ? 1 : -1, now = material(S) * sign, pointsNow = pointsOf(S) * sign;
   makeMove(S, m);
   const over = gameStatus(S).over, mate = over ? null : mateReply(S);
@@ -1727,6 +1740,6 @@ if (typeof module !== 'undefined') {
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
     winnableCaptures, slagVeld, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
-    repetitions, positionKey, pointsOf, forcedPoints, TABEL, lossStart, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
+    repetitions, positionKey, pointsOf, forcedPoints, TABEL, lossStart, ALARM_NODES, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
     POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };
 }

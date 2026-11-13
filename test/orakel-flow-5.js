@@ -1426,6 +1426,18 @@ async function orakelFlow5() {
     check('de strook (' + strook5(a) + ')', strook5(a) === 'Ik pak je toren op c1 (5 punten). Pak je terug, dan pak ik nog eens.');
   });
 
+  /* het alarm in een potje gebruikt de grens: bij de zwaarste zet van de reviewer geen alarm, de zet gaat gewoon door */
+  await regel('[5.4] het alarm in een potje heeft een grens aan posities: is die op, dan gaat de zet door zonder alarm', async function (check) {
+    const a = nieuwKind();
+    a.ev('setPref("guard", true)');
+    await startPotje(a, 2);
+    a.ev('session.S = parseFEN("1nb1kb1r/r2p3p/5p1n/pP2pPp1/PPpPq2P/N5P1/1B2N2R/1R1QKB2 w - - 0 1"); BD.mode = "move"; renderBoard()');
+    zet(a, 'h2h1');
+    await wacht(300);
+    check('geen alarm', !a.ziet('Wacht even!'));
+    check('de zet staat op het bord', a.get('session.S.hist.length') >= 1 && a.get('moveKey(session.S.hist[0].m)') === 'h2h1');
+  });
+
   /* ---------- 5.5: Trucendoos, mat in twee (T9 tot T11) ---------- */
 
   const MAT2_5 = 'k7/8/2K5/8/8/8/8/7R w - - 0 1';

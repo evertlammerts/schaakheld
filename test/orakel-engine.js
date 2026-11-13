@@ -154,6 +154,21 @@
     check('Pxa2, de toren (' + (t && E.moveKey(t)) + ')', !!t && E.moveKey(t) === 'c3a2');
   });
 
+  /* het alarm komt voor de zet op het bord staat: met een grens aan posities wacht het kind nooit lang; is de grens op,
+     dan geen alarm voor die zet */
+  regel('[5.4] het alarm kijkt naar hoogstens ALARM_NODES posities, en is de grens op, dan is er geen alarm', function (check) {
+    if (!check('er is een grens', typeof E.ALARM_NODES === 'number' && E.ALARM_NODES > 0)) return;
+    const S = E.parseFEN('1nb1kb1r/r2p3p/5p1n/pP2pPp1/PPpPq2P/N5P1/1B2N2R/1R1QKB2 w - - 0 1'), m = zet(S, 'h2h1');
+    check('zonder grens: het alarm', !!E.blunderCheck(S, m));
+    const n0 = E.nodesSearched(), r = E.blunderCheck(S, m, E.ALARM_NODES), n = E.nodesSearched() - n0;
+    check('met de grens: geen alarm', r === null);
+    check('en hoogstens de grens en wat de laatste stap nog telt (' + n + ')', n <= E.ALARM_NODES * 1.1);
+    check('de stand blijft onaangeroerd', E.toFEN(S) === '1nb1kb1r/r2p3p/5p1n/pP2pPp1/PPpPq2P/N5P1/1B2N2R/1R1QKB2 w - - 0 1');
+    const T = speel(E.newGame(), ['e2e4', 'e7e5', 'g1f3', 'b8c6']);
+    check('een gewone fout: het alarm blijft met de grens', !!E.blunderCheck(T, zet(T, 'f3e5'), E.ALARM_NODES));
+    check('en daarna zoekt de engine weer zonder grens', E.rootScores(S, 2).length > 0 && !!E.blunderCheck(S, m));
+  });
+
   /* Turbo's beste antwoord is zelf een slag: dan begint het verlies met die slag, ook als een andere slag meer wint */
   regel('[5.4] is Turbo\'s beste antwoord een slag, dan begint het verlies daar, ook als een andere slag meer wint', function (check) {
     const S = E.parseFEN('6k1/1b6/8/8/8/2n2N2/R7/6K1 b - - 0 1');

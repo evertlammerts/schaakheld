@@ -3975,7 +3975,7 @@ function coachEval(S, m) {
   const scored = rootScores(S, 2);
   const mine = scored.find(x => sameMove(x.m, m));
   /* "pas op" alleen voor een zet die zelf iets kost of mat toelaat */
-  const blunder = blunderCheck(S, m);
+  const blunder = blunderCheck(S, m, ALARM_NODES);
   const sterker = !blunder && mine && scored[0].score - mine.score >= 150;
   const book = bookMoves(S).has(moveKey(m));
   const piece = S.board[m.from].toLowerCase();
@@ -4544,7 +4544,7 @@ function onKidMove(m) {
   const S = session.S;
   /* online geen blunder-alarm: dat zou hulp zijn in een eerlijk potje */
   if (P.guard && !session.online) {
-    const bl = blunderCheck(S, m);
+    const bl = blunderCheck(S, m, ALARM_NODES);
     if (bl) {
       snd.bad();
       showModal('<div class="m-emoji">🐢❗</div><h2>Wacht even!</h2>' +
