@@ -7977,7 +7977,7 @@ function endGameOnline(st, drawTxt, xp, doelGehaald) {
   /* op de plek van de XP, zoals tegen Turbo; het weekdoel staat erbij als het meetelt */
   const vriendDoel = !!(P.weekGoal && P.weekGoal.kind === 'vriend');
   const week = !xp ? '<p>Dit potje telt niet mee: het was korter dan tien zetten.</p>' :
-    '<p class="ek-xp">+' + xp + ' XP' + (doelGehaald ? '. Je weekdoel is gehaald: +' + GOAL_XP + ' XP! 🎯' :
+    '<p class="ek-xp">+' + xp + '\u00a0XP' + (doelGehaald ? '. Je weekdoel is gehaald: +' + GOAL_XP + '\u00a0XP! 🎯' :
       vriendDoel ? '. Telt mee voor je weekdoel. 🎯' : '') + '</p>';
   /* waarom vandaag minder XP: in de strook, waar anders de titel van de kaart herhaald wordt; de kaart houdt de uitslag,
      wat verdiend is en wat het kind nu kan doen */
@@ -8078,7 +8078,7 @@ function endGame(st, stil) {
   later(() => {
     say(h);
     toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p>' +
-      (xp ? '<p class="ek-xp">+' + xp + ' XP</p>' : '<p>Dit potje telt niet mee: het was korter dan tien zetten.</p>') + '<!--trofeeen-->' +
+      (xp ? '<p class="ek-xp">+' + xp + '\u00a0XP</p>' : '<p>Dit potje telt niet mee: het was korter dan tien zetten.</p>') + '<!--trofeeen-->' +
       '<div class="ek-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
       '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', () => {
         $('mAgain').addEventListener('click', () => startGame(lvl));

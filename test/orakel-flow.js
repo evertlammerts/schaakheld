@@ -648,6 +648,24 @@ async function orakelFlow() {
     }
   });
 
+  await regel('[4.1] op de XP-regel van een eindkaart staat tussen een getal en XP een harde spatie, zodat de regel daar niet breekt', async function (check) {
+    const a = nieuwKind();
+    a.ev('setPref("weekGoal", { kind: "vriend", n: 1 })');
+    a.ev('MP = { room: "kamer-test-1", seat: "stoel-test-1", host: true, myColor: "w", gameNo: 1, revMine: false, revTheirs: false, ' +
+      'peerName: "Daan", open: false, weg: false, gameId: "potje-test-1", peerOn: true }; mpBeginGame(); var S = session.S; ' +
+      'for (var i = 0; i < 24; i++) { var ms = legalMoves(S); makeMove(S, ms[i % ms.length]); } endGame({ over: true, result: "b", reason: "mat" });');
+    await wacht();
+    const vriend = a.get('document.getElementById("eindkaart").innerHTML');
+    check('testopzet: de kaart van een potje tussen kinderen met het weekdoel', /\+30 XP\. Je weekdoel is gehaald: \+60 XP!/.test(vriend));
+    check('op die kaart geen gewone spatie tussen een getal en XP', !/\d XP/.test(vriend));
+    const b = nieuwKind();
+    b.ev('MP = null; startGame(1); endGame({ over: true, result: "w", reason: "mat" });');
+    await wacht(3000);
+    const turbo = b.get('document.getElementById("eindkaart").innerHTML');
+    check('testopzet: de kaart tegen Turbo met XP', /class="ek-xp"/.test(turbo));
+    check('op de kaart tegen Turbo ook niet', !/\d XP/.test(turbo) && /\d XP/.test(turbo));
+  });
+
   await regel('[1.3] Revanche na afloop begint meteen een nieuw potje, zonder vraag', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
     a.tik('verderKaart');
