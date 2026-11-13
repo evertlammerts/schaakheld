@@ -4333,7 +4333,7 @@ function renderFriends() {
       g ? (beurt ? (g.S.hist.length ? naam + ' heeft gezet.' : 'Jij bent aan zet.') : stand[id].stil ? escHtml(stilZin(f.naam, stand[id].dagen)) :
         naam + ' is aan zet · ' + dagWoord(stand[id].dagen)) : bezetZin ? 'Weer uitnodigen kan als ' + naam + ' SchaakHeld opent.' :
       'vrienden sinds ' + friendSince(f);
-    const knop = wacht ? '<button class="btn plain small" data-cancel="' + id + '">Stop</button>' :
+    const knop = wacht ? '<button class="btn plain small" data-cancel="' + id + '">Stop</button>' : bezetZin ? '' :
       uitd ? (uitd.mijnUitdaging ? '' : '<button class="btn plain small" data-uitdja="' + uitd.gameId + '">Ja, spelen!</button>') :
       g ? '<button class="btn plain small" data-speel="' + id + '">' + (beurt ? 'Jij bent aan zet' : 'Bekijk') + '</button>' :
       '<button class="btn plain small" data-invite="' + id + '">Uitnodigen</button>';
@@ -4924,7 +4924,7 @@ function zinOpenen() {
   return 'Er is nu geen verbinding. ' + (MP.S.turn === MP.myColor ? 'Je kunt wel je zet doen.' : mpNaam() + ' is aan zet.');
 }
 /* een zet zonder verbinding: hij staat hier, en de potjesbus krijgt hem zodra er weer verbinding is */
-function zinBodZonderNet() { return 'Je biedt ' + mpNaam() + ' remise aan zodra er weer verbinding is.'; }
+function zinBodZonderNet() { return 'Je remise-aanbod is bewaard. Heb je weer verbinding, dan gaat het naar ' + mpNaam() + '.'; }
 function zinZonderNet() { return 'Je zet is bewaard op ' + ditApparaat() + '. Heb je weer verbinding, dan gaat hij naar ' + mpNaam() + '.'; }
 /* de vriend is er nu niet: wat de strook zegt, op de eigen beurt en daarna */
 function zinWeg() {
@@ -5197,7 +5197,7 @@ function toonBezet(fid, r) {
   closeModal();
   showModal('<div class="m-emoji">🐢</div><p>' + naam + (r.nee ? ' weet nog niet wat je op de uitdaging zei.' : ' weet nog niet hoe jullie potje afliep.') +
     ' Opent ' + naam + ' SchaakHeld, dan kun je weer uitnodigen.</p><div class="m-btns"><button class="btn sun" id="bezetOk">Oké</button></div>',
-    () => $('bezetOk').addEventListener('click', closeModal), true);
+    () => $('bezetOk').addEventListener('click', closeModal));
 }
 function aantalLopend() {
   const g = samenRauw() || {};
@@ -5256,7 +5256,15 @@ function uitdagingJa(gameId) {
   if (r.ja !== 'stuur') bijSamen(gameId, { ja: 'lees' });
   bijSamen(gameId, { neeWacht: false });
   jaWacht = gameId;
-  showModal('<div class="m-emoji">🤝</div><h2>Verbinden…</h2><p>Even wachten… ⏳</p>', null, false, 'mpwacht');
+  /* Stoppen voordat het ja verstuurd is, laat de uitdaging op de kaart; daarna staat het ja, en het potje komt zodra het bevestigd is */
+  showModal('<div class="m-emoji">🤝</div><h2>Verbinden…</h2><p>Even wachten… ⏳</p>' +
+    '<div class="m-btns"><button class="btn plain" id="jaStop">Stoppen</button></div>', () => $('jaStop').addEventListener('click', () => {
+      jaWacht = null;
+      closeModal();
+      const r2 = (samenRauw() || {})[gameId];
+      if (r2 && r2.ja === 'lees') bijSamen(gameId, { ja: null });
+      thuisVerversen();
+    }), false, 'mpwacht');
   const nogNiet = () => {
     if (jaWacht !== gameId) return;
     jaWacht = null;

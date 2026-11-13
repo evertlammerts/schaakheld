@@ -1397,11 +1397,13 @@ async function orakelTwee6() {
     tikTekst(mees, 'Naar huis');
     await wacht();
     const uitnodigingen = JSON.stringify(__server.buses);
-    tikInRij(mees, fid, 'Uitnodigen');
+    mees.tik('tabVrienden');
+    check('de rij zegt het, en biedt geen Uitnodigen', /Weer uitnodigen kan als Fien SchaakHeld opent\./.test(vriendRijTekst(mees, fid)) && !/Uitnodigen/.test(vriendRijTekst(mees, fid)));
+    mees.ev('inviteFriend(' + JSON.stringify(fid) + ')');
     await wacht();
-    check('de zin in een venster', /Fien weet nog niet hoe jullie potje afliep\. Opent Fien SchaakHeld, dan kun je weer uitnodigen\./.test(mees.scherm()));
+    check('wie toch uitnodigt (Nieuw potje met), krijgt de zin in een venster met één Oké, zonder kruisje',
+      /Fien weet nog niet hoe jullie potje afliep\. Opent Fien SchaakHeld, dan kun je weer uitnodigen\./.test(mees.scherm()) && kanTikken(mees, 'Oké') && !mees.ziet('id="mClose"'));
     await vensterWeg(mees);
-    check('de rij zegt het ook', /Weer uitnodigen kan als Fien SchaakHeld opent\./.test(vriendRijTekst(mees, fid)));
     check('geen uitnodiging verstuurd, en de opgave staat nog in de bus van Mees', JSON.stringify(__server.buses) === uitnodigingen &&
       (await busZegt(mees, fid, true) || {}).uitslag === 'opgave');
     stopApparaat(mees);
@@ -1432,11 +1434,12 @@ async function orakelTwee6() {
     fien = await opent(fien);
     tikTekst(fien, 'Nu niet');
     await wacht();
-    tikInRij(fien, fid, 'Uitnodigen');
+    fien.tik('tabVrienden');
+    check('de rij zegt het, en biedt geen Uitnodigen', /Weer uitnodigen kan als Mees SchaakHeld opent\./.test(vriendRijTekst(fien, fid)) && !/Uitnodigen/.test(vriendRijTekst(fien, fid)));
+    fien.ev('inviteFriend(' + JSON.stringify(fid) + ')');
     await wacht();
-    check('de zin in een venster', /Mees weet nog niet wat je op de uitdaging zei\. Opent Mees SchaakHeld, dan kun je weer uitnodigen\./.test(fien.scherm()));
+    check('wie toch uitnodigt, krijgt de zin in een venster', /Mees weet nog niet wat je op de uitdaging zei\. Opent Mees SchaakHeld, dan kun je weer uitnodigen\./.test(fien.scherm()));
     await vensterWeg(fien);
-    check('de rij zegt het ook', /Weer uitnodigen kan als Mees SchaakHeld opent\./.test(vriendRijTekst(fien, fid)));
     check('het Nu niet staat nog in de bus van Fien', (await busZegt(fien, fid, true) || {}).uitslag === 'nee');
     stopApparaat(fien);
     mees = herlaad(mees);
@@ -2449,7 +2452,7 @@ async function orakelTwee6() {
     await biedRemise(mees);
     await zetUit(RUSTIG, mees);
     await wacht();
-    check('de strook zegt dat het aanbod gaat zodra er verbinding is', /zodra er weer verbinding is/.test(zegt(mees)) && /remise/.test(zegt(mees)));
+    check('de strook zegt dat het aanbod bewaard is en gaat zodra er verbinding is', /Je remise-aanbod is bewaard\. Heb je weer verbinding, dan gaat het naar Fien\./.test(zegt(mees)));
     schuifKlok(3 * DAG);
     const tNet = Date.now();
     weerNetwerk(mees);
@@ -2628,5 +2631,22 @@ async function orakelTwee6() {
     weerNetwerk(mees);
     await tijd(20000);
     check('met verbinding is de zin weg', !/geen verbinding/.test(tekstVan(mees, 'verder')) && /Jij bent aan zet/.test(tekstVan(mees, 'verder')));
+  });
+
+  await regel('[6.4] het wachtvenster na Ja, spelen! heeft Stoppen: wie stopt voordat het ja verstuurd is, houdt de uitdaging op de kaart', async function (check) {
+    const { mees, fien, fid } = await uitdagingVanMees();
+    const echt = fetch;
+    fetch = function (url, o) { return /\/v1\/bus\/check$/.test(url) ? new Promise(function () {}) : echt(url, o); };
+    try {
+      tikTekst(fien, 'Ja, spelen!');
+      await wacht(1000);
+      check('testopzet: Fien wacht', /Verbinden/.test(fien.scherm()));
+      check('het venster heeft Stoppen', kanTikken(fien, 'Stoppen'));
+      tikTekst(fien, 'Stoppen');
+      await wacht(1000);
+    } finally { fetch = echt; }
+    check('het venster is weg, en de uitdaging staat op de kaart', !fien.open() && /Mees daagt je uit/.test(tekstVan(fien, 'verder')) &&
+      kanTikken(fien, 'Ja, spelen!'));
+    check('er ging geen ja de bus in', !(await busZegt(fien, fid, true)));
   });
 }

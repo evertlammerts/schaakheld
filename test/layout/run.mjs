@@ -27,7 +27,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.7', '4.8', '4.12', '6.8', '6.9']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.7', '4.8', '4.12', '6.4', '6.8', '6.9']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -912,6 +912,25 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       }
       const v = await page.evaluate(() => (document.getElementById('verder') || {}).textContent || '');
       check(n, 'de kaart is het stille potje met de uitweg', /heeft al een week niet gezet/.test(v) && /Wacht je liever niet/.test(v));` });
+}
+
+/* plan.md 6.4: het venster als het paar bezet is: het plaatje bovenaan, de zin eronder, één Oké en geen kruisje */
+const BEZET = { schaakheld1: ALLEEN_MAXI, 'schaakheld-samen': JSON.stringify({ v: 1, games: { potjevanvriendmaxi01:
+  Object.assign(bewaardVriendenpotje('vriendmaxi01', 'Maximiliaantje', 0, ['d2d4', 'd7d5'], false),
+    { room: null, seat: null, result: { kind: 'opgave', by: 'w', ply: 2 }, shown: true }) } }) };
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[6.4] ' + W + 'x' + H + ': het venster als het paar bezet is: het plaatje boven de zin, één Oké, geen kruisje, en alles in beeld';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(BEZET)});
+      await page.waitForTimeout(1500);
+      await page.evaluate(() => inviteFriend('vriendmaxi01'));
+      await page.waitForTimeout(500);
+      const plaatje = await rect('#modalBox .m-emoji'), zin = await rect('#modalBox p'), doos = await rect('#modalBox'), ok = await rect('#bezetOk');
+      check(n, 'het venster met de zin', !!zin && /weet nog niet hoe jullie potje afliep/.test(await page.evaluate(() => document.getElementById('modalBox').textContent)));
+      check(n, 'het plaatje boven de zin', !!plaatje && !!zin && plaatje.bottom <= zin.top + 0.5);
+      check(n, 'geen kruisje', !(await rect('#mClose')));
+      check(n, 'de doos en Oké in beeld', binnen(doos, ${W}, ${H}) && binnen(ok, ${W}, ${H}));` });
 }
 
 /* plan.md 6.9 met het blad: elke rij is minstens 56 hoog, de titel staat boven waar het ding staat, en niets is breder dan het scherm */
