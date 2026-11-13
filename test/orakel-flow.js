@@ -1,5 +1,5 @@
-/* Orakel, flowtests: de regels van plan.md voor increment 1, 2 en 3, elk op
-   een eigen verse app-instantie (test/harnas.js). Elke testnaam begint met
+/* Flowtests: gedrag dat binnen één app te zien is, elk op een eigen verse
+   app-instantie (test/harnas.js). Elke testnaam begint met
    zijn regelnummer. Een kind tikt: het bord via onCell, knoppen op wat erop
    staat. Een opdracht klaarzetten gebeurt zoals de bestaande tests het doen. */
 
@@ -117,7 +117,7 @@ function wRij(fen, k, type) {
 function past(rij, t) { t = t.replace(/\s+/g, ' ').replace(/ ([.,:;!?])/g, '$1').trim(); return rij instanceof RegExp ? rij.test(t) : t === rij; }
 
 async function orakelFlow() {
-  /* ================= increment 1 ================= */
+  /* ================= [1.x] bewaren en verdergaan ================= */
 
   await regel('[1.1] na elke halve zet staat het potje bewaard, in de afgesproken vorm', async function (check) {
     const a = nieuwKind();
@@ -459,7 +459,7 @@ async function orakelFlow() {
     check('verder spelen geeft de echte stand, niet de droom', a.fen() === echt && !a.get('!!(session && session.cloud)'));
   });
 
-  /* regel 4.13: één potje tegen Turbo per niveau; een niveau kiezen vraagt nooit iets */
+  /* één potje tegen Turbo per niveau; een niveau kiezen vraagt nooit iets */
   const niveauKnop = function (a, n) { return a.el('modalBox').querySelectorAll('[data-lvl="' + n + '"]')[0]; };
   const kiezerOpen = async function (a) {
     if (heeftKlik(a, 'spelTurbo')) { naarSpelen(a); a.tik('spelTurbo'); } else a.ev('startGameFlow()');
@@ -610,7 +610,7 @@ async function orakelFlow() {
     check('geen plaatje in de kaart', !/😴|🐢|🚀/.test(t));
   });
 
-  /* steekproef: een uitleg onder het bord hoort bij zijn eigen opdracht */
+  /* een uitleg onder het bord hoort bij zijn eigen opdracht */
   await regel('[2.1] de uitleg onder het bord van een oefening staat niet onder het bord van een potje erna', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
@@ -1001,7 +1001,7 @@ async function orakelFlow() {
     check('een tab', bovenaan());
   });
 
-  /* B24: wat een verlaten opdracht nog had klaarstaan, mag het nieuwe potje niet raken */
+  /* wat een verlaten opdracht nog had klaarstaan, mag het nieuwe potje niet raken */
   async function nieuwPotjeIsSchoon(check, a) {
     /* meteen een nieuw potje, voordat de keten van de opdracht afloopt */
     if (heeftKlik(a, 'spelTurbo')) a.tik('spelTurbo'); else a.ev('startGameFlow()');
@@ -1062,7 +1062,7 @@ async function orakelFlow() {
   });
 
   /* Koning ontsnapt: een foute zet waarop Turbo niet mat geeft en niets slaat,
-     zodat de app zijn antwoord moet benoemen (B01) */
+     zodat de app zijn antwoord moet benoemen */
   function fouteZetZonderMat(fen, antwoorden) {
     const S = parseFEN(fen);
     for (const m of legalMoves(S)) {
@@ -1088,7 +1088,7 @@ async function orakelFlow() {
   const matTaak = KONING_POOL.find(function (x) { return x.type === 'mat1'; });
   /* het laatste veld: deze vorm bevriest vandaag al niet, dus de regel staat voor hem als gebouwd */
   const koningGevallen = [
-    /* hier noemt de app Turbo's zet nadat hij al gespeeld is: B01 */
+    /* hier noemt de app Turbo's zet nadat hij al gespeeld is */
     ['een schaak-opdracht, Turbo antwoordt rustig', 'schaak', schaakTaak.fen, schaakTaak.answers, fouteZetZonderMat(schaakTaak.fen, schaakTaak.answers), null, false],
     ['een matdreiging, Turbo geeft mat', 'mat1', matTaak.fen, matTaak.answers,
       moveKey(legalMoves(parseFEN(matTaak.fen)).find(function (m) { return matTaak.answers.indexOf(moveKey(m)) < 0; })), null, true],
@@ -1098,7 +1098,7 @@ async function orakelFlow() {
   const uitleg = function (a) {
     return ['bubble', 'strook', 'onder'].filter(function (id) { return zichtbaar(a, id); }).map(function (id) { return tekstVan(a, id); }).join(' ').trim();
   };
-  /* De woorden van de uitleg horen bij regel 5.5; hier: niets bevriest, Turbo's
+  /* Hier niet de woorden van de uitleg, wel wat er gebeurt: niets bevriest, Turbo's
      antwoord staat op het bord, een uitleg vervangt de openingszin, en de
      opdracht gaat door (nog een poging, of het antwoord staat er). */
   for (const geval of koningGevallen) {
@@ -1183,7 +1183,7 @@ async function orakelFlow() {
     check('daarna de melding van Pauze', !a.open() && /Bewaard/.test(toastTekst(a)));
   });
 
-  /* ================= increment 2 ================= */
+  /* ================= [2.x] het speelscherm: bord, strook en uitleg ================= */
 
   await regel('[2.3] ⋯ houdt Remise aanbieden, Opgeven en de Puntenwijzer; de hulpjes staan onder het bord', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5']) });
@@ -1236,7 +1236,7 @@ async function orakelFlow() {
     check('verborgen bij gelijk', !zichtbaar(a, 'materiaal') || !/\+\d/.test(tekstVan(a, 'materiaal')));
   });
 
-  /* tekst.md, bijlage: per soort opdracht de vraag in de strook en de zin onder het bord */
+  /* per soort opdracht de afgesproken vraag in de strook en de zin onder het bord */
   const VRAGEN = {
     'scan.attacked': ['Welke stukken van jou valt Turbo aan?', 'Tik ze allemaal aan. Een stuk is aangevallen als een groen stuk het kan slaan als Turbo aan zet is.'],
     'scan.capture': ['Welke groene stukken kun jij nu slaan?', 'Tik ze allemaal aan. Kijk bij al je witte stukken wat ze kunnen pakken.'],
@@ -1266,7 +1266,7 @@ async function orakelFlow() {
       .replace(/\{[a-z]+\}/g, '.+') + '$');
   };
 
-  await regel('[2.4] de vragen en de zinnen onder het bord zijn die van tekst.md, voor alle soorten opdrachten', async function (check) {
+  await regel('[2.4] de vragen en de zinnen onder het bord zijn de afgesproken teksten, voor alle soorten opdrachten', async function (check) {
     const a = nieuwKind();
     const app = a.get('JSON.stringify(OPDRACHTEN)');
     check('de app heeft de tabel', !!app);
@@ -1275,7 +1275,7 @@ async function orakelFlow() {
       check(k + ': de vraag', !!t[k] && t[k][0] === VRAGEN[k][0]);
       check(k + ': de zin onder het bord', !!t[k] && (t[k][1] || '') === VRAGEN[k][1]);
     }
-    check('geen soorten die tekst.md niet kent', Object.keys(t).every(function (k) { return k in VRAGEN; }));
+    check('geen soorten zonder afgesproken tekst', Object.keys(t).every(function (k) { return k in VRAGEN; }));
   });
 
   for (const soort of ['scan', 'best3', 'trucs', 'koning']) {
@@ -1401,7 +1401,7 @@ async function orakelFlow() {
     const kaart = tekstVan(a, 'eindkaart');
     check('een kaart, geen venster', zichtbaar(a, 'eindkaart') && !a.open());
     check('Revanche! en Naar huis', /Revanche!/.test(kaart) && /Naar huis/.test(kaart));
-    check('het resultaat (learning.md 3: "Gewonnen!")', /Gewonnen!/.test(kaart));
+    check('het resultaat zegt Gewonnen!', /Gewonnen!/.test(kaart));
     check('wat er verdiend is', /XP/.test(kaart));
     check('nieuwe trofeeën in de kaart, niet als melding', namen.length > 0 && namen.every(function (n) {
       return kaart.indexOf(n) >= 0 && toastTekst(a).indexOf(n) < 0;
@@ -1504,7 +1504,7 @@ async function orakelFlow() {
     return await zagOoit(function () { return a.get('BD.mode') === 'predict'; }, 3000);
   }
 
-  /* F2: bij elke truc van de Trucendoos horen de poging en de uitleg bij die truc, niet bij een andere */
+  /* bij elke truc van de Trucendoos horen de poging en de uitleg bij die truc, niet bij een andere */
   const TRUC_WOORD = { vork: /vork/i, penning: /penning/i, spies: /spies/i, aftrek: /aftrek/i, mat1: /Dit was mat: [^.]+\./, mat2: /Daarna kon Turbo de mat niet meer tegenhouden/ };
   for (const type of Object.keys(TRUC_WOORD)) {
     await regel('[2.4] Trucendoos, ' + type + ': de foute poging en de uitleg na twee missers horen bij deze truc', async function (check) {
@@ -1964,7 +1964,7 @@ async function orakelFlow() {
     check('daarna telt een tik wel', a.get('session.picked') === 1 && a.get('actionBtns.confirm.disabled') === false);
   });
 
-  /* F2: met een voorkeur voor de truc van de opdracht; een zet die twee trucs tegelijk is, toont die van de opdracht */
+  /* met een voorkeur voor de truc van de opdracht; een zet die twee trucs tegelijk is, toont die van de opdracht */
   const TWEE_TRUCS = [
     /* het paard naar e6: aftrekschaak van de loper op h8 en een vork op de torens; de opdracht is een vork */
     ['vork', '3r1r1k/8/8/8/3N4/8/8/B5K1 w - - 0 1', /vork/i],
@@ -2043,7 +2043,7 @@ async function orakelFlow() {
     check('twee', /Er zijn twee goede zetten\.$/.test(opdracht('6k1/8/8/8/8/8/3R2PP/r5K1 w - - 0 1')));
   });
 
-  /* ================= increment 3 ================= */
+  /* ================= [3.x] thuis en Ik: de kaart, het weekdoel, het level en koppelen ================= */
 
   const NU = new __EchteDate('2026-11-12T16:00:00').getTime();
   const dagenTerug = function (n) { return new __EchteDate(NU - n * 86400000).toISOString().slice(0, 10); };
@@ -2168,7 +2168,7 @@ async function orakelFlow() {
     check('De Beste Zet voor de Trucendoos', r.rule === 'R6' && r.action.kind === 'best3');
   });
 
-  /* learning.md 1.7: zolang de poort "5 perfecte speurrondes" open is, kiest R6
+  /* zolang de poort "5 perfecte speurrondes" open is, kiest R6
      eerst Speurogen, ook als dat de laatst geoefende is; R7 speelt dan L* */
   await regel('[3.1] de poort "5 perfecte speurrondes" staat open: R6 kiest Speurogen, R7 speelt tegen Turbo', async function (check) {
     zetDatum('2026-11-12T16:00:00');
@@ -2208,7 +2208,7 @@ async function orakelFlow() {
     check('Speurogen begint', opSpeelscherm(b) && b.get('session.kind') === 'scan' && /\b1 van 5/.test(tekstVan(b, 'roundChip')));
   });
 
-  /* learning.md 1.4: lastKind wordt gezet als een rondje af is, of het kind de kaart volgde of niet */
+  /* lastKind wordt gezet als een rondje af is, of het kind de kaart volgde of niet */
   await regel('[3.2] na een rondje Speurogen stelt de kaart een potje voor, niet weer Speurogen', async function (check) {
     zetDatum('2026-11-12T16:00:00');
     const a = nieuwKind();
@@ -2382,7 +2382,7 @@ async function orakelFlow() {
     check('de oude tellers staan er nog', !!opgeslagen1.cnt['c.pat.penning'] && !!opgeslagen1.cnt['c.winsL3']);
   });
 
-  /* ---------- increment 3, na de review: spelen, herladen, de kaart lezen ---------- */
+  /* ---------- spelen, herladen, de kaart lezen ---------- */
 
   const opgeslagenLoc = function (a) { const d = opgeslagen(a, 'schaakheld1'); return (d && d.loc) || {}; };
 
@@ -2810,7 +2810,7 @@ async function orakelFlow() {
     check('in Instellingen: "Oceaan gekozen" in het venster', a.get('P.theme') === 'oceaan' && /Oceaan gekozen/.test(a.scherm()));
   });
 
-  /* ================= increment 4 (wat op een apparaat te zien is) ================= */
+  /* ================= [4.x] samen spelen en vrienden, op één apparaat ================= */
 
   const koppelInvoer = [
     ['met streepjes', 'lang-beloven-kaal-neer'],
@@ -2904,7 +2904,7 @@ async function orakelFlow() {
   }
 
 
-  /* regel 4.12: een vriend is een rij van twee regels; weghalen zit achter ⋯ */
+  /* een vriend is een rij van twee regels; weghalen zit achter ⋯ */
   const metVriend = function (a, id, naam) {
     a.ev('setFriend(' + JSON.stringify(id) + ', { naam: ' + JSON.stringify(naam) + ', k: "geheimgeheimgeheimgeheimgeheim-' + id + '", since: Date.now(), host: true, weg: false })');
   };

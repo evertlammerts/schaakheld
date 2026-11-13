@@ -196,7 +196,7 @@ async function orakelFlow6() {
     check('geen wachtscherm', !/Wachten op/.test(a.scherm()));
   });
 
-  /* ================= de kaart en het blad: wat de recensent van stap 8 nog ongetest vond ================= */
+  /* ================= de kaart en het blad ================= */
 
   const fien = { fid: 'vriendfien1', naam: 'Fien' }, sem = { fid: 'vriendsem01', naam: 'Sem' };
   await regel('[6.8] een potje waarin het kind zelf aan zet is, heet nooit stil, ook na tien dagen; na vijftien dagen zonder zet van de vriend heet het twee weken', async function (check) {

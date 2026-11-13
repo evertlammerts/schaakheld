@@ -5,7 +5,7 @@
    herstart na: de oude instantie sterft (haar timers lopen niet meer af, haar
    sockets gaan dicht) en een nieuwe start op dezelfde opslag.
 
-   Regels uit plan.md die nog niet gebouwd zijn staan in de suite als
+   Gedrag dat nog niet gebouwd is, staat in de suite als
    nogNiet(naam, blok): het blok moet mislukken (een controle faalt of er
    valt een uitzondering), dan blijft de suite groen; slaagt het, dan wordt
    de suite rood. Een gebouwde regel heet regel(naam, blok), met hetzelfde

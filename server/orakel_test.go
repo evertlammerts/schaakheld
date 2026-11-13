@@ -16,7 +16,7 @@ import (
 	"github.com/coder/websocket"
 )
 
-/* Regels uit plan.md die nog niet gebouwd zijn: hun blok moet falen. Faalt
+/* Een test voor gedrag dat nog niet gebouwd is: zijn blok moet falen. Faalt
    het, dan logt de test "NOG NIET GEBOUWD" en is hij groen; slaagt het, dan
    is hij rood, zodat een gebouwde regel niet als "nog niet" blijft staan.
    Een gebouwde regel roept het blok rechtstreeks aan met t. Go's eigen
@@ -577,7 +577,7 @@ func TestOrakelPotjeGeenOpsomming(t *testing.T) {
 	}(t)
 }
 
-/* ---------- V2 en V6: een staat per paar, alleen voorwaardelijk te schrijven ---------- */
+/* ---------- [V2] en [V6]: een staat per paar, alleen voorwaardelijk te schrijven ---------- */
 
 // de versie zoals elk apparaat hem zelf uitrekent: sha256 van de tekst van
 // het briefje, in kleine hex

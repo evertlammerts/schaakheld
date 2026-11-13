@@ -5,7 +5,7 @@ function ok(name, cond) {
   print((cond ? 'PASS' : 'FAIL') + '  ' + name);
 }
 
-/* "Nu niet" legt een briefje in de bus van wie uitnodigde (regel 4.6); de tests hieronder tellen de
+/* "Nu niet" legt een briefje in de bus van wie uitnodigde; de tests hieronder tellen de
    bussen van hun eigen briefjes, dus dat antwoord gaat na de tik weer weg */
 async function nuNiet() {
   var voor = Object.keys(__server.buses);
@@ -196,7 +196,7 @@ puzzleAttempt(pRa2);
 drainTimers();
 ok('stuk: weggezet = 3 sterren met uitleg', session.phase === 'review' && session.earned - kEarned === 3 &&
   __els.taskBox.innerHTML.indexOf('Weggezet') >= 0);
-/* gedekt alleen als slaan Turbo niets oplevert (de schaakcoach): Lxa1 Txa1 wint hem 2 punten, d3 dekt het paard wel echt */
+/* gedekt alleen als slaan Turbo niets oplevert: Lxa1 Txa1 wint hem 2 punten, d3 dekt het paard wel echt */
 ok('stuk: dekken wordt herkend', (stukHow(parseFEN('4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1'),
   legalMoves(parseFEN('4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1')).find(function (m) { return alg(m.from) === 'd2' && alg(m.to) === 'd3'; }),
   { sq: sqFromAlg('e4') }) || '').indexOf('Gedekt') >= 0);
@@ -274,7 +274,7 @@ goHome();
 startOpening('coach', null);
 ok('coach: meters zichtbaar', !__els.meters.classList.contains('hidden') && __els.meters.innerHTML.indexOf('Centrum') >= 0);
 var cS = session.S;
-/* één lof, in de volgorde van tekst.md: het midden gaat voor de boekzet */
+/* één lof, in de afgesproken volgorde: het midden gaat voor de boekzet */
 ok('coach: boekzet e4 = 3 sterren', coachEval(cS, opM('e2e4')).stars === 3 && coachEval(cS, opM('e2e4')).msg.indexOf('midden') >= 0);
 ok('coach: a3 = 1 ster met tip', coachEval(cS, opM('a2a3')).stars === 1 && coachEval(cS, opM('a2a3')).msg.indexOf('sterker') >= 0);
 ok('coach: bord onaangeraakt door de beoordeling', cS.hist.length === 0);
@@ -330,7 +330,7 @@ ok('dreiging: in schaak geen dreigingsopdracht', threatDetails(parseFEN('6k1/8/8
 
 /* ---------- De Beste Zet: even rondes zijn de valstrik-vraag ---------- */
 /* een vaste reeks toevalsgetallen: de valstrik-vraag heeft een zoekbudget en
-   geeft soms niets, dan komt een keuze uit drie (fix list item 27) */
+   geeft soms niets, dan komt een keuze uit drie */
 var best3Random = Math.random, best3Zaad = 27;
 Math.random = function () {
   best3Zaad = (best3Zaad + 0x6D2B79F5) >>> 0;
@@ -1210,7 +1210,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await linkShareFlow();
   ok('link A: account aangemaakt', !!ACC && geldigAcc(ACC));
   var mHtml = __els.modalBox.innerHTML;
-  /* de code staat als vier genummerde woorden, nooit met streepjes aan elkaar (regel 4.8) */
+  /* de code staat als vier genummerde woorden, nooit met streepjes aan elkaar */
   var linkWoorden = (mHtml.match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
   ok('link A: QR en woordcode getoond', mHtml.indexOf('<svg') >= 0 && linkWoorden.length === 4);
   var code = linkWoorden.join('-');
@@ -1621,7 +1621,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   closeModal();
   mpStop();
 
-  /* ← Home midden in een potje gaat naar huis en houdt potje en verbinding (regel 4.2) */
+  /* ← Home midden in een potje gaat naar huis en houdt potje en verbinding */
   MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false,
     revTheirs: false, peerName: 'Fien', open: false, weg: false, gameId: 'potje-test-1' };
   mpBeginGame();
@@ -2007,7 +2007,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('uitnodiging: druk = niet gemarkeerd, later opnieuw', seenInv.length === 0);
   await friendPoll();
   for (i = 0; i < 30; i++) await null;
-  /* regel 4.5: wat binnenkwam tijdens een rondje, wacht op de Verder-kaart, met beide antwoorden */
+  /* wat binnenkwam tijdens een rondje, wacht op de Verder-kaart, met beide antwoorden */
   ok('uitnodiging: en dan op de Verder-kaart, zonder venster', __els.verder.innerHTML.indexOf('Mila wil spelen') >= 0 &&
     __els.overlay.classList.contains('hidden') && seenInv.length === 0);
   var voorKaart = Object.keys(__server.buses);
