@@ -794,6 +794,13 @@
   .w-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px;
     border: 1.5px solid rgba(23, 69, 111, .25); background: var(--surface); font: inherit; font-weight: 700; color: var(--text); }
   .w-chip b { color: var(--text-quiet); pointer-events: none; }
+  /* een getypt woord is een knop die weghaalt: gevuld, met een kruisje */
+  button.w-chip { background: var(--selected-soft); }
+  .w-chip .w-weg { pointer-events: none; color: var(--text-quiet); font-size: 16px; }
+  /* de eigen code om voor te lezen: een blok, geen knoppen */
+  .code-woorden { background: var(--surface-sunk); border-radius: var(--r-md); padding: 4px; }
+  .code-woorden .w-chip { border: none; background: transparent; justify-content: center; font-size: var(--fs-lg); }
+  .code-woorden .w-chip b { font-size: var(--fs-cap); }
   .btn.hidden { display: none; }
   .w-fout { align-self: center; color: var(--text); font-size: var(--fs-sm); line-height: 1.3; }
   .w-suggs { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; height: 44px; margin: 8px 0; }

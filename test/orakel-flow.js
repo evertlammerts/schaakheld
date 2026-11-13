@@ -2736,6 +2736,16 @@ async function orakelFlow() {
     check('de zin voor vrienden', /'tafle' ken ik niet\. Vraag het je maatje nog eens\./.test(a.scherm()));
   });
 
+  await regel('[4.8] een getypt woord laat zien dat een tik het weghaalt', async function (check) {
+    const a = nieuwKind();
+    a.ev('mpWordFlow()');
+    await wacht(200);
+    const w = a.get('WOORDEN[100]');
+    vulIn(a, a.el('mpInp'), w + ' ');
+    const chip = a.el('mpChips').querySelectorAll('.w-chip')[0];
+    check('een kruisje en een label', !!chip && /×/.test(a.doc.__tekst(chip)) && !!chip._attrs && chip._attrs['aria-label'] === 'haal ' + w + ' weg');
+  });
+
   await regel('[4.8] terwijl de app zoekt, gaat Verbind! niet weer aan, ook niet als het kind een woord vervangt', async function (check) {
     const a = nieuwKind();
     a.ev('mpWordFlow()');

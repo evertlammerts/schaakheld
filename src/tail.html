@@ -606,7 +606,7 @@ async function linkShareFlow() {
   showModal('<div class="m-emoji">🔑</div><h2>Nieuw apparaat koppelen</h2>' +
     (serverOk
       ? '<p id="linkUitleg">Tik op het nieuwe apparaat op Ik heb al een profiel. Typ daar deze vier woorden, of scan de code.</p>' +
-        '<div class="w-chips vier" id="linkWoorden">' + w.map((x, i) => '<span class="w-chip"><b>' + (i + 1) + '</b> ' + x + '</span>').join('') + '</div>' +
+        '<div class="w-chips vier code-woorden" id="linkWoorden">' + w.map((x, i) => '<span class="w-chip"><b>' + (i + 1) + '</b> ' + x + '</span>').join('') + '</div>' +
         '<p id="linkTijd"></p>'
       : '<p><small>Geen verbinding met de server: alleen de QR-route werkt nu.</small></p>') +
     '<div id="linkQR">' + QR.qrSvg(linkURL()) + '</div>' +
@@ -655,7 +655,8 @@ function woordInvoer(n, ids, onbekend) {
   };
   const teken = () => {
     $(ids.chips).classList.toggle('vier', n === 4);
-    $(ids.chips).innerHTML = gekozen.map((w, i) => '<button class="w-chip" data-i="' + i + '"><b>' + (i + 1) + '</b> ' + w + '</button>').join('');
+    $(ids.chips).innerHTML = gekozen.map((w, i) => '<button class="w-chip" data-i="' + i + '" aria-label="haal ' + w + ' weg"><b>' + (i + 1) + '</b> ' + w +
+      '<span class="w-weg">×</span></button>').join('');
     /* alles erin: het toetsenbord mag weg, zodat de knop in beeld komt */
     if (gekozen.length === n && document.activeElement === $(ids.inp)) $(ids.inp).blur();
     /* een exact woord dat nog in het veld staat, neemt de knop zelf mee */
@@ -1022,7 +1023,7 @@ function openSamen() {
 }
 function toonSamenScherm(S = MP.S, kleur = MP.myColor, naam = mpNaam()) {
   showScreen('play');
-  $('modeTitle').textContent = '🤝 ' + naam; /* textContent: geen escHtml */
+  $('modeTitle').textContent = naam; /* textContent: geen escHtml */
   $('roundChip').textContent = '';
   clearBD();
   const laatste = S.hist[S.hist.length - 1];
