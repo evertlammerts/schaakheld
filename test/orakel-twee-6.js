@@ -3433,6 +3433,24 @@ async function orakelTwee6() {
     check('Nieuw potje met Mees nodigt Mees uit', fien.get('!!INV && INV.fid === ' + JSON.stringify(fid)) && /Wachten op Mees/.test(fien.scherm()));
   });
 
+  await regel('[6.6] AC3 Mees ziet de remise na veertien dagen voordat Fien het weet: zijn kaart zegt wanneer hij weer kan uitnodigen, en Nieuw potje met Fien komt zodra Fien het einde kent', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    await aanbodVanMees(mees, fien);
+    stopApparaat(mees);
+    schuifKlok(14 * DAG + UUR);
+    mees = await opent(mees);
+    mees.tik('verderKaart');
+    await wacht(3000);
+    const em = tekstVan(mees, 'eindkaart');
+    check('testopzet: Mees ziet de remise na twee weken', /na twee weken werd het vanzelf remise/.test(em));
+    check('Fien kent het einde nog niet: Naar huis, en wanneer uitnodigen weer kan', kanTikken(mees, 'Naar huis') && !kanTikken(mees, 'Nieuw potje met Fien') &&
+      /Weer uitnodigen kan als Fien SchaakHeld opent\./.test(em));
+    fien = await opent(fien);
+    await tijd(30000);
+    check('Fien opende de app: Nieuw potje met Fien, en de regel is weg', kanTikken(mees, 'Nieuw potje met Fien') && !/Weer uitnodigen kan/.test(tekstVan(mees, 'eindkaart')));
+  });
+
   await regel('[6.3] AC3 in een potje op de staat is de volgende stap Revanche zolang de vriend er is, en Nieuw potje met de vriend zodra die weg is', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');

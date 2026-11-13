@@ -848,8 +848,8 @@
     .modal.typt .m-emoji, .modal.typt .bij-typen-weg { display: none; }
     .modal.typt { margin-top: 0; }
   }
-  #mpWachtRegel.hidden, #ekWacht:empty { display: none; }
-  #ekWacht, #mpWachtRegel { margin: 0; font-size: var(--fs-sm); color: var(--text); }
+  #mpWachtRegel.hidden, #ekWacht:empty, #ekBezet:empty { display: none; }
+  #ekWacht, #ekBezet, #mpWachtRegel { margin: 0; font-size: var(--fs-sm); color: var(--text); }
   .w-sugg { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1.5px solid rgba(23, 69, 111, .25); background: var(--surface);
     font: inherit; color: var(--text); }
   .lvl-btn { display: flex; align-items: center; gap: 12px; text-align: left; }
@@ -4520,20 +4520,26 @@ function mpOnWeg() {
    venster "Jullie zijn nu vrienden!". Dat staat er alleen zolang de ander bereikbaar is, getekend uit de
    toestand bij elke verandering van wie er is. */
 function anderBereikbaar() { return !!(MP && MP.open && MP.peerOn); }
+/* Een eindkaart tussen vrienden biedt een nieuw potje zodra het paar vrij is; tot de vriend het einde kent, zegt de kaart
+   wanneer het weer kan. Is de vriend bij het potje, dan is Revanche de volgende stap. */
+function nieuwPotjeTekenen() {
+  const knop = $('ekNieuw');
+  if (!knop || $('eindkaart').classList.contains('hidden')) return;
+  const f = P.friends[knop.dataset.fid], er = !!$('mpRev') && anderBereikbaar(), nogNiet = !er && !!f && !!paarBezet(knop.dataset.fid);
+  knop.classList.toggle('hidden', er || nogNiet);
+  $('ekBezet').textContent = nogNiet ? 'Weer uitnodigen kan als ' + f.naam + ' SchaakHeld opent.' : '';
+}
 function naEindeTekenen() {
   if (!session || !session.online || !session.over || session.oud || !$('eindkaart') || $('eindkaart').classList.contains('hidden')) { vrVenster(); return; }
   const er = anderBereikbaar(), k = vrKaart(), naam = mpNaam();
-  /* tussen vrienden op de staat kan een nieuw potje pas als de vriend het einde kent */
-  const nogNiet = !er && !!$('ekNieuw') && !!MP && !!paarBezet(MP.paar);
   /* een app die vrienden worden als toestand niet kent: geen knop, wel waarom */
   const oud = !!MP && MP.anderKent === false && !MP.bewezen, bezig = vrTikBezig(), vraag = er && !oud && k === 'vraag' && !bezig;
   /* zolang de vriendschapsvraag van de ander openstaat, is Ja de enige hoofdknop */
   if ($('mpRev')) $('mpRev').classList.toggle('hidden', !er || (!oud && k === 'vraag'));
-  if ($('ekNieuw')) $('ekNieuw').classList.toggle('hidden', er || nogNiet);
+  nieuwPotjeTekenen();
   if ($('vrOk')) $('vrOk').classList.toggle('hidden', !er);
   if ($('mpVriend')) $('mpVriend').classList.toggle('hidden', !er || oud || bezig || k !== 'knop' || !MP || MP.anderKent !== true);
-  if ($('ekWacht')) $('ekWacht').textContent = oud ? 'Vrienden worden kan als ' + naam + ' de nieuwste SchaakHeld heeft.' :
-    nogNiet ? 'Weer uitnodigen kan als ' + naam + ' SchaakHeld opent.' : !er ? '' :
+  if ($('ekWacht')) $('ekWacht').textContent = oud ? 'Vrienden worden kan als ' + naam + ' de nieuwste SchaakHeld heeft.' : !er ? '' :
     k === 'gevraagd' ? 'Gevraagd. Nu wachten op ' + naam + '.' : k === 'wacht' ? 'Jullie willen het allebei! Nu wachten tot ' + naam + ' het ziet. 🤝' : '';
   const vak = $('ekVraag');
   if (!vak) return;
@@ -5625,7 +5631,7 @@ function vriendPotjeVerder(fid, R, voor, ev) {
   } else if (ev.andereApparaat) showToast('Je zet op je andere apparaat telde al.');
   if (ev.regel && !ev.herstel) showToast(ev.regel);
   if (ev.nee && P.friends[fid]) afgewezenUitdagingen.push(P.friends[fid].naam);
-  if (MP && MP.paar === fid && samenInBeeld() && session.over) naEindeTekenen();
+  nieuwPotjeTekenen();
   pollVerversen = true;
 }
 function meldUitdagingNee() {
@@ -9578,9 +9584,9 @@ function endGameOnline(st, drawTxt, nieuw, xp, telRegel) {
     xp === TIRED_XP ? 'Jullie speelden vandaag al veel samen! Nu krijg je voor potjes met ' + escHtml(naam) + ' nog ' + TIRED_XP + ' XP per potje.' : h;
   say(session.eindZin);
   toonEindkaart('<div class="ek-turbo">🐢</div><h2 id="ekKop">' + h + '</h2><p id="ekZin">' + p + '</p>' + vervallen + week + '<!--trofeeen-->' +
-    '<div id="ekVraag"></div><p id="ekWacht"></p>' +
+    '<div id="ekVraag"></div><p id="ekWacht"></p>' + (staat ? '<p id="ekBezet"></p>' : '') +
     '<div class="ek-btns">' + (oud ? '' : '<button class="btn sun" id="mpRev">🔁 Revanche!</button>') +
-    (staat ? '<button class="btn sun" id="ekNieuw">Nieuw potje met ' + escHtml(naam) + '</button>' : '') + vriendKnop +
+    (staat ? '<button class="btn sun" id="ekNieuw" data-fid="' + vriendId + '">Nieuw potje met ' + escHtml(naam) + '</button>' : '') + vriendKnop +
     '<button class="btn ' + (oud ? 'sun' : 'plain') + '" id="mpEind">🏠 Naar huis</button></div>', () => {
       /* een eerder potje: de verbinding van nu blijft zoals hij is */
       if (oud) { $('mpEind').addEventListener('click', () => { sluitEindkaart(); goHome(); }); return; }
@@ -9612,12 +9618,13 @@ function eindeTerwijlWeg(st, weg, fid, naam, nieuw, oud, week) {
   const f = P.friends[fid], n = escHtml(naam);
   say(weg.kop);
   toonEindkaart('<div class="ek-trio">' + friendTrio(f.k) + '</div><h2 id="ekKop">' + weg.kop + '</h2>' +
-    weg.regels.map(r => '<p>' + r + '</p>').join('') + week + '<!--trofeeen-->' +
-    '<div class="ek-btns"><button class="btn sun" id="mpNieuw">Nieuw potje met ' + n + '</button>' +
+    weg.regels.map(r => '<p>' + r + '</p>').join('') + week + '<!--trofeeen-->' + '<p id="ekBezet"></p>' +
+    '<div class="ek-btns"><button class="btn sun" id="ekNieuw" data-fid="' + fid + '">Nieuw potje met ' + n + '</button>' +
     '<button class="btn plain" id="mpEind">🏠 Naar huis</button></div>', () => {
       const naarHuis = () => { sluitEindkaart(); if (oud) goHome(); else mpVerlaat(); };
       $('mpEind').addEventListener('click', naarHuis);
-      $('mpNieuw').addEventListener('click', () => { naarHuis(); inviteFriend(fid); });
+      $('ekNieuw').addEventListener('click', () => { naarHuis(); inviteFriend(fid); });
+      nieuwPotjeTekenen();
     });
 }
 function endGame(st, stil) {
