@@ -675,6 +675,9 @@
   .eindkaart.klein .ek-badge { flex-direction: row; gap: 6px; width: auto; }
   .eindkaart.klein .ek-be { font-size: 28px; }
   .eindkaart .ek-btns { display: flex; flex-direction: column; gap: 8px; width: min(100%, 280px); }
+  /* op een klein bord past de kaart met de vriendschapsvraag alleen met de twee antwoorden naast elkaar */
+  .eindkaart.klein #ekVraag .ek-btns { flex-direction: row; width: 100%; }
+  .eindkaart.klein #ekVraag .ek-btns .btn { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 0 8px; white-space: nowrap; }
   .play-bottom {
     grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
     padding: 0 var(--g) 8px;

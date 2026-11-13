@@ -5283,6 +5283,7 @@ function endGameOnline(st, drawTxt, telt, doelGehaald) {
   const vriendDoel = !!(P.weekGoal && P.weekGoal.kind === 'vriend');
   const week = '<p>' + (!telt ? 'Dit potje telt niet mee: het was korter dan tien zetten.' :
     vriendDoel && doelGehaald ? 'Telt mee voor je weekdoel, en dat is nu gehaald: +' + GOAL_XP + ' XP! 🎯' :
+    doelGehaald ? 'Je weekdoel is gehaald: +' + GOAL_XP + ' XP! 🎯' :
     vriendDoel ? 'Telt mee voor je weekdoel. 🎯' : 'Een potje met een vriend geeft geen XP. Het telt wel voor een weekdoel met vrienden.') + '</p>';
   session.eindZin = vervallen ? 'Je laatste zet telt niet mee: het potje was al klaar.' : h;
   say(session.eindZin);
@@ -5585,7 +5586,8 @@ function checkGoal() {
     saveP();
     syncSoon();
     celebrate();
-    if (speelschermOpen()) bewaarVoorKaart({ e: '🎯', n: 'Weekdoel gehaald!' });
+    /* op de kaart van een potje tussen kinderen zegt de regel over wat telde het doel en zijn punten */
+    if (speelschermOpen() && !(session && session.online)) bewaarVoorKaart({ e: '🎯', n: 'Weekdoel gehaald!' });
     showToast('🎯 Weekdoel gehaald!', true);
     floatXP('+' + GOAL_XP + ' XP Weekdoel gehaald! 🎯');
     updateHud();

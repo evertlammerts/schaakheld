@@ -692,6 +692,34 @@ for (const [W, H] of KLEIN) {
       check(n, 'Vrienden worden staat er niet naast Ja', !k.dubbel);` });
 }
 
+/* de volle kaart van een potje tussen kinderen: een potje dat telt (dus met de regel over wat telde), de trofee van
+   het eerste potje, de vriendschapsvraag en een naam van veertien letters */
+for (const [W, H] of [...KLEIN, [360, 780]]) {
+  const n = '[4.7] ' + W + 'x' + H + ': de volle eindkaart van een potje tussen kinderen, met een trofee, de vriendschapsvraag en een lange naam: alles past';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      const k = await page.evaluate(async () => {
+        MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false, revTheirs: false,
+          peerName: 'Maximiliaantje', open: true, weg: false, gameId: 'potje-test-1', peerOn: true };
+        mpBeginGame();
+        const S = session.S;
+        for (let i = 0; i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
+        endGame({ over: true, result: 'b', reason: 'mat' });
+        await new Promise(r => setTimeout(r, 300));
+        mpOnVriendVraag({ t: 'vriend?', pub: 'A'.repeat(88) });
+        await new Promise(r => setTimeout(r, 1200));
+        const e = document.getElementById('eindkaart'), er = e.getBoundingClientRect();
+        const knoppen = [...e.querySelectorAll('button')].filter(b => b.getClientRects().length);
+        return { sh: e.scrollHeight, ch: e.clientHeight, vraag: /Maximiliaantje wil vrienden worden/.test(e.innerText),
+          trofee: e.querySelectorAll('.ek-badge').length, telde: [...e.querySelectorAll('p')].some(p => /XP|telt/.test(p.textContent)),
+          onder: Math.max(...knoppen.map(b => b.getBoundingClientRect().bottom)) - er.bottom };
+      });
+      check(n, 'testopzet: een potje dat telde, een trofee en de vraag met de lange naam', k.vraag && k.trofee >= 1 && k.telde);
+      check(n, 'alles past in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
+      check(n, 'geen knop onder de rand van de kaart (' + Math.round(k.onder) + ' px)', k.onder <= 1);` });
+}
+
 /* in een kleine eindkaart krimpen de knoppen niet: elke knop is minstens 44 hoog */
 for (const [W, H] of KLEIN) {
   const n = '[2.5] ' + W + 'x' + H + ': elke knop van de eindkaart is minstens 44 hoog, ook met trofeeën of een vriendschapsvraag';

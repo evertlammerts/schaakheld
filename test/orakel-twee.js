@@ -1136,6 +1136,29 @@ async function orakelTwee() {
     check('te kort: aan beide kanten', [kort.a, kort.b].every(function (x) { return /Dit potje telt niet mee: het was korter dan tien zetten\./.test(tekstVan(x, 'eindkaart')); }));
   });
 
+  const doelBijHetEinde = [
+    ['een weekdoel met vrienden', { kind: 'vriend', n: 1 }, 0, 'Telt mee voor je weekdoel, en dat is nu gehaald: +60 XP! 🎯'],
+    ['een weekdoel van een andere soort, dat net vol is van het andere apparaat', { kind: 'opdr', n: 10 }, 10, 'Je weekdoel is gehaald: +60 XP! 🎯']
+  ];
+  for (const geval of doelBijHetEinde) {
+    await regel('[4.1] ' + geval[0] + ', gehaald bij het einde van een potje tussen kinderen: de regel zegt het doel en zijn punten, en de kaart heeft geen tegel', async function (check) {
+      const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+      a.ev('setPref("weekGoal", ' + JSON.stringify(geval[1]) + ')');
+      if (geval[2]) a.ev('bump("wk." + curWeek() + ".opdr", ' + geval[2] + ')');
+      await samenSpelen(a, b);
+      for (const z of ZETTEN22) await speel(a, b, z);
+      const xp = a.get('P.xp');
+      check('testopzet: het doel was nog niet gehaald', !a.get('goalDoneWeek(curWeek())'));
+      await geefOp(aanZet(a, b));
+      await wacht();
+      const kaart = tekstVan(a, 'eindkaart');
+      check('de regel: ' + geval[3], kaart.indexOf(geval[3]) >= 0);
+      check('geen regel die zegt dat er geen XP is', !/geen XP/.test(kaart));
+      check('geen tegel Weekdoel gehaald op de kaart', !/Weekdoel gehaald/.test(a.get('document.getElementById("eindkaart").innerHTML')));
+      check('de punten één keer', a.get('P.xp') === xp + 60);
+    });
+  }
+
   await regel('[4.1] een tweede potje nadat het weekdoel met vrienden gehaald is, zegt niet nog eens dat het nu gehaald is', async function (check) {
     const { a, b } = await potjeMetDoel({ kind: 'vriend', n: 1 }, null, false);
     check('testopzet: het eerste potje haalde het doel', /nu gehaald/.test(tekstVan(a, 'eindkaart')));
