@@ -418,6 +418,12 @@ function __bytesUit(h, n) {
   }
   return out;
 }
+function __nepDigest(bytes) {
+  bytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let h = 2166136261;
+  for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 16777619) >>> 0;
+  return __bytesUit(h, 32);
+}
 var crypto = {
   getRandomValues(arr) {
     for (let i = 0; i < arr.length; i++) {
@@ -428,10 +434,7 @@ var crypto = {
   },
   subtle: {
     digest(alg, bytes) {
-      bytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-      let h = 2166136261;
-      for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 16777619) >>> 0;
-      return Promise.resolve(__bytesUit(h, 32).buffer);
+      return Promise.resolve(__nepDigest(bytes).buffer);
     },
     importKey(fmt, keyBytes, alg) {
       if (alg && alg.name === 'ECDH') return Promise.resolve({ ecdhPub: Array.from(keyBytes) });
@@ -495,13 +498,19 @@ function __veegBussen() {
 function __veegPotjes() {
   for (var id in __server.potjes) if (__server.potjes[id].tot <= __busNu()) delete __server.potjes[id];
 }
+function __hexVan(bytes) {
+  var hex = '';
+  for (var i = 0; i < bytes.length; i++) hex += (bytes[i] >> 4).toString(16) + (bytes[i] & 15).toString(16);
+  return hex;
+}
 function __sha256hex(tekst) {
   return crypto.subtle.digest('SHA-256', new TextEncoder().encode(tekst)).then(function (d) {
-    var hex = '', bytes = new Uint8Array(d);
-    for (var i = 0; i < 32; i++) hex += (bytes[i] >> 4).toString(16) + (bytes[i] & 15).toString(16);
-    return hex;
+    return __hexVan(new Uint8Array(d));
   });
 }
+/* zoals versie in bus.go, maar zonder belofte: vergelijken en opslaan horen in
+   een stap, anders kan een tweede schrijver ertussen en winnen ze allebei */
+function __versie(blob) { return __hexVan(__nepDigest(new TextEncoder().encode(blob))); }
 /* zoals busGeldig na readJSON: de velden zijn tekst (null of weg telt als
    leeg) en de grens telt bytes, zoals len in Go */
 function __busGeldig(body, hex) {
@@ -603,16 +612,20 @@ var fetch = function (url, opts) {
     else if (m === 'POST' && path === '/v1/potje') {
       /* zoals handlePotjePost: de regels van een bus, maar dertig dagen na het
          laatste schrijven, een volle tabel laat de langst niet geschreven bus
-         plaatsmaken, dezelfde bytes verlengen alleen, en alleen bus, bewijs
-         en blob mogen erin staan */
+         plaatsmaken, dezelfde bytes verlengen alleen, en alleen bus, bewijs,
+         blob en als mogen erin staan; als moet de versie zijn van wat er
+         staat ('' voor niets), anders verandert er niets en komt er 409 met
+         wat er staat */
       if (!body || typeof body !== 'object' ||
-        Object.keys(body).some(function (k) { return ['bus', 'bewijs', 'blob'].indexOf(k) < 0; })) { res(400); return; }
+        Object.keys(body).some(function (k) { return ['bus', 'bewijs', 'blob', 'als'].indexOf(k) < 0; })) { res(400); return; }
       __sha256hex(body.bewijs).then(function (hex) {
-        if (!__busGeldig(body, hex)) { res(400); return; }
+        if (!__busGeldig(body, hex) || typeof body.als !== 'string' ||
+          !(body.als === '' || /^[a-f0-9]{64}$/.test(body.als))) { res(400); return; }
         __veegPotjes();
         const blob = body.blob == null ? '' : String(body.blob), nu = __busNu();
-        if (blob === '') { delete __server.potjes[body.bus]; res(204); return; }
         const oud = __server.potjes[body.bus];
+        if (body.als !== (oud ? __versie(oud.blob) : '')) { res(409, { blob: oud ? oud.blob : '' }); return; }
+        if (blob === '') { delete __server.potjes[body.bus]; res(204); return; }
         if (!oud && Object.keys(__server.potjes).length >= MAX_POTJES) {
           let weg = null;
           for (const id in __server.potjes) if (weg === null || __server.potjes[id].tot < __server.potjes[weg].tot) weg = id;
@@ -636,7 +649,7 @@ var fetch = function (url, opts) {
           ongewijzigd[id] = Math.floor((nuC - __server.potjes[id].veranderd) / 1000);
         }
       });
-      res(200, { blobs: blobs, ongewijzigd: ongewijzigd });
+      res(200, { blobs: blobs, ongewijzigd: ongewijzigd, nu: Math.floor(nuC / 1000) });
     }
     else if (m === 'POST' && path === '/v1/room') {
       const k = __nieuweKamer();
