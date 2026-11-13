@@ -53,6 +53,8 @@ async function orakelVersies() {
     if (soort === 'uitdaging' || soort === 'start') return { soort: soort, id: 'potjetwee002', wit: 'b', op: s ? s.id : null, merk: merk };
     if (soort === 'opgeven') return { soort: soort, id: id, eigen: s ? (s.wit === rol ? Math.ceil(ply / 2) : Math.floor(ply / 2)) : 0, merk: merk };
     if (soort === 'zet' || soort === 'zetMetBod') return { soort: 'zet', id: id, ply: ply, zet: ZET[naam] || 'e2e4', bod: soort === 'zetMetBod', merk: merk };
+    /* wie bekijkt, noemt het einde dat hij zag: hier het einde van de staat */
+    if (soort === 'bekijk') return { soort: soort, id: id, ply: ply, merk: merk, einde: s && s.uitslag ? eindeVan(s.uitslag) : null };
     return { soort: soort, id: id, ply: ply, merk: merk };
   };
   const SOORTEN = ['uitdaging', 'start', 'intrekken', 'ja', 'nee', 'zet', 'zetMetBod', 'bod', 'stempel', 'aannemen', 'vanzelf', 'opgeven',
@@ -163,6 +165,19 @@ async function orakelVersies() {
       if (!verwacht && !r.waarom) fout.push(naam + ' ' + soort + ' ' + rol + ': geen reden');
     }
     check('alles volgens de tabel' + (fout.length ? ': ' + fout.slice(0, 6).join(' | ') : ''), fout.length === 0);
+  });
+
+  await regel('[V1] AF4 wie een einde bekijkt, noemt hoe het afliep en wie won: een ander einde dan dat van de staat verandert niets en is gedaan', async function (check) {
+    const staat = STATEN.klaarOnbekend, voor = JSON.stringify(staat), merk = 'nieuw-b---------';
+    const goed = { soort: 'bekijk', id: 'potjeeen0001', ply: 1, merk: merk, einde: { soort: 'opgave', winnaar: 'b' } };
+    const ander = Object.assign({}, goed, { einde: { soort: 'opgave', winnaar: 'a' } }), anders = Object.assign({}, goed, { einde: { soort: 'mat', winnaar: 'b' } });
+    const zonder = Object.assign({}, goed, { einde: undefined });
+    check('het einde van de staat: bekeken', staatNa(staat, goed, 'b', NU).past && staatNa(staat, goed, 'b', NU).staat.spel.bekeken.b === true);
+    check('een ander winnaar: past niet, en is gedaan', !staatNa(staat, ander, 'b', NU).past && alGedaan(staat, ander, 'b', merk));
+    check('een ander soort einde: past niet, en is gedaan', !staatNa(staat, anders, 'b', NU).past && alGedaan(staat, anders, 'b', merk));
+    check('zonder einde: past niet', !staatNa(staat, zonder, 'b', NU).past);
+    check('het goede einde is nog niet gedaan', !alGedaan(staat, goed, 'b', merk));
+    check('de staat zelf bleef gelijk', JSON.stringify(staat) === voor);
   });
 
   await regel('[V1] een handeling op een ander potje of een andere halve zet past nooit', async function (check) {
@@ -281,7 +296,7 @@ async function orakelVersies() {
     st = staatNa(st, { soort: 'uitdaging', id: 'potjevijf005', wit: 'a', op: 'potjevier004', merk: 'nieuw-a---------' }, 'a', NU).staat;
     check('drie in de lijst, het nieuwste eerst', st.vorige.length === 3 && st.vorige.map(function (x) { return x.id; }).join() === 'potjevier004,potjedrie003,potjetwee002');
     check('het nieuwste met uitslag en bekeken, de andere zonder', !!st.vorige[0].uitslag && !!st.vorige[0].bekeken && !('uitslag' in st.vorige[1]) && !('bekeken' in st.vorige[2]));
-    const b = staatNa(st, { soort: 'bekijk', id: 'potjevier004' }, 'b', NU);
+    const b = staatNa(st, { soort: 'bekijk', id: 'potjevier004', einde: eindeVan(st.vorige[0].uitslag) }, 'b', NU);
     check('b kan het nieuwste bekijken', b.past && b.staat.vorige[0].bekeken.b === true);
     check('niet een ouder potje', !staatNa(st, { soort: 'bekijk', id: 'potjedrie003' }, 'b', NU).past);
     check('het merk van wie opgaf, staat in een ouder potje nog te vinden', alGedaan(st, { soort: 'opgeven', id: 'potjetwee002' }, 'a', 'nieuw-a---------'));

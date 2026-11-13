@@ -5507,6 +5507,10 @@ function standVanZetten(zetten) {
 }
 /* een einde of een Nu niet; vrij is het paar pas als allebei het weten */
 function spelAf(spel) { return !!spel && (spel.fase === 'klaar' || spel.fase === 'nee'); }
+/* Een einde zoals een kind het ziet: hoe het afliep en wie won (null bij remise). Wie een einde bekijkt, noemt dit einde:
+   een tik op een einde dat er toen nog niet stond, bekijkt het echte einde niet. */
+function eindeVan(u) { return { soort: u.soort, winnaar: u.soort === 'opgave' ? andereRol(u.door) : u.soort === 'mat' ? u.door : null }; }
+function zelfdeEinde(e, u) { const x = eindeVan(u); return !!e && e.soort === x.soort && e.winnaar === x.winnaar; }
 function paarVrij(staat) { const s = staat.spel; return !s || (spelAf(s) && !!s.weet.a && !!s.weet.b); }
 /* De staat na een handeling { soort, id, ply, eigen, op, merk, ... } van rol, of waarom ze niet (meer) past. Elke
    handeling noemt waarop ze gedaan is, en past niet als dat niet meer de staat is: een zet, een aanbod en een
@@ -5554,6 +5558,7 @@ function staatNa(staat, actie, rol, nu) {
     const eerst = (uit.vorige || [])[0];
     const doel = s && s.id === actie.id && s.fase === 'klaar' ? s : eerst && eerst.id === actie.id ? eerst : null;
     if (!doel || doel.bekeken[rol]) return nee('niets nieuws te bekijken');
+    if (!doel.uitslag || !zelfdeEinde(actie.einde, doel.uitslag)) return nee('een ander einde dan dat van de staat');
     doel.bekeken[rol] = true;
     dateert = false;
   } else if (!s) return nee('er is niets');
@@ -5633,7 +5638,10 @@ function alGedaan(staat, actie, rol, merk) {
     case 'bod': return !!hier && !!hier.bod && hier.bod.door === rol && hier.bod.ply === actie.ply;
     case 'stempel': return !!hier && !!hier.bod && hier.bod.t != null;
     case 'nee': case 'aannemen': case 'vanzelf': case 'opgeven': case 'neem': return eigenEinde(hier) || eigenEinde(eerder);
-    case 'bekijk': { const x = hier || (lijst[0] && lijst[0].id === actie.id ? lijst[0] : null); return !!x && !!x.bekeken && !!x.bekeken[rol]; }
+    case 'bekijk': {
+      const x = hier || (lijst[0] && lijst[0].id === actie.id ? lijst[0] : null);
+      return !!x && ((!!x.bekeken && !!x.bekeken[rol]) || (!!x.uitslag && !zelfdeEinde(actie.einde, x.uitslag)));
+    }
     case 'weghalen': return !s || (spelAf(s) && !!s.weet[rol]);
     default: return false;
   }
@@ -6073,8 +6081,11 @@ function paarVeranderd(fid, voor, uitkomsten) {
       else if (live) { ev.herstel = a.id; ev.regel = hier ? ANDERS_GEWORDEN : nietBegonnen(f.naam); }
     } else if (a.soort === 'opgeven' || a.soort === 'aannemen') {
       const uit = hier && hier.uitslag;
-      if (!live) ev.regel = ANDERS_GEWORDEN;
-      else if (hier && hier.fase === 'potje') { ev.herstel = a.id; ev.regel = a.soort === 'opgeven' ? VERDER_GESPEELD : ANDERS_GEWORDEN; }
+      if (!live) {
+        ev.regel = ANDERS_GEWORDEN;
+        /* het echte einde wacht op de kaart; opent het kind het, dan zegt de eindkaart waarom de tik niet telde */
+        if (a.soort === 'opgeven' && uit && uit.soort === 'opgave' && uit.door !== rol) eindRegelLater[a.id] = eerderOpgegeven(f.naam);
+      } else if (hier && hier.fase === 'potje') { ev.herstel = a.id; ev.regel = a.soort === 'opgeven' ? VERDER_GESPEELD : ANDERS_GEWORDEN; }
       else if (a.soort === 'opgeven' && uit && uit.soort === 'opgave' && uit.door !== rol) {
         ev.herstel = a.id; ev.eindRegel = eerderOpgegeven(f.naam); ev.eindKop = 'Jij wint dit potje!';
       } else { ev.herstel = a.id; ev.eindRegel = ANDERS_GEWORDEN; }
@@ -6216,6 +6227,8 @@ function paarRecords(fid, staat, ookBekeken) {
 const potjeStand = r => r ? JSON.stringify([r.moves, r.result, r.offer, r.state]) : null;
 /* Wat het kind ziet van wat de staat bracht. Een afgewezen uitdaging hoort het één keer, thuis. */
 let afgewezenUitdagingen = [], pollVerversen = false; /* thuis opnieuw tekenen, één keer na het lezen van alle staten */
+/* per potje de zin over een tik in deze run die niet telde, voor de eindkaart die het kind later opent */
+let eindRegelLater = {};
 function vriendPotjeVerder(fid, R, voor, ev) {
   if (MP && MP.paar === fid && MP.gameId === ev.herstel && ev.herstelRec && samenInBeeld()) schermVolgtStaat(ev.herstelRec, ev);
   else if (MP && MP.paar === fid && MP.gameId) {
@@ -10776,6 +10789,8 @@ function endGameOnline(st, drawTxt, nieuw, xp, telRegel) {
     const rec = (samenRauw() || {})[oud ? session.oud.gameId : MP && MP.gameId];
     if (u.vanzelf && ((rec && rec.zetVervallen) || (!oud && MP && MP.zetVervallen))) weg.regels.push('Je laatste zet telt niet mee: het was toen al remise.');
     if (!oud && MP) MP.zetVervallen = false;
+    const id = oud ? session.oud.gameId : MP && MP.gameId;
+    if (eindRegelLater[id]) { weg.regels.push(eindRegelLater[id]); delete eindRegelLater[id]; }
     eindeTerwijlWeg(st, weg, fid, naam, nieuw, oud, '<div id="ekTel">' + telRegel + '</div>');
     return;
   }
@@ -10981,7 +10996,8 @@ function endGame(st, stil) {
     }
     if (opDeStaat) {
       /* het kind ziet het einde: dat schrijft het in de staat, zodat zijn andere apparaten de kaart niet meer tonen */
-      pasToe(eindPaar, { soort: 'bekijk', id: oudId });
+      const rol = myRole(P.friends[eindPaar]), winnaar = st.result === 'd' ? null : st.result === session.myColor ? rol : andereRol(rol);
+      pasToe(eindPaar, { soort: 'bekijk', id: oudId, einde: { soort: st.reason, winnaar } });
       const tel = telLog[oudId];
       endGameOnline(st, drawTxt, false, tel ? tel.xp : 0, telRegelVan(oudId));
       return;

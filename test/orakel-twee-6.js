@@ -3724,4 +3724,29 @@ async function orakelTwee6() {
     check('de gewone strook', /Nu Fien/.test(zegt(mees)) && zegt(mees).indexOf('staat klaar') < 0);
     check('en Fien ziet de zet', fien.get('session.S.hist.length') === 1);
   });
+
+  /* ================= wie een einde bekijkt, noemt welk einde ================= */
+
+  await regel('[6.6] AF4 allebei geven op en Mees is eerst, maar Fien tikt haar kaart weg voordat haar opgave geweigerd wordt: thuis wacht het echte einde, en de eindkaart zegt waarom haar opgeven niet telde', async function (check) {
+    const { mees, fien, fid } = await liveVriendenpotje(false);
+    for (let i = 0; i < 22; i++) await zetUit(RUSTIG, mees, fien);
+    const voorF = tellers(fien);
+    const h = volgendeSchrijf(fien, 'houd');
+    await geefOp(fien);
+    check('testopzet: Fien zag meteen haar eigen opgave', /Mees wint dit potje/.test(tekstVan(fien, 'eindkaart')));
+    await geefOp(mees);
+    tikTekst(fien, 'Naar huis');
+    await wacht();
+    h.laat();
+    await tijd(30000);
+    const z = (await busZegt(mees, fid)) || {};
+    check('testopzet: de opgave van Mees staat, en Fien heeft het einde nog niet bekeken', z.uitslag === 'opgave' &&
+      fien.get('(function () { var s = paarVan(' + JSON.stringify(fid) + ').staat; return !!s && !!s.spel && s.spel.bekeken[myRole(P.friends[' + JSON.stringify(fid) + '])] === false; })()'));
+    check('thuis bij Fien het echte einde', opThuis(fien) && /Mees gaf op/.test(tekstVan(fien, 'verder')) && /Jij wint dit potje/.test(tekstVan(fien, 'verder')));
+    fien.tik('verderKaart');
+    await wacht();
+    const ef = tekstVan(fien, 'eindkaart');
+    check('de eindkaart: Fien wint, met de zin waarom haar opgeven niet telde', /Jij wint dit potje!/.test(ef) && ef.indexOf('Mees gaf net eerder op dan jij, dus jouw opgeven telt niet.') >= 0);
+    check('haar tellers: een gespeeld potje en een winst', tellers(fien) === nogEen(voorF, true));
+  });
 }

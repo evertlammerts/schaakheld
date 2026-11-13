@@ -680,14 +680,17 @@ function willekeurVan(zaad) {
 /* wat een kind kan proberen in de staat die het voor zich heeft */
 function kandidatenVoor(app, s, rol, nieuwId) {
   const sp = s.spel, l = [];
-  if (s.vorige[0]) l.push({ soort: 'bekijk', id: s.vorige[0].id });
+  /* wie een einde bekijkt, noemt het einde dat hij voor zich heeft */
+  const einde = function (u) { return u ? app.get('eindeVan(' + J(u) + ')') : null; };
+  if (s.vorige[0]) l.push({ soort: 'bekijk', id: s.vorige[0].id, einde: einde(s.vorige[0].uitslag) });
   if (app.get('paarVrij(' + J(s) + ')')) {
     const op = sp ? sp.id : null;
     l.push({ soort: 'uitdaging', id: nieuwId, wit: 'a', op: op }, { soort: 'start', id: nieuwId, wit: 'b', op: op });
     if (!sp) return l;
   }
   const id = sp.id, ply = sp.zetten.length;
-  for (const soort of ['intrekken', 'ja', 'nee', 'bekijk', 'bod', 'aannemen']) l.push({ soort: soort, id: id, ply: ply });
+  for (const soort of ['intrekken', 'ja', 'nee', 'bod', 'aannemen']) l.push({ soort: soort, id: id, ply: ply });
+  l.push({ soort: 'bekijk', id: id, ply: ply, einde: einde(sp.uitslag) });
   l.push({ soort: 'opgeven', id: id, eigen: app.get('eigenZetten(' + J(sp) + ', ' + J(rol) + ')') });
   if (sp.fase === 'potje') {
     const zetten = app.get('(function () { var S = standVanZetten(' + J(sp.zetten) + '); return S ? legalMoves(S).slice(0, 2).map(moveKey) : []; })()');
@@ -777,7 +780,7 @@ async function willekeurigeReeksen(zaad, aantal, stappen) {
       let stil = await rust();
       for (const d of D) {
         const s = d.app.get('zichtVan(' + J(d.fid) + ')');
-        for (const g of [s.spel && s.spel.fase === 'klaar' ? s.spel : null, s.vorige[0]]) if (g && !g.bekeken[d.rol]) await d.app.ev('pasToe(' + J(d.fid) + ', ' + J({ soort: 'bekijk', id: g.id }) + ')');
+        for (const g of [s.spel && s.spel.fase === 'klaar' ? s.spel : null, s.vorige[0]]) if (g && !g.bekeken[d.rol]) await d.app.ev('pasToe(' + J(d.fid) + ', ' + J({ soort: 'bekijk', id: g.id, einde: d.app.get('eindeVan(' + J(g.uitslag) + ')') }) + ')');
         await wacht(300);
       }
       stil = (await rust()) && stil;
