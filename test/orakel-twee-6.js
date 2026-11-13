@@ -4106,6 +4106,23 @@ async function orakelTwee6() {
     check('na nog een herlading niet nog eens', !KAN_NIET.test(mees.scherm()));
   });
 
+  await regel('[6.6] AF4a Fien neemt het remise-aanbod van Mees aan; Mees bekijkt de remise op zijn bord: thuis staat het potje bij hem niet meer op de kaart', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const mees = maakApparaat('Mees');
+    let fien = maakApparaat('Fien');
+    const fid = await aanbodVanMees(mees, fien);
+    fien = await opent(fien);
+    fien.tik('verderKaart');
+    await wacht(3000);
+    tikTekst(fien, 'Remise aannemen');
+    await tijd(20000);
+    check('testopzet: Mees ziet de remise op zijn bord', opSpeelscherm(mees) && /Gelijkspel/.test(tekstVan(mees, 'eindkaart')));
+    tikTekst(mees, 'Naar huis');
+    await tijd(20000);
+    check('de staat: Mees heeft het einde bekeken', mees.get('(function () { var s = paarVan(' + JSON.stringify(fid) + ').staat; return !!s && !!s.spel && s.spel.bekeken[myRole(P.friends[' + JSON.stringify(fid) + '])] === true; })()'));
+    check('thuis geen kaart van het potje', opThuis(mees) && !/Je potje met Fien/.test(tekstVan(mees, 'verder')));
+  });
+
   await regel('[6.4] AF7 staat er bij het openen van de app een ander venster, dan komt het Nu niet zodra dat venster dicht is', async function (check) {
     let { mees } = await neeTerwijlOefening();
     stopApparaat(mees);
