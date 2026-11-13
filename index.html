@@ -4913,14 +4913,17 @@ async function blobNaarStaat(k, blob) {
 /* ---------- een apparaat op de staat van een paar ----------
    Per vriend bewaart dit apparaat, buiten het profiel: de staat die het houdt, als tekst (zo stuurt terugschrijven
    dezelfde bytes) en geopend; de versie die de server het laatst toonde (toont, null als het nooit las); de hoogste
-   seq die het zag; de klok van de server bij het laatste lezen; een eigen merk; de handelingen die wachten, op
-   volgorde; en per einde dat het zelf schreef de uitslag die het dan telt (in vorige staat van de oudere potjes geen
-   uitslag meer). Welke potjes het telde, staat in het profielitem (DOC.loc.geteld), bij de tellers. */
+   seq die het zag; een eigen merk; de handelingen die wachten, op volgorde; per einde dat het zelf schreef de uitslag
+   die het dan telt (in vorige staat van de oudere potjes geen uitslag meer); het verschil tussen zijn eigen klok en
+   die van de server bij de laatste lezing, alleen om tijden te tonen; wanneer het de staat het laatst opnieuw schreef;
+   van de laatste potjes de kleuren en de zetten; en na het weghalen van de vriend het geheim, tot de laatste handeling
+   bezorgd is. Welke potjes het telde, staat in het profielitem (DOC.loc.geteld), bij de tellers. */
 const PAAR_KEY = 'schaakheld-paar';
 let versiesOnbekend = false;
 /* De klok van de server staat alleen in het geheugen: wat een lezing in deze run zei, verder geteld met de looptijd
    van het apparaat. Een klok uit de opslag kan dagen oud zijn: een remise-aanbod kreeg er een stempel van dagen terug
-   mee, en een minuut later was het vanzelf remise. Een lezing van meer dan een minuut geleden telt niet. */
+   mee, en een minuut later was het vanzelf remise. Een lezing van meer dan een minuut geleden telt niet, gemeten
+   met de looptijd en met de klok van het apparaat: op een telefoon die sliep met de app open staat de looptijd stil. */
 const serverKlok = {}, KLOK_OUD_MS = 60000;
 function zetKlok(fid, nu) { serverKlok[fid] = { nu, loop: performance.now(), muur: Date.now() }; }
 function klokNu(fid) {
@@ -5275,10 +5278,13 @@ function zichtVan(fid) {
   if (!f) return null;
   const p = paarVan(fid);
   let s = p.staat || { v: 2, seq: p.hoogste, spel: null, vorige: [] };
+  /* alleen een schrijfactie heeft een verse klok nodig; wat het kind ziet, dateert een handeling die wacht met de klok
+     van het apparaat en het verschil van de laatste lezing, hoe oud die ook is */
+  const nu = klokNu(fid), zicht = nu != null ? nu : Math.floor((Date.now() - (+p.verschil || 0)) / 1000);
   /* een ja of een begin dat nog wacht, toont geen potje: dat loopt pas als het in de staat staat */
   for (const a of p.rij) {
     if (a.soort === 'ja' || a.soort === 'start') continue;
-    const r = staatNa(s, Object.assign({}, a, { merk: p.merk }), myRole(f), klokNu(fid));
+    const r = staatNa(s, Object.assign({}, a, { merk: p.merk }), myRole(f), zicht);
     if (r.past) s = r.staat;
   }
   return s;

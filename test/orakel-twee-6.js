@@ -2692,6 +2692,43 @@ async function orakelTwee6() {
     check('een dag later: gisteren', /Fien is aan zet · gisteren/.test(vriendRijTekst(mees, fid)));
   });
 
+  await regel('[6.9] V4 een zet die zonder netwerk wacht, houdt de tijd van het potje: twee minuten later staat het potje met Fien op Spelen nog voor dat met Sem, waarin Sem al een uur aan zet is', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien'), sem = maakApparaat('Sem');
+    const fidF = await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 4, mees);
+    stopApparaat(fien);
+    mees.tik('backBtn');
+    await wacht();
+    const fidS = await vriendErbij(mees, sem);
+    tikInRij(mees, fidS, 'Uitnodigen');
+    await wacht();
+    await sem.ev('friendPoll()');
+    await wacht();
+    sem.tik('invJa');
+    await wacht();
+    mees.tik('mpGo');
+    await wacht();
+    await potjeTot(mees, sem, 2, sem);
+    stopApparaat(sem);
+    mees.tik('backBtn');
+    await wacht();
+    schuifKlok(UUR);
+    await tijd(30000);
+    check('testopzet: de kaart is het potje met Fien, waarin Mees aan zet is', /Verder: je potje met Fien/.test(tekstVan(mees, 'verder')) &&
+      !!vriendenpotjeMet(mees, fidS));
+    geenNetwerk(mees);
+    mees.tik('verderKaart');
+    await wacht();
+    await zetUit(RUSTIG, mees);
+    mees.tik('backBtn');
+    await wacht();
+    await tijd(2 * 60000);
+    const v = tekstVan(mees, 'verder');
+    check('testopzet: de zet wacht nog op het apparaat', mees.get('paarVan(' + JSON.stringify(fidF) + ').rij.length') === 1);
+    check('het potje met Fien vooraan, dat met Sem in de regel Ook nog', /Verder: je potje met Fien/.test(v) && /Ook nog: je potje met Sem/.test(v));
+  });
+
   await regel('[6.8] de tablet en de telefoon zeggen dezelfde dag: Fien is aan zet sinds vijf dagen, ook op een tablet die het potje net leest', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let tel = maakApparaat('Mees'), fien = maakApparaat('Fien');

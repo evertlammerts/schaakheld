@@ -546,6 +546,88 @@ async function orakelPaar() {
     check('zodra Fien het einde nam, staat het nieuwe potje er', s.spel.id === 'potjetwee002' && s.spel.fase === 'potje' && bewaard(w.mees, w.fm).rij.length === 0);
   });
 
+  await regel('[V6] [P30] de app blijft open terwijl vijftien dagen verstrijken en de looptijd van het apparaat stilstaat (een telefoon die sliep): het aanbod krijgt de klok van nu, en een minuut later is het geen remise', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await zetten(w, 'potjeeen0001', RUSTIG, 0, 4);
+    await leesP(w.mees, w.fm);
+    const loop = __klok;
+    schuifKlok(15 * DAG);
+    check('testopzet: de looptijd stond stil', __klok === loop);
+    const nuVoor = Math.floor(__busNu() / 1000);
+    await doe(w.mees, w.fm, { soort: 'zet', id: 'potjeeen0001', ply: 4, zet: RUSTIG[4], bod: true });
+    let s = await serverStaat(w.mees, w.fm);
+    check('de zet en het aanbod hebben de klok van nu', s.spel.zetten.length === 5 && !!s.spel.bod && s.spel.bod.t >= nuVoor && s.spel.t >= nuVoor);
+    schuifKlok(60000);
+    await leesP(w.mees, w.fm);
+    s = await serverStaat(w.mees, w.fm);
+    check('een minuut later geen remise', s.spel.fase === 'potje');
+  });
+
+  await regel('[V6] [P31] de klok van het apparaat staat stil terwijl het twee minuten doorloopt: voor zijn schrijfactie leest het eerst', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await leesP(w.mees, w.fm);
+    const muur = Date.now(), echt = fetch, bus = await paarAdres(w.mees, w.fm), volgorde = [];
+    /* de lezingen van de vriendenronde lukken intussen niet: anders is de klok steeds vers */
+    fetch = function (url, o) { return /\/v1\/bus\/check$/.test(url) ? Promise.resolve({ status: 503, json: function () { return Promise.resolve({}); } }) : echt(url, o); };
+    try { await tijd(2 * 60000); } finally { fetch = echt; }
+    zetOp(muur);
+    fetch = function (url, o) {
+      if (/\/v1\/bus\/check$/.test(url) && JSON.parse(o.body).bussen.indexOf(bus) >= 0) volgorde.push('lees');
+      if (/\/v1\/potje$/.test(url)) volgorde.push('schrijf');
+      return echt(url, o);
+    };
+    try { await doe(w.mees, w.fm, { soort: 'zet', id: 'potjeeen0001', ply: 0, zet: RUSTIG[0] }); } finally { fetch = echt; }
+    check('testopzet: de klok van het apparaat zegt dezelfde tijd', Math.abs(Date.now() - muur) < 30000);
+    check('eerst gelezen, en de zet staat er', volgorde[0] === 'lees' && volgorde.indexOf('schrijf') > 0 && (await serverStaat(w.mees, w.fm)).spel.zetten.length === 1);
+  });
+
+  await regel('[V6] [P34] de klok van het apparaat gaat een dag terug terwijl de app open blijft: voor zijn schrijfactie leest het eerst', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await leesP(w.mees, w.fm);
+    zetOp(Date.now() - DAG);
+    const echt = fetch, bus = await paarAdres(w.mees, w.fm), volgorde = [];
+    fetch = function (url, o) {
+      if (/\/v1\/bus\/check$/.test(url) && JSON.parse(o.body).bussen.indexOf(bus) >= 0) volgorde.push('lees');
+      if (/\/v1\/potje$/.test(url)) volgorde.push('schrijf');
+      return echt(url, o);
+    };
+    try { await doe(w.mees, w.fm, { soort: 'zet', id: 'potjeeen0001', ply: 0, zet: RUSTIG[0] }); } finally { fetch = echt; }
+    check('eerst gelezen, en de zet staat er', volgorde[0] === 'lees' && volgorde.indexOf('schrijf') > 0 && (await serverStaat(w.mees, w.fm)).spel.zetten.length === 1);
+  });
+
+  await regel('[V6] [P32] een zet veertig seconden na een lezing krijgt de klok van die lezing plus veertig seconden, zonder opnieuw te lezen', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await leesP(w.mees, w.fm);
+    const nuLees = Math.floor(__busNu() / 1000);
+    await tijd(40000);
+    const echt = fetch, bus = await paarAdres(w.mees, w.fm), volgorde = [];
+    fetch = function (url, o) {
+      if (/\/v1\/bus\/check$/.test(url) && JSON.parse(o.body).bussen.indexOf(bus) >= 0) volgorde.push('lees');
+      if (/\/v1\/potje$/.test(url)) volgorde.push('schrijf');
+      return echt(url, o);
+    };
+    try { await doe(w.mees, w.fm, { soort: 'zet', id: 'potjeeen0001', ply: 0, zet: RUSTIG[0] }); } finally { fetch = echt; }
+    const s = await serverStaat(w.mees, w.fm);
+    check('niet opnieuw gelezen voor de schrijfactie', volgorde[0] === 'schrijf');
+    check('de zet heeft de klok van de lezing plus veertig seconden', s.spel.zetten.length === 1 && Math.abs(s.spel.t - (nuLees + 40)) <= 1);
+  });
+
+  await regel('[V4] [P33] een zet die zonder netwerk wacht, houdt in wat het kind ziet een tijd, ook als de laatste lezing langer dan een minuut geleden is', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await leesP(w.mees, w.fm);
+    geenNetwerk(w.mees);
+    await doe(w.mees, w.fm, { soort: 'zet', id: 'potjeeen0001', ply: 0, zet: RUSTIG[0] });
+    await tijd(2 * 60000);
+    const nu = Math.floor(__busNu() / 1000), s = w.mees.get('zichtVan(' + J(w.fm) + ')');
+    check('testopzet: de zet wacht en de klok is oud', bewaard(w.mees, w.fm).rij.length === 1 && w.mees.get('klokNu(' + J(w.fm) + ')') === null);
+    check('het zicht heeft de zet met een tijd van nu', s.spel.zetten.length === 1 && Number.isFinite(s.spel.t) && Math.abs(s.spel.t - nu) <= 5);
+  });
+
   await regel('[V2] [V3] [V5] [P29] willekeurige reeksen op vier apparaten (Mees en Fien, elk met een tablet): tikken, lezen, een schrijfactie die blijft hangen of haar antwoord kwijtraakt, netwerk weg, herstarts en de klok; daarna komt alles tot rust, elk apparaat heeft wat de server heeft, niets wacht, elk kind telt elk afgelopen potje één keer met de juiste tellers, en geen afgelopen potje loopt weer', async function (check) {
     const r = await willekeurigeReeksen(1, 20, 60);
     check('testopzet: er liepen potjes af', r.afgelopen >= 20);

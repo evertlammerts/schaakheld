@@ -723,7 +723,9 @@ var scrollTo = function (x, y) {
 };
 var addEventListener = function () {};
 var matchMedia = function () { return { matches: true }; };
-var performance = { now: () => Date.now() };
+/* de looptijd van het apparaat loopt met de klok van de timers en niet met de datum: schuifKlok laat de datum
+   springen terwijl de looptijd stilstaat, zoals een telefoon die sliep met de app open */
+var performance = { now: () => __klok };
 var requestAnimationFrame = function () { return 0; };
 var cancelAnimationFrame = function () {};
 
