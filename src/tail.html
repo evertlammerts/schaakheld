@@ -4537,6 +4537,10 @@ function potjeStatus(S) {
   const st = gameStatus(S);
   return st.over || session.online || repetitions(S) < 2 ? st : { over: true, result: 'd', reason: 'herhaling' };
 }
+/* de tweede keer dezelfde stelling: de derde keer is remise, en dat hoort het kind voor het gebeurt; de regel gaat over
+   de stelling die er staat, dus wie dan schaak staat hoort eerst "Schaak!" en de regel pas bij een volgende tweede keer */
+const HERHAAL_ZIN = 'Deze stelling stond er al eens. Bij de derde keer is het remise. Wil je dat niet? Kies een andere zet.';
+function tweedeKeer(S) { return !session.online && repetitions(S) === 1; }
 function commitKid(m) {
   if (!session || session.kind !== 'game') return;
   BD.spy.clear();
@@ -4572,6 +4576,9 @@ function commitKid(m) {
       }
       say('Dat is een ' + co.what + ' Goed gezien!');
       trucRandjes(co.squares);
+      later(turboTurn, 1100);
+    } else if (tweedeKeer(S)) {
+      say(HERHAAL_ZIN);
       later(turboTurn, 1100);
     } else {
       say('Hmm… nu ik! 💭');
@@ -4705,7 +4712,7 @@ function turboZin(S, m) {
   unmakeMove(S);
   return zin;
 }
-/* Turbo's zin na zijn zet, de eerste die past: schaak, een truc, wat hij pakt of dreigt. na: 'goed' na een goede
+/* Turbo's zin na zijn zet, de eerste die past: schaak, een truc, de tweede keer dezelfde stelling, wat hij pakt of dreigt. na: 'goed' na een goede
    voorspelling (dan staat de lof ervoor als dat samen in de strook past, en zonder zin blijft de lof staan), of
    'remise' als Turbo net remise weigerde (die zin blijft staan, behalve voor schaak of een truc). */
 function doTurboMove(m, na) {
@@ -4719,7 +4726,7 @@ function doTurboMove(m, na) {
     const st = potjeStatus(S);
     if (st.over) { endGame(st); return; }
     if (co) { countPattern(co.key); trucRandjes(co.squares); }
-    const regel = inCheck(S) ? SCHAAK_ZIN : co ? 'Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢' : zin;
+    const regel = inCheck(S) ? SCHAAK_ZIN : co ? 'Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢' : tweedeKeer(S) ? HERHAAL_ZIN : zin;
     /* Turbo's zin is de uitleg en wordt nooit ingekort: past de lof er niet bij, dan gaat de lof (de XP-melding zei het al) */
     if (regel) say(na === 'goed' && Array.from('Goed voorspeld! ' + regel).length <= STROOK_TEKENS ? 'Goed voorspeld! ' + regel : regel);
     kidTurn(!!regel || na != null);

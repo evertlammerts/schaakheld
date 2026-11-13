@@ -527,6 +527,21 @@ async function orakelTwee() {
     } finally { __server.klok = klok; }
   });
 
+  /* drie keer dezelfde stelling in een vriendenpotje: remise op beide apparaten, met dezelfde regel op de eindkaart, en het
+     telt voor elk kind een keer */
+  await nogNiet('[5.6] een vriendenpotje: de derde keer dezelfde stelling is remise op beide apparaten, met dezelfde regel op de eindkaart, en telt voor elk een keer', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    const voor = [a, b].map(function (x) { return x.get('P.c.gamesPlayed || 0'); });
+    for (const z of ['g1f3', 'g8f6', 'f3g1', 'f6g8', 'g1f3', 'g8f6', 'f3g1', 'f6g8']) await speel(a, b, z);
+    await wacht(3000);
+    for (const x of [a, b]) {
+      check('het potje is uit bij ' + x.naam, x.get('!!session && session.over === true'));
+      check('de regel op de eindkaart bij ' + x.naam + ' (' + tekstVan(x, 'eindkaart') + ')', tekstVan(x, 'eindkaart').indexOf('Remise: drie keer dezelfde stelling.') >= 0);
+    }
+    [a, b].forEach(function (x, i) { check('het telt een keer bij ' + x.naam, x.get('P.c.gamesPlayed || 0') === voor[i] + 1); });
+  });
+
   /* zelfde grenzen als de Go-test van 4.10: na 9,5 minuten nog wel, na 10,5 niet meer */
   await regel('[4.10] de nep-server: een koppelcode werkt tien minuten, daarna niet meer', async function (check) {
     const klok = __server.klok;

@@ -549,6 +549,52 @@ async function orakelFlow5() {
     } finally { pickMove = echt; }
   });
 
+
+  /* de tweede keer dezelfde stelling is nog geen remise, en Turbo zegt het: na zijn eigen zet en na die van het kind,
+     de eerste keer niet */
+  const HERHAAL_ZIN5 = 'Deze stelling stond er al eens. Bij de derde keer is het remise. Wil je dat niet? Kies een andere zet.';
+  await regel('[5.6] de tweede keer dezelfde stelling: nog geen remise, en Turbo zegt het in de strook, na zijn zet en na die van het kind', async function (check) {
+    const echt = pickMove;
+    pickMove = function (S) { const k = S.board[sqFromAlg('g8')] === 'n' ? 'g8f6' : 'f6g8'; return legalMoves(S).find(function (m) { return moveKey(m) === k; }); };
+    try {
+      const a = nieuwKind();
+      await startPotje(a, 2);
+      zet(a, 'g1f3');
+      check('de eerste keer na de zet van het kind geen regel (' + strook5(a) + ')', strook5(a) !== HERHAAL_ZIN5);
+      await wacht(3000);
+      check('de eerste keer na Turbo\'s zet geen regel (' + strook5(a) + ')', strook5(a) !== HERHAAL_ZIN5);
+      zet(a, 'f3g1');
+      await wacht(3000);
+      check('testopzet: de beginstelling staat er weer', a.get('session.S.hist.length') === 4);
+      check('de tweede keer is geen remise: het kind is aan zet', a.get('session.over') !== true && a.get('BD.mode') === 'move');
+      check('na Turbo\'s zet de regel (' + strook5(a) + ')', strook5(a) === HERHAAL_ZIN5);
+      zet(a, 'g1f3');
+      check('na de zet van het kind de regel (' + strook5(a) + ')', strook5(a) === HERHAAL_ZIN5);
+    } finally { pickMove = echt; }
+  });
+  /* staat het kind de tweede keer schaak, dan gaat "Schaak!" voor; de regel komt bij de volgende stelling die er voor de
+     tweede keer staat (een regel over een andere stelling zou niet kloppen) */
+  await regel('[5.6] de tweede keer dezelfde stelling met het kind in schaak: eerst "Je staat schaak!", de regel bij de volgende tweede keer', async function (check) {
+    const echt = pickMove;
+    pickMove = function (S) { const k = S.board[sqFromAlg('a2')] === 'r' ? 'a2a1' : 'a1a2'; return legalMoves(S).find(function (m) { return moveKey(m) === k; }); };
+    try {
+      const a = nieuwKind();
+      await startPotje(a, 2);
+      a.ev('session.S = parseFEN("6k1/8/8/P7/8/8/r7/7K b - - 0 30"); BD.mode = "off"; renderBoard(); turboTurn()');
+      await wacht(3000);
+      zet(a, 'h1h2');
+      await wacht(3000);
+      zet(a, 'h2h1');
+      check('de beginstelling de tweede keer, na de zet van het kind: de regel (' + strook5(a) + ')', strook5(a) === HERHAAL_ZIN5);
+      await wacht(3000);
+      check('testopzet: Turbo gaf weer schaak', a.get('session.S.hist.length') === 5 && a.get('inCheck(session.S)'));
+      check('de tweede keer in schaak: "Je staat schaak!" (' + strook5(a) + ')', strook5(a) === 'Je staat schaak! Red je koning! 👑');
+      zet(a, 'h1h2');
+      check('daarna de volgende tweede keer: de regel (' + strook5(a) + ')', strook5(a) === HERHAAL_ZIN5);
+      check('en het potje loopt', a.get('session.over') !== true);
+    } finally { pickMove = echt; }
+  });
+
   /* ---------- 5.11: de voorspelvraag alleen als Turbo's zet ertoe doet ---------- */
 
   /* Over een heel potje, wat Turbo ook zet: de vraag komt precies als zijn zet
