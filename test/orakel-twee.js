@@ -861,7 +861,7 @@ async function orakelTwee() {
     });
   }
 
-  await nogNiet('[4.5] een uitnodiging tijdens een potje komt op de Verder-kaart, vóór het potje tegen Turbo', async function (check) {
+  await regel('[4.5] een uitnodiging tijdens een potje komt op de Verder-kaart, vóór het potje tegen Turbo', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     await wordenVrienden(fien, daan);
     daan.ev('setPref("predict", false); setPref("guard", false)');
@@ -876,6 +876,39 @@ async function orakelTwee() {
     const t = tekstVan(daan, 'verder');
     check('na Pauze op de kaart', /Fien/.test(t));
     check('vóór het potje tegen Turbo', t.indexOf('Turbo') > t.indexOf('Fien') && t.indexOf('Fien') >= 0);
+  });
+
+  /* D38: een uitnodiging op de Verder-kaart heeft beide antwoorden in de kaart */
+  async function uitnodigingTijdensPotje() {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await wordenVrienden(fien, daan);
+    daan.ev('setPref("predict", false); setPref("guard", false)');
+    await startPotje(daan, 1);
+    await zetEnWacht(daan, 'e2e4');
+    await nodigUit(fien);
+    await daan.ev('friendPoll()');
+    await wacht();
+    daan.tik('backBtn');
+    await wacht();
+    return { fien, daan };
+  }
+  await regel('[4.5] een uitnodiging op de Verder-kaart heeft Nu niet en Ja, spelen! in de kaart; Ja begint het potje', async function (check) {
+    const { fien, daan } = await uitnodigingTijdensPotje();
+    check('testopzet: de kaart noemt Fien', /Fien wil spelen/.test(tekstVan(daan, 'verder')));
+    check('beide antwoorden in de kaart', kanTikken(daan, 'Nu niet') && kanTikken(daan, 'Ja, spelen!') && !daan.open());
+    tikTekst(daan, 'Ja, spelen!');
+    await wacht();
+    fien.tik('mpGo');
+    await wacht();
+    check('samen in een potje', fien.get('!!(session && session.online && MP && MP.S)') && daan.get('!!(session && session.online && MP && MP.S)'));
+    check('het potje tegen Turbo staat nog bewaard', !!turboPotje(daan, 1));
+  });
+
+  await regel('[4.5] Nu niet op de Verder-kaart bereikt wie uitnodigde, en de kaart toont weer het potje tegen Turbo', async function (check) {
+    const { fien, daan } = await uitnodigingTijdensPotje();
+    tikTekst(daan, 'Nu niet');
+    check('Fien leest het', await zagOoit(function () { return /Daan kan nu even niet/.test(zegt(fien)); }, 30000));
+    check('de kaart toont het potje tegen Turbo', /Verder: je potje tegen/.test(tekstVan(daan, 'verder')) && !/Fien wil spelen/.test(tekstVan(daan, 'verder')));
   });
 
   await nogNiet('[4.5] vastgelopen in ronde 0: wie herlaadt en opnieuw uitnodigt, bereikt de ander die nog in het oude potje zit', async function (check) {

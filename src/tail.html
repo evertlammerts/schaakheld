@@ -2013,7 +2013,9 @@ function geldigeUitnodiging(inv) {
 async function friendPoll() {
   friendPollTimer = 0;
   const wachtend = !!INV;
-  if (!netAvailable() || session || (mpBezig() && !wachtend) || (modalOpen && !wachtend)) { friendPollSoon(); return; }
+  if (!netAvailable() || (modalOpen && !wachtend)) { friendPollSoon(); return; }
+  /* in een potje of rondje komt een uitnodiging niet als venster: ze wacht op de Verder-kaart */
+  const bezig = !!session || (mpBezig() && !wachtend);
   const ids = Object.keys(P.friends || {}).filter(id => !P.friends[id].weg);
   if (!ids.length) { friendPollSoon(30000); return; }
   const buses = {};
@@ -2047,6 +2049,7 @@ async function friendPoll() {
       if (!geldigeUitnodiging(inv) || seenInv.includes(inv.id)) continue;
       /* kruisende uitnodigingen tussen dezelfde twee: rol a houdt de zijne */
       if (INV && INV.fid === fid && myRole(P.friends[fid]) === 'a') continue;
+      if (bezig || (uitnodigingWacht && uitnodigingWacht.inv.id === inv.id)) { uitnodigingWacht = { fid, inv }; thuisVerversen(); continue; }
       const eigenWacht = !!INV && modalOpen && modalKey === 'mpwacht' && !modalQueue.length;
       if (eigenWacht) closeModal();
       if (showInvite(fid, inv)) break;
@@ -2068,18 +2071,7 @@ function showInvite(fid, inv) {
     '<p>Doe je mee? Wie wit krijgt, hoor je zo.</p>' +
     '<div class="m-btns"><button class="btn sun" id="invJa">Ja, spelen! 🎉</button>' +
     '<button class="btn plain" id="invNee">Nu niet</button></div>', () => {
-      $('invJa').addEventListener('click', () => {
-        closeModal();
-        /* wij gaan op de zijne in: onze eigen uitnodiging kan nu pas weg */
-        if (INV) inviteClear();
-        if (MP) mpStop();
-        mpStart(inv.room, inv.seat, false);
-        MP.viaFriend = fid;
-        showModal('<div class="m-emoji">🤝</div><h2>Verbinden…</h2><p>Even wachten… ⏳</p>' +
-          '<div class="m-btns"><button class="btn plain" id="mpNee4">Stoppen</button></div>',
-          () => $('mpNee4').addEventListener('click', () => { closeModal(); mpVerlaat(); }), false, 'mpwacht');
-        mpWachtOpMaatje(f.naam);
-      });
+      $('invJa').addEventListener('click', () => { closeModal(); uitnodigingJa(fid, inv); });
       $('invNee').addEventListener('click', () => {
         closeModal();
         zegNee(f, neeBus, inv.id);
@@ -2087,6 +2079,37 @@ function showInvite(fid, inv) {
       });
     }, false, 'uitnodiging');
   return true;
+}
+/* ja op een uitnodiging: wij gaan op de zijne in, en onze eigen uitnodiging kan nu pas weg */
+function uitnodigingJa(fid, inv) {
+  const f = P.friends[fid];
+  if (!f || samenBezet()) return;
+  if (uitnodigingWacht && uitnodigingWacht.inv.id === inv.id) uitnodigingWacht = null;
+  markSeen(inv.id);
+  if (INV) inviteClear();
+  if (MP) mpStop();
+  mpStart(inv.room, inv.seat, false);
+  MP.viaFriend = fid;
+  showModal('<div class="m-emoji">🤝</div><h2>Verbinden…</h2><p>Even wachten… ⏳</p>' +
+    '<div class="m-btns"><button class="btn plain" id="mpNee4">Stoppen</button></div>',
+    () => $('mpNee4').addEventListener('click', () => { closeModal(); mpVerlaat(); }), false, 'mpwacht');
+  mpWachtOpMaatje(f.naam);
+}
+/* een uitnodiging die kwam terwijl het kind in een potje of rondje zat: {fid, inv}, voor de Verder-kaart */
+let uitnodigingWacht = null;
+function uitnodigingOpKaart() {
+  const w = uitnodigingWacht, f = w && P.friends[w.fid];
+  const over = w ? INVITE_TTL - (Date.now() - +w.inv.ts) : 0;
+  if (!w || !f || f.weg || over <= 0 || seenInv.includes(w.inv.id)) { uitnodigingWacht = null; return null; }
+  return { naam: f.naam, minuten: Math.max(1, Math.ceil(over / 60000)) };
+}
+function uitnodigingNee() {
+  const w = uitnodigingWacht, f = w && P.friends[w.fid];
+  uitnodigingWacht = null;
+  if (!f) { renderVerder(); return; }
+  markSeen(w.inv.id);
+  zegNee(f, busFor(f, theirRole(f)), w.inv.id);
+  renderVerder();
 }
 /* "Nu niet": een kort briefje in de bus van wie uitnodigde, die daar toch al op let */
 async function zegNee(f, bus, op) {
@@ -3151,6 +3174,7 @@ function doeActie(a) {
   else if (a.go === 'samen') openSamen();
   else if (a.go === 'gestopt') toonKamerWeg();
   else if (a.go === 'oud') toonOudEinde(a.gameId);
+  else if (a.go === 'uitnodiging') { if (uitnodigingWacht) uitnodigingJa(uitnodigingWacht.fid, uitnodigingWacht.inv); }
   else showHomeTab('vrienden');
 }
 
@@ -3188,7 +3212,7 @@ function renderVerder() {
   const el = $('verder');
   const b = leesPotje(), rj = leesRondjes(), alle = leesSamenAlles();
   const r = nextStep(P, { now: Date.now(), potje: b && !b.kapot ? b.r : null, rondjes: Object.keys(rj).length ? rj : null,
-    samen: null, uitnodiging: null, moment: null });
+    samen: null, uitnodiging: uitnodigingOpKaart(), moment: null });
   const bezig = vriendItems(alle).concat(r.bezig);
   const kapotKey = !Array.isArray(alle) ? SAMEN_KEY : potjeKapot() ? POTJE_KEY : null;
   const eerste = kapotKey || !bezig.length ? r : bezig[0];
@@ -3197,6 +3221,9 @@ function renderVerder() {
     '<div class="verder-kaart kapot"><span class="vk-titel">Dit potje kan ik niet meer openen. Sorry!</span>' +
     '<span class="vk-zin">Je XP, sterren en trofeeën zijn niet kwijt.</span>' +
     '<button class="btn plain small" id="verderWeg">Weghalen</button></div>' :
+    eerste.rule === 'R1i' ? '<div class="verder-kaart antwoorden"><span class="vk-titel">' + escHtml(eerste.title) + '</span>' +
+    '<span class="vk-zin">' + escHtml(eerste.text) + '</span><span class="vk-knoppen"><button class="btn stil small" id="verderNee">Nu niet</button>' +
+    '<button class="btn sun small" id="verderJa">' + escHtml(eerste.button) + '</button></span></div>' :
     '<button class="verder-kaart" id="verderKaart"><span class="vk-titel">' + escHtml(eerste.title) + '</span>' +
     '<span class="vk-zin">' + escHtml(eerste.text) + '</span><span class="vk-knop">' + (eerste.button === 'Bekijk' ? '' : '▶ ') +
     escHtml(eerste.button) + '</span></button>';
@@ -3212,7 +3239,10 @@ function renderVerder() {
   const welkom = !kapotKey && eerste.rule === 'R3', naam = P.name ? (welkom ? ', ' : ' ') + P.name : '';
   $('groet').textContent = (welkom ? 'Welkom terug' : 'Hoi') + naam + '! 👋';
   if (kapotKey) $('verderWeg').addEventListener('click', () => { if (kapotKey === POTJE_KEY) wisKapottePotjes(); else opslag(kapotKey, null); renderVerder(); });
-  else $('verderKaart').addEventListener('click', () => doeActie(eerste.action));
+  else if (eerste.rule === 'R1i') {
+    $('verderJa').addEventListener('click', () => doeActie(eerste.action));
+    $('verderNee').addEventListener('click', uitnodigingNee);
+  } else $('verderKaart').addEventListener('click', () => doeActie(eerste.action));
   el.querySelectorAll('.verder-ook').forEach(o => o.addEventListener('click', () => doeActie(ook[+o.dataset.ook].action)));
 }
 

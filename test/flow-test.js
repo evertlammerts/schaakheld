@@ -1875,8 +1875,14 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('uitnodiging: druk = niet gemarkeerd, later opnieuw', seenInv.length === 0);
   await friendPoll();
   for (i = 0; i < 30; i++) await null;
-  ok('uitnodiging: en dan wel getoond', __els.modalBox.innerHTML.indexOf('wil een potje spelen') >= 0 && seenInv.length === 1);
-  await nuNiet();
+  /* regel 4.5: wat binnenkwam tijdens een rondje, wacht op de Verder-kaart, met beide antwoorden */
+  ok('uitnodiging: en dan op de Verder-kaart, zonder venster', __els.verder.innerHTML.indexOf('Mila wil spelen') >= 0 &&
+    __els.overlay.classList.contains('hidden') && seenInv.length === 0);
+  var voorKaart = Object.keys(__server.buses);
+  fire(__els.verderNee, 'click');
+  for (i = 0; i < 40; i++) await null;
+  Object.keys(__server.buses).forEach(function (b) { if (voorKaart.indexOf(b) < 0) delete __server.buses[b]; });
+  ok('uitnodiging: Nu niet op de kaart = gezien, en de kaart is weer gewoon', seenInv.length === 1 && __els.verder.innerHTML.indexOf('wil spelen') < 0);
   /* twee vrienden nodigen elkaar tegelijk uit: rol b (wij, host=false) krijgt
      de vraag te zien en houdt zijn eigen uitnodiging tot het kind ja zegt */
   seenInv = [];
