@@ -1060,7 +1060,7 @@ function vergeetSamen(gameId) {
   schrijfSamen(g);
 }
 /* de uitslag zoals de games over dagen hem ook dragen: wat, door wie, na hoeveel halve zetten */
-const UITSLAG_SOORT = ['opgave', 'remise', 'mat', 'pat', '50', 'materiaal'];
+const UITSLAG_SOORT = ['opgave', 'remise', 'mat', 'pat', '50', 'materiaal', 'lang'];
 function geldigeUitslag(u) {
   if (!u || typeof u !== 'object' || !UITSLAG_SOORT.includes(u.kind) || !Number.isInteger(u.ply) || u.ply < 0) return null;
   if (u.by !== 'w' && u.by !== 'b' && u.by !== null) return null;
@@ -1986,6 +1986,9 @@ function potjeZetten(s) {
    vorige: de laatste drie afgelopen potjes, het nieuwste eerst met id, weet, uitslag en bekeken, de twee daarvoor met
    alleen id en weet: daar vindt een apparaat dat het antwoord op zijn schrijfactie miste, zijn merk. */
 const VORIGE_MAX = 3;
+/* een potje heet zoals de app het maakt (negen willekeurige bytes); een merk is zestien tekens; een potje tussen
+   vrienden is remise bij zijn vijfhonderdste halve zet, zodat het altijd in de ene lengte past */
+const POTJE_ID_RE = /^[A-Za-z0-9_-]{12}$/, MERK_RE = /^[A-Za-z0-9_-]{16}$/, LANGSTE_POTJE = 500;
 /* hoeveel halve zetten dit kind zelf deed: daarop rust een opgave die wachtte */
 function eigenZetten(spel, rol) { const n = spel.zetten.length; return spel.wit === rol ? Math.ceil(n / 2) : Math.floor(n / 2); }
 const VEERTIEN_DAGEN_S = 14 * 86400;
@@ -2010,6 +2013,9 @@ function paarVrij(staat) { const s = staat.spel; return !s || (spelAf(s) && !!s.
    het afgelopen potje of het Nu niet dat er stond, of null); de rest het potje. */
 function staatNa(staat, actie, rol, nu) {
   const uit = JSON.parse(JSON.stringify(staat)), s = uit.spel, nee = waarom => ({ past: false, waarom });
+  if ((rol !== 'a' && rol !== 'b') || !actie || typeof actie !== 'object') return nee('geen handeling van a of b');
+  /* wat een einde of een Nu niet schrijft, draagt een merk dat de inhoud ook weer kan lezen */
+  const merk = typeof actie.merk === 'string' && MERK_RE.test(actie.merk) ? actie.merk : null;
   const ditPotje = !!s && actie.id === s.id, dezeZet = !!s && actie.ply === s.zetten.length;
   /* wie het einde maakt, weet het; zag het kind het op het scherm, dan bekeek het het ook (de remise na veertien
      dagen schrijft een apparaat terwijl het kind meestal niet kijkt) */
@@ -2018,7 +2024,7 @@ function staatNa(staat, actie, rol, nu) {
     s.bod = null;
     s.uitslag = Object.assign({ soort, door, ply: s.zetten.length }, extra || {});
     s.weet = { a: null, b: null };
-    s.weet[rol] = actie.merk;
+    s.weet[rol] = merk;
     s.bekeken = { a: false, b: false };
     s.bekeken[rol] = actie.gezien != null ? !!actie.gezien : actie.soort !== 'vanzelf';
   };
@@ -2036,6 +2042,7 @@ function staatNa(staat, actie, rol, nu) {
     if (!paarVrij(staat)) return nee(s.fase === 'uitdaging' ? 'er staat al een uitdaging' : s.fase === 'potje' ? 'er loopt een potje' :
       'de vriend weet het einde of het antwoord nog niet');
     if ((actie.op == null ? null : actie.op) !== (s ? s.id : null)) return nee('er staat iets anders dan toen');
+    if (typeof actie.id !== 'string' || !POTJE_ID_RE.test(actie.id) || (actie.wit !== 'a' && actie.wit !== 'b')) return nee('geen goed potje');
     /* een afgelopen potje gaat zonder zetten vooraan in vorige; de twee daarvoor houden id en merken */
     if (s && s.fase === 'klaar') uit.vorige = [{ id: s.id, weet: s.weet, uitslag: s.uitslag, bekeken: s.bekeken }]
       .concat((uit.vorige || []).map(x => ({ id: x.id, weet: x.weet }))).slice(0, VORIGE_MAX);
@@ -2055,9 +2062,10 @@ function staatNa(staat, actie, rol, nu) {
     if (s.fase !== 'uitdaging' || s.door === rol || !ditPotje) return nee('geen uitdaging van de vriend');
     if (actie.soort === 'ja') s.fase = 'potje';
     else {
+      if (!merk) return nee('zonder merk');
       s.fase = 'nee';
       s.weet = { a: null, b: null };
-      s.weet[rol] = actie.merk;
+      s.weet[rol] = merk;
     }
   } else if (actie.soort === 'zet') {
     if (s.fase !== 'potje' || !ditPotje) return nee('geen lopend potje');
@@ -2069,8 +2077,10 @@ function staatNa(staat, actie, rol, nu) {
     /* een open aanbod van de vriend is met deze zet beantwoord */
     if (s.bod && s.bod.door !== rol) s.bod = null;
     const st = gameStatus(S);
-    if (st.over) einde(st.reason, rol);
-    else if (actie.bod) s.bod = { door: rol, ply: s.zetten.length, t: null };
+    if (st.over || s.zetten.length >= LANGSTE_POTJE) {
+      if (!merk) return nee('een einde zonder merk');
+      einde(st.over ? st.reason : 'lang', rol);
+    } else if (actie.bod) s.bod = { door: rol, ply: s.zetten.length, t: null };
   } else if (actie.soort === 'bod') {
     /* na de eigen zet, één keer per eigen zet */
     if (s.fase !== 'potje' || !ditPotje || !dezeZet) return nee('geen lopend potje op deze stand');
@@ -2084,19 +2094,23 @@ function staatNa(staat, actie, rol, nu) {
     dateert = false;
   } else if (actie.soort === 'aannemen') {
     if (s.fase !== 'potje' || !s.bod || s.bod.door === rol || !ditPotje || !dezeZet) return nee('geen aanbod van de vriend');
+    if (!merk) return nee('een einde zonder merk');
     einde('remise', s.bod.door);
   } else if (actie.soort === 'vanzelf') {
     if (s.fase !== 'potje' || !s.bod || s.bod.door !== rol || s.bod.t == null || nu - s.bod.t < VEERTIEN_DAGEN_S || !ditPotje || !dezeZet) {
       return nee('geen eigen aanbod van veertien dagen');
     }
+    if (!merk) return nee('een einde zonder merk');
     einde('remise', rol, { vanzelf: true, bodT: s.bod.t });
   } else if (actie.soort === 'opgeven') {
     if (s.fase !== 'potje' || !ditPotje) return nee('geen lopend potje');
     if (actie.eigen !== eigenZetten(s, rol)) return nee('het kind zette intussen zelf');
+    if (!merk) return nee('een einde zonder merk');
     einde('opgave', rol);
   } else if (actie.soort === 'neem') {
     if (!spelAf(s) || s.weet[rol] || !ditPotje) return nee('niets te nemen');
-    s.weet[rol] = actie.merk;
+    if (!merk) return nee('zonder merk');
+    s.weet[rol] = merk;
     dateert = false;
   } else return nee('onbekende handeling');
   if (dateert && uit.spel) uit.spel.t = nu;
@@ -2136,23 +2150,25 @@ async function blobNaarStaat(k, blob) {
   if (!o || typeof o !== 'object') return null;
   if (typeof o.v === 'number' && o.v > 2) return { nieuwer: true };
   if (o.v !== 2 || !Number.isInteger(o.seq) || o.seq < 0) return null;
-  const rol = x => x === 'a' || x === 'b', merk = x => x === null || (typeof x === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(x));
+  const rol = x => x === 'a' || x === 'b', merk = x => x === null || (typeof x === 'string' && MERK_RE.test(x));
+  const potjeId = x => typeof x === 'string' && POTJE_ID_RE.test(x);
   const weetGoed = w => !!w && typeof w === 'object' && merk(w.a) && merk(w.b);
   const bekekenGoed = b => !!b && typeof b === 'object' && typeof b.a === 'boolean' && typeof b.b === 'boolean';
   /* alleen wat een uitslag mag dragen; undefined is: klopt niet */
   const uitslagVan = (u, n) => u === null ? null : !u || !UITSLAG_SOORT.includes(u.soort) || !rol(u.door) || !Number.isInteger(u.ply) || u.ply < 0 ||
-    (n != null && u.ply > n) ? undefined : Object.assign({ soort: u.soort, door: u.door, ply: u.ply }, u.vanzelf === true ? { vanzelf: true } : {},
-      Number.isFinite(u.bodT) ? { bodT: u.bodT } : {});
+    (n != null && u.ply > n) || (u.vanzelf != null && u.soort !== 'remise') ? undefined :
+    Object.assign({ soort: u.soort, door: u.door, ply: u.ply }, u.vanzelf === true ? { vanzelf: true } : {},
+      u.vanzelf === true && Number.isFinite(u.bodT) ? { bodT: u.bodT } : {});
   let spel = null;
   if (o.spel !== null) {
     const s = o.spel;
-    if (!s || typeof s !== 'object' || !ID_RE.test(String(s.id)) || !rol(s.wit) || !rol(s.door) ||
+    if (!s || typeof s !== 'object' || !potjeId(s.id) || !rol(s.wit) || !rol(s.door) ||
         !['uitdaging', 'nee', 'potje', 'klaar'].includes(s.fase) || !weetGoed(s.weet) || !bekekenGoed(s.bekeken)) return null;
     const zetten = potjeZetten(s.zetten);
     const uitslag = zetten ? uitslagVan(s.uitslag, zetten.length) : undefined;
-    if (!zetten || !standVanZetten(zetten) || uitslag === undefined || (s.fase === 'klaar') !== !!uitslag) return null;
+    if (!zetten || zetten.length > LANGSTE_POTJE || !standVanZetten(zetten) || uitslag === undefined || (s.fase === 'klaar') !== !!uitslag) return null;
     const bod = s.bod;
-    if (bod !== null && !(bod && rol(bod.door) && bod.ply === zetten.length && (bod.t === null || Number.isFinite(bod.t)))) return null;
+    if (bod !== null && !(bod && s.fase === 'potje' && rol(bod.door) && bod.ply === zetten.length && (bod.t === null || Number.isFinite(bod.t)))) return null;
     spel = { id: s.id, wit: s.wit, door: s.door, fase: s.fase, zetten, bod: bod ? { door: bod.door, ply: bod.ply, t: bod.t } : null,
       uitslag, weet: { a: s.weet.a, b: s.weet.b }, bekeken: { a: s.bekeken.a, b: s.bekeken.b }, t: Number.isFinite(s.t) ? s.t : null };
   }
@@ -2160,7 +2176,7 @@ async function blobNaarStaat(k, blob) {
   const vorige = [];
   for (let i = 0; i < o.vorige.length; i++) {
     const v = o.vorige[i];
-    if (!v || !ID_RE.test(String(v.id)) || !weetGoed(v.weet)) return null;
+    if (!v || !potjeId(v.id) || !weetGoed(v.weet)) return null;
     if (i > 0) { vorige.push({ id: v.id, weet: { a: v.weet.a, b: v.weet.b } }); continue; }
     const uitslag = uitslagVan(v.uitslag);
     if (!uitslag || !bekekenGoed(v.bekeken)) return null;
