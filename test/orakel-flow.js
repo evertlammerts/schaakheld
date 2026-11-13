@@ -634,7 +634,7 @@ async function orakelFlow() {
   });
 
   await regel('[4.1] de zin dat een potje met hetzelfde kind vandaag 15 XP geeft, staat vanaf het vierde potje in de strook en niet op de kaart; ervoor nergens', async function (check) {
-    const zin = /Vandaag krijg je voor potjes met Daan nog 15 XP per potje\./;
+    const zin = /Jullie speelden vandaag al veel samen! Nu krijg je voor potjes met Daan nog 15 XP per potje\./;
     for (const al of [2, 3]) {
       const a = nieuwKind();
       a.ev('ensureDay(); P.day.vriend = { "naam:Daan": ' + al + ' }; saveP();');

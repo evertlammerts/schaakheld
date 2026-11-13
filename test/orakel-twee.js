@@ -1684,7 +1684,7 @@ async function orakelTwee() {
     zetDatum('2026-11-12T10:00:00');
     const a = maakApparaat('Fien'), b = maakApparaat('Daan'), c = maakApparaat('Lotte');
     await samenSpelen(a, b);
-    const kregen = [], zin = /Vandaag krijg je voor potjes met (Daan|Fien) nog 15 XP per potje\./;
+    const kregen = [], zin = /Jullie speelden vandaag al veel samen! Nu krijg je voor potjes met (Daan|Fien) nog 15 XP per potje\./;
     let eerderNergens = true;
     for (let i = 0; i < 4; i++) {
       if (i) await revanche(a, b);
