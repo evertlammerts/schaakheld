@@ -448,6 +448,41 @@ async function orakelFlow5() {
     } finally { genSafeTask = echt; }
   });
 
+  /* ---------- 5.6: drie keer dezelfde stelling is remise, tegen Turbo ---------- */
+
+  /* 1.e3, daarna heen en weer met de paarden: na de laatste e3 staat de stelling
+     met zwart aan zet bij zet 1, 5 en 9; die van wit aan zet pas bij zet 10 voor de derde keer */
+  const HERHAAL_KIND = ['e2e3', 'b8c6', 'g1f3', 'c6b8', 'f3g1', 'b8c6', 'g1f3', 'c6b8'];
+  await regel('[5.6] tegen Turbo: zet het kind dezelfde stelling voor de derde keer neer, dan is het remise: "Remise: drie keer dezelfde stelling. Niemand wint, niemand verliest."', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(2, HERHAAL_KIND) });
+    a.tik('verderKaart');
+    await wacht();
+    if (!check('testopzet: het potje loopt, met stellingen die er al twee keer stonden', a.get('!!session && session.kind === "game" && !session.over && session.S.hist.length === 8'))) return;
+    const xp = a.get('P.xp');
+    zet(a, 'f3g1');
+    await wacht(2500);
+    check('het potje is uit na de zet van het kind, en Turbo zet niet meer', a.get('session.over') === true && a.get('session.S.hist.length') === 9);
+    const kaart = norm5(tekstVan(a, 'eindkaart'));
+    check('de eindkaart (' + kaart + ')', zichtbaar(a, 'eindkaart') && kaart.indexOf('Remise: drie keer dezelfde stelling. Niemand wint, niemand verliest.') >= 0);
+    check('remise telt als remise: 30 XP (' + (a.get('P.xp') - xp) + ')', a.get('P.xp') - xp === 30);
+    check('het potje staat niet meer bewaard', a.opslag.getItem(POTJE) === null);
+  });
+
+  /* 1.Pf3 e6, daarna heen en weer: Turbo's Pc6-b8 zet de stelling van zet 2 voor de derde keer neer */
+  const HERHAAL_TURBO = ['g1f3', 'e7e6', 'f3g1', 'b8c6', 'g1f3', 'c6b8', 'f3g1', 'b8c6', 'g1f3'];
+  await regel('[5.6] tegen Turbo: zet Turbo dezelfde stelling voor de derde keer neer, dan is het ook remise', async function (check) {
+    const echt = pickMove;
+    pickMove = function (S) { return legalMoves(S).find(function (m) { return moveKey(m) === 'c6b8'; }); };
+    try {
+      const a = nieuwKind({ opslag: opslagMetPotje(2, HERHAAL_TURBO) });
+      a.tik('verderKaart');
+      const uit = await totDat5(function () { return a.get('!!session && session.over'); }, 8000);
+      await wacht(1500);
+      check('het potje is uit na Turbo\'s zet', uit && a.get('session.S.hist.length') === 10 && a.get('moveKey(session.S.hist[9].m)') === 'c6b8');
+      check('de eindkaart (' + norm5(tekstVan(a, 'eindkaart')) + ')', norm5(tekstVan(a, 'eindkaart')).indexOf('Remise: drie keer dezelfde stelling.') >= 0);
+    } finally { pickMove = echt; }
+  });
+
   /* ---------- 5.11: de voorspelvraag alleen als Turbo's zet ertoe doet ---------- */
 
   /* Over een heel potje, wat Turbo ook zet: de vraag komt precies als zijn zet

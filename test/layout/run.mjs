@@ -674,6 +674,9 @@ for (const [W, H] of KLEIN) {
         const v = await page.evaluate(() => { const b = [...document.querySelectorAll('#onder button')].find(x => /Volgende/.test(x.textContent));
           if (!b) return null; const r = b.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }; });
         check(n, 'testopzet: Volgende staat er', !!v);
+        /* de valstrik-vraag heeft een zoekbudget en geeft soms niets, dan komt een keuze uit drie: een vaste reeks toevalsgetallen */
+        if (soorten[i] === 'best3') await page.evaluate(() => { let s = 24; Math.random = () => { s = (s + 0x6D2B79F5) >>> 0;
+          let t = Math.imul(s ^ (s >>> 15), s | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; });
         await klikTekst(/Volgende/);
         await page.waitForTimeout(1800);
         const raak = await page.evaluate(v => [...document.querySelectorAll('#onder button')].filter(b => b.getClientRects().length)

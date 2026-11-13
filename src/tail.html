@@ -4406,6 +4406,12 @@ function onKidMove(m) {
   commitKid(m);
 }
 
+/* Tegen Turbo is de derde keer dezelfde stelling remise; een vriendenpotje
+   krijgt die regel met de code van dat potje */
+function potjeStatus(S) {
+  const st = gameStatus(S);
+  return st.over || session.online || repetitions(S) < 2 ? st : { over: true, result: 'd', reason: 'herhaling' };
+}
 function commitKid(m) {
   if (!session || session.kind !== 'game') return;
   BD.spy.clear();
@@ -4424,7 +4430,7 @@ function commitKid(m) {
       mpSend({ t: 'zet', from: m.from, to: m.to, promo: m.promo || null,
         n: S.hist.length, gameNo: MP ? MP.gameNo : 0 });
     }
-    const st = gameStatus(S);
+    const st = potjeStatus(S);
     if (st.over) { endGame(st); return; }
     if (inCheck(S)) snd.check();
     if (session.online) {
@@ -4566,7 +4572,7 @@ function doTurboMove(m, stil) {
   playMove(m, () => {
     if (!session || session.kind !== 'game') return;
     updateTrays();
-    const st = gameStatus(S);
+    const st = potjeStatus(S);
     if (st.over) { endGame(st); return; }
     if (co) {
       countPattern(co.key);
@@ -4864,7 +4870,7 @@ function endGame(st, stil) {
   setActions([]);
   const drawTxt = { pat: 'Pat! De koning kan nergens meer heen, maar staat geen schaak.',
     '50': 'Vijftig zetten zonder slaan of pionzet.', materiaal: 'Te weinig stukken om mat te zetten.',
-    remise: 'Remise afgesproken: jullie vonden het allebei gelijk.' };
+    remise: 'Remise afgesproken: jullie vonden het allebei gelijk.', herhaling: 'Remise: drie keer dezelfde stelling. Niemand wint, niemand verliest.' };
   /* opgeven of remise vlak na het begin telt nergens voor mee */
   const telt = (st.reason !== 'opgave' && st.reason !== 'remise') || session.S.hist.length >= MIN_PLIES_TELT;
   if (telt) bump('c.gamesPlayed', 1);
