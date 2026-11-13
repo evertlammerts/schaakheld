@@ -428,6 +428,49 @@ for (const [W, H] of [[375, 553], [360, 640]]) {
       if (v) check(n, 'veilig of valstrik: helemaal in beeld en niet afgeknipt', binnen(v, ${W}, ${H}) && !v.over && v.top >= v.onderTop - 0.5 && v.bottom <= v.onderBottom + 0.5);` });
 }
 
+/* plan.md 5.5: ook de langste eerste reden van Speurogen (SG16) en van De Beste Zet (B1, met de langste zetnaam) past helemaal onder het bord */
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n = '[5.5] ' + W + 'x' + H + ': de langste eerste reden van Speurogen en De Beste Zet staat helemaal in beeld';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const eersteReden = async () => page.evaluate(() => {
+        const e = document.querySelector('#taskBox .e-body p, #taskBox .e-body li'), o = document.getElementById('onder');
+        if (!e || !o) return null;
+        const r = e.getBoundingClientRect(), ro = o.getBoundingClientRect();
+        return { tekst: e.textContent, top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height,
+          over: e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1, onderTop: ro.top, onderBottom: ro.bottom };
+      });
+      const past = (soort, r) => {
+        check(n, soort + ': een eerste reden (' + (r && r.tekst) + ')', !!r);
+        if (r) check(n, soort + ': helemaal in beeld en niet afgeknipt', binnen(r, ${W}, ${H}) && !r.over && r.top >= r.onderTop - 0.5 && r.bottom <= r.onderBottom + 0.5);
+      };
+      await vers(${W}, ${H});
+      await startOefening('scan');
+      await page.evaluate(() => {
+        const S = parseFEN('6k1/8/8/5n2/3R4/2P5/8/6K1 w - - 0 1'), details = threatDetails(S);
+        session.S = S; session.task = { S, type: 'threat', targets: details.map(x => x.sq), extra: null, details };
+        session.phase = 'marking'; BD.marks.clear(); BD.glow.clear(); BD.mode = 'mark'; renderBoard();
+      });
+      await veld('d4'); await veld('f5');
+      await klikTekst(/Klaar/);
+      await page.waitForTimeout(1200);
+      past('speurogen', await eersteReden());
+      await vers(${W}, ${H});
+      await startOefening('best3');
+      await page.evaluate(async () => {
+        const S = parseFEN('r6k/1P6/8/8/8/8/8/6K1 w - - 0 1');
+        const opts = ['g1f2', 'b7a8q', 'g1h2'].map(k => ({ m: legalMoves(S).find(x => moveKey(x) === k), deep: 0 }));
+        genBest3 = () => ({ S, options: opts, best: opts[1] });
+        setTask(null); setOptions(null); BD.arrows = [];
+        buildBest3();
+        await new Promise(r => setTimeout(r, 500));
+      });
+      await page.locator('.opt[data-i="1"]').click();
+      await klikTekst(/Deze kies ik/);
+      await page.waitForTimeout(3500);
+      past('de beste zet', await eersteReden());` });
+}
+
 /* visual.md G1: een lange naam in de groet breekt af in plaats van "…", en de rij blijft 40 tot 41 hoog */
 for (const [W, H] of [[360, 640], [375, 553]]) {
   const n = '[3.11] ' + W + 'x' + H + ': de groet met een naam van veertien W\'s is heel, de rij is hoogstens 41 hoog en de spelknoppen staan boven de tabbalk';
