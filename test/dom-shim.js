@@ -676,6 +676,8 @@ var fetch = function (url, opts) {
       const id = path.slice('/v1/profile/'.length);
       const prof = __server.profiles[id];
       if (m === 'PUT') {
+        /* zoals maxBlob in server.go: een profiel boven 64 KB krijgt 413 */
+        if ((body == null ? 0 : body.byteLength != null ? body.byteLength : body.length) > 65536) return res(413);
         if (prof && prof.secret !== secret) return res(404);
         __server.profiles[id] = { secret, blob: new Uint8Array(body) };
         res(204);

@@ -1979,6 +1979,24 @@ async function leesPotjesbus(f, blob) {
   if (u && !result) return null;
   return { gameId: o.gameId, white: o.white, state: o.state, keys, S, offer: a && a.ply <= keys.length ? a : null, result };
 }
+/* Een potjesbus wordt alleen opnieuw ontsleuteld en nagespeeld als zijn bytes veranderden: het lezen gebeurt elke
+   vijftien seconden, en het naspelen van lange potjes kost op een oude telefoon merkbaar tijd. Wat terugkomt, wordt
+   nergens veranderd. */
+const busGelezen = new Map();
+async function leesPotjesbusEens(f, bus, blob) {
+  const c = busGelezen.get(bus);
+  if (c && c.blob === blob && c.k === f.k) return c.uit;
+  const uit = await leesPotjesbus(f, blob);
+  busGelezen.set(bus, { blob, k: f.k, uit });
+  return uit;
+}
+/* het potje van de verbinding wijkt af van wat bewaard staat: dan eerst bewaren */
+function mpAnders() {
+  const r = (samenRauw() || {})[MP.gameId], h = MP.S.hist;
+  return !r || r.moves.length !== h.length || r.moves.some((k, i) => k !== moveKey(h[i].m)) || !!r.shown !== !!MP.shown ||
+    JSON.stringify(r.result || null) !== JSON.stringify(MP.result || null) || JSON.stringify(r.offer || null) !== JSON.stringify(MP.offer || null) ||
+    (r.room || null) !== (MP.room || null);
+}
 /* zegt de bus hetzelfde als dit potje? dan hoeft er niets geschreven te worden */
 function zelfdeBus(r, x) {
   const i = vriendBusInhoud(r), u = i.result, v = x.result;
@@ -2006,7 +2024,7 @@ function uitslagVanVriend(r, u, S) {
 async function potjesbusGelezen(fid, O, F, aO, aF, blobO) {
   const f = P.friends[fid];
   if (!f || f.weg) return;
-  if (MP && MP.viaFriend === fid && MP.gameId && MP.S) bewaarSamen();
+  if (MP && MP.viaFriend === fid && MP.gameId && MP.S && mpAnders()) bewaarSamen();
   const g = samenRauw();
   if (!g) return;
   const ik = myRole(f), ev = {}, nu = Date.now(), gVoor = JSON.stringify(g);
@@ -2045,7 +2063,7 @@ async function potjesbusGelezen(fid, O, F, aO, aF, blobO) {
       if (ev.weg) delete g[ev.weg];
       g[R.gameId] = R;
       schrijfSamen(g);
-      thuisVerversen();
+      pollVerversen = true;
       return;
     }
   }
@@ -2214,7 +2232,7 @@ function schrijfTeken(fid, X) {
 /* wat van een potje op het scherm te zien is; de rest (wanneer bewaard, de bus) verandert het scherm niet */
 const potjeStand = r => r ? JSON.stringify([r.moves, r.result, r.offer, r.state]) : null;
 /* Wat het kind ziet van wat de potjesbussen brachten. Een afgewezen uitdaging hoort het één keer, thuis. */
-let afgewezenUitdagingen = [];
+let afgewezenUitdagingen = [], pollVerversen = false; /* thuis opnieuw tekenen, één keer na het lezen van alle bussen */
 function vriendPotjeVerder(fid, R, voor, ev) {
   if (MP && MP.viaFriend === fid && MP.gameId) {
     if (MP.gameId === ev.stil) { const inBeeld = samenInBeeld(); mpStop(true); if (inBeeld) goHome(); }
@@ -2235,7 +2253,7 @@ function vriendPotjeVerder(fid, R, voor, ev) {
         $('laatOk').addEventListener('click', closeModal);
       });
   }
-  thuisVerversen();
+  pollVerversen = true;
 }
 function meldUitdagingNee() {
   if (!afgewezenUitdagingen.length || session || modalOpen) return;
@@ -2674,12 +2692,15 @@ async function friendPoll() {
     const f = P.friends[id];
     potjes[id] = { eigen: (await busFor(f, myRole(f), 'potje')).bus, vriend: (await busFor(f, theirRole(f), 'potje')).bus };
   }
-  const alle = Object.keys(buses);
-  for (const id in potjes) alle.push(potjes[id].eigen, potjes[id].vriend);
+  /* de adressen van één vriend gaan samen in één verzoek: zo komen de leeftijden van een paar van hetzelfde moment */
+  const delen = [];
+  ids.forEach((id, i) => {
+    const groep = [mijn[i].bus].concat(potjes[id] ? [potjes[id].eigen, potjes[id].vriend] : []), laatste = delen[delen.length - 1];
+    if (laatste && laatste.length + groep.length <= BUS_BATCH) laatste.push(...groep); else delen.push(groep);
+  });
   try {
     const blobs = {}, oud = {}, gelezen = new Set();
-    for (let i = 0; i < alle.length; i += BUS_BATCH) {
-      const deel = alle.slice(i, i + BUS_BATCH);
+    for (const deel of delen) {
       const r = await fetch(SYNC_URL + '/v1/bus/check', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bussen: deel }) });
       if (r.status === 200) {
@@ -2693,10 +2714,11 @@ async function friendPoll() {
     for (const id in potjes) {
       const p = potjes[id], f = P.friends[id];
       if (!f || f.weg || !gelezen.has(p.eigen) || !gelezen.has(p.vriend)) continue;
-      const O = p.eigen in blobs ? await leesPotjesbus(f, blobs[p.eigen]) : null;
-      const F = p.vriend in blobs ? await leesPotjesbus(f, blobs[p.vriend]) : null;
+      const O = p.eigen in blobs ? await leesPotjesbusEens(f, p.eigen, blobs[p.eigen]) : null;
+      const F = p.vriend in blobs ? await leesPotjesbusEens(f, p.vriend, blobs[p.vriend]) : null;
       await potjesbusGelezen(id, O, F, +oud[p.eigen] || 0, +oud[p.vriend] || 0, blobs[p.eigen] || null);
     }
+    if (pollVerversen) { pollVerversen = false; thuisVerversen(); }
     for (const bus in blobs) {
       const fid = buses[bus];
       const bytes = fid ? b64urlBytes(String(blobs[bus])) : null;

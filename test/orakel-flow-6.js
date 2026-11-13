@@ -53,6 +53,76 @@ async function orakelFlow6() {
     await wacht();
   };
 
+  /* een rustig potje van n halve zetten: geen slag, geen schaak, en het potje loopt nog */
+  const stilPotje = function (n, zaad) {
+    const S = newGame(), uit = [];
+    for (let i = 0; i < n; i++) {
+      const ms = legalMoves(S);
+      let gekozen = null;
+      for (let j = 0; j < ms.length && !gekozen; j++) {
+        const m = ms[(j + zaad * 7 + i * 3) % ms.length];
+        if (isCapture(S, m)) continue;
+        makeMove(S, m);
+        if (!inCheck(S) && !gameStatus(S).over) gekozen = m;
+        unmakeMove(S);
+      }
+      if (!gekozen) throw new Error('testopzet: geen rustige zet meer');
+      makeMove(S, gekozen);
+      uit.push(moveKey(gekozen));
+    }
+    return uit;
+  };
+
+  /* ================= wat een keer lezen kost, en wat er per verzoek gaat ================= */
+
+  await regel('[6.2] een keer lezen zonder iets nieuws kost niets: met vijf potjes van 80 halve zetten wordt geen zet nagespeeld, niets bewaard en niets opnieuw getekend', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const vrienden = [];
+    for (let i = 0; i < 5; i++) vrienden.push({ fid: 'vriendstil' + i + 'xx', naam: 'Stil' + i, zetten: stilPotje(80, i) });
+    const a = await kind(opslagMetVrienden(vrienden));
+    await a.ev('friendPoll()');
+    await wacht(5000);
+    await a.ev('friendPoll()');
+    await wacht(5000);
+    check('testopzet: vijf potjes van 80 halve zetten bewaard', a.get('Object.keys(JSON.parse(localStorage.getItem("schaakheld-samen")).games).length') === 5);
+    a.ev('document.__tel = { zetten: 0, bewaard: 0, getekend: 0 };' +
+      'var lm = legalMoves; legalMoves = function () { document.__tel.zetten++; return lm.apply(this, arguments); };' +
+      'var ss = schrijfSamen; schrijfSamen = function (g) { document.__tel.bewaard++; return ss(g); };' +
+      'var rv = renderVerder; renderVerder = function () { document.__tel.getekend++; return rv.apply(this, arguments); };');
+    await a.ev('friendPoll()');
+    await wacht(1000);
+    const tel = JSON.parse(a.get('JSON.stringify(document.__tel)'));
+    check('geen zet nagespeeld', tel.zetten === 0);
+    check('niets bewaard', tel.bewaard === 0);
+    check('niets opnieuw getekend', tel.getekend === 0);
+  });
+
+  await regel('[6.10] met 23 vrienden gaan de drie adressen van elke vriend in hetzelfde verzoek, en geen verzoek heeft er meer dan 64', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const vrienden = [];
+    for (let i = 0; i < 23; i++) vrienden.push({ fid: 'vriendnummer' + (10 + i), naam: 'Vriend' + i });
+    const a = await kind(opslagMetVrienden(vrienden));
+    const verzoeken = [], echt = fetch;
+    fetch = function (url, o) { if (/\/v1\/bus\/check$/.test(url)) verzoeken.push(JSON.parse(o.body).bussen); return echt(url, o); };
+    try { await a.ev('friendPoll()'); } finally { fetch = echt; }
+    const drietallen = await a.ev('(async function () { const uit = []; for (const id in P.friends) { const f = P.friends[id];' +
+      'uit.push([(await busFor(f, myRole(f))).bus, (await busFor(f, myRole(f), "potje")).bus, (await busFor(f, theirRole(f), "potje")).bus]); } return uit; })()');
+    check('testopzet: 23 drietallen in meer dan één verzoek', drietallen.length === 23 && verzoeken.length > 1);
+    check('elk drietal in één verzoek', drietallen.every(function (d) { return verzoeken.some(function (v) { return d.every(function (b) { return v.indexOf(b) >= 0; }); }); }));
+    check('geen verzoek boven de 64', verzoeken.every(function (v) { return v.length <= 64; }));
+  });
+
+  await regel('[6.7] een profiel met 400 geziene vriendenpotjes gaat nog naar de server; boven 64 KB weigert de nep-server, zoals de echte', async function (check) {
+    const a = await kind(opslagMetVrienden([{ fid: 'vriendfien1', naam: 'Fien' }]));
+    await a.ev('ensureAccount()');
+    a.ev('DOC.set.potjes = {}; for (let i = 0; i < 400; i++) DOC.set.potjes["potjenummer" + (100000 + i)] = curWeek(); saveP()');
+    check('400 in de set', a.get('Object.keys(DOC.set.potjes).length') === 400);
+    check('het profiel gaat naar de server', await a.ev('syncNow()') === true);
+    const status = await a.ev('fetch(SYNC_URL + "/v1/profile/" + ACC.id, { method: "PUT", headers: { Authorization: "Bearer " + ACC.secret },' +
+      ' body: new Uint8Array(65537) }).then(function (r) { return r.status; })');
+    check('een profiel van 65537 bytes krijgt 413', status === 413);
+  });
+
   /* ================= vriendenpotjes die dagen doorlopen ================= */
 
   await regel('[6.9] twee potjes tegen Turbo, een rondje en twee vriendenpotjes: de kaart, één telregel en het blad in de vaste volgorde', async function (check) {

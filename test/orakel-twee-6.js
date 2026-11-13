@@ -1600,6 +1600,54 @@ async function orakelTwee6() {
     });
   }
 
+  for (const [hoe, venster] of [['wacht even', 10000], ['gaat na twee seconden dicht', 2000]]) {
+    await regel('[6.7] Fien geeft op; de telefoon van Mees ziet het einde en ' + hoe + '; de tablet had hetzelfde einde nog nieuw bewaard: geen eindkaart, niets geteld, en samen één keer', async function (check) {
+      zetDatum('2026-11-16T10:00:00');
+      let tel = maakApparaat('Mees'), fien = maakApparaat('Fien');
+      await vriendenpotje(tel, fien);
+      await potjeTot(tel, fien, 22, fien);
+      let tab = await tweedeApparaat(tel);
+      const voor = tellers(tel), record = JSON.parse(JSON.stringify(samenPotje(tel)));
+      await geefOp(fien);
+      await wacht(venster);
+      check('testopzet: de telefoon telde de winst', tellers(tel) === nogEen(voor, true));
+      record.result = { kind: 'opgave', by: record.myColor === 'w' ? 'b' : 'w', ply: record.moves.length };
+      stopApparaat(tel);
+      stopApparaat(tab);
+      tab.opslag.setItem('schaakheld-samen', JSON.stringify({ v: 1, games: { [record.gameId]: Object.assign({}, record, { shown: false }) } }));
+      tab = await opent(tab);
+      check('de tablet toont geen eindkaart voor het potje met Fien', !/Fien/.test(tekstVan(tab, 'verder')) && !kanTikken(tab, 'Bekijk'));
+      check('en telde niets', tellers(tab) === nogEen(voor, true));
+      tel = await opent(tel);
+      await tab.ev('syncNow()');
+      await wacht(2000);
+      check('samen één keer geteld', tellers(tel) === nogEen(voor, true) && tellers(tab) === nogEen(voor, true));
+    });
+  }
+
+  await regel('[6.7] een potje tegen Turbo dat afloopt terwijl een vriendenpotje doorloopt, gaat niet door de telling van de vriendenpotjes: de winst daarna telt', async function (check) {
+    zetDatum('2026-11-16T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    mees.ev('setPref("predict", false); setPref("guard", false)');
+    await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 22, fien);
+    mees.tik('backBtn');
+    await wacht(2000);
+    await startPotje(mees, 1);
+    await zetEnWacht(mees, 'e2e4');
+    await wacht(6000);
+    await geefOp(mees);
+    tikTekst(mees, 'Naar huis');
+    await wacht(2000);
+    const voor = tellers(mees);
+    mees.tik('verderKaart');
+    await wacht(2000);
+    await geefOp(fien);
+    await tijd(5000);
+    check('Mees leest dat hij wint', /JIJ WINT|Jij wint/.test(tekstVan(mees, 'eindkaart')));
+    check('en de winst telt', tellers(mees) === nogEen(voor, true));
+  });
+
   await regel('[6.9] een potje met iemand die geen vriend is, blijft bewaard als het kind een vriendenpotje opent, en de kaart leidt ernaar terug', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     let tel = maakApparaat('Mees'), fien = maakApparaat('Fien'), sem = maakApparaat('Sem');
