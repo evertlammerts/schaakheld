@@ -1524,6 +1524,40 @@ async function orakelTwee() {
       !/bij Vrienden/.test(tekstVan(daan, 'bubble')));
   });
 
+  await regel('[2.5] haalt een kind de ander weg terwijl ze samen spelen en gaat het na het einde naar huis, dan noemt de strook van de ander de vriendenlijst nog: die heeft het kind er nog in', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    const fid = await wordenVrienden(fien, daan);
+    fien.ev('if (MP) mpStop(); goHome()');
+    daan.ev('if (MP) mpStop(); goHome()');
+    await wacht();
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    await speel(fien, daan, 'e7e5');
+    fien.tik('backBtn');
+    await wacht();
+    fien.ev('removeFriendAsk(' + JSON.stringify(fid) + ')');
+    fien.tik('rmVrJa');
+    await wacht();
+    fien.tik('verderKaart');
+    await tel(3);
+    await geefOp(aanZet(fien, daan));
+    await tel(4);
+    check('testopzet: Fien heeft Daan niet meer, Daan heeft Fien nog', !geheimen(fien) && !!geheimen(daan));
+    tikTekst(fien, 'Naar huis');
+    await tel(40);
+    check('Daan leest dat hij Fien later weer kan uitnodigen', /Fien ging naar huis\. Nodig Fien later weer uit bij Vrienden\./.test(tekstVan(daan, 'bubble')));
+  });
+
+  await regel('[2.5] een vriend die maar aan één kant aankwam: gaat de ander na het einde naar huis, dan noemt de strook van wie hem bewaarde de vriendenlijst', async function (check) {
+    const { fien, daan } = await eenKantVriend();
+    check('testopzet: Daan heeft Fien, Fien heeft Daan niet', !!geheimen(daan) && !geheimen(fien));
+    globalThis.__blok = false;
+    daan.ev('closeModal()');
+    tikTekst(fien, 'Naar huis');
+    await tel(40);
+    check('Daan leest dat hij Fien later weer kan uitnodigen', /Fien ging naar huis\. Nodig Fien later weer uit bij Vrienden\./.test(tekstVan(daan, 'bubble')));
+  });
+
   await regel('[2.5] wat een kind bij het einde nog moet lezen, blijft over een herlading heen: de regel over een vriend die terugging', async function (check) {
     let { fien, daan } = await eenKantVriend();
     tikTekst(daan, 'Revanche');
