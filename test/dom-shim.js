@@ -762,7 +762,8 @@ function WebSocket(url) {
       }
       /* zoals room.go: het welkom zegt of de ander nu verbonden is */
       const p = peer();
-      lever(self, '{"t":"welkom","peer":' + !!p + '}');
+      /* __server.welkomZonderAnder speelt een server die nog niet bijgewerkt is: zijn welkom zegt niets over de ander */
+      lever(self, __server.welkomZonderAnder ? '{"t":"welkom"}' : '{"t":"welkom","peer":' + !!p + '}');
       if (p) lever(p, '{"t":"peer","aan":true}');
       return;
     }
