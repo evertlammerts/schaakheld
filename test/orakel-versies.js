@@ -234,6 +234,7 @@ async function orakelVersies() {
       vast(await blobNaarStaat(k, langstBlob)) === vast(langst));
     const zegel = async function (o) { return b64url(await sealJSON(k, 'paar', vasteLengte(o, POTJE_LENGTE))); };
     const rauw = function (s) { return { v: 2, seq: 3, spel: Object.assign({}, s, { zetten: zettenNaarBus(s.zetten) }), vorige: [] }; };
+    check('een lopend potje van vijfhonderd halve zetten is niet te lezen: de vijfhonderdste beëindigt het', (await blobNaarStaat(k, await zegel(rauw(spel({ zetten: rustig(LANGSTE_POTJE) }))))) === null);
     check('meer dan vijfhonderd halve zetten is niet te lezen', (await blobNaarStaat(k, await zegel(rauw(spel({ zetten: rustig(LANGSTE_POTJE + 1) }))))) === null);
     check('een merk van een andere lengte is niet te lezen', (await blobNaarStaat(k, await zegel(rauw(spel({ fase: 'klaar', uitslag: { soort: 'opgave', door: 'a', ply: 0 },
       weet: { a: 'kortmerk', b: null } }))))) === null && (await blobNaarStaat(k, await zegel(rauw(spel({ fase: 'klaar', uitslag: { soort: 'opgave', door: 'a', ply: 0 },

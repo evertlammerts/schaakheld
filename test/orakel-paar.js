@@ -261,18 +261,120 @@ async function orakelPaar() {
     check('wat niet te openen is, staat er nog', __server.potjes[bus].blob.indexOf('nietteopenen') === 0 && bewaard(w.mees, w.fm).rij.length === 1);
   });
 
-  await regel('[P13] een server zonder potjes met een versie: er gaat niets heen en het apparaat onthoudt dat', async function (check) {
+  await regel('[P13] een server zonder potjes met een versie zegt in de check geen tijd: er gaat niets heen, het apparaat onthoudt dat en leest niet verder', async function (check) {
     const w = await paarMeesFien();
-    const echt = fetch;
-    let n = 0;
-    fetch = function (url, o) { if (/\/v1\/potje$/.test(url)) { n++; return Promise.resolve({ status: 404, json: function () { return Promise.reject(new SyntaxError('geen json')); } }); } return echt(url, o); };
+    const echt = fetch, bus = await paarAdres(w.mees, w.fm);
+    let schrijf = 0, lees = 0;
+    fetch = function (url, o) {
+      if (/\/v1\/potje$/.test(url)) schrijf++;
+      if (/\/v1\/bus\/check$/.test(url) && JSON.parse(o.body).bussen.indexOf(bus) >= 0) {
+        lees++;
+        return echt(url, o).then(function (r) { return { status: r.status, json: function () { return r.json().then(function (d) { delete d.nu; return d; }); } }; });
+      }
+      return echt(url, o);
+    };
     try {
       const r = await doe(w.mees, w.fm, { soort: 'uitdaging', id: 'potjeeen0001', wit: w.rm, op: null });
       check('pasToe zegt dat de server het niet kent', !!r && r.oud === true);
       await doe(w.mees, w.fm, { soort: 'uitdaging', id: 'potjeeen0001', wit: w.rm, op: null });
-      check('de tweede keer gaat er niets meer heen', n === 1);
+      await leesP(w.mees, w.fm);
+      check('er ging niets heen, en na de eerste keer leest het niet meer', schrijf === 0 && lees === 1);
       check('niets wacht', bewaard(w.mees, w.fm).rij.length === 0);
     } finally { fetch = echt; }
+  });
+
+  await regel('[V2] [P18] een 404 op een schrijfactie is een schrijfactie die niet lukte: de zet wacht en gaat de volgende keer, en er vervalt niets', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    const echt = fetch;
+    let keer = 0;
+    fetch = function (url, o) {
+      if (/\/v1\/potje$/.test(url) && keer++ === 0) return Promise.resolve({ status: 404, json: function () { return Promise.reject(new SyntaxError('geen json')); } });
+      return echt(url, o);
+    };
+    let r;
+    try { r = await doe(w.mees, w.fm, { soort: 'zet', id: 'potjeeen0001', ply: 0, zet: RUSTIG[0] }); } finally { fetch = echt; }
+    check('de zet wacht, en de server heet niet oud', !(r && r.oud) && bewaard(w.mees, w.fm).rij.length === 1 && w.mees.get('versiesOnbekend') === false);
+    await leesP(w.mees, w.fm);
+    const s = await serverStaat(w.mees, w.fm);
+    check('de volgende keer staat hij erop', s.spel.zetten.length === 1 && bewaard(w.mees, w.fm).rij.length === 0);
+  });
+
+  await regel('[V6] [P16] na vijftien dagen weg zet Mees met een remise-aanbod voor hij las: het aanbod en de zet krijgen de klok van nu, en een minuut later is het geen remise', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await zetten(w, 'potjeeen0001', RUSTIG, 0, 4);
+    await leesP(w.mees, w.fm);
+    stopApparaat(w.mees);
+    schuifKlok(15 * DAG);
+    const mees = herlaad(w.mees);
+    await wacht();
+    const nuVoor = Math.floor(__busNu() / 1000);
+    await doe(mees, w.fm, { soort: 'zet', id: 'potjeeen0001', ply: 4, zet: RUSTIG[4], bod: true });
+    let s = await serverStaat(mees, w.fm);
+    check('de zet en het aanbod staan er, met de klok van nu', s.spel.zetten.length === 5 && !!s.spel.bod && s.spel.bod.t >= nuVoor && s.spel.t >= nuVoor);
+    schuifKlok(60000);
+    await leesP(mees, w.fm);
+    s = await serverStaat(mees, w.fm);
+    check('een minuut later loopt het potje nog', s.spel.fase === 'potje');
+  });
+
+  await regel('[V6] [P17] een schrijfactie leest eerst als de laatste lezing van deze run ouder is dan een minuut, en een 409 gooit de klok niet weg', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await zetten(w, 'potjeeen0001', RUSTIG, 0, 4);
+    await leesP(w.mees, w.fm);
+    await doe(w.fien, w.ff, { soort: 'bod', id: 'potjeeen0001', ply: 4 });
+    const bus = await paarAdres(w.mees, w.fm), echt = fetch;
+    let lees = 0;
+    fetch = function (url, o) { if (/\/v1\/bus\/check$/.test(url) && JSON.parse(o.body).bussen.indexOf(bus) >= 0) lees++; return echt(url, o); };
+    try {
+      await doe(w.mees, w.fm, { soort: 'zet', id: 'potjeeen0001', ply: 4, zet: RUSTIG[4] });
+      let s = await serverStaat(w.mees, w.fm);
+      check('testopzet: de zet van Mees beantwoordde het aanbod', s.spel.zetten.length === 5 && s.spel.bod === null);
+      check('na de 409 zette Mees zonder opnieuw te lezen', lees === 0);
+      schuifKlok(2 * 60000);
+      await doe(w.mees, w.fm, { soort: 'bod', id: 'potjeeen0001', ply: 5 });
+      s = await serverStaat(w.mees, w.fm);
+      check('twee minuten later las hij eerst, en het aanbod staat er', lees === 1 && !!s.spel.bod && s.spel.bod.door === w.rm);
+    } finally { fetch = echt; }
+  });
+
+  /* een staat op de server zetten zoals een ander apparaat hem geschreven kan hebben */
+  const zetOpServer = async function (app, fid, staat) {
+    const blob = await app.ev('staatNaarBlob(P.friends[' + J(fid) + '].k, ' + J(staat) + ')');
+    __server.potjes[await paarAdres(app, fid)] = { blob: blob, tot: __busNu() + 30 * DAG, veranderd: __busNu() };
+  };
+  const afgelopenBijAllebei = async function () {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await zetten(w, 'potjeeen0001', RUSTIG, 0, 2);
+    await doe(w.mees, w.fm, { soort: 'opgeven', id: 'potjeeen0001', eigen: 1 });
+    await leesP(w.fien, w.ff);
+    await leesP(w.mees, w.fm);
+    return w;
+  };
+  await regel('[V3] [P19] bij dezelfde teller toont de server als lopend een potje dat dit apparaat als afgelopen kent en dat allebei weten: het schrijft zijn staat terug', async function (check) {
+    const w = await afgelopenBijAllebei();
+    const sy = bewaard(w.mees, w.fm).staat;
+    check('testopzet: afgelopen en allebei weten het', sy.spel.fase === 'klaar' && !!sy.spel.weet.a && !!sy.spel.weet.b);
+    const sx = JSON.parse(JSON.stringify(sy));
+    Object.assign(sx.spel, { fase: 'potje', uitslag: null, weet: { a: null, b: null }, bekeken: { a: false, b: false } });
+    await zetOpServer(w.mees, w.fm, sx);
+    await leesP(w.mees, w.fm);
+    const s = await serverStaat(w.mees, w.fm);
+    check('de afgelopen staat staat weer op de server', s.spel.fase === 'klaar' && s.seq === sy.seq && !!s.spel.weet.a && !!s.spel.weet.b);
+  });
+  await regel('[V3] [P20] bij een lagere teller toont de server dat potje afgelopen met één merk: het apparaat schrijft zijn staat terug', async function (check) {
+    const w = await afgelopenBijAllebei();
+    const sy = bewaard(w.mees, w.fm).staat;
+    const sx = JSON.parse(JSON.stringify(sy));
+    sx.seq = sy.seq - 1;
+    sx.spel.weet[w.rf] = null;
+    await zetOpServer(w.mees, w.fm, sx);
+    await leesP(w.mees, w.fm);
+    const s = await serverStaat(w.mees, w.fm);
+    check('de staat met beide merken staat weer op de server', s.seq === sy.seq && !!s.spel.weet.a && !!s.spel.weet.b);
   });
 
   await regel('[V2] [P14] een zet en meteen een aanbod: één verzoek tegelijk, op volgorde (de zet, het aanbod, de stempel erop), en alles staat er', async function (check) {

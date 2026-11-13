@@ -2322,7 +2322,7 @@ async function blobNaarStaat(k, blob) {
         !['uitdaging', 'nee', 'potje', 'klaar'].includes(s.fase) || !weetGoed(s.weet) || !bekekenGoed(s.bekeken)) return null;
     const zetten = potjeZetten(s.zetten);
     const uitslag = zetten ? uitslagVan(s.uitslag, zetten.length) : undefined;
-    if (!zetten || zetten.length > LANGSTE_POTJE || !standVanZetten(zetten) || uitslag === undefined || (s.fase === 'klaar') !== !!uitslag) return null;
+    if (!zetten || zetten.length > LANGSTE_POTJE || (zetten.length === LANGSTE_POTJE && s.fase !== 'klaar') || !standVanZetten(zetten) || uitslag === undefined || (s.fase === 'klaar') !== !!uitslag) return null;
     const bod = s.bod;
     if (bod !== null && !(bod && s.fase === 'potje' && rol(bod.door) && bod.ply === zetten.length && (bod.t === null || Number.isFinite(bod.t)))) return null;
     spel = { id: s.id, wit: s.wit, door: s.door, fase: s.fase, zetten, bod: bod ? { door: bod.door, ply: bod.ply, t: bod.t } : null,
@@ -2348,6 +2348,17 @@ async function blobNaarStaat(k, blob) {
    uitslag meer). Welke potjes het telde, staat in het profielitem (DOC.loc.geteld), bij de tellers. */
 const PAAR_KEY = 'schaakheld-paar';
 let versiesOnbekend = false;
+/* De klok van de server staat alleen in het geheugen: wat een lezing in deze run zei, verder geteld met de looptijd
+   van het apparaat. Een klok uit de opslag kan dagen oud zijn: een remise-aanbod kreeg er een stempel van dagen terug
+   mee, en een minuut later was het vanzelf remise. Een lezing van meer dan een minuut geleden telt niet. */
+const serverKlok = {}, KLOK_OUD_MS = 60000;
+function zetKlok(fid, nu) { serverKlok[fid] = { nu, loop: performance.now(), muur: Date.now() }; }
+function klokNu(fid) {
+  const k = serverKlok[fid];
+  if (!k) return null;
+  const loop = performance.now() - k.loop, muur = Date.now() - k.muur;
+  return loop < 0 || loop > KLOK_OUD_MS || Math.abs(muur) > KLOK_OUD_MS ? null : k.nu + Math.floor(loop / 1000);
+}
 function paren() {
   let o = null;
   try { o = JSON.parse(opslag(PAAR_KEY)); } catch (e) {}
@@ -2364,7 +2375,7 @@ function paarVan(fid) {
   }
   return { blob: typeof p.blob === 'string' ? p.blob : null, staat: p.staat && typeof p.staat === 'object' ? p.staat : null,
     versie: typeof p.versie === 'string' ? p.versie : '', toont: typeof p.toont === 'string' ? p.toont : null,
-    hoogste: Number.isInteger(p.hoogste) && p.hoogste >= 0 ? p.hoogste : 0, nu: Number.isFinite(p.nu) ? p.nu : null,
+    hoogste: Number.isInteger(p.hoogste) && p.hoogste >= 0 ? p.hoogste : 0,
     merk: p.merk,
     rij: Array.isArray(p.rij) ? p.rij.filter(a => a && typeof a === 'object' && typeof a.soort === 'string') : [],
     telBij: p.telBij && typeof p.telBij === 'object' && !Array.isArray(p.telBij) ? p.telBij : {} };
@@ -2394,7 +2405,6 @@ async function schrijfPaar(f, blob, als) {
     const to = await paarBus(f);
     const r = await fetch(SYNC_URL + '/v1/potje', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob, als }) });
-    if (r.status === 404) return { oud: true };
     if (r.status !== 409) return { code: r.status };
     let d = null;
     try { d = await r.json(); } catch (e) {}
@@ -2418,7 +2428,7 @@ function telEinde(u, rol, fid) {
   if ((u.soort === 'mat' && u.door === rol) || (u.soort === 'opgave' && u.door !== rol)) bump('c.winsOnline', 1);
 }
 function getelde(fid) { const l = DOC.loc.geteld && DOC.loc.geteld[fid]; return Array.isArray(l) ? l : []; }
-/* V5: een afgelopen potje met het eigen merk telt op dit apparaat, één keer. De lijst staat in het profielitem en
+/* Een afgelopen potje met het eigen merk telt op dit apparaat, één keer. De lijst staat in het profielitem en
    gaat mee met de eerste teller in dezelfde bewaaractie: wie tussen lijst en tellers stopt, telt niet twee keer en
    verliest niets. */
 function telPaar(fid, rol) {
@@ -2445,7 +2455,8 @@ function eigenHandelingen(fid, rol) {
   const kop = { id: sp.id, ply: sp.zetten.length, zelf: true }, erbij = [];
   if (spelAf(sp) && !sp.weet[rol]) erbij.push(Object.assign({ soort: 'neem' }, kop));
   if (sp.fase === 'potje' && sp.bod && sp.bod.t == null) erbij.push(Object.assign({ soort: 'stempel' }, kop));
-  if (sp.fase === 'potje' && sp.bod && sp.bod.door === rol && sp.bod.t != null && p.nu != null && p.nu - sp.bod.t >= VEERTIEN_DAGEN_S) {
+  const nu = klokNu(fid);
+  if (sp.fase === 'potje' && sp.bod && sp.bod.door === rol && sp.bod.t != null && nu != null && nu - sp.bod.t >= VEERTIEN_DAGEN_S) {
     erbij.push(Object.assign({ soort: 'vanzelf' }, kop));
   }
   const nieuw = erbij.filter(a => !p.rij.some(x => x.soort === a.soort && x.id === a.id && x.ply === a.ply));
@@ -2453,17 +2464,16 @@ function eigenHandelingen(fid, rol) {
   p.rij = nieuw.concat(p.rij);
   bewaarPaar(fid, p);
 }
-/* V3: wat de server toont (blob, of null als er niets staat) naast wat dit apparaat houdt. Is de server ouder of
-   leeg, dan schrijft het zijn staat terug als die nog telt, of als de server een potje toont dat dit apparaat als
-   afgelopen kent; een afgelopen staat die allebei weten, houdt het bij een lege server als geheugen. Anders neemt
+/* Wat de server toont (blob, of null als er niets staat) naast wat dit apparaat houdt. Is de server ouder (een lagere
+   seq, of dezelfde en dan wint dit apparaat) of leeg, dan schrijft het zijn staat terug als die nog telt, of als de
+   server een potje toont dat dit apparaat als afgelopen kent; een afgelopen staat die allebei weten, houdt het bij een lege server als geheugen. Anders neemt
    het wat de server toont, ook met een lagere seq. Wat niet te openen is of van een nieuwere app, blijft staan:
    false, en er gaat niets heen. */
-async function verwerkPaar(fid, X, nu) {
+async function verwerkPaar(fid, X) {
   const f = P.friends[fid], rol = myRole(f);
   for (let ronde = 0; ronde < 6; ronde++) {
     const sx = X ? await blobNaarStaat(f.k, X) : null, vx = X ? await versieVan(X) : '';
     const p = paarVan(fid);
-    if (nu != null) p.nu = nu;
     if (X && (!sx || sx.nieuwer)) { bewaarPaar(fid, p); return false; }
     p.toont = vx;
     const sy = p.staat;
@@ -2474,13 +2484,12 @@ async function verwerkPaar(fid, X, nu) {
     } else if (sy && vx !== p.versie) {
       const ouder = sx.seq < p.hoogste || (sx.seq === sy.seq && sterkerDan(sy, p.versie, sx, vx));
       const afgelopen = [sy.spel && spelAf(sy.spel) ? sy.spel.id : null].concat(sy.vorige.map(e => e.id), getelde(fid));
-      const kent = !!sx.spel && afgelopen.includes(sx.spel.id) && !(sy.spel && sy.spel.id === sx.spel.id && sx.seq >= sy.seq);
+      const kent = !!sx.spel && afgelopen.includes(sx.spel.id);
       if (ouder && (staatTelt(sy) || kent)) terug = true;
     }
     if (terug) {
       bewaarPaar(fid, p);
       const ant = await schrijfPaar(f, p.blob, vx);
-      if (ant.oud) { versiesOnbekend = true; return false; }
       if (ant.code === 409) { X = ant.blob; continue; }
       if (ant.code !== 204) return false;
       const q = paarVan(fid);
@@ -2513,7 +2522,8 @@ async function leesPaarNu(fid) {
     d = await r.json();
   } catch (e) { return false; }
   if (!d || !Number.isFinite(d.nu)) { versiesOnbekend = true; return false; }
-  return verwerkPaar(fid, d.blobs && typeof d.blobs[to.bus] === 'string' ? d.blobs[to.bus] : null, d.nu);
+  zetKlok(fid, d.nu);
+  return verwerkPaar(fid, d.blobs && typeof d.blobs[to.bus] === 'string' ? d.blobs[to.bus] : null);
 }
 /* de rij afwerken: wat al in de staat staat, is gedaan; wat niet meer past, vervalt zonder woord; de rest gaat als
    schrijfactie op de versie die de server toonde. Zonder netwerk of bij een andere fout blijft de rij staan. */
@@ -2522,12 +2532,16 @@ async function werkRijAf(fid) {
   if (!f || !f.k) return {};
   if (versiesOnbekend) { const p = paarVan(fid); p.rij = []; bewaarPaar(fid, p); return { oud: true }; }
   const rol = myRole(f);
-  if (paarVan(fid).nu == null && !(await leesPaarNu(fid))) return versiesOnbekend ? werkRijAf(fid) : {};
   for (let ronde = 0; ronde < 40; ronde++) {
-    const p = paarVan(fid);
-    if (!p.rij.length) return {};
+    if (!paarVan(fid).rij.length) return {};
+    /* zonder lezing in deze run, of een van meer dan een minuut geleden, eerst lezen: een schrijfactie dateert met nu */
+    if (klokNu(fid) == null) {
+      if (!(await leesPaarNu(fid))) return versiesOnbekend ? werkRijAf(fid) : {};
+      continue;
+    }
+    const p = paarVan(fid), nu = klokNu(fid);
     const a = p.rij[0], basis = p.staat || { v: 2, seq: p.hoogste, spel: null, vorige: [] };
-    const r = alGedaan(basis, a, rol, p.merk) ? null : staatNa(basis, Object.assign({}, a, { merk: p.merk }), rol, p.nu);
+    const r = alGedaan(basis, a, rol, p.merk) ? null : staatNa(basis, Object.assign({}, a, { merk: p.merk }), rol, nu);
     if (!r || !r.past) {
       p.rij.shift();
       bewaarPaar(fid, p);
@@ -2543,9 +2557,8 @@ async function werkRijAf(fid) {
     bewaarPaar(fid, p);
     const blob = await staatNaarBlob(f.k, na), versie = await versieVan(blob);
     const ant = await schrijfPaar(f, blob, p.toont != null ? p.toont : p.versie);
-    if (ant.oud) { versiesOnbekend = true; return werkRijAf(fid); }
     if (ant.code === 409) {
-      if (!(await verwerkPaar(fid, ant.blob, null))) return {};
+      if (!(await verwerkPaar(fid, ant.blob))) return {};
       continue;
     }
     if (ant.code !== 204) return {};
@@ -2565,19 +2578,20 @@ function pasToe(fid, actie) {
   bewaarPaar(fid, p);
   return inPaarSlot(fid, () => werkRijAf(fid));
 }
-/* na een lezing, uit de check of uit een 409: verwerken, dan de rij */
+/* na een lezing van een check die ook andere bussen las: de klok van die lezing, dan verwerken en de rij */
 function staatGelezen(fid, blob, nu) {
-  return inPaarSlot(fid, async () => (await verwerkPaar(fid, blob, nu)) ? werkRijAf(fid) : {});
+  if (Number.isFinite(nu)) zetKlok(fid, nu);
+  return inPaarSlot(fid, async () => (await verwerkPaar(fid, blob)) ? werkRijAf(fid) : {});
 }
 function leesPaar(fid) {
   return inPaarSlot(fid, async () => (await leesPaarNu(fid)) ? werkRijAf(fid) : {});
 }
-/* V4: wat het kind voor zich heeft: de bewaarde staat met wat nog wacht erin verwerkt */
+/* Wat het kind voor zich heeft: de bewaarde staat met wat nog wacht erin verwerkt */
 function zichtVan(fid) {
   const f = P.friends[fid], p = paarVan(fid);
   if (!f) return null;
   let s = p.staat || { v: 2, seq: p.hoogste, spel: null, vorige: [] };
-  for (const a of p.rij) { const r = staatNa(s, Object.assign({}, a, { merk: p.merk }), myRole(f), p.nu); if (r.past) s = r.staat; }
+  for (const a of p.rij) { const r = staatNa(s, Object.assign({}, a, { merk: p.merk }), myRole(f), klokNu(fid)); if (r.past) s = r.staat; }
   return s;
 }
 /* wat in de eigen potjesbus staat: het potje zonder naam, wit als rol van de vriendschap */
