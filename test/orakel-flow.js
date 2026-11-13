@@ -593,6 +593,33 @@ async function orakelFlow() {
     check('in het potje tegen Turbo geen uitleg van de oefening', !zichtbaar(a, 'hulpZin'));
   });
 
+  await regel('[4.13] Revanche tegen Turbo laat een potje dat niet te lezen is op een ander niveau staan', async function (check) {
+    const o = maakOpslag();
+    o.setItem(POTJE, JSON.stringify({ v: 2, games: {
+      1: { level: 1, moves: ['e2e4', 'f7f6', 'd2d4', 'g7g5'], tips: 3, drawAsked: null, started: 1794700000000, updated: 1794700009000, patXP: 0 },
+      2: { level: 2, moves: ['e2e4', 'e2e4'], tips: 3, drawAsked: null, started: 1794700000000, updated: 1794700000000, patXP: 0 } } }));
+    const a = nieuwKind({ opslag: o });
+    await wacht();
+    await startPotje(a, 1);
+    check('testopzet: het potje op niveau 1 gaat verder', a.get('session.level') === 1 && a.get('session.S.hist.length') === 4);
+    await zetEnWacht(a, 'd1h5');
+    check('testopzet: mat', a.get('!!(session && session.over)'));
+    tikTekst(a, 'Revanche');
+    await wacht();
+    check('het onleesbare potje op niveau 2 staat er nog', /"2":\{[^}]*"e2e4","e2e4"/.test(a.opslag.getItem(POTJE) || ''));
+  });
+
+  await regel('[4.8] zonder server opent "Ik typ woorden" niet alsof alles goed is: de app zegt het meteen', async function (check) {
+    const a = nieuwKind();
+    const echt = fetch;
+    fetch = function () { return Promise.reject(new TypeError('Load failed')); };
+    try {
+      a.ev('mpWordFlow()');
+      await wacht(200);
+    } finally { fetch = echt; }
+    check('geen woordvenster, wel de zin', !/Samen spelen op afstand/.test(a.scherm()) && /De server doet even niet mee/.test(toastTekst(a)));
+  });
+
   await regel('[1.3] Revanche na afloop begint meteen een nieuw potje, zonder vraag', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
     a.tik('verderKaart');
@@ -723,7 +750,11 @@ async function orakelFlow() {
     check('testopzet: de kaart zegt dat het niet open kan', /kan ik niet meer openen/.test(tekstVan(a, 'verder')));
     await startPotje(a, 2);
     check('een nieuw potje, zonder vraag', opSpeelscherm(a) && !a.open() && a.get('session.level') === 2);
-    check('het kapotte potje is weg', opgeslagen(a, POTJE) === null);
+    check('een nieuw potje op een ander niveau laat het kapotte potje staan', /e7e2/.test(a.opslag.getItem(POTJE) || ''));
+    a.tik('backBtn');
+    await wacht();
+    await startPotje(a, 1);
+    check('een nieuw potje op zijn eigen niveau haalt het weg', opSpeelscherm(a) && a.get('session.level') === 1 && opgeslagen(a, POTJE) === null);
   });
 
   await regel('[1.5] rondjes die niet te lezen zijn (kapotte tekst) worden stil weggehaald, en het rondje begint opnieuw', async function (check) {

@@ -159,7 +159,8 @@ function normDoc(raw) {
       const m = {};
       for (const dev in src) {
         const n = +src[dev];
-        if (typeof src[dev] === 'number' && isFinite(n) && n > 0 && dev.length <= 64) {
+        /* een 0 blijft staan: zo staat een net gekoppeld apparaat in het profiel voordat het iets verdiende */
+        if (typeof src[dev] === 'number' && isFinite(n) && n >= 0 && dev.length <= 64) {
           m[dev] = Math.min(n, MAX_BIJDRAGE);
         }
       }
@@ -388,9 +389,10 @@ function foldCnt(src, out) {
   for (const path in src) {
     for (const dev in src[path]) {
       const n = +src[path][dev];
-      if (!isFinite(n) || n <= 0) continue;
+      if (!isFinite(n) || n < 0) continue;
       const m = out[path] || (out[path] = {});
-      if (n > (+m[dev] || 0)) m[dev] = n;
+      /* een 0 telt ook: dat is een apparaat dat er is maar nog niets verdiende */
+      if (!(dev in m) || n > +m[dev]) m[dev] = n;
     }
   }
 }
@@ -612,12 +614,29 @@ async function linkShareFlow() {
     '<div id="linkQR">' + QR.qrSvg(linkURL()) + '</div>' +
     '<div class="m-btns"><button class="btn sun hidden" id="linkNieuw">Nieuwe code</button>' +
     '<button class="btn plain" id="linkDone">Klaar</button></div>', () => {
-      $('linkDone').addEventListener('click', () => { clearTimeout(linkKlok); closeModal(); });
-      $('linkNieuw').addEventListener('click', () => { closeModal(); linkShareFlow(); });
+      let open = true;
+      $('linkDone').addEventListener('click', () => { open = false; clearTimeout(linkKlok); closeModal(); });
+      $('linkNieuw').addEventListener('click', () => { open = false; closeModal(); linkShareFlow(); });
       if (!serverOk) return;
+      /* zolang het venster open is: om de vijf tellen kijken of een nieuw apparaat in het profiel staat */
+      const eerder = andereApparaten();
+      const kijk = async () => {
+        if (!open || !modalOpen || Date.now() > tot) return;
+        await syncNow();
+        if (!open || !modalOpen) return;
+        if ([...andereApparaten()].some(d => !eerder.has(d))) {
+          open = false;
+          clearTimeout(linkKlok);
+          for (const id of ['linkUitleg', 'linkWoorden', 'linkQR']) if ($(id)) $(id).style.display = 'none';
+          $('linkTijd').textContent = 'Gelukt! Je level, sterren en trofeeën staan nu ook op je andere apparaat.';
+          return;
+        }
+        setTimeout(kijk, 5000);
+      };
+      setTimeout(kijk, 5000);
       /* hele minuten, nooit tikkende seconden: de tijd telt mee met de klok van het apparaat */
       const toon = () => {
-        if (!$('linkTijd')) return;
+        if (!$('linkTijd') || !open) return;
         const over = tot - Date.now();
         if (over <= 0) {
           $('linkTijd').textContent = 'Deze code werkt niet meer.';
@@ -750,6 +769,21 @@ async function fetchRemoteProfile(acc) {
 }
 /* een account bestaat al zodra de koppelcode open stond; een ander apparaat pas als
    dit apparaat een profiel overnam, of een sync iets binnenbracht dat een ander schreef */
+/* De apparaten die in het profiel geschreven hebben, behalve dit. Een net gekoppeld apparaat schrijft een 0 onder
+   zijn eigen naam in de XP-teller (geen nieuwe sleutel, de som blijft gelijk), zodat het andere apparaat het ziet. */
+function andereApparaten() {
+  const uit = new Set();
+  for (const pad in DOC.cnt) for (const d in DOC.cnt[pad]) if (d !== DEV) uit.add(d);
+  return uit;
+}
+function meldApparaat() {
+  const m = DOC.cnt.xp || (DOC.cnt.xp = {});
+  if (DEV in m) return;
+  m[DEV] = 0;
+  saveP();
+  /* syncSoon, niet syncNow: tijdens het koppelen loopt er vaak al een sync, en die zou deze stil overslaan */
+  syncSoon();
+}
 function anderApparaat() {
   return !!ACC && (ACC.overgenomen === true ||
     Object.keys(DOC.cnt).some(pad => Object.keys(DOC.cnt[pad]).some(d => d !== DEV)));
@@ -758,6 +792,7 @@ function finishLink(acc, remote) {
   ACC = { id: acc.id, secret: acc.secret, overgenomen: true };
   saveAcc();
   if (remote) applyRemoteDoc(remote);
+  meldApparaat();
   refreshAfterSync();
   syncNow();
 }
@@ -1734,7 +1769,9 @@ async function mpHostQR() {
     return;
   }
   mpStart(resp.room, resp.seat, true);
-  const url = location.origin + location.pathname + '#' + PLAY_PREFIX + resp.room + '.' + resp.guest;
+  /* de naam van wie de code laat zien, als derde deel: zo kan de vraag na het scannen hem noemen; hij gaat nooit naar de server */
+  const url = location.origin + location.pathname + '#' + PLAY_PREFIX + resp.room + '.' + resp.guest +
+    (P.name ? '.' + encodeURIComponent(P.name) : '');
   showModal('<div class="m-emoji">🤝</div><h2>Samen spelen</h2>' + samenKapotZin() +
     '<p>Laat je maatje deze code scannen in SchaakHeld: bij Vrienden, met 📷 Ik&nbsp;scan de code.</p>' +
     '<div style="width:190px;max-width:60vw;margin:8px auto">' + QR.qrSvg(url) + '</div>' +
@@ -1747,12 +1784,14 @@ async function mpHostQR() {
 /* verwerkt de inhoud van een speel-QR ("room.seat", het stuk na SHPLAY1:),
    uit het fragment of uit de in-app scanner */
 function handlePlayString(rest) {
-  const dot = rest.indexOf('.');
-  if (dot < 0) return false;
-  const room = rest.slice(0, dot), seat = rest.slice(dot + 1);
+  const delen = rest.split('.');
+  if (delen.length < 2) return false;
+  const room = delen[0], seat = delen[1];
+  let naam = '';
+  try { naam = decodeURIComponent(delen.slice(2).join('.')).replace(/[<>&\x00-\x1f]/g, '').trim().slice(0, 14); } catch (e) {}
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(room) || !/^[A-Za-z0-9_-]{8,64}$/.test(seat)) return false;
   showModal('<div class="m-emoji">🤝</div><h2>Meespelen?</h2>' + samenKapotZin() +
-    '<p>Je maatje wil een potje schaken. Doe je mee?</p>' +
+    '<p>' + (naam ? escHtml(naam) : 'Je maatje') + ' wil een potje schaken. Doe je mee?</p>' +
     '<div class="m-btns"><button class="btn sun" id="mpJa">Ja, spelen! 🤝</button>' +
     '<button class="btn plain" id="mpNee">Nee</button></div>', () => {
       $('mpJa').addEventListener('click', () => {
@@ -2168,9 +2207,9 @@ async function friendPoll() {
 }
 /* pas als de vraag echt op het scherm staat is het briefje 'gezien'; anders
    komt het bij de volgende ronde gewoon terug */
-function showInvite(fid, inv) {
+function showInvite(fid, inv, ookBezig) {
   const f = P.friends[fid];
-  if (!f || session || (mpBezig() && !INV) || modalOpen) return false;
+  if (!f || session || (mpBezig() && !INV && !ookBezig) || modalOpen) return false;
   markSeen(inv.id);
   /* de bus voor een "Nu niet" alvast uitrekenen, zodat het antwoord meteen weg kan */
   const neeBus = busFor(f, theirRole(f));
@@ -2193,7 +2232,7 @@ function uitnodigingJa(fid, inv) {
   if (!f) return;
   /* naast een lopend vriendenpotje kan het niet: dan kan het kind wel Nu niet zeggen, zodat de vriend het meteen hoort */
   if (samenLoopt()) {
-    showModal('<p>Je potje met ' + escHtml(mpNaam()) + ' loopt nog. Speel dat eerst uit.</p>' +
+    showModal('<div class="m-emoji">♟️</div><p>Je potje met ' + escHtml(mpNaam()) + ' loopt nog. Speel dat eerst uit.</p>' +
       '<div class="m-btns"><button class="btn plain" id="invLooptNee">Nu niet</button></div>', () => {
         $('invLooptNee').addEventListener('click', () => { closeModal(); if (uitnodigingWacht && uitnodigingWacht.inv.id === inv.id) uitnodigingNee(); });
       }, true);
@@ -2211,7 +2250,7 @@ function uitnodigingJa(fid, inv) {
   mpWachtOpMaatje(f.naam);
 }
 /* een uitnodiging die kwam terwijl het kind in een potje of rondje zat: {fid, inv}, voor de Verder-kaart */
-let uitnodigingWacht = null;
+let uitnodigingWacht = null, uitnodigingKlok = 0;
 function uitnodigingOpKaart() {
   const w = uitnodigingWacht, f = w && P.friends[w.fid];
   const over = w ? INVITE_TTL - (Date.now() - +w.inv.ts) : 0;
@@ -2324,8 +2363,12 @@ function openScanner(kind) {
 }
 
 /* op afstand: wederzijdse woordcodes, elk kind twee woorden */
-function mpWordFlow() {
+async function mpWordFlow() {
   if (samenBezet()) return;
+  /* zonder server werken de woorden niet: dat zegt de app meteen, zoals bij de QR */
+  let server = false;
+  try { server = netAvailable() && (await fetch(SYNC_URL + '/healthz')).status === 200; } catch (e) {}
+  if (!server) { showToast('De server doet even niet mee… probeer zo nog eens! 🛜'); return; }
   const mijn = [];
   for (let i = 0; i < 2; i++) {
     const b = randBytes(2);
@@ -2449,9 +2492,11 @@ function floatXP(txt) {
   const d = document.createElement('div');
   d.className = 'xp-float';
   d.textContent = txt;
-  d.style.left = Math.max(8, r.left - 60) + 'px';
   d.style.top = (r.bottom + 8) + 'px';
   document.body.appendChild(d);
+  /* een lange regel schuift naar links, zodat hij binnen het scherm blijft */
+  const breed = d.getBoundingClientRect().width;
+  d.style.left = Math.max(8, Math.min(r.left - 60, window.innerWidth - breed - 8)) + 'px';
   setTimeout(() => d.remove(), 1500);
 }
 
@@ -3033,10 +3078,10 @@ function potjeKapot() {
   return !alle || Object.keys(alle).some(k => alle[k].kapot);
 }
 /* Weghalen op de kaart: alleen wat niet te lezen is */
-function wisKapottePotjes() {
+function wisKapottePotjes(level) {
   const alle = leesPotjes(), rauw = potjesRauw();
   if (!alle || !rauw) { opslag(POTJE_KEY, null); return; }
-  for (const k in alle) if (alle[k].kapot) delete rauw[k];
+  for (const k in alle) if (alle[k].kapot && (level == null || String(k) === String(level))) delete rauw[k];
   schrijfPotjes(rauw);
 }
 function schrijfPotjes(games) {
@@ -3331,6 +3376,9 @@ function renderVerder() {
   const v = vriendItems(alle);
   const r = nextStep(P, { now: Date.now(), potje: b && !b.kapot ? b.r : null, rondjes: Object.keys(rj).length ? rj : null,
     samen: v.samen, uitnodiging: uitnodigingOpKaart(), moment: null });
+  /* de minuten op de kaart lopen met de klok mee, en na de tien minuten is de uitnodiging weg, ook zonder netwerk */
+  clearTimeout(uitnodigingKlok);
+  if (uitnodigingWacht) uitnodigingKlok = setTimeout(thuisVerversen, ((INVITE_TTL - (Date.now() - +uitnodigingWacht.inv.ts)) % 60000) + 50);
   const bezig = v.items.concat(r.bezig);
   const kapotKey = alle.kapot ? SAMEN_KEY : potjeKapot() ? POTJE_KEY : null;
   const eerste = kapotKey || !bezig.length ? r : bezig[0];
@@ -3363,6 +3411,11 @@ function renderVerder() {
     $('verderNee').addEventListener('click', uitnodigingNee);
   } else $('verderKaart').addEventListener('click', () => doeActie(eerste.action));
   el.querySelectorAll('.verder-ook').forEach(o => o.addEventListener('click', () => doeActie(ook[+o.dataset.ook].action)));
+  /* een uitnodiging staat nooit nergens: is ze niet de kaart en niet de ene regel Ook nog, dan komt ze als venster */
+  if (uitnodigingWacht && !kapotKey && eerste.rule !== 'R1i' && !(ook[0] && ook[0].rule === 'R1i') && !session && !modalOpen) {
+    const w = uitnodigingWacht;
+    if (showInvite(w.fid, w.inv, true)) uitnodigingWacht = null;
+  }
 }
 
 function hervatPotje() {
@@ -4469,8 +4522,8 @@ function startGame(level, bewaard) {
   renderBoard();
   /* een hervat potje staat al precies zo bewaard; een nieuw potje haalt een oud record weg */
   if (bewaard) { session.laatstBewaard = JSON.stringify(potjeInhoud()); toonBewaard(true); } else {
-    /* een nieuw potje haalt weg wat niet te lezen is: dat zei de kiezer */
-    if (potjeKapot()) wisKapottePotjes();
+    /* een nieuw potje haalt weg wat op dit niveau niet te lezen is (dat zei de kiezer); andere niveaus blijven */
+    if (potjeKapot()) wisKapottePotjes(level);
     bewaarPotje();
   }
   if (session.S.turn === 'w') kidTurn(); else { BD.mode = 'off'; turboTurn(); }
@@ -5722,7 +5775,7 @@ function renderLevelPath() {
       '<div class="lp-eis">Nog te doen: ' + N.gate.txt + ' (' + N.gate.prog(P) + ')</div>');
 }
 function renderIkBewaard() {
-  $('ikBewaard').innerHTML = (anderApparaat() ? '✔ Bewaard op dit apparaat en je andere apparaat.' :
+  $('ikBewaard').innerHTML = (anderApparaat() ? '✔ Gekoppeld: je level, sterren en trofeeën staan ook op je andere apparaat.' :
     'Alles staat op ' + ditApparaat() + '. Speel je ook ergens anders? Koppel het, dan is alles dubbel bewaard.' +
     '<br><button class="btn plain small" id="ikKoppel">🔑 Speel op een ander apparaat</button>') +
     '<small>Een potje blijft hier staan vanaf de eerste zet, een rondje vanaf het eerste antwoord.</small>';
@@ -5746,9 +5799,9 @@ function renderHome() {
    (uitnodigen of samen spelen) en Ik (week, vorm, trofeeën). */
 const HOME_TABS = { spelen: 'tabSpelen', vrienden: 'tabVrienden', ik: 'tabIk' };
 let laatsteTab = 'spelen', terugTab = 'spelen';
-/* Pauze gaat naar het tabblad van waar het kind kwam; een potje met een kind dat geen vriend is, staat alleen op
-   Spelen (de Verder-kaart), dus daar gaat het heen */
-function pauzeTab() { return session && session.online && !(MP && MP.viaFriend) ? 'spelen' : terugTab; }
+/* Pauze gaat naar het tabblad van waar het kind kwam; een potje met een ander kind staat op Spelen (de
+   Verder-kaart), dus daar gaat het heen */
+function pauzeTab() { return session && session.online ? 'spelen' : terugTab; }
 function showHomeTab(name) {
   if (!HOME_TABS[name]) name = 'spelen';
   laatsteTab = name;

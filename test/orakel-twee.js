@@ -783,7 +783,31 @@ async function orakelTwee() {
     check('in het vriendenpotje geen uitleg van de oefening', opSpeelscherm(a) && !zichtbaar(a, 'hulpZin'));
   });
 
-  await nogNiet('[3.5] na koppelen weet ook het oude apparaat dat alles op twee apparaten staat, ook als het nieuwe nog niets verdiende', async function (check) {
+  await regel('[3.5] het apparaat dat de code liet zien, zegt dat het gelukt is zodra het nieuwe apparaat gekoppeld is', async function (check) {
+    const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    const vier = (mees.modal().match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
+    check('testopzet: vier woorden', vier.length === 4);
+    ipad.ev('linkEntryFlow()');
+    typ(ipad, 'wordInp', vier);
+    ipad.tik('linkGo');
+    await wacht();
+    ipad.tik('linkYes');
+    /* in kleine stapjes: het codevenster kijkt om de vijf tellen, en elke keer is een heen-en-weer met de server */
+    await zagOoit(function () { return /Gelukt/.test(tekstVan(mees, 'linkTijd')); }, 40000);
+    check('het codevenster zegt het', /Gelukt! Je level, sterren en trofeeën staan nu ook op je andere apparaat\./.test(tekstVan(mees, 'linkTijd')) &&
+      kanTikken(mees, 'Klaar') && !zichtbaar(mees, 'linkWoorden'));
+    mees.tik('linkDone');
+    mees.tik('tabIk');
+    ipad.ev('closeModal()');
+    ipad.tik('tabIk');
+    check('Ik zegt op beide apparaten dat ze gekoppeld zijn', [mees, ipad].every(function (x) {
+      return /✔ Gekoppeld: je level, sterren en trofeeën staan ook op je andere apparaat\./.test(tekstVan(x, 'ikBewaard'));
+    }));
+  });
+
+  await regel('[3.5] na koppelen weet ook het oude apparaat dat alles op twee apparaten staat, ook als het nieuwe nog niets verdiende', async function (check) {
     const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
     await mees.ev('linkShareFlow()');
     await wacht();
@@ -958,7 +982,7 @@ async function orakelTwee() {
     check('te kort: aan beide kanten', [kort.a, kort.b].every(function (x) { return /Dit potje telt niet mee: het was korter dan tien zetten\./.test(tekstVan(x, 'eindkaart')); }));
   });
 
-  await regel('[4.2] Pauze uit een potje met een kind dat geen vriend is, gaat naar Spelen; uit een potje met een vriend naar het tabblad van waar het kwam', async function (check) {
+  await regel('[4.2] Pauze uit een potje met een ander kind gaat naar Spelen, waar de kaart het potje toont, ook als het van Vrienden kwam', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     a.tik('tabVrienden');
     await wacht();
@@ -981,7 +1005,7 @@ async function orakelTwee() {
     check('testopzet: een potje tussen vrienden', c.get('!!(session && session.online && MP && MP.viaFriend)'));
     c.tik('backBtn');
     await wacht();
-    check('vriend: terug op Vrienden, waar de rij het potje toont', zichtbaar(c, 'view-vrienden') && /aan zet/.test(tekstVan(c, 'friendList')));
+    check('vriend: ook op Spelen, met het potje op de kaart', zichtbaar(c, 'view-spelen') && /je potje met Sem/.test(tekstVan(c, 'verder')));
   });
 
   await regel('[4.6] wie uitnodigt, leest dat de uitnodiging klaarstaat, zonder te zeggen dat de app van de ander dicht is', async function (check) {
@@ -990,6 +1014,22 @@ async function orakelTwee() {
     await nodigUit(fien);
     check('het venster', /Je uitnodiging staat klaar voor Daan\. Zeg het gerust even!/.test(fien.scherm()) && !/zodra de app open gaat/.test(fien.scherm()));
     check('de rij', /Wachten op Daan…/.test(tekstVan(fien, 'friendList')) && !/SchaakHeld opent/.test(tekstVan(fien, 'friendList')));
+  });
+
+  await regel('[4.7] de vraag na een gescande code noemt wie de code liet zien', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    const echt = QR.qrSvg;
+    let tekst = '';
+    QR.qrSvg = function (s) { tekst = s; return echt(s); };
+    try { await fien.ev('mpHostQR()'); await wacht(); } finally { QR.qrSvg = echt; }
+    check('testopzet: de code heeft een speelstuk', tekst.indexOf('#SHPLAY1:') >= 0);
+    daan.location.hash = tekst.slice(tekst.indexOf('#'));
+    daan.ev('checkPlayFragment()');
+    await wacht();
+    check('de vraag noemt Fien', /Fien wil een potje schaken\. Doe je mee\?/.test(daan.scherm()));
+    daan.ev('closeModal()');
+    daan.ev('handlePlayString("kamerkamer1.stoelstoel1")');
+    check('een code zonder naam zegt Je maatje', /Je maatje wil een potje schaken\. Doe je mee\?/.test(daan.scherm()));
   });
 
   await regel('[4.4] is de kamer weg, dan zien beiden hetzelfde einde en telt het voor niemand', async function (check) {
@@ -1279,6 +1319,60 @@ async function orakelTwee() {
     tikTekst(fien, 'Nu niet');
     check('Sem hoort het meteen', await zagOoit(function () { return /Fien kan nu even niet/.test(zegt(sem)); }, 30000));
     check('de uitnodiging is van de kaart, het potje met Daan loopt nog', !/Sem wil spelen/.test(tekstVan(fien, 'verder')) && fien.get('samenLoopt()'));
+  });
+
+  await regel('[4.5] een uitnodiging die niet op de kaart past, komt als venster zodra het kind thuis is', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan'), lotte = maakApparaat('Lotte'), sem = maakApparaat('Sem');
+    await wordenVrienden(fien, sem);
+    fien.ev('if (MP) mpStop(true); goHome()');
+    sem.ev('if (MP) mpStop(true); goHome()');
+    await wacht();
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    fien.tik('backBtn');
+    await wacht();
+    await geefOp(daan);
+    await wacht(3000);
+    await samenSpelen(fien, lotte);
+    await speel(fien, lotte, 'e2e4');
+    await nodigUit(sem);
+    await fien.ev('friendPoll()');
+    await wacht();
+    check('testopzet: de uitnodiging wacht', fien.get('!!uitnodigingWacht'));
+    fien.tik('backBtn');
+    await wacht();
+    check('testopzet: de kaart toont het einde met Daan en een regel Ook nog, niet de uitnodiging',
+      /Je potje met Daan is klaar/.test(tekstVan(fien, 'verder')) && !/Sem wil spelen/.test(tekstVan(fien, 'verder')));
+    check('de uitnodiging komt als venster', /Sem wil een potje spelen!/.test(fien.scherm()) && kanTikken(fien, 'Nu niet'));
+  });
+
+  await regel('[4.5] een uitnodiging verloopt ook zonder netwerk na haar tien minuten', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const { fien } = await semNodigtUitTijdensTurbo();
+    geenNetwerk(fien);
+    fien.tik('backBtn');
+    await wacht();
+    check('testopzet: op de kaart', /Sem wil spelen/.test(tekstVan(fien, 'verder')));
+    await wacht(10 * 60000 + 30000);
+    check('na tien minuten weg, ook zonder netwerk', !/wil spelen/.test(tekstVan(fien, 'verder')));
+  });
+
+  await regel('[4.5] een fout van de server bij het lezen van de bus laat de uitnodiging staan', async function (check) {
+    const { fien, sem } = await semNodigtUitTijdensTurbo();
+    const echt = fetch;
+    fetch = function (url, o) {
+      if (/\/v1\/bus\/check/.test(url)) return Promise.resolve({ status: 500, json: function () { return Promise.resolve({}); } });
+      return echt(url, o);
+    };
+    try {
+      tikTekst(sem, 'Stop met wachten');
+      await wacht(20000);
+      fien.tik('backBtn');
+      await wacht();
+      check('de uitnodiging staat er nog', /Sem wil spelen/.test(tekstVan(fien, 'verder')));
+    } finally { fetch = echt; }
+    await wacht(20000);
+    check('zodra het lezen lukt, is ze weg', !/Sem wil spelen/.test(tekstVan(fien, 'verder')));
   });
 
   await regel('[4.5] vastgelopen in ronde 0 bestaat niet meer: wie herlaadt, zit zonder nieuwe uitnodiging weer in hetzelfde potje, en dezelfde vriend nog eens uitnodigen zegt dat het potje nog loopt', async function (check) {

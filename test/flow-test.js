@@ -863,6 +863,17 @@ ok('modal zonder cancel: eigen knop sluit', modalOpen === false &&
   ok('compat: een doc van nu houdt zijn lijst, alleen met trofeeën die er zijn', JSON.stringify(normDoc(metLijst).loc.shownBadges) === '["winst"]');
   ok('compat: de lijst gaat mee door bewaren en laden', JSON.stringify(normDoc(JSON.parse(JSON.stringify(normDoc(metLijst)))).loc.shownBadges) === '["winst"]');
   ok('compat: een oud plat profiel: elke trofee telt als getoond', JSON.stringify(migrateLegacy({ badges: { winst: true } }, 'd1').loc.shownBadges || null) === '["winst"]');
+  /* een gekoppeld apparaat schrijft een 0 onder zijn eigen naam in de XP-teller: de check houdt hem, elke som
+     blijft gelijk, en een doc van de vorige release blijft precies zoals hij was */
+  var metNul = JSON.parse(JSON.stringify(oud));
+  metNul.cnt.xp.d3 = 0;
+  var dn = normDoc(JSON.parse(JSON.stringify(metNul))), vn = viewFromDoc(dn);
+  ok('compat: een doc met een 0 laadt, de 0 blijft staan, en elke som is gelijk', dn.cnt.xp.d3 === 0 && vn.xp === 520 && vn.stars === 40 &&
+    vn.wins === 3 && vn.c.pat.vork === 4);
+  ok('compat: een doc van de vorige release blijft na de check precies zoals hij was',
+    JSON.stringify(normDoc(JSON.parse(JSON.stringify(oud))).cnt) === JSON.stringify(oud.cnt));
+  var samen = mergeDoc(normDoc(JSON.parse(JSON.stringify(oud))), dn);
+  ok('compat: samenvoegen met een doc met een 0: de 0 blijft, de sommen zijn gelijk', samen.cnt.xp.d3 === 0 && viewFromDoc(samen).xp === 520);
   ok('een nieuw profiel: niets getoond, en het kent zijn level', (emptyDoc().loc.shownBadges || [1]).length === 0 && emptyDoc().loc.lastLevel === 0);
 })();
 /* de velden van het startadvies: start (LWW), lastKind en lastSeen (per apparaat) en de teller c.drie */

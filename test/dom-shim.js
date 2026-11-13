@@ -672,6 +672,9 @@ var fetch = function (url, opts) {
       const p = __server.links[body.code];
       delete __server.links[body.code];
       (p === undefined || p.tot <= __busNu()) ? res(404) : res(200, { payload: p.payload });
+    } else if (m === 'GET' && path === '/healthz') {
+      /* zoals server.go: de server leeft */
+      res(200, 'ok\n');
     } else if (path.indexOf('/v1/profile/') === 0) {
       const id = path.slice('/v1/profile/'.length);
       const prof = __server.profiles[id];
