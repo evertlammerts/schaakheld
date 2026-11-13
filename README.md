@@ -10,100 +10,169 @@ De app traint twee vaardigheden die jonge schakers vaak overslaan:
 2. **Vooruitdenken.** Eerst bedenken wat de tegenstander hierna kan doen, dan
    pas zetten.
 
-## Spelvormen
+## Thuis
 
-Het startscherm heeft drie tabs: **Spelen**, **Vrienden** en **Ik**.
+Drie tabs: **Spelen**, **Vrienden** en **Ik**.
 
-Twee potjes:
+- **Spelen** begint met de kaart **Verder**. Loopt er iets (een potje, een
+  rondje oefenen, een uitnodiging of uitdaging), dan brengt Verder je
+  terug, het dringendste eerst. Loopt er niets, dan stelt de kaart iets voor
+  en zegt waarom: een stap naar je weekdoel, na een potje een oefening, en
+  anders een potje tegen de Turbo die bij je past. Eén regel "Ook nog"
+  eronder noemt het andere dat loopt, of telt het en opent de lijst.
+  Daaronder je week, de twee spelknoppen (Tegen Turbo en Met een vriend) en
+  de vijf oefeningen; alles blijft één tik weg, wat de kaart ook voorstelt.
+- **Vrienden**: je vrienden, met per vriend het potje of de knop
+  Uitnodigen, en samen spelen met iemand nieuw (code scannen, je code laten
+  zien, of vier woorden typen op afstand).
+- **Ik** begint met je level: het pad en wat het volgende level vraagt (XP
+  en soms een meesterproef). Daarna wat er bewaard staat, je trofeeën, de
+  bordkleuren, je week, je vorm en het Trucenboekje.
 
-- **Potje tegen Turbo.** Een echte partij op drie sterktes. Turbo opent
-  uit een klein openingsboek en Super Turbo denkt met een tijdsbudget
-  (iteratief verdiepen, transpositietabel). Met een denk-meter die geduld
-  beloont, een voorspel-bonus, een blunder-alarm dat waarschuwt zonder
-  voor te zeggen, een strategie-coach en een denkwolk: een droomkopie van
-  het bord om vrij vooruit te proberen. Een potje verlaat je niet zomaar:
-  je kunt remise aanbieden (Turbo neemt alleen aan bij een echt gelijke
-  stand) of opgeven.
-- **Potje met een vriend.** Samen spelen via een speel-QR of wederzijdse
-  woordcodes. Na een potje kunnen jullie vrienden worden (allebei ja
-  tikken); daarna nodig je elkaar met één tik uit.
+## Het speelscherm
 
-Vijf oefenspellen, elk vijf opdrachten per rondje met uitleg bij elke
-fout:
+Een potje en elke oefening staan op één scherm: bovenaan de strook met wat
+Turbo zegt of wat de opdracht vraagt, daaronder het hele bord, en onder het
+bord de uitleg en de knoppen. Niets schuift boven het bord en de pagina
+scrolt niet, ook niet op een kleine telefoon. Remise aanbieden, opgeven en
+de puntenwijzer (pion 1, paard 3, loper 3, toren 5, dame 9) staan onder ⋯.
+
+Alles wat loopt blijft bewaard, na elke halve zet: een potje tegen Turbo
+(één per sterkte), een rondje oefenen (per oefening) en een potje met een
+ander kind. "‹ Pauze" gaat naar huis zonder iets te vragen; Verder brengt
+het terug, ook na het sluiten van de app.
+
+## Potjes
+
+- **Tegen Turbo**, op drie sterktes: Slaapkop Turbo, Turbo en Super Turbo.
+  Turbo en Super Turbo openen uit een klein openingsboek; Super Turbo
+  rekent het diepst. Hulp onder het bord: de Speurbril (drie keer per
+  potje lichten alle aangevallen stukken op), de Denkwolk (een droomkopie
+  van het bord om vrij vooruit te proberen) en Zet terug. Turbo vraagt soms
+  welk stuk hij gaat zetten. Na zijn zet zegt hij in de strook wat hij
+  pakte en of je kunt terugpakken, of, met het blunder-alarm aan, dat hij
+  iets dreigt.
+- **Het blunder-alarm** (aan of uit onder ⋯ en in de instellingen) houdt
+  een zet even tegen die mat in één toelaat of een stuk kost terwijl een
+  andere zet minder kost. Het zegt wat er dan gebeurt, maar noemt nooit de
+  betere zet.
+- **Een potje eindigt** door het uit te spelen, op te geven of remise:
+  remise aanbieden (Turbo neemt aan bij een gelijke stand na genoeg
+  zetten), pat, te weinig materiaal, vijftig zetten zonder slag of
+  pionzet, of de derde keer dezelfde stelling. Staat een stelling er voor
+  de tweede keer, dan zegt de strook dat de derde keer remise is. Na een
+  potje tegen Turbo noemt de eindkaart het belangrijkste moment, of je
+  beste zet, met een tip voor de volgende keer.
+- **Met een ander kind**, via een speel-QR of vier woorden. Wie pauzeert,
+  herlaadt of even geen netwerk heeft, gaat verder waar het was. Geen
+  blunder-alarm en geen hulp: het is een eerlijk potje.
+- **Vrienden.** Na een potje kunnen jullie vrienden worden: allebei
+  "Vrienden worden" of "Ja, vrienden!" tikken. Daarna nodig je een vriend
+  met één tik uit. Is die er niet, dan daag je de vriend uit voor later:
+  die ziet de uitdaging bij het openen van SchaakHeld en tikt "Ja,
+  spelen!" of "Nu niet". Een potje met een vriend kan dagen duren: ieder
+  zet wanneer het uitkomt, ook als de ander de app dicht heeft, en zonder
+  netwerk wacht de zet op het apparaat. Begint een potje terwijl jullie
+  allebei in de app zitten, dan speel je het live en kan het daarna over
+  dagen verder. Met elke vriend loopt één potje tegelijk, en uitnodigen
+  kan tot er acht potjes met vrienden lopen. Een remise-aanbod waar de
+  ander veertien dagen geen zet op doet, wordt remise, en na 500 halve
+  zetten is het ook remise. Zet een vriend een week niet, dan zakt het
+  potje naar onderen en wijst de kaart de weg naar remise aanbieden.
+
+## Oefenen
+
+Vijf oefeningen, elk vijf opdrachten per rondje. Een fout krijgt altijd
+uitleg: wie valt aan, wie verdedigt, en waarom een ruil wel of niet gunstig
+is. In de Trucendoos en Koning ontsnapt speelt Turbo na een foute zet zijn
+echte antwoord, en de zin zegt wat het bord dan laat zien.
 
 - **Speurogen.** Tik alle aangevallen stukken aan, alles wat je kunt
   slaan, alle velden waar een stuk heen kan, het stuk dat je met winst
-  kunt slaan, of wat Turbo dreigt te pakken als jij zou passen.
-- **De Beste Zet.** Om en om: kies de beste van drie zetten, of
-  beoordeel een voorgenomen zet als veilig of valstrik. Bij een verkeerde
-  keuze zie je wat er dan gebeurt.
-- **Turbo's Trucendoos.** Vind de vork, penning, spies, aftrekaanval,
-  mat in een of mat in twee. Het Trucenboekje op het Ik-tabblad houdt bij
-  hoe vaak je ze al gespot hebt.
-- **Koning ontsnapt.** Verdedigen: je staat schaak of Turbo dreigt mat,
-  en precies een of twee zetten redden je. Of een stuk van je
-  hangt: wegzetten, dekken of tegenaanvallen. De koningspuzzels komen uit
-  een vooraf met de engine gegenereerde en dieper nagerekende voorraad
-  (`tools/make-koning.js`), omdat de bewijsvoering per puzzel tientallen
-  seconden kost.
-- **Openingsschool.** Structuur leren zien. De coach beoordeelt de eerste
-  acht zetten op centrum, ontwikkeling, koningsveiligheid en tempo (met
-  een engine-check: een nette zet die een stuk weggeeft heet gewoon een
-  valstrik). Drie openingspaden (Italiaans, Londen, zwart tegen 1.e4)
-  vertellen per zet waarom.
+  kunt slaan, of wat Turbo met winst kan pakken als jij zou passen.
+- **De Beste Zet.** Om en om: kies de beste van drie zetten, of beoordeel
+  een voorgenomen zet als veilig of valstrik. Na een verkeerde keuze zie je
+  wat er dan gebeurt.
+- **Turbo's Trucendoos.** Vind de vork, penning, spies, aftrekaanval, mat
+  in één of mat in twee. Het Trucenboekje op Ik houdt bij hoe vaak je ze
+  al gespot hebt.
+- **Koning ontsnapt.** Verdedigen: je staat schaak of Turbo dreigt mat in
+  één, en een of twee zetten redden je. Of een stuk van je hangt (Red je
+  stuk): zet het weg, dek het, zet er iets tussen, of val zelf iets aan.
+- **Openingsschool.** De coach beoordeelt je eerste acht zetten op
+  centrum, ontwikkeling, koningsveiligheid en tempo, met een engine-check.
+  Drie openingspaden (Italiaans, Londen, en een antwoord op 1.e4 met
+  zwart) vertellen per zet waarom.
 
-Motivatie zonder straf: een **weekdoel** dat het kind zelf kiest (zoveel
-opdrachten, potjes of toprondes per week) met zeven bolletjes voor de
-dagen, en een **vorm-score** per oefenspel over de laatste veertien dagen
-(trefkans, moeilijkheid, tempo en hoe vaak je oefent). Daarnaast levels
-met meesterproeven, trofeeen en bordkleuren.
+De opdrachten van de Trucendoos, Red je stuk en Koning ontsnapt komen uit
+voorraden die vooraf met de engine gezocht en dieper nagerekend zijn. In
+de Trucendoos krijgt elk apparaat elke truc van een soort één keer voor er
+een terugkomt. Speurogen en De Beste Zet worden live gemaakt.
 
-Fouten worden altijd uitgelegd: wie valt aan, wie verdedigt, en waarom een
-ruil wel of niet gunstig is. Onder het bord staat een puntenwijzer
-(pion 1, paard 3, loper 3, toren 5, dame 9).
+## Motivatie zonder straf
+
+Het **level** en het **weekdoel** zijn de motivatie. Een level haal je met
+XP en soms een meesterproef. XP komt uit opdrachten, uit elk potje tegen
+Turbo dat telt (winst het meest, en meer tegen een sterkere Turbo; ook
+verlies en remise geven XP) en uit potjes met een ander kind (30 XP, vanaf
+het vierde potje op een dag met hetzelfde kind 15). Het weekdoel kiest het
+kind zelf: opdrachten, potjes of winst tegen Turbo, potjes met een vriend,
+of toprondes, met zeven bolletjes voor de dagen. Daarnaast een **vorm** per
+oefening over de laatste veertien dagen, trofeeën en zeven bordkleuren die
+je met je level vrijspeelt. Geen dagenreeks die kapot kan, geen klok op
+een potje, en wat een kind verdiende gaat nooit verloren.
 
 ## Spelen
 
-Open `index.html` in een browser. Geen dependencies, geen build-tooling.
-Voortgang (sterren, levels, trofeeen, weekdoel, vorm, vrienden,
-instellingen) staat in localStorage als een CRDT-document en kan via
-`server/` versleuteld gesynct worden naar een tweede apparaat. Diezelfde
-kleine Go-server relayt de zetten van potjes met een vriend en bewaart de
-versleutelde uitnodigingen (brievenbussen); zonder server werkt alles
-behalve samen spelen.
+Open `index.html` in een browser; geen installatie. Voortgang (XP, level,
+sterren, trofeeën, weekdoel, vorm, vrienden, instellingen) staat in
+localStorage en kan met een koppelcode versleuteld gesynct worden naar een
+tweede apparaat van hetzelfde kind. De kleine Go-server in `server/` doet
+dat, relayt de zetten van potjes met een ander kind, en bewaart voor
+vrienden alleen versleutelde uitnodigingen en de versleutelde staat van
+hun potje. Zonder server werkt alles behalve samen spelen en syncen.
 
-De site is een PWA: één keer online openen, daarna werkt alles offline
-(vliegtuigstand incluis). Op een iPad of telefoon: "Zet op beginscherm",
-dan opent hij als echte app met het schildpad-icoon. De service worker
-haalt online altijd de nieuwste versie op en valt offline terug op de
-cache.
+De site is een PWA: één keer online openen, daarna werkt alles offline.
+Op een iPad of telefoon: "Zet op beginscherm", dan opent hij als echte app
+met het schildpad-icoon. De service worker haalt online altijd de nieuwste
+versie op en valt offline terug op de cache.
 
 ## Bouwen en testen
 
 ```
 ./build.sh   # bouwt index.html en sw.js uit src/
-./test.sh    # draait de engine-tests en de UI-flowtests headless
+./test.sh    # draait alle suites; rood als er een faalt of afbreekt
 ```
 
-De tests draaien onder `jsc` (JavaScriptCore, zit standaard in macOS). De
-engine-suite draait ook onder node: `node test/test-engine.js`.
+`./test.sh` draait de engine-tests, de flowtests en de tests met twee
+apparaten onder `jsc` (zit standaard in macOS), de PWA-checks, de
+woordlijst, de compatibiliteitspoort (`tools/compat/`, met node), de
+layoutcontroles in een echte browser-engine (`test/layout/run.mjs`, met
+`playwright-cli`) en de Go-tests van de server (met een go-toolchain). Hoe
+je een test schrijft, staat in `test/README.md`.
+
+`tools/dev.sh start [MAP] [POORT]` serveert een build op
+`http://127.0.0.1:POORT` met een eigen Go-server op POORT+1000;
+`tools/dev.sh status`, `stop` en `reset` doen wat ze zeggen.
 
 ## Techniek
 
-Alles zit in een enkel HTML-bestand, opgebouwd uit drie delen in `src/`:
+Alles zit in één HTML-bestand, opgebouwd uit `src/`:
 
 - `head.html`: opmaak en styling.
-- `engine.js`: schaaklogica. 0x88-bordrepresentatie, volledige legale
-  zetgeneratie (rokade, en passant, promotie), mat/pat-detectie, een
-  alpha-beta-zoeker met quiescence voor de oefeningen, een zoeker met
-  tijdsbudget (iteratief verdiepen, Zobrist-hash, transpositietabel,
-  killer/history-ordening, schaak-extensie) voor Super Turbo, een klein
-  openingsboek, static exchange evaluation voor de ruil-oordelen, mat-in-N
-  via de zoeker, en generatoren die oefenposities maken via zelfspel met
-  ruis (ook verdedigingsopdrachten: mat-dreiging of hangend stuk met een
-  of twee reddende zetten).
-- `tail.html`: de gehele gebruikersinterface.
+- `engine.js`: schaaklogica. 0x88-bord, volledige legale zetgeneratie
+  (rokade, en passant, promotie), mat, pat en herhaling, een alpha-beta
+  zoeker met quiescence voor de oefeningen, een zoeker met iteratief
+  verdiepen, Zobrist-hash en transpositietabel voor Super Turbo, een klein
+  openingsboek, static exchange evaluation voor de ruil-oordelen, het
+  blunder-alarm, het belangrijkste moment en de generatoren van de
+  opdrachten.
+- `koning.js` en `trucs.js`: de vooraf nagerekende voorraden opdrachten,
+  gemaakt met `tools/make-koning.js` en `tools/make-trucs.js`.
+- `words.js` (de woordenlijst voor codes), `qr.js` (de eigen QR-encoder)
+  en `jsqr.js` (de QR-lezer, meegeleverd).
+- `tail.html`: de gebruikersinterface.
+- `sw.js`: de service worker.
 
 De zetgeneratie is geverifieerd met perft-tests op vijf standaardposities
-(exacte nodecounts, tot diepte 4). De UI-flows zijn afgedekt met een
-headless testsuite op een minimale DOM-shim.
+(exacte aantallen, tot diepte 3 of 4).
