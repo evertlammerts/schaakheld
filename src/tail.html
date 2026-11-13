@@ -1021,7 +1021,7 @@ function bewaarSamen() {
       myColor: MP.myColor, gameNo: MP.gameNo, moves: MP.S.hist.map(u => moveKey(u.m)),
       peerName: MP.peerName || '', result: MP.result || null, offer: MP.offer || null,
       shown: !!MP.shown, updated: Date.now(), sessie: MP.vr ? MP.vr.sessie : 0, kamer: MP.kamer || null,
-      nogTonen: MP.vrNogTonen || null, terugZeggen: !!MP.vrTerugZeggen, tel: MP.telWie || null, ander: MP.anderFid || null };
+      nogTonen: MP.vrNogTonen || null, terugZeggen: !!MP.vrTerugZeggen, tel: MP.telWie || null };
   }
   const gelukt = schrijfSamen(games);
   MP.nietBewaard = !gelukt;
@@ -1087,7 +1087,6 @@ function samenHervat(b) {
   MP.vrNogTonen = typeof b.r.nogTonen === 'string' && ID_RE.test(b.r.nogTonen) ? b.r.nogTonen : null;
   MP.vrTerugZeggen = b.r.terugZeggen === true;
   MP.telWie = typeof b.r.tel === 'string' && b.r.tel.length <= 80 ? b.r.tel : null;
-  MP.anderFid = typeof b.r.ander === 'string' && ID_RE.test(b.r.ander) ? b.r.ander : null;
   bewaarSamen();
 }
 /* de hele stand, voor de ander na elke verbinding en zodra die terug is */
@@ -2011,7 +2010,6 @@ async function mpHerkenVriend(bewijzen) {
   for (const b of bewijzen.slice(0, MAX_FRIENDS)) if (!fid && typeof b === 'string' && BEWIJS_RE.test(b) && mijn.has(b)) fid = mijn.get(b);
   mp.bewezen = !!fid;
   mp.bewezenFid = fid;
-  if (fid) mp.anderFid = fid;
   /* een lopend potje houdt de soort waarmee het begon; het volgende begint met wat de groeten nu bewijzen */
   if (fid && !vrPotjeLoopt()) mp.viaFriend = fid;
 }
@@ -2048,7 +2046,7 @@ function geldigePub(p) { return typeof p === 'string' && /^[A-Za-z0-9_-]{40,140}
 function vrNieuw(sessie) { return { sessie, kp: null, pub: null, wil: 0, nee: 0, zag: 0, voor: null }; }
 function vrBegin(sessie) {
   return { vr: vrNieuw(sessie), hun: vrNieuw(-1), kamer: null, anderKent: null, hunGroet: null, bewezen: false, neeGezegd: 0, vrMaakt: null,
-    vrNogTonen: null, vrTerugZeggen: false, vrSleutel: null, telWie: null, anderFid: null };
+    vrNogTonen: null, vrTerugZeggen: false, vrSleutel: null, telWie: null };
 }
 const vrHunNee = () => MP.hun.voor === MP.vr.sessie ? MP.hun.nee : 0;
 const vrHunZag = () => MP.hun.voor === MP.vr.sessie ? MP.hun.zag : 0;
@@ -2062,8 +2060,7 @@ function vrKaart() {
 const vrTikBezig = () => !!(MP && MP.vr && MP.vrSleutel && !MP.vr.kp);
 /* of het kind de ander nu in zijn vriendenlijst heeft; de soort van het lopende potje blijft wat hij was */
 function vrIsVriend() {
-  const f = MP && MP.anderFid && P.friends[MP.anderFid];
-  return !!f && !f.weg;
+  return !!MP && [MP.viaFriend, MP.kamer && MP.kamer.fid, MP.bewezenFid].some(id => !!id && !!P.friends[id] && !P.friends[id].weg);
 }
 function vrVroeg() { const k = vrKaart(); return vrTikBezig() || k === 'gevraagd' || k === 'wacht'; }
 function vrStaat() { const v = MP.vr; return { sessie: v.sessie, pub: v.pub, wil: v.wil, nee: v.nee, zag: v.zag, voor: v.voor }; }
@@ -2220,7 +2217,6 @@ function bewaarVriend(id, k, host) {
   setFriend(id, { k, naam: mpNaam(), host, weg: false, since: oud && oud.since ? oud.since : Date.now() });
   /* een potje houdt de soort waarmee het begon */
   if (MP && !vrPotjeLoopt()) MP.viaFriend = id;
-  if (MP) MP.anderFid = id;
   dropModal('vriendvraag');
   renderFriends();
 }
