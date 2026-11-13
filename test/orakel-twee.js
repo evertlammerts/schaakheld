@@ -2079,13 +2079,15 @@ async function orakelTwee() {
     await wacht();
     await samenSpelen(fien, daan);
     await speel(fien, daan, 'e2e4');
+    /* Daan is aan zet: dan is de uitnodiging de kaart, wat de kleur van Fien ook is */
+    if (fien.get('MP.myColor') === 'b') await speel(fien, daan, 'e7e5');
     await nodigUit(sem);
     await fien.ev('friendPoll()');
     await wacht();
     fien.tik('backBtn');
     await wacht();
-    check('testopzet: de kaart toont het potje met Daan en de uitnodiging van Sem', /je potje met Daan/.test(tekstVan(fien, 'verder')) &&
-      /Sem wil spelen/.test(tekstVan(fien, 'verder')));
+    check('testopzet: de kaart is de uitnodiging van Sem, met het potje met Daan eronder', /Sem wil spelen/.test(tekstVan(fien, 'verder')) &&
+      /je potje met Daan/.test(tekstVan(fien, 'verder')) && kanTikken(fien, 'Ja, spelen!'));
     tikTekst(fien, 'Ja, spelen!');
     await wacht();
     check('de zin, met Nu niet en het kruisje', /Je potje met Daan loopt nog\. Speel dat eerst uit\./.test(fien.scherm()) && kanTikken(fien, 'Nu niet') &&

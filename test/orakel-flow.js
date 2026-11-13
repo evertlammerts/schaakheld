@@ -2059,9 +2059,10 @@ async function orakelFlow() {
           weg: false, host: true, since: 1794500000000 } } : {} }));
       if (metPotje) o.setItem(POTJE, JSON.stringify({ v: 2, games: { 2: { level: 2, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null,
         started: NU, updated: NU, patXP: 0 } } }));
-      if (metVriend) o.setItem(SAMEN_O, JSON.stringify({ v: 1, games: { potjevanfien1: { gameId: 'potjevanfien1', fid: 'vriendfien1', room: null,
-        seat: null, host: false, myColor: 'b', gameNo: 1, moves: ['e2e4'], peerName: 'Fien', result: null, offer: null, shown: false,
-        state: 'potje', beurtT: NU, updated: NU } } }));
+      /* een potje met een vriend staat in de staat van het paar: Fien speelt wit en zette, Mees (rol a) is aan zet */
+      if (metVriend) o.setItem('schaakheld-paar', JSON.stringify({ vriendfien1: { merk: 'merkvandittoest1', rij: [], hoogste: 2,
+        staat: { v: 2, seq: 2, vorige: [], spel: { id: 'potjevanfien', wit: 'b', door: 'b', fase: 'potje', zetten: ['e2e4'], bod: null, uitslag: null,
+          weet: { a: null, b: null }, bekeken: { a: false, b: false }, t: Math.floor(NU / 1000) } } } }));
       if (metRondje) o.setItem(RONDJES, JSON.stringify({ scan: { round: 2, earned: 6 } }));
       const a = nieuwKind({ opslag: o });
       a.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(5)) + '; renderVerder()');

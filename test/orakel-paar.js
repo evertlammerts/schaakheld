@@ -273,6 +273,8 @@ async function orakelPaar() {
       }
       return echt(url, o);
     };
+    /* de laatste lezing is ouder dan een minuut: de schrijfactie leest eerst */
+    schuifKlok(2 * 60000);
     try {
       const r = await doe(w.mees, w.fm, { soort: 'uitdaging', id: 'potjeeen0001', wit: w.rm, op: null });
       check('pasToe zegt dat de server het niet kent', !!r && r.oud === true);
@@ -405,4 +407,300 @@ async function orakelPaar() {
     const s = await serverStaat(w.mees, w.fm);
     check('de volgende keer staat ze op de server, één keer', !!s && s.seq === 1 && s.spel.fase === 'uitdaging' && bewaard(w.mees, w.fm).rij.length === 0);
   });
+
+  await regel('[V3] [P21] de server verliest de staat met een einde dat Fien nog niet kent: Mees schrijft het terug, en Fien neemt het', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await zetten(w, 'potjeeen0001', RUSTIG, 0, 2);
+    await doe(w.mees, w.fm, { soort: 'opgeven', id: 'potjeeen0001', eigen: 1 });
+    const klaar = await serverStaat(w.mees, w.fm);
+    check('testopzet: afgelopen, en alleen Mees weet het', klaar.spel.fase === 'klaar' && !!klaar.spel.weet[w.rm] && !klaar.spel.weet[w.rf]);
+    __potjesKwijt();
+    await leesP(w.mees, w.fm);
+    let s = await serverStaat(w.mees, w.fm);
+    check('Mees schreef het einde terug, met zijn seq', !!s && s.spel.fase === 'klaar' && s.seq === klaar.seq);
+    await leesP(w.fien, w.ff);
+    s = await serverStaat(w.mees, w.fm);
+    check('Fien nam het einde', !!s && !!s.spel.weet[w.rf]);
+  });
+
+  await regel('[V3] [P22] na een verloren staat toont de server een lagere seq met een nieuwe uitdaging van Fien: Mees neemt die, ook als het einde dat hij bewaart afgelopen is, en volgt daarna wat Fien schrijft', async function (check) {
+    const w = await afgelopenBijAllebei();
+    const sy = bewaard(w.mees, w.fm).staat;
+    /* zoals een tablet van Fien die sinds lang sliep, na het verlies een uitdaging schrijft op wat zij nog had */
+    const sx = { v: 2, seq: sy.seq - 2, spel: { id: 'potjetwee002', wit: w.rf, door: w.rf, fase: 'uitdaging', zetten: [], bod: null, uitslag: null,
+      weet: { a: null, b: null }, bekeken: { a: false, b: false }, t: Math.floor(__busNu() / 1000) }, vorige: [] };
+    __potjesKwijt();
+    await zetOpServer(w.mees, w.fm, sx);
+    await leesP(w.mees, w.fm);
+    let s = await serverStaat(w.mees, w.fm);
+    check('de uitdaging van Fien staat er nog', !!s && !!s.spel && s.spel.id === 'potjetwee002' && s.seq === sy.seq - 2);
+    check('Mees heeft haar', bewaard(w.mees, w.fm).staat.spel.id === 'potjetwee002');
+    await leesP(w.fien, w.ff);
+    await doe(w.fien, w.ff, { soort: 'intrekken', id: 'potjetwee002' });
+    s = await serverStaat(w.mees, w.fm);
+    check('testopzet: Fien trok in, nog onder de seq die Mees ooit zag', !!s && s.spel === null && s.seq === sy.seq - 1);
+    await leesP(w.mees, w.fm);
+    s = await serverStaat(w.mees, w.fm);
+    check('Mees volgt: hij schrijft zijn uitdaging niet terug', !!s && s.spel === null && bewaard(w.mees, w.fm).staat.spel === null);
+  });
+
+  await regel('[V3] [P23] een potje dat al uit vorige is, kent Mees als afgelopen door zijn lijst van getelde potjes: toont de server het lopend met een lagere seq, dan schrijft hij zijn staat terug', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    const lopend = await serverStaat(w.mees, w.fm);
+    let vorig = 'potjeeen0001';
+    for (const id of [null, 'potjetwee002', 'potjedrie003', 'potjevier004', 'potjevijf005']) {
+      if (id) { await potjeMeesWit(w, id, vorig); vorig = id; }
+      await doe(w.mees, w.fm, { soort: 'opgeven', id: vorig, eigen: 0 });
+      await leesP(w.fien, w.ff);
+      await leesP(w.mees, w.fm);
+    }
+    const sy = bewaard(w.mees, w.fm).staat;
+    check('testopzet: het eerste potje staat niet meer in de staat, wel in de lijst', sy.spel.id === 'potjevijf005' &&
+      !sy.vorige.some(function (v) { return v.id === 'potjeeen0001'; }) && w.mees.get('getelde(' + J(w.fm) + ').includes("potjeeen0001")'));
+    await zetOpServer(w.mees, w.fm, lopend);
+    await leesP(w.mees, w.fm);
+    const s = await serverStaat(w.mees, w.fm);
+    check('Mees schreef zijn staat terug', !!s && s.seq === sy.seq && s.spel.id === 'potjevijf005');
+  });
+
+  await regel('[V2] [P24] Mees schrijft na een verloren staat terug en krijgt een 409: hij verwerkt wat er dan staat, en zijn zet die wachtte gaat in dezelfde lezing', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await leesP(w.fien, w.ff);
+    geenNetwerk(w.mees);
+    await doe(w.mees, w.fm, { soort: 'zet', id: 'potjeeen0001', ply: 0, zet: RUSTIG[0] });
+    check('testopzet: de zet wacht', bewaard(w.mees, w.fm).rij.length === 1);
+    __potjesKwijt();
+    weerNetwerk(w.mees);
+    /* vlak voor het terugschrijven van Mees schrijft Fien het potje terug */
+    const echt = fetch, bus = await paarAdres(w.mees, w.fm);
+    let eerst = true, fienSchreef = false;
+    fetch = function (url, o) {
+      if (eerst && /\/v1\/potje$/.test(url)) {
+        eerst = false;
+        return w.fien.ev('leesPaar(' + J(w.ff) + ')').then(function () { fienSchreef = !!__server.potjes[bus]; return echt(url, o); });
+      }
+      return echt(url, o);
+    };
+    try { await leesP(w.mees, w.fm); } finally { fetch = echt; }
+    check('testopzet: Fien schreef eerst', fienSchreef);
+    const s = await serverStaat(w.mees, w.fm);
+    check('de zet staat er, en niets wacht', !!s && s.spel.zetten.length === 1 && bewaard(w.mees, w.fm).rij.length === 0);
+  });
+
+  await regel('[V6] [P25] wat het apparaat zelf doet, gaat voor wat wachtte: het eigen aanbod van veertien dagen is remise voordat een opgave die zonder netwerk wachtte, gaat', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await zetten(w, 'potjeeen0001', RUSTIG, 0, 4);
+    await leesP(w.mees, w.fm);
+    await doe(w.mees, w.fm, { soort: 'zet', id: 'potjeeen0001', ply: 4, zet: RUSTIG[4], bod: true });
+    let s = await serverStaat(w.mees, w.fm);
+    check('testopzet: het aanbod staat er met een stempel', !!s.spel.bod && Number.isInteger(s.spel.bod.t));
+    stopApparaat(w.mees);
+    schuifKlok(15 * DAG);
+    const mees = herlaad(w.mees);
+    geenNetwerk(mees);
+    await wacht();
+    await doe(mees, w.fm, { soort: 'opgeven', id: 'potjeeen0001', eigen: 3 });
+    check('testopzet: de opgave wacht', bewaard(mees, w.fm).rij.length === 1);
+    weerNetwerk(mees);
+    await leesP(mees, w.fm);
+    s = await serverStaat(mees, w.fm);
+    check('remise vanzelf, geen opgave', s.spel.fase === 'klaar' && s.spel.uitslag.soort === 'remise' && s.spel.uitslag.vanzelf === true);
+    check('de opgave is vervallen', bewaard(mees, w.fm).rij.length === 0);
+  });
+
+  await regel('[V5] [P26] een potje dat te kort was om te tellen, staat toch meteen in de bewaarde lijst van getelde potjes', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await zetten(w, 'potjeeen0001', RUSTIG, 0, 2);
+    const voor = w.mees.get('JSON.stringify([P.c.gamesPlayed, P.c.winsOnline])');
+    await doe(w.mees, w.fm, { soort: 'opgeven', id: 'potjeeen0001', eigen: 1 });
+    const d = JSON.parse(w.mees.opslag.getItem('schaakheld1'));
+    check('testopzet: er telde niets', w.mees.get('JSON.stringify([P.c.gamesPlayed, P.c.winsOnline])') === voor);
+    check('de lijst in de opslag heeft het potje', !!d.loc.geteld && JSON.stringify(d.loc.geteld[w.fm]) === '["potjeeen0001"]');
+  });
+
+  await regel('[V2] [P27] een zet op een potje dat dit apparaat nog niet las: het leest eerst, en de zet telt', async function (check) {
+    const w = await paarMeesFien();
+    await leesP(w.fien, w.ff);
+    await doe(w.mees, w.fm, { soort: 'start', id: 'potjeeen0001', wit: w.rf, op: null, totVrij: true });
+    check('testopzet: het potje staat op de server, Fien las het niet', !!(await serverStaat(w.mees, w.fm)).spel && !bewaard(w.fien, w.ff).staat);
+    const r = await doe(w.fien, w.ff, { soort: 'zet', id: 'potjeeen0001', ply: 0, zet: RUSTIG[0] });
+    const s = await serverStaat(w.mees, w.fm);
+    check('de zet staat er', r.afloop === 'geschreven' && s.spel.zetten.length === 1);
+  });
+
+  await regel('[V2] [P28] een nieuw potje in de kamer wacht tot de vriend het vorige einde nam, en gaat dan', async function (check) {
+    const w = await paarMeesFien();
+    await potjeMeesWit(w, 'potjeeen0001');
+    await doe(w.mees, w.fm, { soort: 'opgeven', id: 'potjeeen0001', eigen: 0 });
+    const r = await doe(w.mees, w.fm, { soort: 'start', id: 'potjetwee002', wit: w.rm, op: 'potjeeen0001', totVrij: true });
+    let s = await serverStaat(w.mees, w.fm);
+    check('het begin wacht, en het einde staat er nog', r.afloop === 'wacht' && bewaard(w.mees, w.fm).rij.length === 1 && s.spel.id === 'potjeeen0001');
+    await leesP(w.fien, w.ff);
+    await leesP(w.mees, w.fm);
+    s = await serverStaat(w.mees, w.fm);
+    check('zodra Fien het einde nam, staat het nieuwe potje er', s.spel.id === 'potjetwee002' && s.spel.fase === 'potje' && bewaard(w.mees, w.fm).rij.length === 0);
+  });
+
+  await regel('[V2] [V3] [V5] [P29] willekeurige reeksen op vier apparaten (Mees en Fien, elk met een tablet): tikken, lezen, een schrijfactie die blijft hangen of haar antwoord kwijtraakt, netwerk weg, herstarts en de klok; daarna komt alles tot rust, elk apparaat heeft wat de server heeft, niets wacht, elk kind telt elk afgelopen potje één keer met de juiste tellers, en geen afgelopen potje loopt weer', async function (check) {
+    const r = await willekeurigeReeksen(1, 20, 60);
+    check('testopzet: er liepen potjes af', r.afgelopen >= 20);
+    check('geen reeks met een fout' + (r.fouten ? ': ' + Object.keys(r.soorten).join(' | ') : ''), r.fouten === 0);
+  });
+}
+
+/* Een eigen willekeur met een zaad, zodat elke run dezelfde reeksen speelt. */
+function willekeurVan(zaad) {
+  let z = (zaad * 2654435761) >>> 0;
+  return function (n) {
+    z = (z + 0x6D2B79F5) | 0;
+    let t = Math.imul(z ^ (z >>> 15), 1 | z);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return Math.floor(((t ^ (t >>> 14)) >>> 0) / 4294967296 * n);
+  };
+}
+/* wat een kind kan proberen in de staat die het voor zich heeft */
+function kandidatenVoor(app, s, rol, nieuwId) {
+  const sp = s.spel, l = [];
+  if (s.vorige[0]) l.push({ soort: 'bekijk', id: s.vorige[0].id });
+  if (app.get('paarVrij(' + J(s) + ')')) {
+    const op = sp ? sp.id : null;
+    l.push({ soort: 'uitdaging', id: nieuwId, wit: 'a', op: op }, { soort: 'start', id: nieuwId, wit: 'b', op: op });
+    if (!sp) return l;
+  }
+  const id = sp.id, ply = sp.zetten.length;
+  for (const soort of ['intrekken', 'ja', 'nee', 'bekijk', 'bod', 'aannemen']) l.push({ soort: soort, id: id, ply: ply });
+  l.push({ soort: 'opgeven', id: id, eigen: app.get('eigenZetten(' + J(sp) + ', ' + J(rol) + ')') });
+  if (sp.fase === 'potje') {
+    const zetten = app.get('(function () { var S = standVanZetten(' + J(sp.zetten) + '); return S ? legalMoves(S).slice(0, 2).map(moveKey) : []; })()');
+    zetten.forEach(function (z) { l.push({ soort: 'zet', id: id, ply: ply, zet: z }, { soort: 'zet', id: id, ply: ply, zet: z, bod: true }); });
+  }
+  return l;
+}
+/* Willekeurige reeksen op de staat van een paar. De server raakt de staat hier nooit kwijt: dat is een grens die het
+   ontwerp noemt, en die reeksen gaan anders fout om die reden. */
+async function willekeurigeReeksen(zaad, aantal, stappen) {
+  const kies = willekeurVan(zaad);
+  zetDatum('2026-11-20T10:00:00');
+  const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+  await wordenVrienden(mees, fien);
+  const fm = mees.get('Object.keys(P.friends)[0]'), ff = fien.get('Object.keys(P.friends)[0]');
+  const mees2 = await tweedeApparaat(mees), fien2 = await tweedeApparaat(fien);
+  let D = [{ naam: 'a1', app: mees, fid: fm, kind: 'm' }, { naam: 'a2', app: mees2, fid: fm, kind: 'm' },
+    { naam: 'b1', app: fien, fid: ff, kind: 'f' }, { naam: 'b2', app: fien2, fid: ff, kind: 'f' }];
+  for (const d of D) d.rol = d.app.get('myRole(P.friends[' + J(d.fid) + '])');
+  const bus = await paarAdres(mees, fm), k = mees.get('P.friends[' + J(fm) + '].k');
+  const echt = fetch;
+  let vast = [], modus = null;
+  fetch = function (url, o) {
+    if (/\/v1\/potje$/.test(url) && modus === 'houd') { modus = null; return new Promise(function (ok) { vast.push(function () { ok(echt(url, o)); }); }); }
+    if (/\/v1\/potje$/.test(url) && modus === 'kwijt') { modus = null; return echt(url, o).then(function () { throw new TypeError('Load failed'); }); }
+    return echt(url, o);
+  };
+  const open = async function (blob) { return blob ? mees.ev('blobNaarStaat(' + J(k) + ', ' + J(blob) + ')') : null; };
+  let fouten = 0, afgelopen = 0;
+  const soorten = {};
+  try {
+    for (let n = 0; n < aantal; n++) {
+      /* elke reeks begint leeg: geen staat op de server, niets bewaard op de apparaten, een nieuw merk */
+      delete __server.potjes[bus];
+      vast = []; modus = null;
+      D = D.map(function (d) { weerNetwerk(d.app); d.app.ev('opslag("schaakheld-paar", null); DOC.loc.geteld = {}; saveP()'); return Object.assign({}, d, { app: herlaad(d.app) }); });
+      await wacht();
+      const klaar = {}, herrezen = [];
+      const tellersVoor = D.map(function (d) { return [eigenTeller(d.app, 'c.gamesPlayed'), eigenTeller(d.app, 'c.winsOnline')]; });
+      let nr = 0;
+      const volg = async function () {
+        const p = __server.potjes[bus], s = p ? await open(p.blob) : null, sp = s && s.spel;
+        if (sp && sp.fase === 'klaar') klaar[sp.id] = sp.uitslag;
+        else if (sp && klaar[sp.id] && herrezen.indexOf(sp.id) < 0) herrezen.push(sp.id);
+      };
+      for (let i = 0; i < stappen; i++) {
+        const d = D[kies(4)], h = kies(20);
+        if (h < 8) {
+          if (d.app.netwerk.uit && kies(2)) weerNetwerk(d.app);
+          else {
+            const s = d.app.get('zichtVan(' + J(d.fid) + ')');
+            const l = kandidatenVoor(d.app, s, d.rol, 'pz' + String(zaad).padStart(3, '0') + 'r' + String(n).padStart(3, '0') + 'n' + String(nr + 1).padStart(2, '0')).filter(function (a) {
+              return d.app.get('staatNa(' + J(s) + ', ' + J(Object.assign({ merk: 'merkmerkmerkmerk' }, a)) + ', ' + J(d.rol) + ', klokNu(' + J(d.fid) + ') || 0).past');
+            });
+            if (l.length) {
+              let a = l[kies(l.length)];
+              if (a.soort === 'opgeven' && kies(3)) a = l[kies(l.length)];
+              if (a.soort === 'uitdaging' || a.soort === 'start') nr++;
+              d.app.ev('pasToe(' + J(d.fid) + ', ' + J(a) + ')');
+            }
+          }
+        } else if (h < 12) d.app.ev('leesPaar(' + J(d.fid) + ')');
+        else if (h === 12) modus = 'houd';
+        else if (h === 13) { if (vast.length) vast.shift()(); }
+        else if (h === 14) modus = 'kwijt';
+        else if (h === 15) geenNetwerk(d.app);
+        else if (h === 16 && !vast.length) { const j = D.indexOf(d); D[j] = Object.assign({}, d, { app: herlaad(d.app) }); }
+        else if (h === 17) __herstartServer();
+        else schuifKlok(kies(6) === 0 ? 15 * DAG : (1 + kies(60)) * 1000);
+        await wacht(300);
+        if (__server.potjes[bus]) __server.potjes[bus].tot = __busNu() + 30 * DAG;
+        await volg();
+      }
+      /* rust: alles komt aan, alles met netwerk, elk apparaat leest tot er niets meer verandert; dan bekijkt elk kind
+         wat er te bekijken is, en weer rust */
+      modus = null;
+      while (vast.length) vast.shift()();
+      const rust = async function () {
+        for (let ronde = 0; ronde < 30; ronde++) {
+          const voor = J(D.map(function (d) { const p = d.app.get('paarVan(' + J(d.fid) + ')'); return [p.versie, p.rij.length]; })) + ((__server.potjes[bus] || {}).blob || '');
+          for (const d of D) { weerNetwerk(d.app); await d.app.ev('leesPaar(' + J(d.fid) + ')'); await wacht(300); await volg(); }
+          const na = J(D.map(function (d) { const p = d.app.get('paarVan(' + J(d.fid) + ')'); return [p.versie, p.rij.length]; })) + ((__server.potjes[bus] || {}).blob || '');
+          if (voor === na) return true;
+        }
+        return false;
+      };
+      let stil = await rust();
+      for (const d of D) {
+        const s = d.app.get('zichtVan(' + J(d.fid) + ')');
+        for (const g of [s.spel && s.spel.fase === 'klaar' ? s.spel : null, s.vorige[0]]) if (g && !g.bekeken[d.rol]) await d.app.ev('pasToe(' + J(d.fid) + ', ' + J({ soort: 'bekijk', id: g.id }) + ')');
+        await wacht(300);
+      }
+      stil = (await rust()) && stil;
+      const p = [];
+      if (!stil) p.push('het komt niet tot rust');
+      const sv = __server.potjes[bus] ? await mees.ev('versieVan(' + J(__server.potjes[bus].blob) + ')') : '';
+      for (const d of D) {
+        const b = d.app.get('paarVan(' + J(d.fid) + ')');
+        if (b.versie !== sv && !(sv === '' && !d.app.get('staatTelt(paarVan(' + J(d.fid) + ').staat)'))) p.push('een apparaat bewaart iets anders dan de server heeft');
+        if (b.rij.length) p.push('op een apparaat wacht nog ' + b.rij.map(function (a) { return a.soort; }).join(' '));
+      }
+      for (const id in klaar) for (const kind of ['m', 'f']) {
+        const keer = D.filter(function (d) { return d.kind === kind; }).reduce(function (t, d) { return t + (d.app.get('getelde(' + J(d.fid) + ')').indexOf(id) >= 0 ? 1 : 0); }, 0);
+        if (keer !== 1) p.push('een kind telde een potje ' + keer + ' keer');
+      }
+      for (const d of D) for (const id of d.app.get('getelde(' + J(d.fid) + ')')) if (!klaar[id]) p.push('een apparaat telde een potje dat nooit afliep');
+      /* de tellers van elk kind, opgeteld over zijn twee apparaten: gespeeld als het potje telt, winst bij mat of opgave
+         van de ander */
+      for (const kind of ['m', 'f']) {
+        const rol = D.find(function (d) { return d.kind === kind; }).rol;
+        let gespeeld = 0, winst = 0;
+        for (const id in klaar) {
+          const u = klaar[id];
+          if ((u.soort !== 'opgave' && u.soort !== 'remise') || u.ply >= 20) gespeeld++;
+          if ((u.soort === 'mat' && u.door === rol) || (u.soort === 'opgave' && u.door !== rol)) winst++;
+        }
+        const erbij = D.reduce(function (t, d, i) { return d.kind !== kind ? t : [t[0] + eigenTeller(d.app, 'c.gamesPlayed') - tellersVoor[i][0], t[1] + eigenTeller(d.app, 'c.winsOnline') - tellersVoor[i][1]]; }, [0, 0]);
+        if (erbij[0] !== gespeeld || erbij[1] !== winst) p.push('de tellers van een kind kloppen niet');
+      }
+      afgelopen += Object.keys(klaar).length;
+      if (herrezen.length) p.push('een afgelopen potje liep weer');
+      if (p.length) {
+        fouten++;
+        const kop = p.filter(function (f, i, l) { return l.indexOf(f) === i; }).join('; ');
+        soorten[kop] = (soorten[kop] || 0) + 1;
+      }
+    }
+  } finally { fetch = echt; }
+  return { fouten, soorten, afgelopen };
 }

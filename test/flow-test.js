@@ -1110,9 +1110,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
 (async function () {
   closeModal(); /* het naamvenster uit de reset-flow */
 
-  /* ---------- compat: de getelde vriendenpotjes (set.potjes) ----------
-     Een profiel van de release van nu kent de set niet. Elk vriendenpotje telt per kind
-     één keer, ook met gekoppelde apparaten; de set groeit alleen en voegt samen als vereniging. */
+  /* ---------- compat: een profiel van de release van nu ---------- */
   var releaseDoc = function () {
     var d = { v: 2, epoch: 0,
       cnt: { xp: { r1: 520 }, stars: { r1: 40 }, wins: { r1: 3 }, 'c.gamesPlayed': { r1: 9 }, 'c.winsOnline': { r1: 2 } },
@@ -1123,32 +1121,6 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     d.cnt['wk.' + curWeek() + '.online'] = { r1: 1 };
     return d;
   };
-  await regel('[6.7] compat: een profiel van de release van nu laadt zonder verlies en krijgt een lege set getelde vriendenpotjes', function (check) {
-    var d = normDoc(releaseDoc()), v = viewFromDoc(d);
-    check('punten, tellers, trofeeën, de week en de vriend blijven', v.xp === 520 && v.stars === 40 && v.wins === 3 && v.c.gamesPlayed === 9 &&
-      v.c.winsOnline === 2 && wkGet(curWeek(), 'online', v) === 1 && v.badges.winst === true && v.badges.potje === true &&
-      v.name === 'Oscar' && v.theme === 'oceaan' && v.friends.vriendevert1.naam === 'Evert');
-    check('een lege set getelde vriendenpotjes', !!d.set.potjes && typeof d.set.potjes === 'object' && Object.keys(d.set.potjes).length === 0);
-  });
-  await regel('[6.7] compat: samenvoegen met een profiel zonder de set houdt de geziene vriendenpotjes met hun week, in beide richtingen, en verliest niets', function (check) {
-    var oud = normDoc(releaseDoc()), raw = releaseDoc();
-    raw.set.potjes = { abcdefghijkl: '2026-W46' };
-    raw.cnt.xp.t2 = 30;
-    var nieuw = normDoc(raw), ab = mergeDoc(nieuw, oud), ba = mergeDoc(oud, nieuw);
-    check('de set blijft, met de week, in beide richtingen', !!ab.set.potjes && ab.set.potjes.abcdefghijkl === '2026-W46' &&
-      !!ba.set.potjes && ba.set.potjes.abcdefghijkl === '2026-W46');
-    check('en verder niets kwijt', viewFromDoc(ab).xp === 550 && viewFromDoc(ba).xp === 550 && viewFromDoc(ab).c.winsOnline === 2 && viewFromDoc(ba).c.winsOnline === 2);
-  });
-  await regel('[6.7] compat: de set houdt alleen echte potje-ids met een week, en komt mee door koppelen, bewaren en laden', async function (check) {
-    var raw = releaseDoc();
-    raw.set.potjes = { abcdefghijkl: '2026-W46', '<b>x</b>': '2026-W46', kort: '2026-W46', nietwaar1234: true, geenweek1234: 'ja' };
-    check('alleen het echte id met een week', !!normDoc(raw).set.potjes && JSON.stringify(Object.keys(normDoc(raw).set.potjes)) === '["abcdefghijkl"]');
-    var a = maakApparaat('Oscar');
-    a.ev('applyRemoteDoc(' + JSON.stringify(raw) + ')');
-    check('na koppelen staat het id in het profiel', a.get('!!DOC.set.potjes && DOC.set.potjes.abcdefghijkl === "2026-W46"'));
-    var b = herlaad(a);
-    check('ook na bewaren en laden', b.get('!!DOC.set.potjes && DOC.set.potjes.abcdefghijkl === "2026-W46"'));
-  });
   await regel('[V5] compat: een profiel van de release van nu laadt met een lege lijst getelde vriendenpotjes en verliest niets', function (check) {
     var d = normDoc(releaseDoc()), v = viewFromDoc(d);
     check('punten, tellers, trofeeën, de week en de vriend blijven', v.xp === 520 && v.stars === 40 && v.wins === 3 && v.c.gamesPlayed === 9 &&
@@ -1171,18 +1143,6 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     a.ev('DOC.loc.geteld = ' + JSON.stringify({ vriendevert1: ['abcdefghijkl'] }) + '; saveP()');
     var b = herlaad(a);
     check('na bewaren en laden staat de lijst er nog', b.get('JSON.stringify(DOC.loc.geteld)') === '{"vriendevert1":["abcdefghijkl"]}');
-  });
-  await regel('[6.7] de set houdt de 400 nieuwste einden, bij twee weken voor één potje de laatste, en een naam die elk object kent is geen gezien potje', function (check) {
-    var raw = releaseDoc();
-    raw.set.potjes = {};
-    for (var i = 0; i < 450; i++) raw.set.potjes['potjenummer' + (1000 + i)] = (i < 50 ? '2025-W' : '2026-W') + String(10 + i % 40);
-    var d = normDoc(raw), ids = Object.keys(d.set.potjes);
-    check('400 blijven, en de oudste 50 zijn weg', ids.length === 400 && ids.every(function (k) { return /^2026-/.test(d.set.potjes[k]); }));
-    var x = normDoc(releaseDoc()), y = normDoc(releaseDoc());
-    x.set.potjes = { abcdefghijkl: '2026-W10' };
-    y.set.potjes = { abcdefghijkl: '2026-W20' };
-    check('samengevoegd telt de laatste week', mergeDoc(x, y).set.potjes.abcdefghijkl === '2026-W20' && mergeDoc(y, x).set.potjes.abcdefghijkl === '2026-W20');
-    check('constructor, hasOwnProperty en toString zijn nooit al gezien', !eindeGezien('constructor') && !eindeGezien('hasOwnProperty') && !eindeGezien('toString'));
   });
   ok('woorden: 1024 uniek geladen', WOORDEN.length === 1024 && new Set(WOORDEN).size === 1024);
   var qm = QR.qrMatrix('test');

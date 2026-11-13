@@ -31,11 +31,27 @@ function maakApparaat(naam, opties) {
   const eigenFetch = function (url, o) {
     return netwerk.uit ? Promise.reject(new TypeError('Load failed')) : fetch(url, o);
   };
-  const maak = new Function('document', 'localStorage', 'location', 'history', '__els', 'setTimeout', 'WebSocket', 'fetch',
-    __APP_SRC + '\n;return function (code) { return eval(code); };');
-  const ev = maak(doc, opslag, loc, loc.__history, doc.__els, eigenTimer, EigenSocket, eigenFetch);
+  /* een klok die scheef staat: dit apparaat leest de tijd van de wereld plus klokAf ms */
+  const klokAf = opties.klokAf || 0;
+  const namen = ['document', 'localStorage', 'location', 'history', '__els', 'setTimeout', 'WebSocket', 'fetch'];
+  const waarden = [doc, opslag, loc, loc.__history, doc.__els, eigenTimer, EigenSocket, eigenFetch];
+  if (klokAf) {
+    const ScheveDate = function (...a) {
+      const W = Date;
+      if (!(this instanceof ScheveDate)) return new W(W.now() + klokAf).toString();
+      return a.length ? new W(...a) : new W(W.now() + klokAf);
+    };
+    ScheveDate.now = function () { return Date.now() + klokAf; };
+    ScheveDate.UTC = function (...a) { return Date.UTC(...a); };
+    ScheveDate.parse = function (t) { return Date.parse(t); };
+    ScheveDate.prototype = Date.prototype;
+    namen.push('Date');
+    waarden.push(ScheveDate);
+  }
+  const maak = new Function(...namen, __APP_SRC + '\n;return function (code) { return eval(code); };');
+  const ev = maak(...waarden);
   const app = {
-    naam, doc, els: doc.__els, opslag, location: loc, ev, leven, netwerk,
+    naam, doc, els: doc.__els, opslag, location: loc, ev, leven, netwerk, klokAf,
     get(expr) { return ev('(' + expr + ')'); },
     el(id) { return doc.getElementById(id); },
     modal() { return doc.getElementById('modalBox').innerHTML; },
@@ -62,7 +78,7 @@ function stopApparaat(app) {
 
 function herlaad(app) {
   stopApparaat(app);
-  return maakApparaat(app.naam, { opslag: app.opslag, locatie: app.location, netwerk: app.netwerk, herstart: true });
+  return maakApparaat(app.naam, { opslag: app.opslag, locatie: app.location, netwerk: app.netwerk, herstart: true, klokAf: app.klokAf });
 }
 
 /* het netwerk van dit apparaat valt weg: open lijnen breken zonder
@@ -241,19 +257,17 @@ function opgeslagen(app, sleutel) {
   try { return JSON.parse(v); } catch (e) { return v; }
 }
 
-/* het ene bewaarde vriendenpotje: schaakheld-samen is een kaart van potjes per potje-id */
+/* het ene potje met een ander kind zoals het apparaat het kent: de bewaarde potjes, met die van vrienden uit de staat
+   van hun paar */
 function samenPotje(app) {
-  const r = opgeslagen(app, 'schaakheld-samen');
-  const ids = r && r.games && typeof r.games === 'object' ? Object.keys(r.games) : [];
-  return ids.length === 1 ? r.games[ids[0]] : null;
+  const g = app.get('samenRauw() || {}'), ids = Object.keys(g);
+  return ids.length === 1 ? g[ids[0]] : null;
 }
 
-/* het lopende bewaarde vriendenpotje met deze vriend, ook als er meer vriendenpotjes bewaard staan; een ingetrokken
-   uitdaging is alleen een verborgen merkteken */
+/* het lopende potje of de uitdaging met deze vriend, ook als er meer potjes zijn */
 function vriendenpotjeMet(app, fid) {
-  const r = opgeslagen(app, 'schaakheld-samen');
-  const g = r && r.games && typeof r.games === 'object' ? Object.keys(r.games).map(function (k) { return r.games[k]; }) : [];
-  return g.filter(function (x) { return !!x && x.fid === fid && !x.result && !x.ingetrokken; })[0] || null;
+  const g = app.get('samenRauw() || {}');
+  return Object.keys(g).map(function (k) { return g[k]; }).filter(function (x) { return !!x && x.fid === fid && !x.result && !x.ingetrokken; })[0] || null;
 }
 
 /* de regels "Ook nog" onder de Verder-kaart, zoals een kind ze leest */

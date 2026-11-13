@@ -1,7 +1,7 @@
 /* Orakel, flowtests voor vriendenpotjes die dagen doorlopen, op één apparaat: wat
-   een kind ziet als de vriend er niet is. Een vriendenpotje staat klaar zoals het nu
-   bewaard wordt (een kaart van potjes per potje-id, met de kamer en het stoeltje van
-   toen); die kamer bestaat niet meer, dus het potje gaat verder via de potjesbussen.
+   een kind ziet als de vriend er niet is. Een vriendenpotje staat klaar als de staat
+   van het paar, zoals het apparaat die bewaart; er is geen kamer, dus het potje gaat
+   verder via die staat op de server.
    Elke testnaam begint met zijn regelnummer. De helpers staan in deze functie, omdat
    de app in de flowsuite zijn namen in de globale scope heeft. */
 
@@ -12,23 +12,34 @@ async function orakelFlow6() {
 
   /* een profiel met een naam en vrienden; wie zetten heeft, heeft een vriendenpotje waarin dit kind
      wit speelt (of zwart), en desgewenst een remise-aanbod van de vriend in de stand van nu. Elke keer een
-     eigen geheim: de nep-server is gedeeld, en de potjesbussen van een andere test horen er niet bij. */
+     eigen geheim: de nep-server is gedeeld, en de staten van een andere test horen er niet bij. */
   let nummer = 0;
+  /* een id zoals de app het maakt: twaalf tekens */
+  const id12 = function (x) { return x.length === 12 ? x : x.length > 12 ? x.slice(0, 4) + x.slice(-8) : (x + '____________').slice(0, 12); };
+  /* Een potje of uitdaging met een vriend zoals dit apparaat het kent: een staat van het paar, met de vriend als host
+     (het kind heeft rol a). r heeft de vorm van een potje op de kaart: zetten, kleur, aanbod, uitslag, beurtT. */
+  const alsPaar = function (r) {
+    const rol = 'a', ander = 'b', kleur = r.myColor || 'w', rolVan = function (c) { return c === kleur ? rol : ander; };
+    const t = Math.floor((r.beurtT || r.updated || Date.now() - UUR) / 1000), uitd = r.state === 'uitdaging';
+    const spel = { id: id12(r.gameId), wit: rolVan('w'), door: uitd && r.host === false ? ander : rol, fase: uitd ? 'uitdaging' : r.result ? 'klaar' : 'potje',
+      zetten: (r.moves || []).slice(), bod: r.offer ? { door: rolVan(r.offer.by), ply: r.offer.ply, t: r.offer.t ? Math.floor(r.offer.t / 1000) : t } : null,
+      uitslag: r.result ? { soort: r.result.kind, door: r.result.by ? rolVan(r.result.by) : rol, ply: r.result.ply } : null,
+      weet: { a: null, b: null }, bekeken: { a: false, b: false }, t: t };
+    return { staat: { v: 2, seq: 3, spel: spel, vorige: [] }, hoogste: 3, merk: 'merkvandittoest1', rij: [] };
+  };
   const opslagMetVrienden = function (vrienden, extra) {
     nummer++;
-    const o = maakOpslag(), games = {}, friends = {};
+    const o = maakOpslag(), paren = {}, friends = {};
     vrienden.forEach(function (v, i) {
       friends[v.fid] = { k: 'geheimvoorvriendschap' + nummer + '-' + v.fid + '-xxxx', naam: v.naam, t: 1, weg: false, host: true, since: 1794500000000 + i * 1000 };
       if (!v.zetten) return;
       const kleur = v.kleur || 'w';
-      games['potjevan' + v.fid] = { gameId: 'potjevan' + v.fid, fid: v.fid, room: 'kamervantoen' + i + 'xx', seat: 'stoelvantoen' + i + 'xx',
-        host: true, myColor: kleur, gameNo: 1, moves: v.zetten, peerName: v.naam, result: null,
-        offer: v.aanbod ? { by: kleur === 'w' ? 'b' : 'w', ply: v.zetten.length, answer: null } : null, shown: false,
-        updated: v.updated || Date.now() - UUR };
+      paren[v.fid] = alsPaar({ gameId: 'potjevan' + v.fid, myColor: kleur, moves: v.zetten,
+        offer: v.aanbod ? { by: kleur === 'w' ? 'b' : 'w', ply: v.zetten.length } : null, updated: v.updated || Date.now() - UUR });
     });
     o.setItem('schaakheld1', JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'Mees', t: 1 } },
       max: { best: 0, goal: {} }, friends, loc: {} }));
-    if (Object.keys(games).length) o.setItem('schaakheld-samen', JSON.stringify({ v: 1, games }));
+    if (Object.keys(paren).length) o.setItem('schaakheld-paar', JSON.stringify(paren));
     for (const k in extra || {}) o.setItem(k, extra[k]);
     return o;
   };
@@ -84,10 +95,11 @@ async function orakelFlow6() {
     await wacht(5000);
     await a.ev('friendPoll()');
     await wacht(5000);
-    check('testopzet: vijf potjes van 80 halve zetten bewaard', a.get('Object.keys(JSON.parse(localStorage.getItem("schaakheld-samen")).games).length') === 5);
+    check('testopzet: vijf potjes van 80 halve zetten bewaard', a.get('Object.keys(paren()).filter(function (k) { return paren()[k].staat && paren()[k].staat.spel.zetten.length === 80; }).length') === 5);
     a.ev('document.__tel = { zetten: 0, bewaard: 0, getekend: 0 };' +
       'var lm = legalMoves; legalMoves = function () { document.__tel.zetten++; return lm.apply(this, arguments); };' +
       'var ss = schrijfSamen; schrijfSamen = function (g) { document.__tel.bewaard++; return ss(g); };' +
+      'var bp = bewaarPaar; bewaarPaar = function (f, p) { document.__tel.bewaard++; return bp(f, p); };' +
       'var rv = renderVerder; renderVerder = function () { document.__tel.getekend++; return rv.apply(this, arguments); };');
     await a.ev('friendPoll()');
     await wacht(1000);
@@ -97,18 +109,18 @@ async function orakelFlow6() {
     check('niets opnieuw getekend', tel.getekend === 0);
   });
 
-  await regel('[6.10] met 23 vrienden gaan de drie adressen van elke vriend in hetzelfde verzoek, en geen verzoek heeft er meer dan 64', async function (check) {
+  await regel('[6.10] met 40 vrienden gaan de twee adressen van elke vriend (de uitnodiging en de staat van het paar) in hetzelfde verzoek, en geen verzoek heeft er meer dan 64', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const vrienden = [];
-    for (let i = 0; i < 23; i++) vrienden.push({ fid: 'vriendnummer' + (10 + i), naam: 'Vriend' + i });
+    for (let i = 0; i < 40; i++) vrienden.push({ fid: 'vriendnummer' + (10 + i), naam: 'Vriend' + i });
     const a = await kind(opslagMetVrienden(vrienden));
     const verzoeken = [], echt = fetch;
     fetch = function (url, o) { if (/\/v1\/bus\/check$/.test(url)) verzoeken.push(JSON.parse(o.body).bussen); return echt(url, o); };
     try { await a.ev('friendPoll()'); } finally { fetch = echt; }
-    const drietallen = await a.ev('(async function () { const uit = []; for (const id in P.friends) { const f = P.friends[id];' +
-      'uit.push([(await busFor(f, myRole(f))).bus, (await busFor(f, myRole(f), "potje")).bus, (await busFor(f, theirRole(f), "potje")).bus]); } return uit; })()');
-    check('testopzet: 23 drietallen in meer dan één verzoek', drietallen.length === 23 && verzoeken.length > 1);
-    check('elk drietal in één verzoek', drietallen.every(function (d) { return verzoeken.some(function (v) { return d.every(function (b) { return v.indexOf(b) >= 0; }); }); }));
+    const tweetallen = await a.ev('(async function () { const uit = []; for (const id in P.friends) { const f = P.friends[id];' +
+      'uit.push([(await busFor(f, myRole(f))).bus, (await paarBus(f)).bus]); } return uit; })()');
+    check('testopzet: 40 tweetallen in meer dan één verzoek', tweetallen.length === 40 && verzoeken.length > 1);
+    check('elk tweetal in één verzoek', tweetallen.every(function (d) { return verzoeken.some(function (v) { return d.every(function (b) { return v.indexOf(b) >= 0; }); }); }));
     check('geen verzoek boven de 64', verzoeken.every(function (v) { return v.length <= 64; }));
   });
 
@@ -125,12 +137,9 @@ async function orakelFlow6() {
 
   /* een opslag met vrienden en precies deze bewaarde potjes en uitdagingen */
   const opslagMetPotjes = function (vrienden, records) {
-    const o = opslagMetVrienden(vrienden), games = {};
-    records.forEach(function (r) {
-      games[r.gameId] = Object.assign({ room: null, seat: null, host: true, myColor: 'w', gameNo: 1, moves: [], result: null, offer: null,
-        shown: false, state: 'potje', updated: Date.now() - UUR }, r);
-    });
-    o.setItem('schaakheld-samen', JSON.stringify({ v: 1, games }));
+    const o = opslagMetVrienden(vrienden), paren = JSON.parse(o.getItem('schaakheld-paar') || '{}');
+    records.forEach(function (r) { paren[r.fid] = alsPaar(r); });
+    o.setItem('schaakheld-paar', JSON.stringify(paren));
     return o;
   };
 
@@ -209,10 +218,11 @@ async function orakelFlow6() {
 
   await regel('[6.9] een uitdaging in het blad vraagt eerst Ja of Nu niet; een eigen uitdaging in het blad brengt naar Vrienden, zonder die vraag', async function (check) {
     zetDatum('2026-11-14T10:00:00');
-    const a = await kind(opslagMetPotjes([fien, sem], [
+    const daan = { fid: 'vrienddaan1', naam: 'Daan' };
+    const a = await kind(opslagMetPotjes([fien, sem, daan], [
       { gameId: 'potjevansem01', fid: 'vriendsem01', peerName: 'Sem', moves: ['c2c4', 'e7e5'] },
       { gameId: 'uitdvanfien1x', fid: 'vriendfien1', peerName: 'Fien', state: 'uitdaging', host: false },
-      { gameId: 'uitdaansem01x', fid: 'vriendsem01', peerName: 'Sem', state: 'uitdaging', mijnUitdaging: true }]));
+      { gameId: 'uitdaandaan1x', fid: 'vrienddaan1', peerName: 'Daan', state: 'uitdaging', mijnUitdaging: true }]));
     tikTekst(a, 'Ook nog');
     await wacht();
     tikTekst(a, 'Fien daagt je uit');
@@ -222,7 +232,7 @@ async function orakelFlow6() {
     await wacht();
     tikTekst(a, 'Ook nog');
     await wacht();
-    tikTekst(a, 'Je uitdaging aan Sem');
+    tikTekst(a, 'Je uitdaging aan Daan');
     await wacht();
     check('de eigen uitdaging brengt naar Vrienden, zonder vraag', zichtbaar(a, 'view-vrienden') && !a.open());
   });
@@ -411,7 +421,7 @@ async function orakelFlow6() {
     const s = a.scherm();
     check('het venster daarna', /Uitdaging verstuurd!/.test(s) && kanTikken(a, 'Naar huis') &&
       /Fien is er nu niet\. Fien ziet je uitdaging bij het openen van SchaakHeld\. Je kunt intussen iets anders doen\./.test(s));
-    check('de uitdaging staat in de eigen potjesbus', Object.keys(__server.potjes).length === potjes + 1);
+    check('de uitdaging staat in de staat van het paar', Object.keys(__server.potjes).length === potjes + 1);
     tikTekst(a, 'Naar huis');
     await wacht();
     a.tik('tabSpelen');

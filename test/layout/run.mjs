@@ -27,7 +27,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '6.4', '6.8', '6.9', 'V2']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '6.4', '6.8', '6.9', 'V2', 'V9']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -737,6 +737,30 @@ for (const [W, H, uitslag, vol] of [[360, 640, 'w'], [375, 553, 'w'], [375, 647,
       check(n, 'geen knop onder de rand van de kaart (' + Math.round(k.onder) + ' px)', k.onder <= 1);` });
 }
 
+/* regel V9: de eindkaart van een potje tussen vrienden dat met de 500e halve zet remise werd, met de zin over de marathon */
+for (const [W, H] of [[360, 640], [375, 553], [390, 844], [768, 1004]]) {
+  const n = '[V9] ' + W + 'x' + H + ': de eindkaart van de remise na 250 zetten: de zin over de marathon staat erop, alles past, en geen knop valt eronder';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      const k = await page.evaluate(async () => {
+        MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false, revTheirs: false,
+          peerName: 'Maximiliaantje', open: true, weg: false, gameId: 'potje-test-1', peerOn: true };
+        mpBeginGame();
+        await new Promise(r => setTimeout(r, 300));
+        const S = session.S;
+        for (let i = 0; i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
+        endGame({ over: true, result: 'd', reason: 'lang' });
+        await new Promise(r => setTimeout(r, 1200));
+        const e = document.getElementById('eindkaart'), er = e.getBoundingClientRect();
+        const knoppen = [...e.querySelectorAll('button')].filter(b => b.getClientRects().length);
+        return { sh: e.scrollHeight, ch: e.clientHeight, tekst: e.innerText, onder: Math.max(...knoppen.map(b => b.getBoundingClientRect().bottom)) - er.bottom };
+      });
+      check(n, 'de zin over de marathon', /Remise: dit potje duurde 250 zetten, en langer kan niet\. Wat een marathon!/.test(k.tekst) && /Gelijkspel!/.test(k.tekst));
+      check(n, 'alles past in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
+      check(n, 'geen knop onder de rand van de kaart (' + Math.round(k.onder) + ' px)', k.onder <= 1);` });
+}
+
 /* in een kleine eindkaart krimpen de knoppen niet: elke knop is minstens 44 hoog */
 for (const [W, H] of KLEIN) {
   const n = '[2.5] ' + W + 'x' + H + ': elke knop van de eindkaart is minstens 44 hoog, ook met trofeeën of een vriendschapsvraag';
@@ -968,23 +992,25 @@ GEVALLEN.push({ regels: ['[3.5] 390x844: Ik begint met het level, dan bewaard, t
 
 /* plan.md 6.9: Spelen met vier dingen bezig, het eerste een remise-aanbod van een vriend met een lange naam, en Spelen
    met een regel "Ook nog" die twee regels neemt: de kaart, één regel eronder, de weekregel en beide spelknoppen
-   staan boven de tabbalk. De vriendenpotjes staan bewaard zoals nu, met een kamer die er niet meer is. */
-const POTJES_DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'Mees', t: 1 } }, max: { best: 0, goal: {} }, loc: {},
-  friends: {
-    vriendmaxi01: { k: 'sleutelsleutelsleutelsleutelsleutelM', naam: 'Maximiliaantje', t: 1, since: 1792000000000, host: true, weg: false },
-    vriendsem001: { k: 'sleutelsleutelsleutelsleutelsleutelS', naam: 'Sem', t: 1, since: 1792100000000, host: true, weg: false } } });
-const bewaardVriendenpotje = (fid, naam, i, zetten, aanbod) => ({ gameId: 'potjevan' + fid, fid, room: 'kamervantoen' + i + 'xx',
-  seat: 'stoelvantoen' + i + 'xx', host: true, myColor: 'w', gameNo: 1, moves: zetten, peerName: naam, result: null,
-  offer: aanbod ? { by: 'b', ply: zetten.length, answer: null } : null, shown: false, updated: 1794700000000 });
-const MAXI_BIEDT = bewaardVriendenpotje('vriendmaxi01', 'Maximiliaantje', 0, ['d2d4', 'd7d5'], true);
-const VIER_BEZIG = { schaakheld1: POTJES_DOC,
-  'schaakheld-samen': JSON.stringify({ v: 1, games: { potjevanvriendmaxi01: MAXI_BIEDT,
-    potjevanvriendsem001: bewaardVriendenpotje('vriendsem001', 'Sem', 1, ['c2c4'], false) } }),
+   staan boven de tabbalk. Een vriendenpotje staat in de staat van het paar zoals dit apparaat die bewaart; de vriend
+   is host, dus het kind heeft rol a. Elke stand heeft eigen geheimen: de server houdt wat eerdere gevallen schreven. */
+const profielMet = (stand, vrienden) => JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'Mees', t: 1 } },
+  max: { best: 0, goal: {} }, loc: {}, friends: Object.fromEntries(vrienden.map(([fid, naam], i) => [fid,
+    { k: ('sleutel' + stand + fid).padEnd(36, 'x').slice(0, 36), naam, t: 1, since: 1792000000000 + i * 100000000, host: true, weg: false }])) });
+const paarStaat = (id, r) => {
+  const kleur = r.kleur || 'w', rolVan = c => c === kleur ? 'a' : 'b', t = Math.floor((r.t || 1794700000000) / 1000), zetten = r.zetten || [];
+  return { staat: { v: 2, seq: 3, vorige: [], spel: { id, wit: rolVan('w'), door: r.uitdaging ? 'b' : 'a',
+    fase: r.uitdaging ? 'uitdaging' : r.uitslag ? 'klaar' : 'potje', zetten, bod: r.aanbod ? { door: 'b', ply: zetten.length, t } : null,
+    uitslag: r.uitslag || null, weet: r.weet || { a: null, b: null }, bekeken: r.bekeken || { a: false, b: false }, t } },
+    hoogste: 3, merk: 'merkvandittoest1', rij: [] };
+};
+const MAXI_BIEDT = { zetten: ['d2d4', 'd7d5'], aanbod: true };
+const VIER_BEZIG = { schaakheld1: profielMet('vier', [['vriendmaxi01', 'Maximiliaantje'], ['vriendsem001', 'Sem']]),
+  'schaakheld-paar': JSON.stringify({ vriendmaxi01: paarStaat('potjemaxi001', MAXI_BIEDT), vriendsem001: paarStaat('potjesem0001', { zetten: ['c2c4'] }) }),
   'schaakheld-potje': JSON.stringify({ v: 2, games: { 1: { level: 1, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null, started: 1, updated: 1, patXP: 0 } } }),
   'schaakheld-rondjes': JSON.stringify({ scan: { round: 2, earned: 6 } }) };
-/* zonder Sem: zijn potje uit de vorige stand staat nog in de potjesbus, en een ander apparaat van dit kind neemt dat over */
-const ALLEEN_MAXI = JSON.stringify(Object.assign(JSON.parse(POTJES_DOC), { friends: { vriendmaxi01: JSON.parse(POTJES_DOC).friends.vriendmaxi01 } }));
-const OOK_LANG = { schaakheld1: ALLEEN_MAXI, 'schaakheld-samen': JSON.stringify({ v: 1, games: { potjevanvriendmaxi01: MAXI_BIEDT } }),
+const OOK_LANG = { schaakheld1: profielMet('vier', [['vriendmaxi01', 'Maximiliaantje']]),
+  'schaakheld-paar': JSON.stringify({ vriendmaxi01: paarStaat('potjemaxi001', MAXI_BIEDT) }),
   'schaakheld-rondjes': JSON.stringify({ trucs: { round: 2, earned: 6 } }) };
 for (const [W, H] of [[360, 640], [375, 553]]) {
   const n = '[6.9] ' + W + 'x' + H + ': met vier dingen bezig en met een regel Ook nog van twee regels staan de kaart (een remise-aanbod), één regel, de weekregel en beide spelknoppen boven de tabbalk';
@@ -1008,9 +1034,9 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
 }
 
 /* plan.md 6.8: een stil potje als kaart, met de uitweg eronder, en een tweede stil potje in de regel Ook nog */
-const STIL_LANG = { schaakheld1: POTJES_DOC, 'schaakheld-samen': JSON.stringify({ v: 1, games: {
-  potjevanvriendmaxi01: Object.assign(bewaardVriendenpotje('vriendmaxi01', 'Maximiliaantje', 0, ['d2d4', 'd7d5', 'c2c4'], false), { beurtT: Date.now() - 8 * 86400000 }),
-  potjevanvriendsem001: Object.assign(bewaardVriendenpotje('vriendsem001', 'Sem', 1, ['c2c4', 'e7e5', 'g1f3'], false), { beurtT: Date.now() - 12 * 86400000 }) } }) };
+const STIL_LANG = { schaakheld1: profielMet('stil', [['vriendmaxi01', 'Maximiliaantje'], ['vriendsem001', 'Sem']]),
+  'schaakheld-paar': JSON.stringify({ vriendmaxi01: paarStaat('potjemaxi001', { zetten: ['d2d4', 'd7d5', 'c2c4'], t: Date.now() - 8 * 86400000 }),
+    vriendsem001: paarStaat('potjesem0001', { zetten: ['c2c4', 'e7e5', 'g1f3'], t: Date.now() - 12 * 86400000 }) }) };
 for (const [W, H] of [[360, 640], [375, 553]]) {
   const n = '[6.8] ' + W + 'x' + H + ': twee stille potjes, de kaart met de uitweg eronder en een regel Ook nog: de kaart, de regels, de weekregel en beide spelknoppen boven de tabbalk';
   GEVALLEN.push({ regels: [n], code: `
@@ -1027,9 +1053,9 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
 }
 
 /* plan.md 6.4: het venster als het paar bezet is: het plaatje bovenaan, de zin eronder, één Oké en geen kruisje */
-const BEZET = { schaakheld1: ALLEEN_MAXI, 'schaakheld-samen': JSON.stringify({ v: 1, games: { potjevanvriendmaxi01:
-  Object.assign(bewaardVriendenpotje('vriendmaxi01', 'Maximiliaantje', 0, ['d2d4', 'd7d5'], false),
-    { room: null, seat: null, result: { kind: 'opgave', by: 'w', ply: 2 }, shown: true }) } }) };
+const BEZET = { schaakheld1: profielMet('bezet', [['vriendmaxi01', 'Maximiliaantje']]),
+  'schaakheld-paar': JSON.stringify({ vriendmaxi01: paarStaat('potjemaxi001', { zetten: ['d2d4', 'd7d5'], uitslag: { soort: 'opgave', door: 'a', ply: 2 },
+    weet: { a: 'merkvandittoest1', b: null }, bekeken: { a: true, b: false } }) }) };
 for (const [W, H] of [[360, 640], [375, 553]]) {
   const n = '[6.4] ' + W + 'x' + H + ': het venster als het paar bezet is: het plaatje boven de zin, één Oké, geen kruisje, en alles in beeld';
   GEVALLEN.push({ regels: [n], code: `
@@ -1068,11 +1094,8 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
 
 /* plan.md 6.9: een uitdaging van een vriend met een lange naam: de rij op Vrienden noemt onder de naam alleen dat hij
    uitdaagt en welke kleur het kind heeft, in hoogstens twee regels; de kaart houdt de hele zin en blijft binnen het scherm */
-/* een eigen sleutel: de bussen van vriendmaxi01 houden op de server wat eerdere gevallen schreven */
-const UITDAGING = { schaakheld1: JSON.stringify(Object.assign(JSON.parse(POTJES_DOC), { friends: { vriendmaxi02: { k: 'sleutelsleutelsleutelsleuteluitdaging',
-  naam: 'Maximiliaantje', t: 1, since: 1792000000000, host: true, weg: false } } })), 'schaakheld-samen': JSON.stringify({ v: 1, games: { potjevanvriendmaxi02:
-  Object.assign(bewaardVriendenpotje('vriendmaxi02', 'Maximiliaantje', 0, [], false),
-    { room: null, seat: null, myColor: 'b', state: 'uitdaging', mijnUitdaging: false, beurtT: Date.now() }) } }) };
+const UITDAGING = { schaakheld1: profielMet('uitdaging', [['vriendmaxi02', 'Maximiliaantje']]),
+  'schaakheld-paar': JSON.stringify({ vriendmaxi02: paarStaat('potjemaxi002', { kleur: 'b', uitdaging: true, t: Date.now() }) }) };
 for (const [W, H] of [[360, 640], [375, 553]]) {
   const n = '[6.9] ' + W + 'x' + H + ': een uitdaging van een vriend met een lange naam: de rij zegt in hoogstens twee regels dat hij uitdaagt en welke kleur het kind heeft, en de kaart past';
   GEVALLEN.push({ regels: [n], code: `
