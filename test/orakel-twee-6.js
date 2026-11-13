@@ -2057,16 +2057,7 @@ async function orakelTwee6() {
   }
 
   /* het aanbod van Mees staat veertien dagen en tien minuten; Fien zit op haar bord met het aanbod */
-  /* een rustig potje van n halve zetten: paarden heen en weer, en om de 98 halve zetten een pionzet van elk, zodat de
-     vijftigzettenregel het niet beëindigt */
-  const rustigLang = function (n) {
-    const z = [], wit = ['a2a3', 'b2b3', 'c2c3', 'd2d3', 'e2e3', 'f2f3'], zwart = ['a7a6', 'b7b6', 'c7c6', 'd7d6', 'e7e6', 'f7f6'];
-    while (z.length < n) {
-      const i = z.length % 98, blok = Math.floor(z.length / 98);
-      z.push(i === 96 ? wit[blok] : i === 97 ? zwart[blok] : ['g1f3', 'g8f6', 'f3g1', 'f6g8'][i % 4]);
-    }
-    return z;
-  };
+  const rustigLang = function (n) { return rustigePartij(n, true); };
 
   await regel('[6.6] V9 met de 500e halve zet is een potje tussen vrienden remise: wie hem zet ziet het meteen, de ander bij het openen, met de zin over de marathon, en elk telt één keer', async function (check) {
     const { mees, fien, fid } = await uitdagingVanMees();
@@ -3875,5 +3866,159 @@ async function orakelTwee6() {
     check('het paar staat er', alles.some(function (kv) { return kv[0] === 'paar' && kv[1] === 'paar'; }));
     check('elk veld heeft een plek' + (zonderPlek(alles).length ? ': zonder plek ' + zonderPlek(alles).join(', ') : ''), zonderPlek(alles).length === 0);
     check('het aanbod op de eigen zet zit niet in het geheugen', !alles.some(function (kv) { return kv[0] === 'bodMetZet'; }));
+  });
+
+  /* ================= drie keer dezelfde stelling in een potje op de staat ================= */
+
+  const DRIE_KEER = 'Remise: drie keer dezelfde stelling. Niemand wint, niemand verliest.', AL_EENS = 'Deze stelling stond er al eens.';
+  /* na 22 rustige halve zetten heen en weer met de paarden: na de 26e staat de stelling er voor de tweede keer, Mees is aan zet */
+  const PAARDEN = ['g1f3', 'g8f6', 'f3g1', 'f6g8', 'g1f3', 'g8f6', 'f3g1', 'f6g8'];
+  const totTweedeKeer = async function () {
+    const { mees, fien, fid } = await liveVriendenpotje(false);
+    await potjeTot(mees, fien, 22, mees);
+    for (const z of PAARDEN.slice(0, 4)) { await zetUit(Array(22).concat(PAARDEN), mees, fien); }
+    return { mees, fien, fid };
+  };
+
+  await regel('[5.6] AB1 in een potje op de staat zegt de strook bij de tweede keer dezelfde stelling dat de derde keer remise is, bij Fien na haar zet en bij Mees op zijn beurt', async function (check) {
+    const { mees, fien } = await totTweedeKeer();
+    check('testopzet: 26 halve zetten op beide borden, Mees aan zet', mees.get('session.S.hist.length') === 26 && fien.get('session.S.hist.length') === 26 && magZetten(mees));
+    check('Fien na haar zet', zegt(fien).indexOf(AL_EENS) >= 0);
+    check('Mees op zijn beurt', zegt(mees).indexOf(AL_EENS) >= 0);
+  });
+
+  await regel('[5.6] AB1 de derde keer dezelfde stelling in een potje op de staat is remise voor allebei: in de staat, op beide eindkaarten met de zin, en één keer geteld', async function (check) {
+    const { mees, fien, fid } = await totTweedeKeer();
+    const voorM = tellers(mees), voorF = tellers(fien);
+    for (const z of PAARDEN.slice(4)) { await zetUit(Array(22).concat(PAARDEN), mees, fien); }
+    await tijd(5000);
+    const s = (await busInhoud(mees, fid, await potjesbus(mees, fid))).spel;
+    check('de staat: remise door herhaling met de 30e halve zet', !!s && s.fase === 'klaar' && s.uitslag.soort === 'herhaling' && s.uitslag.ply === 30);
+    check('Mees: de eindkaart met de zin', /Gelijkspel!/.test(tekstVan(mees, 'eindkaart')) && tekstVan(mees, 'eindkaart').indexOf(DRIE_KEER) >= 0);
+    check('Fien ook', /Gelijkspel!/.test(tekstVan(fien, 'eindkaart')) && tekstVan(fien, 'eindkaart').indexOf(DRIE_KEER) >= 0);
+    check('elk één gespeeld potje, niemand wint', JSON.parse(tellers(mees))[0] === JSON.parse(voorM)[0] + 1 && JSON.parse(tellers(fien))[0] === JSON.parse(voorF)[0] + 1 &&
+      JSON.parse(tellers(mees))[1] === JSON.parse(voorM)[1] && JSON.parse(tellers(fien))[1] === JSON.parse(voorF)[1]);
+  });
+
+  await regel('[5.6] AB1 de regel over herhaling blijft op de beurt van Mees staan als hij de app opnieuw opent', async function (check) {
+    let { mees } = await totTweedeKeer();
+    check('testopzet: Mees leest de regel', zegt(mees).indexOf(AL_EENS) >= 0);
+    mees = herlaad(mees);
+    await tijd(20000);
+    for (let i = 0; i < 4 && mees.open(); i++) { mees.ev('closeModal()'); await wacht(); }
+    mees.tik('verderKaart');
+    await wacht(3000);
+    check('na het openen dezelfde regel', opSpeelscherm(mees) && zegt(mees).indexOf(AL_EENS) >= 0);
+  });
+
+  await regel('[5.6] AB1 wat Mees over herhaling al las, blijft gelezen na een herlading: speelt hij anders verder, dan komt de regel niet nog eens', async function (check) {
+    let { mees, fien } = await totTweedeKeer();
+    check('testopzet: Mees leest de regel', zegt(mees).indexOf(AL_EENS) >= 0);
+    zet(mees, 'g1e2');
+    await wacht();
+    zet(fien, 'g8h6');
+    await wacht(3000);
+    check('testopzet: 28 halve zetten, Mees aan zet, geen regel over herhaling', mees.get('session.S.hist.length') === 28 && magZetten(mees) && !/stelling/.test(zegt(mees)));
+    mees = herlaad(mees);
+    await tijd(20000);
+    for (let i = 0; i < 4 && mees.open(); i++) { mees.ev('closeModal()'); await wacht(); }
+    mees.tik('verderKaart');
+    await wacht(3000);
+    check('na het openen geen regel over herhaling', opSpeelscherm(mees) && mees.get('session.S.hist.length') === 28 && !/stelling/.test(zegt(mees)));
+  });
+
+  await regel('[5.6] AB1 kwam de tweede keer terwijl de app van Mees dicht was, dan zegt de strook het als hij het potje opent', async function (check) {
+    let { mees, fien } = await liveVriendenpotje(false);
+    await potjeTot(mees, fien, 22, mees);
+    const lijst = Array(22).concat(PAARDEN);
+    for (let i = 0; i < 3; i++) await zetUit(lijst, mees, fien);
+    stopApparaat(mees);
+    await wacht(3000);
+    await zetUit(lijst, fien);
+    await tijd(20000);
+    mees = await opent(mees);
+    check('testopzet: Mees is thuis zonder kamer en het potje staat op 26', opThuis(mees) && fien.get('session.S.hist.length') === 26 && !mees.get('MP && MP.room'));
+    mees.tik('verderKaart');
+    await wacht(3000);
+    check('bij het openen de regel', opSpeelscherm(mees) && mees.get('session.S.hist.length') === 26 && zegt(mees).indexOf(AL_EENS) >= 0);
+  });
+
+  await regel('[5.6] AB1 Mees was weg toen het de derde keer werd: de kaart zegt dat het potje remise is, en de eindkaart waarom', async function (check) {
+    let { mees, fien } = await totTweedeKeer();
+    const lijst = Array(22).concat(PAARDEN);
+    for (let i = 0; i < 3; i++) await zetUit(lijst, mees, fien);
+    stopApparaat(mees);
+    await wacht(3000);
+    await zetUit(lijst, fien);
+    await tijd(5000);
+    check('testopzet: bij Fien remise door herhaling', tekstVan(fien, 'eindkaart').indexOf(DRIE_KEER) >= 0);
+    mees = await opent(mees);
+    check('de kaart van Mees: remise', /Je potje met Fien is remise/.test(tekstVan(mees, 'verder')));
+    mees.tik('verderKaart');
+    await wacht();
+    check('de eindkaart met de zin', tekstVan(mees, 'eindkaart').indexOf(DRIE_KEER) >= 0);
+  });
+
+  await regel('[5.6] AB1 beantwoordt Fien het remise-aanbod van Mees met een zet die de stelling voor de tweede keer geeft, dan leest Mees de regel over herhaling, en dat Fien liever doorspeelt telt als gehoord', async function (check) {
+    const { mees, fien } = await liveVriendenpotje(false);
+    await potjeTot(mees, fien, 22, mees);
+    const lijst = Array(22).concat(PAARDEN);
+    for (let i = 0; i < 3; i++) await zetUit(lijst, mees, fien);
+    await biedRemise(mees);
+    await wacht(3000);
+    if (fien.open()) { tikTekst(fien, 'Nee, doorspelen'); await wacht(); }
+    await zetUit(lijst, fien);
+    await wacht(3000);
+    check('testopzet: 26 halve zetten, Mees aan zet', mees.get('session.S.hist.length') === 26 && magZetten(mees));
+    check('de regel over herhaling, niet dat Fien liever doorspeelt', zegt(mees).indexOf(AL_EENS) >= 0 && !/liever door/.test(zegt(mees)));
+    mees.tik('backBtn');
+    await wacht(3000);
+    check('thuis de gewone kaart', /Fien heeft gezet\. Jij bent aan zet\./.test(tekstVan(mees, 'verderKaart')) && !/liever door/.test(tekstVan(mees, 'verder')));
+  });
+
+  await regel('[5.6] AB1 is de kamer weg terwijl Mees de regel over herhaling leest, dan blijft die regel staan', async function (check) {
+    const { mees } = await totTweedeKeer();
+    const kamer = mees.get('MP.room');
+    check('testopzet: Mees leest de regel', zegt(mees).indexOf(AL_EENS) >= 0);
+    delete __server.wsrooms[kamer];
+    mees.ev('MP.ws.close()');
+    await tijd(30000);
+    check('testopzet: zonder kamer verder op de staat', mees.get('!!MP && !MP.room') && opSpeelscherm(mees));
+    check('de regel staat er nog', zegt(mees).indexOf(AL_EENS) >= 0);
+  });
+
+  await regel('[5.6] AB1 geeft de zet van Fien schaak in een potje op de staat, dan zegt de strook van Mees dat', async function (check) {
+    const { mees, fien } = await liveVriendenpotje(false);
+    const lijst = ['e2e4', 'e7e5', 'f2f4', 'd8h4'];
+    for (let i = 0; i < 4; i++) await zetUit(lijst, mees, fien);
+    await wacht(3000);
+    check('testopzet: Mees staat schaak en is aan zet', mees.get('inCheck(session.S)') && magZetten(mees));
+    check('de strook', /Schaak! Red je koning\./.test(zegt(mees)));
+  });
+
+  /* ================= een einde dat de spelers kiezen, telt pas vanaf twintig halve zetten ================= */
+
+  const TELT_NIET = 'Dit potje telt niet mee: het was korter dan tien zetten.';
+  await regel('[5.6] AF6 twee kinderen in de kamer zetten de paarden heen en weer: remise na acht halve zetten, en het telt voor geen van beiden', async function (check) {
+    const a = maakApparaat('Lotte'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    const voorA = tellers(a), voorB = tellers(b), xpA = a.get('P.xp'), xpB = b.get('P.xp');
+    for (const z of PAARDEN) await speel(a, b, z);
+    await wacht(3000);
+    check('testopzet: remise door herhaling na acht halve zetten', a.get('session.S.hist.length') === 8 && tekstVan(a, 'eindkaart').indexOf(DRIE_KEER) >= 0);
+    check('de kaart zegt dat het niet meetelt', tekstVan(a, 'eindkaart').indexOf(TELT_NIET) >= 0 && tekstVan(b, 'eindkaart').indexOf(TELT_NIET) >= 0);
+    check('geen teller en geen XP', tellers(a) === voorA && tellers(b) === voorB && a.get('P.xp') === xpA && b.get('P.xp') === xpB);
+  });
+
+  await regel('[5.6] AF6 twee vrienden zetten in een potje op de staat de paarden heen en weer: remise na acht halve zetten, in de staat, en het telt voor geen van beiden', async function (check) {
+    const { mees, fien, fid } = await liveVriendenpotje(false);
+    const voorM = tellers(mees), voorF = tellers(fien), xpM = mees.get('P.xp'), xpF = fien.get('P.xp');
+    for (let i = 0; i < 8; i++) await zetUit(PAARDEN, mees, fien);
+    await tijd(5000);
+    const s = (await busInhoud(mees, fid, await potjesbus(mees, fid))).spel;
+    check('de staat: remise door herhaling met de achtste halve zet', !!s && s.fase === 'klaar' && s.uitslag.soort === 'herhaling' && s.uitslag.ply === 8);
+    check('de kaart zegt dat het niet meetelt', tekstVan(mees, 'eindkaart').indexOf(TELT_NIET) >= 0 && tekstVan(fien, 'eindkaart').indexOf(TELT_NIET) >= 0);
+    check('geen teller, geen week en geen XP', tellers(mees) === voorM && tellers(fien) === voorF && mees.get('P.xp') === xpM && fien.get('P.xp') === xpF &&
+      weekOnline(mees) === 0 && weekOnline(fien) === 0);
   });
 }

@@ -535,7 +535,8 @@ async function orakelFlow5() {
     check('het potje is uit na de zet van het kind, en Turbo zet niet meer', a.get('session.over') === true && a.get('session.S.hist.length') === 9);
     const kaart = norm5(tekstVan(a, 'eindkaart'));
     check('de eindkaart (' + kaart + ')', zichtbaar(a, 'eindkaart') && kaart.indexOf('Remise: drie keer dezelfde stelling. Niemand wint, niemand verliest.') >= 0);
-    check('remise telt als remise: 30 XP (' + (a.get('P.xp') - xp) + ')', a.get('P.xp') - xp === 30);
+    check('een einde dat de spelers kiezen, telt pas vanaf twintig halve zetten: geen XP (' + (a.get('P.xp') - xp) + ')', a.get('P.xp') - xp === 0 &&
+      kaart.indexOf('Dit potje telt niet mee: het was korter dan tien zetten.') >= 0);
     check('het potje staat niet meer bewaard', a.opslag.getItem(POTJE) === null);
   });
 

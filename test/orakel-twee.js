@@ -3772,7 +3772,8 @@ async function orakelTwee() {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     const voor = [a, b].map(function (x) { return x.get('P.c.gamesPlayed || 0'); });
-    for (const z of ['g1f3', 'g8f6', 'f3g1', 'f6g8', 'g1f3', 'g8f6', 'f3g1', 'f6g8']) await speel(a, b, z);
+    /* eerst twintig rustige halve zetten: een remise die de spelers kiezen, telt pas vanaf daar */
+    for (const z of RUSTIG.slice(0, 22).concat(['g1f3', 'g8f6', 'f3g1', 'f6g8', 'g1f3', 'g8f6', 'f3g1', 'f6g8'])) await speel(a, b, z);
     await wacht(3000);
     for (const x of [a, b]) {
       check('het potje is uit bij ' + x.naam, x.get('!!session && session.over === true'));

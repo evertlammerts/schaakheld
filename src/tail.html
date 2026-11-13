@@ -1046,6 +1046,11 @@ function leesSamen() {
    potje begint (samenOpruimen). De zetten worden hier niet nagespeeld: dit gebeurt na elke halve zet. */
 function bewaarSamen() {
   if (!MP || !MP.gameId || !MP.S) return true;
+  /* een potje op de staat staat in de staat; wat alleen dit apparaat ervan weet, staat bij het paar */
+  if (opStaat()) {
+    const p = paarVan(MP.paar), h = MP.herhaalGezegd == null ? null : MP.gameId + ':' + MP.herhaalGezegd;
+    if (p.herhaalGezegd !== h) { p.herhaalGezegd = h; bewaarPaar(MP.paar, p); }
+  }
   const games = samenRauw() || {}, oud = samenVorm(games[MP.gameId], MP.gameId) ? games[MP.gameId] : null;
   delete games[MP.gameId];
   const moves = MP.S.hist.map(u => moveKey(u.m));
@@ -2319,9 +2324,10 @@ function eigenZetten(spel, rol) { const n = spel.zetten.length; return spel.wit 
 const VEERTIEN_DAGEN_S = 14 * 86400;
 const andereRol = r => r === 'a' ? 'b' : 'a';
 function rolAanZet(spel) { return (spel.zetten.length % 2 === 0) === (spel.wit === 'a') ? 'a' : 'b'; }
-/* een potje tussen vrienden eindigt ook met zijn langste lengte, als remise: de staat heeft één vaste grootte */
+/* een potje tussen vrienden eindigt zoals elk potje met een ander kind, en ook met zijn langste lengte, als remise: de
+   staat heeft één vaste grootte */
 function statusOpStaat(S) {
-  const st = gameStatus(S);
+  const st = potjeStatus(S);
   return st.over || S.hist.length < LANGSTE_POTJE ? st : { over: true, result: 'd', reason: 'lang' };
 }
 function standVanZetten(zetten) {
@@ -2576,7 +2582,7 @@ function paarVan(fid) {
     telBij: p.telBij && typeof p.telBij === 'object' && !Array.isArray(p.telBij) ? p.telBij : {},
     potjes: p.potjes && typeof p.potjes === 'object' && !Array.isArray(p.potjes) ? p.potjes : {}, verschil: Number.isFinite(p.verschil) ? p.verschil : 0,
     vernieuwd: Number.isFinite(p.vernieuwd) ? p.vernieuwd : null, doorGespeeld: typeof p.doorGespeeld === 'string' ? p.doorGespeeld : null,
-    bodMetZet: typeof p.bodMetZet === 'string' ? p.bodMetZet : null, vriend: p.vriend && typeof p.vriend === 'object' && typeof p.vriend.k === 'string' ? p.vriend : null };
+    bodMetZet: typeof p.bodMetZet === 'string' ? p.bodMetZet : null, herhaalGezegd: typeof p.herhaalGezegd === 'string' ? p.herhaalGezegd : null, vriend: p.vriend && typeof p.vriend === 'object' && typeof p.vriend.k === 'string' ? p.vriend : null };
 }
 function bewaarPaar(fid, p) {
   const o = paren();
@@ -2624,7 +2630,7 @@ function sterkerDan(mijn, mijnVersie, hun, hunVersie) {
 /* een einde tussen vrienden telt zoals een potje in de kamer: gespeeld, de week en XP als het telt, en de winst */
 function telEinde(u, rol, fid) {
   let xp = 0;
-  if ((u.soort !== 'opgave' && u.soort !== 'remise') || u.ply >= MIN_PLIES_TELT) {
+  if (eindeTelt(u.soort, u.ply)) {
     bump('c.gamesPlayed', 1);
     xp = vriendPotjeXP(fid);
     bump('xp', xp);
@@ -3038,7 +3044,8 @@ function paarRecords(fid, staat, ookBekeken) {
       result: u ? Object.assign({ kind: u.soort, by: ['opgave', 'mat', 'remise'].includes(u.soort) ? kleur(u.door) : null, ply: u.ply },
         u.vanzelf ? { vanzelf: true, t: ms(u.bodT) } : {}) : null,
       offer: g.bod ? { by: kleur(g.bod.door), ply: g.bod.ply, answer: null, t: ms(g.bod.t) } : null,
-      doorGespeeld: p.doorGespeeld === id + ':' + zetten.length, shown: !!g.bekeken && !!g.bekeken[rol], vriendWeet: !!g.weet && !!g.weet[ander], beurtT: ms(t), updated: ms(t),
+      doorGespeeld: p.doorGespeeld === id + ':' + zetten.length,
+      herhaalGezegd: p.herhaalGezegd && p.herhaalGezegd.startsWith(id + ':') ? +p.herhaalGezegd.slice(id.length + 1) : null, shown: !!g.bekeken && !!g.bekeken[rol], vriendWeet: !!g.weet && !!g.weet[ander], beurtT: ms(t), updated: ms(t),
       state: g.fase === 'uitdaging' ? 'uitdaging' : 'potje', mijnUitdaging: door === rol, paar: fid };
   };
   const sp = s.spel;
@@ -3122,11 +3129,12 @@ function mpVolgtRecord(r, ev) {
   if (ev.andereApparaat) say('Je zet op je andere apparaat telde al.');
   else if (remiseVraagOpen()) toonRemiseVraag();
   else if (bord && r.doorGespeeld && MP.S.turn === MP.myColor) zegDoorGespeeld();
-  else if (bord) say(MP.S.turn === MP.myColor ? 'Jij weer! Wat wordt je plan? 💭' : zinWeg());
+  else if (bord && MP.S.turn === MP.myColor) say(herhaalOpBeurt(MP.S) || (inCheck(MP.S) ? 'Schaak! Red je koning. 👑' : 'Jij weer! Wat wordt je plan? 💭'));
+  else if (bord) say(zinWeg());
 }
 function zegDoorGespeeld() {
   const fid = MP.paar;
-  say(mpNaam() + ' speelt liever door, dus het wordt geen remise. Jij bent aan zet.');
+  say(herhaalOpBeurt(MP.S) || mpNaam() + ' speelt liever door, dus het wordt geen remise. Jij bent aan zet.');
   inPaarSlot(fid, async () => { const p = paarVan(fid); p.doorGespeeld = null; bewaarPaar(fid, p); });
 }
 /* bij het openen van een potje met een vriend die er niet is; zonder verbinding belooft de strook niets over de vriend */
@@ -3156,7 +3164,7 @@ function kamerWegVriend() {
   clearTimeout(MP.reTimer);
   Object.assign(MP, { room: null, seat: null, open: false, peerOn: false });
   bewaarSamen();
-  if (samenInBeeld() && !session.over) say(zinWeg()); else thuisVerversen();
+  if (samenInBeeld() && !session.over) zegInPotje(zinWeg()); else thuisVerversen();
   friendPollSoon(500);
 }
 async function ecdhStart() {
@@ -6699,6 +6707,9 @@ function gameActions() {
    dat door opgeven of remise eindigt telt pas mee (tellers, weekdoel) na
    twintig zetten, anders is opgeven een sterrenfabriek. */
 const MIN_PLIES_TELT = 20;
+/* Een einde dat de spelers kiezen (opgeven, remise afspreken, drie keer dezelfde stelling) telt pas vanaf twintig halve
+   zetten, anders is het een snelle weg naar XP; een einde dat het bord afdwingt, telt altijd. */
+function eindeTelt(soort, ply) { return !['opgave', 'remise', 'herhaling'].includes(soort) || ply >= MIN_PLIES_TELT; }
 function resignAsk() {
   if (!session || session.kind !== 'game' || session.over) return;
   const naam = session.online ? escHtml(mpNaam()) : 'Turbo';
@@ -7580,7 +7591,7 @@ function openHulp() {
 
 /* Een potje met een vriend dat afliep terwijl het kind weg was. De kaart zegt eerst alleen dat het klaar is (of
    remise), de eindkaart zegt de uitslag en wat er gebeurde; de strook zegt de kop van de eindkaart. */
-const REMISE_SOORT = ['remise', 'pat', '50', 'materiaal', 'lang'];
+const REMISE_SOORT = ['remise', 'pat', '50', 'materiaal', 'lang', 'herhaling'];
 function kaartEinde(u, ik, naam) {
   const titel = 'Je potje met ' + naam + ' is ' + (REMISE_SOORT.includes(u.kind) ? 'remise' : 'klaar');
   const zin = u.kind === 'opgave' && u.by !== ik ? naam + ' gaf op. Jij wint dit potje!' :
@@ -7818,12 +7829,12 @@ function endGame(st, stil) {
     '50': 'Vijftig zetten zonder slaan of pionzet.', materiaal: 'Te weinig stukken om mat te zetten.',
     remise: 'Remise afgesproken: jullie vonden het allebei gelijk.', herhaling: 'Remise: drie keer dezelfde stelling. Niemand wint, niemand verliest.',
     lang: 'Remise: dit potje duurde ' + LANGSTE_POTJE / 2 + ' zetten, en langer kan niet. Wat een marathon!' };
-  /* opgeven of remise vlak na het begin telt nergens voor mee; een potje samen telt per kind één keer */
+  /* een einde dat de spelers vlak na het begin kiezen, telt nergens voor mee; een potje samen telt per kind één keer */
   const oudId = session.oud ? session.oud.gameId : MP && MP.gameId, eindPaar = session.oud ? session.oud.paar : MP && MP.paar;
   /* een potje met een vriend op de staat van het paar telt het apparaat waarvan het merk in de staat staat
      (telPaar); hier is het alleen te zien */
   const opDeStaat = !!session.online && !!eindPaar && vriendOpStaat(eindPaar);
-  const zouTellen = (st.reason !== 'opgave' && st.reason !== 'remise') || session.S.hist.length >= MIN_PLIES_TELT;
+  const zouTellen = eindeTelt(st.reason, session.S.hist.length);
   const nieuw = !opDeStaat, telt = nieuw && zouTellen;
   if (telt) bump('c.gamesPlayed', 1);
   if (!stil) afgemaakt('game');
