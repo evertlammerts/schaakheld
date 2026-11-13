@@ -160,19 +160,21 @@ async function alles() {
   await tik();
 
   /* ---------- 4. al vrienden: geen tweede vriendschap ---------- */
+  /* het bord van een vriendenpotje hoort bij de verbinding (MP.S); het speelscherm kijkt ernaar */
   await samenSpelen(evert, oscar);
   ok('herkennen: allebei herkennen ze elkaar aan het bewijs in het hallo',
     evert.get('MP.viaFriend') === fid && oscar.get('MP.viaFriend') === fid);
-  evert.ev('session.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
-  oscar.ev('session.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
+  evert.ev('session.S = MP.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
+  oscar.ev('session.S = MP.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
   const witNu = evert.get('MP.myColor') === 'w' ? evert : oscar;
   witNu.ev('BD.mode = "move"');
   await speel(evert, oscar, 'a1a8');
   ok('herkennen: het eindscherm biedt geen tweede vriendschap aan',
     eindziet(evert, 'Revanche') && eindziet(oscar, 'Revanche') && !eindziet(evert, 'Vrienden worden') && !eindziet(oscar, 'Vrienden worden') &&
     evert.get('Object.keys(P.friends).length') === 1 && oscar.get('Object.keys(P.friends).length') === 1);
-  evert.ev('mpVerlaat()');
-  oscar.ev('mpVerlaat()');
+  /* een potje vanaf een FEN heeft geen zettenlijst vanaf de start: de uitslag kan niet over en weer, dus allebei gewoon weg */
+  evert.ev('mpStop(); goHome()');
+  oscar.ev('mpStop(); goHome()');
   await tik();
 
   /* ---------- 5. gekruiste uitnodigingen ---------- */
@@ -260,18 +262,18 @@ async function alles() {
   const krijger = bieder === evert ? oscar : evert;
   bieder.ev('offerDraw()');
   await tik();
-  ok('remise: de ander krijgt de vraag', krijger.ziet('biedt remise aan'));
-  krijger.tik('rmNee');
+  ok('remise: de ander krijgt de vraag, onder het bord', /biedt remise aan/.test(tekstVan(krijger, 'bubble')) && kanTikken(krijger, 'Remise aannemen') && !krijger.open());
+  tikTekst(krijger, 'Nee, doorspelen');
   await tik();
   ok('remise: nee = doorspelen, allebei nog in het potje',
     evert.get('session.over') === false && oscar.get('session.over') === false && !krijger.open());
   bieder.ev('offerDraw()');
   await tik();
   ok('remise: te snel opnieuw vragen mag niet, en de vrager hoort waarom',
-    !krijger.open() && bieder.el('bubble').innerHTML.indexOf('net al remise') >= 0);
+    !krijger.open() && !kanTikken(krijger, 'Remise aannemen') && bieder.el('bubble').innerHTML.indexOf('net al remise') >= 0);
   bieder.ev('session.drawAsked = null; offerDraw()');
   await tik();
-  krijger.tik('rmJa');
+  tikTekst(krijger, 'Remise aannemen');
   await tik();
   ok('remise: ja = gelijkspel op allebei de telefoons',
     evert.get('session.over') === true && oscar.get('session.over') === true &&
@@ -284,14 +286,14 @@ async function alles() {
   evert.ev('mpWordFlow()');
   oscar.ev('mpWordFlow()');
   await tik();
-  const codeE = (evert.modal().match(/<b>([a-z]+-[a-z]+)<\/b>/) || [])[1];
-  const codeO = (oscar.modal().match(/<b>([a-z]+-[a-z]+)<\/b>/) || [])[1];
+  /* de eigen woorden staan genummerd: "Jouw woorden: 1 wild 2 duizend" (regel 4.8) */
+  const eigen = function (app) { const m = app.modal().match(/Jouw woorden: <b>1 ([a-z]+) &nbsp; 2 ([a-z]+)<\/b>/); return m ? m[1] + '-' + m[2] : undefined; };
+  const codeE = eigen(evert), codeO = eigen(oscar);
   ok('woorden: allebei twee woorden om voor te lezen', !!codeE && !!codeO && codeE !== codeO);
   typ(evert, 'mpInp', codeO.split('-'));
   typ(oscar, 'mpInp', codeE.split('-'));
-  ok('woorden: allebei de twee woorden van de ander ingetypt',
-    evert.el('mpChips').textContent === codeO.split('-').join(' - ') &&
-    oscar.el('mpChips').textContent === codeE.split('-').join(' - '));
+  const blokjes = function (app, code) { const w = code.split('-'); return new RegExp('1\\s*' + w[0] + '[^]*2\\s*' + w[1]).test(app.doc.__tekst(app.el('mpChips'))); };
+  ok('woorden: allebei de twee woorden van de ander ingetypt', blokjes(evert, codeO) && blokjes(oscar, codeE));
   evert.tik('mpKoppel');
   oscar.tik('mpKoppel');
   /* elk pollt om de 2,5 s; de nepklok springt naar de eerstvolgende timer, dus wacht op de koppeling zelf */
@@ -316,7 +318,9 @@ async function alles() {
   const ipad = maakApparaat(null);
   await evert.ev('linkShareFlow()');
   await tik();
-  const code4 = (evert.modal().match(/<b>([a-z]+-[a-z]+-[a-z]+-[a-z]+)<\/b>/) || [])[1];
+  /* de code staat als vier genummerde woorden (regel 4.8) */
+  const vier = (evert.modal().match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
+  const code4 = vier.length === 4 ? vier.join('-') : undefined;
   ok('koppelen: Evert krijgt vier woorden om over te typen', !!code4);
   evert.tik('linkDone');
   ipad.ev('linkEntryFlow()');
@@ -414,7 +418,8 @@ async function alles() {
 
   /* ---------- 15. vriend weghalen: herkennen stopt ---------- */
   evert.ev('showHomeTab("vrienden")');
-  fire(evert.el('friendList'), 'click', { target: { dataset: { remove: fid } } });
+  fire(evert.el('friendList'), 'click', { target: { dataset: { meer: fid } } });
+  evert.tik('vrWeg');
   evert.tik('rmVrJa');
   await tik();
   ok('weghalen: bij Evert weg, bij Oscar blijft de vriendschap staan',
@@ -429,8 +434,8 @@ async function alles() {
   await samenSpelen(evert, oscar);
   ok('weghalen: niemand herkent nog een vriendschap',
     evert.get('MP.viaFriend') == null && oscar.get('MP.viaFriend') == null);
-  evert.ev('session.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
-  oscar.ev('session.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
+  evert.ev('session.S = MP.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
+  oscar.ev('session.S = MP.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
   (evert.get('MP.myColor') === 'w' ? evert : oscar).ev('BD.mode = "move"');
   await speel(evert, oscar, 'a1a8');
   ok('weghalen: en het eindscherm biedt vrienden worden weer aan',
@@ -482,6 +487,26 @@ async function alles() {
   evert.tik('meldOk');
   await tik();
   ok('wachtkamer: en Evert is gewoon thuis', !evert.open() && evert.get('MP') === null && evert.get('session') === null);
+
+  /* ---------- 19. de ander geeft op terwijl jij thuis bent: het einde wacht bij Verder ---------- */
+  {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    fien.tik('backBtn');
+    await tik();
+    daan.ev('resignAsk()');
+    daan.tik('rsJa');
+    await tik();
+    ok('[4.2] thuis: Fien hoort het nog niet midden in iets anders', !fien.open() && fien.get('session') === null);
+    fien.tik('verderKaart');
+    await tik();
+    ok('[4.2] bij Verder: Fien wint, en het potje is niet meer bewaard', eindziet(fien, 'JIJ WINT') &&
+      fien.opslag.getItem('schaakheld-samen') === null);
+    fien.ev('mpVerlaat()');
+    daan.ev('mpVerlaat()');
+    await tik();
+  }
 
   /* ---------- 18. het materiaal en de letters, elk vanaf de eigen kant ---------- */
   {

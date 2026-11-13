@@ -326,12 +326,19 @@
   .vorm-d { font-size: 12px; color: var(--leaf-deep); font-weight: bold; }
 
   /* vrienden */
-  .friend { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: var(--cream); margin: 8px 0; }
-  .friend .f-emo { font-size: 20px; letter-spacing: 2px; background: var(--card); border-radius: 12px; padding: 6px 8px; white-space: nowrap; }
-  .friend .f-txt { flex: 1; line-height: 1.3; font-size: 15.5px; font-weight: bold; }
-  .friend .f-sub { display: block; font-size: 12px; font-weight: normal; color: var(--ink-soft); }
+  /* een vriend is een rij van twee regels: plaatjes, naam en ⋯; dan wat er is en één knop */
+  .friend { padding: 4px 4px 8px 12px; border-radius: 16px; background: var(--cream); margin: 8px 0; }
+  .friend .f-kop { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+  .friend .f-emo { flex: none; font-size: 20px; letter-spacing: 2px; white-space: nowrap; }
+  .friend .f-naam { flex: 1; min-width: 0; font-size: 17px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .friend .f-meer { flex: none; width: 44px; height: 44px; font-size: 20px; box-shadow: none; background: transparent; color: var(--ink-soft); }
+  .friend .f-voet { display: flex; align-items: center; gap: 8px; padding-right: 8px; }
+  .friend .f-sub { flex: 1; min-width: 0; font-size: 13px; line-height: 1.3; color: var(--ink-soft); }
+  .friend .f-voet .btn { flex: none; min-height: 44px; }
   .friend.wait { background: var(--leaf-soft); }
-  .friend .f-rm { width: 34px; height: 34px; font-size: 14px; box-shadow: none; background: transparent; color: var(--ink-soft); }
+  .friend.beurt { background: linear-gradient(90deg, var(--sun-soft), var(--cream)); }
+  .friend.beurt .f-sub { color: var(--leaf-deep); font-weight: bold; }
+  .btn.gevaar { color: var(--danger); }
 
   /* openingsschool: drie meters op een rij */
   .meters { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -364,6 +371,10 @@
     padding: 8px 16px; font-weight: bold; font-size: 15px;
   }
   .verder-kaart.kapot { cursor: default; }
+  /* een uitnodiging: beide antwoorden in de kaart, Nu niet stil en Ja, spelen! als hoofdknop */
+  .verder-kaart.antwoorden { cursor: default; }
+  .verder-kaart .vk-knoppen { align-self: flex-end; display: flex; gap: 8px; margin-top: 4px; }
+  .verder-kaart .vk-knoppen .btn { min-height: 44px; }
   .verder-ook {
     display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px;
     margin-top: 8px; padding: 10px 16px; cursor: pointer; text-align: left;
@@ -486,6 +497,7 @@
   .btn.leaf { background: var(--success); color: var(--on-success); box-shadow: 0 4px 0 #1A5A2E; }
   .btn.coral { background: var(--danger); color: var(--on-danger); box-shadow: 0 4px 0 #8A2B1E; }
   .btn.plain { background: var(--card); box-shadow: 0 4px 0 #D9E5EE; }
+  .btn.stil { background: transparent; box-shadow: none; }
   .btn.small { padding: 9px 16px; font-size: 14.5px; }
 
   .points-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 12px; }
@@ -517,6 +529,7 @@
     flex: 0 0 auto; width: 30px; height: 30px; display: grid; place-items: center;
     background: #E0F1FD; border-radius: 50%; font-size: 14px;
   }
+  .opt-btn .o-sub { display: block; font-size: 12.5px; font-weight: normal; opacity: .85; margin-top: 2px; }
   .opt-btn.picked { box-shadow: 0 0 0 3px var(--sun), var(--shadow); }
   .opt-btn.wrong { opacity: .45; text-decoration: line-through; pointer-events: none; }
   .opt-btn.right { box-shadow: 0 0 0 3px var(--leaf), var(--shadow); }
@@ -635,11 +648,18 @@
   .coords-r span, .coords-f span { flex: 1; display: grid; place-items: center; line-height: 1; }
   .eindkaart {
     grid-column: 2; grid-row: 1; z-index: 25; min-height: 0; overflow-y: auto;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
     padding: 16px; text-align: center; background: var(--surface); border-radius: 16px;
     box-shadow: var(--elev-2); animation: pop-in var(--dur-slow) var(--ease);
   }
+  /* midden in de kaart met marges: een kaart die te hoog is, scrolt dan vanaf de titel in plaats van boven af te knippen */
+  .eindkaart > :first-child { margin-top: auto; }
+  .eindkaart > :last-child { margin-bottom: auto; }
+  .eindkaart.klein > .ek-turbo + * { margin-top: auto; }
   .eindkaart.hidden { display: none; }
+  #ekVraag { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  #ekVraag:empty { display: none; }
+  #ekVraag p { margin: 0; }
   .eindkaart .ek-turbo { width: 88px; height: 88px; display: grid; place-items: center; font-size: 56px; line-height: 1;
     background: var(--leaf-soft); border-radius: 50%; }
   .eindkaart h2 { margin: 0; font-size: var(--fs-xl); }
@@ -655,6 +675,9 @@
   .eindkaart.klein .ek-badge { flex-direction: row; gap: 6px; width: auto; }
   .eindkaart.klein .ek-be { font-size: 28px; }
   .eindkaart .ek-btns { display: flex; flex-direction: column; gap: 8px; width: min(100%, 280px); }
+  /* op een klein bord past de kaart met de vriendschapsvraag alleen met de twee antwoorden naast elkaar */
+  .eindkaart.klein #ekVraag .ek-btns { flex-direction: row; width: 100%; }
+  .eindkaart.klein #ekVraag .ek-btns .btn { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 0 8px; white-space: nowrap; }
   .play-bottom {
     grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
     padding: 0 var(--g) 8px;
@@ -766,9 +789,43 @@
     color: var(--ink); margin-bottom: 14px;
   }
   .modal input:focus { outline: none; border-color: var(--sun); }
+  /* de woordinvoer: genummerde woorden als blokjes, een tik haalt er een weg */
+  /* vaste hoogtes: wat onder het veld staat springt niet als er een woord bijkomt */
+  .w-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; height: 44px; margin: 0 0 8px; overflow: hidden; }
+  .w-chips.vier { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 44px; align-content: flex-start; height: 94px; }
+  #linkQR { width: 170px; max-width: 50vw; margin: 8px auto; }
+  @media (max-height: 659px) { #linkQR { width: 120px; } }
+  .w-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px;
+    border: 1.5px solid rgba(23, 69, 111, .25); background: var(--surface); font: inherit; font-weight: 700; color: var(--text); }
+  .w-chip b { color: var(--text-quiet); pointer-events: none; }
+  /* een getypt woord is een knop die weghaalt: gevuld, met een kruisje */
+  button.w-chip { background: var(--selected-soft); }
+  .w-chip .w-weg { pointer-events: none; color: var(--text-quiet); font-size: 16px; }
+  /* de eigen code om voor te lezen: een blok, geen knoppen */
+  .code-woorden { background: var(--surface-sunk); border-radius: var(--r-md); padding: 4px; }
+  .code-woorden .w-chip { border: none; background: transparent; justify-content: center; font-size: var(--fs-lg); }
+  .code-woorden .w-chip b { font-size: var(--fs-cap); }
+  .btn.hidden { display: none; }
+  .w-fout { align-self: center; color: var(--text); font-size: var(--fs-sm); line-height: 1.3; }
+  .w-suggs { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; height: 44px; margin: 8px 0; }
+  .w-sugg { flex: none; }
+  /* met het toetsenbord open is er op een laag scherm geen plek voor het plaatje */
+  @media (max-height: 659px) {
+    .modal.typt .m-emoji, .modal.typt .bij-typen-weg { display: none; }
+    .modal.typt { margin-top: 0; }
+  }
+  #mpWachtRegel.hidden, #ekWacht:empty { display: none; }
+  #ekWacht, #mpWachtRegel { margin: 0; font-size: var(--fs-sm); color: var(--text); }
+  .w-sugg { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1.5px solid rgba(23, 69, 111, .25); background: var(--surface);
+    font: inherit; color: var(--text); }
   .lvl-btn { display: flex; align-items: center; gap: 12px; text-align: left; }
   .lvl-btn .l-emoji { font-size: 30px; }
   .lvl-btn .l-sub { display: block; font-size: 12.5px; font-weight: normal; opacity: .85; }
+  .lvl-btn .l-txt { flex: 1; min-width: 0; }
+  .lvl-btn .l-sub.verder-zet { color: var(--leaf-deep); font-weight: bold; font-size: 14px; opacity: 1; }
+  .lvl-btn .go-mini { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: var(--on-primary);
+    display: grid; place-items: center; box-shadow: 0 2px 0 var(--primary-edge); font-size: 14px; }
+  .lvl-btn .l-pijl { flex: none; font-size: 22px; opacity: .6; }
 
   /* onderaan, boven de tabbalk, zodat hij nooit over de Verder-kaart valt;
      tikken gaan erdoorheen */
@@ -876,7 +933,7 @@
       <div class="home-card" style="margin-top:10px">
         <div class="card-title">🤝 Jouw vrienden</div>
         <div id="friendList"></div>
-        <div class="note">Vrienden worden kan alleen samen: na een potje tikken jullie allebei op Ja. Niemand kan jou zomaar toevoegen.</div>
+        <div class="note">Vrienden worden kan alleen samen: na een potje vraagt de een het, en de ander tikt op Ja. Niemand kan jou zomaar toevoegen.</div>
       </div>
       <div class="home-card">
         <div class="card-title">🌟 Spelen met een nieuw maatje</div>

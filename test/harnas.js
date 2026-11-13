@@ -241,6 +241,19 @@ function opgeslagen(app, sleutel) {
   try { return JSON.parse(v); } catch (e) { return v; }
 }
 
+/* het ene bewaarde vriendenpotje: schaakheld-samen is een kaart van potjes per potje-id */
+function samenPotje(app) {
+  const r = opgeslagen(app, 'schaakheld-samen');
+  const ids = r && r.games && typeof r.games === 'object' ? Object.keys(r.games) : [];
+  return ids.length === 1 ? r.games[ids[0]] : null;
+}
+
+/* het bewaarde potje tegen Turbo op een niveau: schaakheld-potje is een kaart van potjes per niveau */
+function turboPotje(app, niveau) {
+  const r = opgeslagen(app, 'schaakheld-potje');
+  return r && r.games && typeof r.games === 'object' ? r.games[niveau] || null : null;
+}
+
 function opThuis(app) { return zichtbaar(app, 'scr-home') && !zichtbaar(app, 'scr-play'); }
 function opSpeelscherm(app) { return zichtbaar(app, 'scr-play') && !zichtbaar(app, 'scr-home'); }
 
