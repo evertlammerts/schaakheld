@@ -1548,6 +1548,59 @@ async function orakelTwee() {
     check('Daan leest dat hij Fien later weer kan uitnodigen', /Fien ging naar huis\. Nodig Fien later weer uit bij Vrienden\./.test(tekstVan(daan, 'bubble')));
   });
 
+  await regel('[2.5] wie de ander nog in de lijst heeft en tijdens het potje herlaadt, leest na het einde nog dat hij de ander later weer kan uitnodigen', async function (check) {
+    const fien = maakApparaat('Fien');
+    let daan = maakApparaat('Daan');
+    const fid = await wordenVrienden(fien, daan);
+    fien.ev('if (MP) mpStop(); goHome()');
+    daan.ev('if (MP) mpStop(); goHome()');
+    await wacht();
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    await speel(fien, daan, 'e7e5');
+    /* Fien haalt Daan weg, dus haar groet bewijst hem niet meer; Daan heeft Fien nog */
+    fien.tik('backBtn');
+    await wacht();
+    fien.ev('removeFriendAsk(' + JSON.stringify(fid) + ')');
+    fien.tik('rmVrJa');
+    await wacht();
+    fien.tik('verderKaart');
+    await tel(3);
+    daan = await terugInPotje(daan);
+    check('testopzet: Daan is terug in het potje en heeft Fien nog', daan.get('!!(session && session.online && !session.over)') && !!geheimen(daan));
+    await geefOp(aanZet(fien, daan));
+    await tel(4);
+    tikTekst(fien, 'Naar huis');
+    await tel(40);
+    check('Daan leest dat hij Fien later weer kan uitnodigen', /Fien ging naar huis\. Nodig Fien later weer uit bij Vrienden\./.test(tekstVan(daan, 'bubble')));
+  });
+
+  await regel('[2.5] haalt een kind de ander zelf weg terwijl ze samen spelen, dan noemt zijn strook de vriendenlijst niet meer als de ander naar huis gaat', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    const fid = await wordenVrienden(fien, daan);
+    fien.ev('if (MP) mpStop(); goHome()');
+    daan.ev('if (MP) mpStop(); goHome()');
+    await wacht();
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    await speel(fien, daan, 'e7e5');
+    daan.tik('backBtn');
+    await wacht();
+    daan.ev('removeFriendAsk(' + JSON.stringify(fid) + ')');
+    daan.tik('rmVrJa');
+    await wacht();
+    daan.tik('verderKaart');
+    await tel(3);
+    check('testopzet: Daan heeft Fien niet meer en is terug in het potje', !geheimen(daan) && daan.get('!!(session && session.online && !session.over)'));
+    await geefOp(aanZet(fien, daan));
+    await tel(4);
+    if (fien.open()) fien.ev('closeModal()');
+    tikTekst(fien, 'Naar huis');
+    await tel(40);
+    check('Daan leest dat Fien naar huis ging, en niets over Vrienden', /Fien ging naar huis/.test(tekstVan(daan, 'bubble')) &&
+      !/bij Vrienden/.test(tekstVan(daan, 'bubble')));
+  });
+
   await regel('[2.5] een vriend die maar aan één kant aankwam: gaat de ander na het einde naar huis, dan noemt de strook van wie hem bewaarde de vriendenlijst', async function (check) {
     const { fien, daan } = await eenKantVriend();
     check('testopzet: Daan heeft Fien, Fien heeft Daan niet', !!geheimen(daan) && !geheimen(fien));

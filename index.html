@@ -3590,7 +3590,7 @@ function bewaarSamen() {
       myColor: MP.myColor, gameNo: MP.gameNo, moves: MP.S.hist.map(u => moveKey(u.m)),
       peerName: MP.peerName || '', result: MP.result || null, offer: MP.offer || null,
       shown: !!MP.shown, updated: Date.now(), sessie: MP.vr ? MP.vr.sessie : 0, kamer: MP.kamer || null,
-      nogTonen: MP.vrNogTonen || null, terugZeggen: !!MP.vrTerugZeggen, tel: MP.telWie || null };
+      nogTonen: MP.vrNogTonen || null, terugZeggen: !!MP.vrTerugZeggen, tel: MP.telWie || null, ander: MP.anderFid || null };
   }
   const gelukt = schrijfSamen(games);
   MP.nietBewaard = !gelukt;
@@ -3656,6 +3656,7 @@ function samenHervat(b) {
   MP.vrNogTonen = typeof b.r.nogTonen === 'string' && ID_RE.test(b.r.nogTonen) ? b.r.nogTonen : null;
   MP.vrTerugZeggen = b.r.terugZeggen === true;
   MP.telWie = typeof b.r.tel === 'string' && b.r.tel.length <= 80 ? b.r.tel : null;
+  MP.anderFid = typeof b.r.ander === 'string' && ID_RE.test(b.r.ander) ? b.r.ander : null;
   bewaarSamen();
 }
 /* de hele stand, voor de ander na elke verbinding en zodra die terug is */
@@ -4330,11 +4331,12 @@ function naEindeVervalt() {
   for (const id of ['mpRev', 'vrOk']) if ($(id)) { $(id).disabled = false; $(id).textContent = '🔁 Revanche!'; }
   naEindeTekenen();
 }
-/* De ander is na het einde weg (naar huis, de app dicht of geen lijn): de revanche vervalt, en de strook en het
-   venster zeggen het. Wat elk kind over vrienden wil, blijft. */
+/* wat de strook zegt als de ander na het einde weg is, uit wat nu waar is */
 function naEindeWegNu() {
   return { naam: mpNaam(), vriend: vrIsVriend(), vroeg: !!MP && vrVroeg(), revanche: !!(MP && MP.revMine) };
 }
+/* De ander is na het einde weg (naar huis, de app dicht of geen lijn): de revanche vervalt, en de strook en het
+   venster zeggen het. */
 function naEindeWeg({ naam, vriend, vroeg, revanche }) {
   naEindeVervalt();
   const later = vriend ? 'Nodig ' + naam + ' later weer uit bij Vrienden.' : 'Leuk dat jullie samen speelden!';
