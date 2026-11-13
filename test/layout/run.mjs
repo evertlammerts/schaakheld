@@ -843,6 +843,26 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       check(n, 'de pagina scrolt niet opzij', p.sw <= p.W + 1);` });
 }
 
+/* visual.md, deel twee: hoogstens één regel Ook nog, zodat de spelknoppen boven de tabbalk blijven */
+const POTJES_TWEE = JSON.stringify({ v: 2, games: {
+  1: { level: 1, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null, started: 1, updated: 2, patXP: 0 },
+  2: { level: 2, moves: ['d2d4', 'd7d5'], tips: 3, drawAsked: null, started: 1, updated: 1, patXP: 0 } } });
+const RONDJES_TWEE = JSON.stringify({ scan: { round: 2, earned: 6 }, best3: { round: 1, earned: 3 } });
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n = '[3.3] ' + W + 'x' + H + ': met een uitnodiging, twee potjes tegen Turbo en twee rondjes: één regel Ook nog, en beide spelknoppen boven de tabbalk';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, { schaakheld1: ${JSON.stringify(VRIENDEN_DOC)}, 'schaakheld-potje': ${JSON.stringify(POTJES_TWEE)},
+        'schaakheld-rondjes': ${JSON.stringify(RONDJES_TWEE)} });
+      await page.evaluate(() => { uitnodigingWacht = { fid: 'vriendaaaaaa2', inv: { id: 'uitnodiging01', room: 'kamerkamer1', seat: 'stoelstoel1',
+        naam: 'Fien', ts: Date.now() } }; renderVerder(); });
+      await page.waitForTimeout(300);
+      check(n, 'testopzet: de uitnodiging is de kaart', await page.evaluate(() => /Fien wil spelen/.test(document.getElementById('verder').textContent)));
+      check(n, 'één regel Ook nog', await page.evaluate(() => document.querySelectorAll('#verder .verder-ook').length) === 1);
+      const tab = await rect('.tabbar'), t = await rect('#spelTurbo'), v = await rect('#spelVriend');
+      check(n, 'beide spelknoppen boven de tabbalk', !!tab && !!t && !!v && t.bottom <= tab.top + 0.5 && v.bottom <= tab.top + 0.5);` });
+}
+
 GEVALLEN.push({ regels: ['[3.5] 390x844: Ik begint met het level, dan bewaard, trofeeën, bordkleuren, de week, vorm en het trucboek'],
   code: `
       const n = '[3.5] 390x844: Ik begint met het level, dan bewaard, trofeeën, bordkleuren, de week, vorm en het trucboek';

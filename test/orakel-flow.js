@@ -498,12 +498,13 @@ async function orakelFlow() {
   });
 
   await regel('[4.13] de Verder-kaart toont het potje dat het laatst gespeeld is, en Verder opent dat potje', async function (check) {
-    const a = nieuwKind({ opslag: opslagMetPotjes({ 1: ['e2e4', 'e7e5'], 3: ['d2d4', 'd7d5', 'c2c4'] }, { 1: 1794700009000, 3: 1794700001000 }) });
+    /* het hogere niveau is het laatst gespeeld: zo zegt de test iets over de volgorde, niet over het laagste niveau */
+    const a = nieuwKind({ opslag: opslagMetPotjes({ 1: ['e2e4', 'e7e5'], 3: ['d2d4', 'd7d5', 'c2c4', 'e7e6'] }, { 1: 1794700001000, 3: 1794700009000 }) });
     await wacht();
-    check('de kaart noemt Slaapkop Turbo', /Slaapkop Turbo/.test(tekstVan(a, 'verder')) && !/Super Turbo/.test(tekstVan(a, 'verder')));
+    check('de kaart noemt Super Turbo', /Super Turbo/.test(tekstVan(a, 'verder')) && !/Slaapkop Turbo/.test(tekstVan(a, 'verder')));
     a.tik('verderKaart');
     await wacht();
-    check('Verder opent het potje op niveau 1', opSpeelscherm(a) && a.get('session.level') === 1 && a.get('session.S.hist.length') === 2);
+    check('Verder opent het potje op niveau 3', opSpeelscherm(a) && a.get('session.level') === 3 && a.get('session.S.hist.length') === 4);
   });
 
   await regel('[4.13] compat: een potje van de vorige vorm hoort daarna bij zijn niveau, naast een nieuw potje op een ander niveau', async function (check) {
@@ -516,6 +517,7 @@ async function orakelFlow() {
     const d = opgeslagen(a, POTJE);
     check('in de nieuwe vorm, met het oude potje op niveau 3', !!d && d.v === 2 && JSON.stringify(turboPotje(a, 3).moves) === JSON.stringify(['e2e4', 'e7e5']) &&
       /g1f3/.test(JSON.stringify(turboPotje(a, 1).moves)));
+    check('het oude potje heeft de vorm van de andere, zonder eigen versie', !('v' in turboPotje(a, 3)) && turboPotje(a, 3).level === 3);
     a.tik('backBtn');
     await wacht();
     await startPotje(a, 3);
@@ -540,6 +542,43 @@ async function orakelFlow() {
     await geefOp(c);
     const na = c.get(tellers);
     check('na twintig halve zetten: een gespeeld potje, ook in de week', na[0] === cVoor[0] + 1 && na[1] === cVoor[1] + 1);
+  });
+
+  await regel('[4.13] Weghalen haalt alleen het potje weg dat niet te lezen is; de kiezer noemt het niveau', async function (check) {
+    const o = maakOpslag();
+    o.setItem(POTJE, JSON.stringify({ v: 2, games: {
+      1: { level: 1, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null, started: 1794700000000, updated: 1794700000000, patXP: 0 },
+      2: { level: 2, moves: ['e2e4', 'e2e4'], tips: 3, drawAsked: null, started: 1794700000000, updated: 1794700000000, patXP: 0 } } }));
+    const a = nieuwKind({ opslag: o });
+    await wacht();
+    await kiezerOpen(a);
+    check('de kiezer noemt het potje dat niet open kan', /Je potje tegen Turbo kan ik niet meer openen\. Een nieuw potje haalt het weg\./.test(a.scherm()) &&
+      !/Slaapkop Turbo kan ik niet/.test(a.scherm()));
+    a.ev('closeModal()');
+    await wacht();
+    check('testopzet: de kaart zegt dat een potje niet open kan', /kan ik niet meer openen/.test(tekstVan(a, 'verder')));
+    tikTekst(a, 'Weghalen');
+    await wacht();
+    check('alleen het potje op niveau 2 is weg', !!turboPotje(a, 1) && !turboPotje(a, 2) && /Verder: je potje tegen Slaapkop Turbo/.test(tekstVan(a, 'verder')));
+  });
+
+  await regel('[4.13] een potje onder de sleutel van een ander niveau is niet te lezen', async function (check) {
+    const o = maakOpslag();
+    o.setItem(POTJE, JSON.stringify({ v: 2, games: {
+      2: { level: 1, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null, started: 1794700000000, updated: 1794700000000, patXP: 0 } } }));
+    const a = nieuwKind({ opslag: o });
+    await wacht();
+    check('de kaart zegt dat het niet open kan', /kan ik niet meer openen/.test(tekstVan(a, 'verder')) && !/Verder: je potje tegen/.test(tekstVan(a, 'verder')));
+  });
+
+  await regel('[4.13] de kaart noemt Turbo zonder plaatje, ook in de regel Ook nog', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5']) });
+    a.opslag.setItem(RONDJES, JSON.stringify({ scan: { round: 2, earned: 6 } }));
+    const b = herlaad(a);
+    await wacht();
+    const t = tekstVan(b, 'verder');
+    check('testopzet: het potje en het rondje staan op de kaart', /Slaapkop Turbo/.test(t) && /Ook nog/.test(t));
+    check('geen plaatje in de kaart', !/😴|🐢|🚀/.test(t));
   });
 
   await regel('[1.3] Revanche na afloop begint meteen een nieuw potje, zonder vraag', async function (check) {

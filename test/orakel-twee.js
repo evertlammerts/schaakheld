@@ -947,6 +947,85 @@ async function orakelTwee() {
     check('de kaart toont het potje tegen Turbo', /Verder: je potje tegen/.test(tekstVan(daan, 'verder')) && !/Fien wil spelen/.test(tekstVan(daan, 'verder')));
   });
 
+  /* de uitnodiging op de kaart: terugnemen, de minuten, en naast een lopend vriendenpotje */
+  async function semNodigtUitTijdensTurbo() {
+    const fien = maakApparaat('Fien'), sem = maakApparaat('Sem');
+    await wordenVrienden(fien, sem);
+    fien.ev('setPref("predict", false); setPref("guard", false)');
+    await startPotje(fien, 1);
+    await zetEnWacht(fien, 'e2e4');
+    await nodigUit(sem);
+    await fien.ev('friendPoll()');
+    await wacht();
+    return { fien, sem };
+  }
+  await regel('[4.5] een uitnodiging die de vriend terugnam, gaat van de kaart zodra het lezen van de bus dat ziet', async function (check) {
+    const { fien, sem } = await semNodigtUitTijdensTurbo();
+    check('testopzet: de uitnodiging wacht', fien.get('!!uitnodigingWacht'));
+    tikTekst(sem, 'Stop met wachten');
+    await wacht(20000);
+    fien.tik('backBtn');
+    await wacht();
+    check('thuis geen uitnodiging op de kaart en geen venster', !/Sem wil spelen/.test(tekstVan(fien, 'verder')) && !fien.open());
+  });
+
+  await regel('[4.5] kan de bus niet gelezen worden, dan blijft de uitnodiging staan tot het lezen weer lukt', async function (check) {
+    const { fien, sem } = await semNodigtUitTijdensTurbo();
+    geenNetwerk(fien);
+    tikTekst(sem, 'Stop met wachten');
+    await wacht(20000);
+    fien.tik('backBtn');
+    await wacht();
+    check('zonder netwerk blijft ze op de kaart', /Sem wil spelen/.test(tekstVan(fien, 'verder')));
+    weerNetwerk(fien);
+    await wacht(20000);
+    check('zodra het lezen lukt, is ze weg', !/Sem wil spelen/.test(tekstVan(fien, 'verder')) && !fien.open());
+  });
+
+  await regel('[4.5] de minuten op de kaart tellen af, en na tien minuten is de uitnodiging weg', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const { fien } = await semNodigtUitTijdensTurbo();
+    fien.tik('backBtn');
+    await wacht();
+    check('testopzet: nog 10 minuten', /De uitnodiging is nog 10 minuten geldig\./.test(tekstVan(fien, 'verder')));
+    await wacht(5 * 60000);
+    check('na vijf minuten: nog 5 minuten', /De uitnodiging is nog 5 minuten geldig\./.test(tekstVan(fien, 'verder')));
+    await wacht(4 * 60000 + 30000);
+    check('in de laatste minuut: nog 1 minuut', /De uitnodiging is nog 1 minuut geldig\./.test(tekstVan(fien, 'verder')));
+    await wacht(60000);
+    check('na tien minuten is ze weg', !/wil spelen/.test(tekstVan(fien, 'verder')) && !fien.open());
+  });
+
+  await regel('[4.5] een uitnodiging naast een lopend vriendenpotje: de zin dat het potje nog loopt heeft Nu niet, en wie uitnodigde hoort het meteen', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan'), sem = maakApparaat('Sem');
+    await wordenVrienden(fien, sem);
+    fien.ev('if (MP) mpStop(true); goHome()');
+    sem.ev('if (MP) mpStop(true); goHome()');
+    await wacht();
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    await nodigUit(sem);
+    await fien.ev('friendPoll()');
+    await wacht();
+    fien.tik('backBtn');
+    await wacht();
+    check('testopzet: de kaart toont het potje met Daan en de uitnodiging van Sem', /je potje met Daan/.test(tekstVan(fien, 'verder')) &&
+      /Sem wil spelen/.test(tekstVan(fien, 'verder')));
+    tikTekst(fien, 'Sem wil spelen');
+    await wacht();
+    check('de zin, met Nu niet en het kruisje', /Je potje met Daan loopt nog\. Speel dat eerst uit\./.test(fien.scherm()) && kanTikken(fien, 'Nu niet') &&
+      zichtbaar(fien, 'mClose'));
+    fien.tik('mClose');
+    await wacht(3000);
+    check('het kruisje sluit alleen: de uitnodiging staat er nog, en Sem wacht nog', /Sem wil spelen/.test(tekstVan(fien, 'verder')) &&
+      !/kan nu even niet/.test(zegt(sem)));
+    tikTekst(fien, 'Sem wil spelen');
+    await wacht();
+    tikTekst(fien, 'Nu niet');
+    check('Sem hoort het meteen', await zagOoit(function () { return /Fien kan nu even niet/.test(zegt(sem)); }, 30000));
+    check('de uitnodiging is van de kaart, het potje met Daan loopt nog', !/Sem wil spelen/.test(tekstVan(fien, 'verder')) && fien.get('samenLoopt()'));
+  });
+
   await regel('[4.5] vastgelopen in ronde 0 bestaat niet meer: wie herlaadt, zit zonder nieuwe uitnodiging weer in hetzelfde potje, en dezelfde vriend nog eens uitnodigen zegt dat het potje nog loopt', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     const fid = await wordenVrienden(fien, daan);
@@ -1178,6 +1257,8 @@ async function orakelTwee() {
     await biedRemise(wit);
     await wacht();
     check('testopzet: het antwoord staat onder het bord, zonder venster', kanTikken(zwart, 'Remise aannemen') && !zwart.open());
+    check('Remise aannemen en Nee, doorspelen zijn allebei gewone knoppen', zwart.get('actionBtns.rmJa.className') === 'btn plain' &&
+      zwart.get('actionBtns.rmNee.className') === 'btn plain');
     tikTekst(zwart, 'Remise aannemen');
     await wacht();
     check('remise aan beide kanten', eindziet(wit, 'Gelijkspel') && eindziet(zwart, 'Gelijkspel'));
@@ -1199,7 +1280,8 @@ async function orakelTwee() {
     for (const x of [wit, zwart]) { x.tik('backBtn'); await wacht(); x.tik('tabVrienden'); await wacht(); }
     const rij = function (x) { return x.doc.__tekst(x.el('friendList')); };
     check('wit leest dat het aan zet is, met Speel verder', /Jij bent aan zet\./.test(rij(wit)) && kanTikken(wit, 'Speel verder') && !/Uitnodigen/.test(rij(wit)));
-    check('zwart leest wie aan zet is', new RegExp(wit.naam + ' is aan zet\\.').test(rij(zwart)) && !/Uitnodigen/.test(rij(zwart)));
+    check('zwart leest wie aan zet is, met Bekijk', new RegExp(wit.naam + ' is aan zet\\.').test(rij(zwart)) && !/Uitnodigen|Speel verder/.test(rij(zwart)) &&
+      kanTikken(zwart, 'Bekijk'));
     tikTekst(wit, 'Speel verder');
     await wacht();
     check('Speel verder opent het potje', opSpeelscherm(wit) && aanDeBeurt(wit));
@@ -1513,7 +1595,7 @@ async function orakelTwee() {
     check('testopzet: de vraag komt aan', kanTikken(zwart, 'Remise aannemen'));
     await biedRemise(wit);
     await wacht(500);
-    check('een tweede aanbod zonder antwoord gaat ook weg', /Je biedt remise aan/.test(tekstVan(wit, 'bubble')) && !/net al/.test(tekstVan(wit, 'bubble')));
+    check('een tweede aanbod zonder antwoord gaat ook weg', /Je biedt \S+ remise aan\. \S+ kan ja zeggen of doorspelen\./.test(tekstVan(wit, 'bubble')) && !/net al/.test(tekstVan(wit, 'bubble')));
     zet(wit, 'g1f3');
     await wacht(2000);
     check('na de zet van wit is de vraag weg', !kanTikken(zwart, 'Remise aannemen'));

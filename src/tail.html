@@ -1640,7 +1640,7 @@ function renderFriends() {
     const sub = wacht ? 'Wachten tot ' + naam + ' SchaakHeld opent…' : g ? (beurt ? 'Jij bent aan zet.' : naam + ' is aan zet.') :
       'vrienden sinds ' + friendSince(f);
     const knop = wacht ? '<button class="btn plain small" data-cancel="' + id + '">Stop</button>' :
-      g ? '<button class="btn plain small" data-speel="' + id + '">Speel verder</button>' :
+      g ? '<button class="btn plain small" data-speel="' + id + '">' + (beurt ? 'Speel verder' : 'Bekijk') + '</button>' :
       '<button class="btn plain small" data-invite="' + id + '">Uitnodigen</button>';
     return '<div class="friend' + (wacht ? ' wait' : '') + (beurt ? ' beurt' : '') + '" data-fid="' + id + '">' +
       '<div class="f-kop"><span class="f-emo">' + friendTrio(f.k) + '</span><span class="f-naam">' + naam + '</span>' +
@@ -2034,7 +2034,7 @@ function inviteCancel() {
   renderFriends();
 }
 
-/* ontvangen: op het startscherm om de zoveel tijd de eigen bussen opvragen */
+/* ontvangen: om de zoveel tijd de eigen bussen opvragen, thuis en ook tijdens een potje of rondje */
 function friendPollSoon(ms) {
   clearTimeout(friendPollTimer);
   friendPollTimer = setTimeout(friendPoll, ms == null ? 15000 : ms);
@@ -2068,10 +2068,16 @@ async function friendPoll() {
   const alle = Object.keys(buses);
   try {
     const blobs = {};
+    let gelezen = true;
     for (let i = 0; i < alle.length; i += BUS_BATCH) {
       const r = await fetch(SYNC_URL + '/v1/bus/check', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bussen: alle.slice(i, i + BUS_BATCH) }) });
-      if (r.status === 200) { const data = await r.json(); Object.assign(blobs, (data && data.blobs) || {}); }
+      if (r.status === 200) { const data = await r.json(); Object.assign(blobs, (data && data.blobs) || {}); } else gelezen = false;
+    }
+    /* een uitnodiging die de vriend terugnam: haar briefje is weg uit de bus, dus ook van de kaart */
+    if (gelezen && uitnodigingWacht) {
+      const bus = Object.keys(buses).find(b => buses[b] === uitnodigingWacht.fid);
+      if (!bus || !blobs[bus]) { uitnodigingWacht = null; thuisVerversen(); }
     }
     for (const bus in blobs) {
       const fid = buses[bus];
@@ -2127,7 +2133,15 @@ function showInvite(fid, inv) {
 /* ja op een uitnodiging: wij gaan op de zijne in, en onze eigen uitnodiging kan nu pas weg */
 function uitnodigingJa(fid, inv) {
   const f = P.friends[fid];
-  if (!f || samenBezet()) return;
+  if (!f) return;
+  /* naast een lopend vriendenpotje kan het niet: dan kan het kind wel Nu niet zeggen, zodat de vriend het meteen hoort */
+  if (samenLoopt()) {
+    showModal('<p>Je potje met ' + escHtml(mpNaam()) + ' loopt nog. Speel dat eerst uit.</p>' +
+      '<div class="m-btns"><button class="btn plain" id="invLooptNee">Nu niet</button></div>', () => {
+        $('invLooptNee').addEventListener('click', () => { closeModal(); if (uitnodigingWacht && uitnodigingWacht.inv.id === inv.id) uitnodigingNee(); });
+      }, true);
+    return;
+  }
   if (uitnodigingWacht && uitnodigingWacht.inv.id === inv.id) uitnodigingWacht = null;
   markSeen(inv.id);
   if (INV) inviteClear();
@@ -2936,7 +2950,8 @@ function potjesRauw() {
   let d;
   try { d = JSON.parse(opslag(POTJE_KEY)); } catch (e) { return null; }
   if (d == null) return {};
-  if (d && d.v === 1) { const g = {}; g[d.level] = d; return g; }
+  /* een record van de vorige vorm heeft daarna dezelfde vorm als de andere: zonder eigen versie */
+  if (d && d.v === 1) { const g = {}, r = Object.assign({}, d); delete r.v; g[d.level] = r; return g; }
   return d && d.v === 2 && d.games && typeof d.games === 'object' && !Array.isArray(d.games) ? Object.assign({}, d.games) : null;
 }
 /* per niveau het potje, of {kapot}; null als er niets te lezen valt */
@@ -3158,9 +3173,9 @@ function nextStep(P, ctx) {
         ook: 'je potje met ' + naam, action: { go: 'samen' } });
   }
   if (ctx.uitnodiging) bezig.push({ rule: 'R1i', title: ctx.uitnodiging.naam + ' wil spelen', button: 'Ja, spelen!',
-    text: 'De uitnodiging is nog ' + ctx.uitnodiging.minuten + ' minuten geldig.', ook: ctx.uitnodiging.naam + ' wil spelen', action: { go: 'uitnodiging' } });
+    text: 'De uitnodiging is nog ' + ctx.uitnodiging.minuten + (ctx.uitnodiging.minuten === 1 ? ' minuut' : ' minuten') + ' geldig.', ook: ctx.uitnodiging.naam + ' wil spelen', action: { go: 'uitnodiging' } });
   if (ctx.potje) {
-    const n = ctx.potje.moves.length, zet = Math.floor(n / 2) + 1, naam = TURBO_NAMES[ctx.potje.level];
+    const n = ctx.potje.moves.length, zet = Math.floor(n / 2) + 1, naam = turboNaam(ctx.potje.level);
     bezig.push({ rule: 'R2', title: 'Verder: je potje tegen ' + naam, button: 'Speel verder', wat: 'potje',
       text: 'Zet ' + zet + '. ' + (n % 2 === 0 ? 'Jij bent aan zet.' : 'Turbo is aan zet.'),
       ook: 'je potje tegen ' + naam + ', zet ' + zet, action: { go: 'verder' } });
@@ -3262,7 +3277,8 @@ function renderVerder() {
   const bezig = v.items.concat(r.bezig);
   const kapotKey = alle.kapot ? SAMEN_KEY : potjeKapot() ? POTJE_KEY : null;
   const eerste = kapotKey || !bezig.length ? r : bezig[0];
-  const ook = kapotKey ? bezig : bezig.slice(1);
+  /* hoogstens één regel Ook nog: zo blijven de spelknoppen boven de tabbalk; de rest is er via zijn eigen knop */
+  const ook = (kapotKey ? bezig : bezig.slice(1)).slice(0, 1);
   let h = kapotKey ?
     '<div class="verder-kaart kapot"><span class="vk-titel">Dit potje kan ik niet meer openen. Sorry!</span>' +
     '<span class="vk-zin">Je XP, sterren en trofeeën zijn niet kwijt.</span>' +
@@ -4350,8 +4366,11 @@ function gameWinXP(level) {
 const TURBO_KEUZE = [[1, '😴', 'Slaapkop Turbo', 'Doet soms een dutje. Fijn om mee te beginnen.'], [2, '🐢', 'Turbo', 'Denkt al best goed na.'],
   [3, '🚀', 'Super Turbo', 'Kijkt ver vooruit. Pittig!']];
 function startGameFlow() {
-  const alle = leesPotjes() || {};
-  const kapot = potjeKapot() ? '<p>Je oude potje kan ik niet meer openen. Een nieuw potje haalt het weg.</p>' : '';
+  const gelezen = leesPotjes(), alle = gelezen || {};
+  /* wat niet te lezen is, met de naam van het niveau als die er is */
+  const kapotte = gelezen ? Object.keys(gelezen).filter(k => gelezen[k].kapot) : ['?'];
+  const kapot = [...new Set(kapotte.map(k => k in TURBO_NAMES ? 'potje tegen ' + turboNaam(k) : 'oude potje'))]
+    .map(w => '<p>Je ' + w + ' kan ik niet meer openen. Een nieuw potje haalt het weg.</p>').join('');
   showModal('<div class="m-emoji">🐢</div><h2>Tegen wie speel je?</h2>' + kapot + '<div class="m-btns">' +
     TURBO_KEUZE.map(([lvl, emoji, naam, zin]) => {
       const b = alle[lvl] && !alle[lvl].kapot ? alle[lvl] : null;
@@ -4465,7 +4484,7 @@ function offerDraw() {
     MP.offer = { by: MP.myColor, ply: n, answer: null };
     bewaarSamen();
     mpSend({ t: 'remise?', gameNo: MP.gameNo, ply: n });
-    say('Je biedt remise aan… wachten wat ' + mpNaam() + ' zegt. 🤝');
+    say('Je biedt ' + mpNaam() + ' remise aan. ' + mpNaam() + ' kan ja zeggen of doorspelen.');
     return;
   }
   if (turboAcceptsDraw(S)) {
@@ -4506,7 +4525,7 @@ function remiseRij() {
   if (!samenInBeeld() || session.over) return;
   if (!remiseVraagOpen()) { if (actionBtns.rmJa) setActions([]); return; }
   setActions([{ label: '½ Remise aannemen', cls: 'plain', fn: remiseJa, id: 'rmJa' },
-    { label: 'Nee, doorspelen', cls: 'stil', fn: remiseNee, id: 'rmNee' }]);
+    { label: 'Nee, doorspelen', cls: 'plain', fn: remiseNee, id: 'rmNee' }]);
 }
 function remiseJa() {
   if (!remiseVraagOpen() || !samenInBeeld() || session.over) { remiseRij(); return; }
