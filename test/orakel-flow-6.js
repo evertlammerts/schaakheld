@@ -165,6 +165,27 @@ async function orakelFlow6() {
     check('na zeven middernachten heet het potje stil, ook al is het nog geen 7 keer 24 uur', /Fien heeft al een week niet gezet\./.test(tekstVan(b, 'verder')));
   });
 
+  await regel('[6.6] staat het eigen remise-aanbod, dan zegt de kaart dat, en staat er geen regel onder dat het potje blijft staan', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const a = await kind(opslagMetPotjes([{ fid: 'vriendfien1', naam: 'Fien' }], [{ gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien',
+      moves: ['d2d4', 'd7d5', 'c2c4'], offer: { by: 'w', ply: 3, answer: null, t: Date.now() - UUR } }]));
+    const v = tekstVan(a, 'verder');
+    check('de kaart: het eigen aanbod', /Je bood remise aan\. Fien is aan zet\./.test(v));
+    check('geen regel dat het potje blijft staan', !/blijft staan/.test(v));
+  });
+
+  await regel('[6.4] met acht potjes met vrienden tegelijk zegt Uitnodigen bij een negende vriend waarom het niet kan', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const vrienden = [], potjes = [];
+    for (let i = 0; i < 9; i++) vrienden.push({ fid: 'vriendacht' + i + 'xx', naam: 'Vriend' + i });
+    for (let i = 0; i < 8; i++) potjes.push({ gameId: 'potjeacht' + i + 'xxx', fid: 'vriendacht' + i + 'xx', peerName: 'Vriend' + i, moves: ['e2e4'] });
+    const a = await kind(opslagMetPotjes(vrienden, potjes));
+    tikInRij(a, 'vriendacht8xx', 'Uitnodigen');
+    await wacht(100);
+    check('de melding', toastTekst(a) === 'Je hebt al 8 potjes met vrienden tegelijk. Speel er eerst een uit.');
+    check('geen wachtscherm', !/Wachten op/.test(a.scherm()));
+  });
+
   await regel('[6.1] de zetten in de bus houden elke promotie: dame, toren, loper en paard', async function (check) {
     const a = await kind(opslagMetVrienden([]));
     const lijst = ['a2a4', 'b7b5', 'a4b5', 'a7a6', 'b5a6', 'c8b7', 'a6b7', 'b8c6', 'b7a8q'];

@@ -1663,6 +1663,8 @@ async function orakelTwee6() {
       ['een langere lijst die de eigen niet verlengt', await blob(potje({ moves: bus(andere) }))],
       ['een opgave van Mees in de bus van Fien', await blob(potje({ result: { kind: 'opgave', by: r0.myColor, ply: zetten.length } }))],
       ['een mat die er niet staat', await blob(potje({ result: { kind: 'mat', by: r0.myColor === 'w' ? 'b' : 'w', ply: zetten.length } }))],
+      ['een remise zonder aanbod van Mees', await blob(potje({ result: { kind: 'remise', by: r0.myColor, ply: zetten.length } }))],
+      ['een remise na veertien dagen op naam van Mees, in de bus van Fien', await blob(potje({ result: { kind: 'remise', by: r0.myColor, ply: zetten.length, vanzelf: true } }))],
       ['een ander potje terwijl dit loopt', await blob(potje({ gameId: 'eenanderpotje1', moves: bus(['e2e4']) }))]
     ];
     for (const [wat, b] of gevallen) {
@@ -2453,5 +2455,77 @@ async function orakelTwee6() {
     await tijd(40000);
     const r = vriendenpotjeMet(mees, fid);
     check('de dag van het aanbod is de dag dat het op de server kwam', !!r && !!r.offer && r.offer.t >= tNet);
+  });
+
+  /* ================= deel E5: wat de eerste recensent nog ongetest vond ================= */
+
+  await regel('[6.6] een aanbod dat nog niet in de eigen bus staat, telt de veertien dagen niet, ook als die bus al lang onveranderd is', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 22, mees);
+    stopApparaat(fien);
+    await zetUit(RUSTIG, mees);
+    await tijd(5000);
+    geenNetwerk(mees);
+    await biedRemise(mees);
+    await tijd(3000);
+    schuifKlok(15 * DAG);
+    weerNetwerk(mees);
+    await tijd(60000);
+    check('geen remise: het aanbod stond nog niet op de server', !!vriendenpotjeMet(mees, fid));
+    check('het aanbod staat nu wel in de bus', !!((await busInhoud(mees, fid, await potjesbus(mees, fid, true))) || {}).offer);
+  });
+
+  for (const [n, telt] of [[22, true], [2, false]]) {
+    await regel('[6.8] Opgeven en weghalen na ' + n + ' halve zetten telt ' + (telt ? 'één gespeeld potje' : 'niets'), async function (check) {
+      zetDatum('2026-11-14T10:00:00');
+      const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+      const fid = await vriendenpotje(mees, fien);
+      await potjeTot(mees, fien, n, mees);
+      stopApparaat(fien);
+      mees.tik('backBtn');
+      await wacht();
+      const voor = tellers(mees);
+      tikInRij(mees, fid, '⋯');
+      await wacht();
+      tikTekst(mees, 'Vriend weghalen');
+      await wacht();
+      tikTekst(mees, 'Opgeven en weghalen');
+      await tijd(10000);
+      check(telt ? 'één gespeeld potje erbij, geen winst' : 'niets geteld', tellers(mees) === (telt ? nogEen(voor, false) : voor));
+    });
+  }
+
+  await regel('[6.7] Nieuw potje met op de eindkaart van een potje dat afliep terwijl Mees weg was, nodigt Fien uit', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 4, fien);
+    stopApparaat(mees);
+    await geefOp(fien);
+    await tijd(10000);
+    stopApparaat(fien);
+    schuifKlok(DAG);
+    mees = await opent(mees);
+    mees.tik('verderKaart');
+    await wacht();
+    tikTekst(mees, 'Nieuw potje met Fien');
+    await wacht();
+    check('de uitnodiging gaat uit: Mees wacht op Fien', /Wachten op Fien/.test(mees.scherm()));
+  });
+
+  await regel('[6.4] een uitdaging uit het wachtscherm haalt de uitnodiging van de server: Fien krijgt alleen de uitdaging', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await wordenVrienden(mees, fien);
+    stopApparaat(fien);
+    const adres = await mees.ev('(async function () { var f = P.friends[' + JSON.stringify(fid) + ']; return (await busFor(f, theirRole(f))).bus; })()');
+    tikInRij(mees, fid, 'Uitnodigen');
+    await wacht();
+    check('testopzet: de uitnodiging staat op de server', !!(__server.buses[adres] && __server.buses[adres].blob));
+    tikTekst(mees, 'Daag Fien uit voor later');
+    await tijd(5000);
+    check('de uitnodiging is van de server', !(__server.buses[adres] && __server.buses[adres].blob));
   });
 }
