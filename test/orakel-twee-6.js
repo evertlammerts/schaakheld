@@ -368,6 +368,8 @@ async function orakelTwee6() {
       mees = await opent(mees);
       await tijd(20000);
       check('allebei weten het: beide bussen staan er nog', bus in __server.potjes && fienBus in __server.potjes);
+      const bewaard = function (x) { const r = opgeslagen(x, 'schaakheld-samen'); return !!r && !!r.games && id in r.games; };
+      check('en geen van beide apparaten bewaart het potje nog', !bewaard(mees) && !bewaard(fien));
       const totM = __server.potjes[bus].tot, totF = __server.potjes[fienBus].tot;
       stopApparaat(mees);
       stopApparaat(fien);
@@ -1917,5 +1919,39 @@ async function orakelTwee6() {
     await tijd(30000);
     tab.tik('tabVrienden');
     check('de rij op de tablet zegt Uitgedaagd', /Uitgedaagd · nog geen antwoord/.test(vriendRijTekst(tab, fid)));
+  });
+
+  await regel('[6.8] een vriend weghalen aan wie een uitdaging staat, trekt die in: de vriend ziet geen uitdaging bij het openen', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await wordenVrienden(mees, fien);
+    stopApparaat(fien);
+    await daagUit(mees, fid, 'Fien');
+    tikInRij(mees, fid, '⋯');
+    await wacht();
+    tikTekst(mees, 'Vriend weghalen');
+    await wacht();
+    tikTekst(mees, 'Ja, weghalen');
+    await tijd(10000);
+    check('de bus van Mees zegt dat de uitdaging is ingetrokken', (await busZegt(mees, fid, true) || {}).uitslag === 'teruggetrokken');
+    schuifKlok(DAG);
+    fien = await opent(fien);
+    check('Fien ziet geen uitdaging van Mees', !/Mees daagt je uit/.test(tekstVan(fien, 'verder')) && !vriendenpotjeMet(fien, fid));
+  });
+
+  await regel('[6.5] een server zonder potjesbussen: een potje tussen vrienden gaat dan alleen via de kamer, en stopt als de kamer weg is', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    await vriendenpotje(mees, fien);
+    const echt = fetch;
+    fetch = function (url, o) { return /\/v1\/potje$/.test(url) ? Promise.resolve({ status: 404, json: function () { return Promise.resolve({}); } }) : echt(url, o); };
+    try {
+      await zetUit(RUSTIG, mees, fien);
+      await tijd(5000);
+      check('de app weet dat deze server geen potjesbussen heeft', mees.get('geenPotjesbussen') === true);
+      __herstartServer();
+      await tijd(60000);
+      check('als de kamer weg is, is het potje gestopt', /is gestopt/.test(mees.scherm() + ' ' + tekstVan(mees, 'verder')));
+    } finally { fetch = echt; }
   });
 }
