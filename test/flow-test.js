@@ -2374,7 +2374,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   showHomeTab('spelen');
   showHomeTab('vrienden');
   renderFriends();
-  fire(__els.friendList, 'click', { target: { dataset: { remove: fid } } });
+  fire(__els.friendList, 'click', { target: { dataset: { meer: fid } } });
+  fire(__els.vrWeg, 'click');
   ok('vriend: weghalen vraagt eerst, en na vier keer tekenen nog steeds maar een keer',
     __els.modalBox.innerHTML.indexOf('Mila weghalen') >= 0 && modalQueue.length === 0);
   fire(__els.rmVrJa, 'click');

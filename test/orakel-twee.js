@@ -1054,6 +1054,8 @@ async function orakelTwee() {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     await wordenVrienden(fien, daan);
     await samenSpelen(fien, daan);
+    /* de rij van Daan heeft nu Speel verder; een andere vriend nodigt Fien uit */
+    fien.ev('setFriend("vriendsemsem1", { naam: "Sem", k: "sleutelsleutelsleutelsleutelsleutelsem", since: Date.now(), host: true, weg: false })');
     fien.tik('backBtn');
     await wacht();
     fien.tik('tabVrienden');
@@ -1104,6 +1106,30 @@ async function orakelTwee() {
     tikTekst(zwart, 'Remise aannemen');
     await wacht();
     check('remise aan beide kanten', eindziet(wit, 'Gelijkspel') && eindziet(zwart, 'Gelijkspel'));
+  });
+
+  /* regel 4.12 met D38: de rij van een vriend toont het ene lopende potje */
+  await regel('[4.12] de rij van een vriend toont het lopende potje: wie aan zet is, en Speel verder opent het', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await wordenVrienden(fien, daan);
+    await nodigUit(fien);
+    await daan.ev('friendPoll()');
+    await wacht();
+    daan.tik('invJa');
+    await wacht();
+    fien.tik('mpGo');
+    await wacht();
+    check('testopzet: samen in een potje tussen vrienden', fien.get('!!(MP && MP.viaFriend && MP.S && !MP.over)') && daan.get('!!(MP && MP.viaFriend && MP.S)'));
+    const wit = aanZet(fien, daan), zwart = wit === fien ? daan : fien;
+    for (const x of [wit, zwart]) { x.tik('backBtn'); await wacht(); x.tik('tabVrienden'); await wacht(); }
+    const rij = function (x) { return x.doc.__tekst(x.el('friendList')); };
+    check('wit leest dat het aan zet is, met Speel verder', /Jij bent aan zet\./.test(rij(wit)) && kanTikken(wit, 'Speel verder') && !/Uitnodigen/.test(rij(wit)));
+    check('zwart leest wie aan zet is', new RegExp(wit.naam + ' is aan zet\\.').test(rij(zwart)) && !/Uitnodigen/.test(rij(zwart)));
+    tikTekst(wit, 'Speel verder');
+    await wacht();
+    check('Speel verder opent het potje', opSpeelscherm(wit) && aanDeBeurt(wit));
+    await speel(wit, zwart, 'e2e4');
+    check('na de zet van wit leest zwart op Vrienden dat het aan zet is', /Jij bent aan zet\./.test(rij(zwart)));
   });
 
   await regel('[4.2] een zet van de ander terwijl het kind thuis is: meteen bewaard, en de kaart zegt wie aan zet is', async function (check) {

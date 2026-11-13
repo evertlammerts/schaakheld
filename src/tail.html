@@ -979,7 +979,7 @@ function samenInBeeld() { return !!(session && session.online && MP && session.S
 function samenLoopt() { return !!(MP && MP.S && !MP.over); }
 /* de verbinding blijft ook na het einde, tot de ander de uitslag kent */
 function samenBewaren() { return samenLoopt() || !!(MP && MP.S && MP.result && !MP.bekend); }
-function thuisVerversen() { if ($('scr-play').classList.contains('hidden')) renderVerder(); }
+function thuisVerversen() { if ($('scr-play').classList.contains('hidden')) { renderVerder(); renderFriends(); } }
 /* bij het openen van de app: weer verbinden met het bewaarde stoeltje */
 function samenHervat(b) {
   mpStart(b.r.room, b.r.seat, b.r.host);
@@ -1591,15 +1591,31 @@ function renderFriends() {
     return;
   }
   el.innerHTML = ids.map(id => {
-    const f = P.friends[id];
-    const wacht = INV && INV.fid === id;
-    return '<div class="friend' + (wacht ? ' wait' : '') + '" data-fid="' + id + '"><span class="f-emo">' + friendTrio(f.k) + '</span>' +
-      '<span class="f-txt">' + escHtml(f.naam) + '<span class="f-sub">' +
-      (wacht ? 'Wachten tot ' + escHtml(f.naam) + ' SchaakHeld opent…' : 'vrienden sinds ' + friendSince(f)) + '</span></span>' +
-      (wacht ? '<button class="btn plain small" data-cancel="' + id + '">Stop</button>' :
-        '<button class="btn sun small" data-invite="' + id + '">Uitnodigen</button>') +
-      '<button class="icon-btn f-rm" data-remove="' + id + '" title="Weghalen">✕</button></div>';
+    const f = P.friends[id], naam = escHtml(f.naam);
+    const wacht = !!INV && INV.fid === id, g = !wacht && samenMet(id), beurt = !!g && g.S.turn === g.kleur;
+    const sub = wacht ? 'Wachten tot ' + naam + ' SchaakHeld opent…' : g ? (beurt ? 'Jij bent aan zet.' : naam + ' is aan zet.') :
+      'vrienden sinds ' + friendSince(f);
+    const knop = wacht ? '<button class="btn plain small" data-cancel="' + id + '">Stop</button>' :
+      g ? '<button class="btn plain small" data-speel="' + id + '">Speel verder</button>' :
+      '<button class="btn plain small" data-invite="' + id + '">Uitnodigen</button>';
+    return '<div class="friend' + (wacht ? ' wait' : '') + (beurt ? ' beurt' : '') + '" data-fid="' + id + '">' +
+      '<div class="f-kop"><span class="f-emo">' + friendTrio(f.k) + '</span><span class="f-naam">' + naam + '</span>' +
+      '<button class="icon-btn f-meer" data-meer="' + id + '" title="Meer" aria-label="Meer over ' + naam + '">⋯</button></div>' +
+      '<div class="f-voet"><span class="f-sub">' + sub + '</span>' + knop + '</div></div>';
   }).join('');
+}
+/* het lopende vriendenpotje met deze vriend: dat van de verbinding, anders het bewaarde */
+function samenMet(fid) {
+  if (MP && MP.S && MP.gameId) return MP.viaFriend === fid && samenLoopt() ? { S: MP.S, kleur: MP.myColor } : null;
+  const b = leesSamen();
+  return b && !b.kapot && !b.r.result && b.r.fid === fid ? { S: b.S, kleur: b.r.myColor } : null;
+}
+/* ⋯ bij een vriend: weghalen, met een vraag erna */
+function vriendMenu(fid) {
+  const f = P.friends[fid];
+  showModal('<h2>' + escHtml(f.naam) + '</h2><div class="m-btns"><button class="btn plain gevaar" id="vrWeg">Vriend weghalen</button></div>', () => {
+    $('vrWeg').addEventListener('click', () => { closeModal(); removeFriendAsk(fid); });
+  }, true);
 }
 function friendSince(f) {
   if (!f.since) return 'kort geleden';
@@ -5640,7 +5656,8 @@ $('friendList').addEventListener('click', e => {
   const d = e.target && e.target.dataset ? e.target.dataset : {};
   if (d.invite && P.friends[d.invite]) inviteFriend(d.invite);
   else if (d.cancel) inviteCancel();
-  else if (d.remove && P.friends[d.remove]) removeFriendAsk(d.remove);
+  else if (d.meer && P.friends[d.meer]) vriendMenu(d.meer);
+  else if (d.speel) openSamen();
 });
 $('backBtn').addEventListener('click', () => {
   /* een vriendenpotje blijft staan en de verbinding ook: de ander merkt niets */

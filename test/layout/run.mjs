@@ -27,7 +27,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.7', '4.8']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.7', '4.8', '4.12']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -809,6 +809,38 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647], [390, 667], [402, 700]
       check(regels[regels.length - 1], 'testopzet: de Denkwolk is aan te tikken', await klikTekst(/Denkwolk/));
       await page.waitForTimeout(400);
       await meet(regels[regels.length - 1]);` });
+}
+
+/* plan 4.12: Vrienden met drie vrienden, een met een naam van veertien letters en een met een lopend potje */
+const VRIENDEN_DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'Mees', t: 1 } }, max: { best: 0, goal: {} }, loc: {},
+  friends: {
+    vriendaaaaaa1: { k: 'sleutelsleutelsleutelsleutelsleutel1', naam: 'Maximiliaantje', t: 1, since: 1792000000000, host: true, weg: false },
+    vriendaaaaaa2: { k: 'sleutelsleutelsleutelsleutelsleutel2', naam: 'Fien', t: 1, since: 1792100000000, host: true, weg: false },
+    vriendaaaaaa3: { k: 'sleutelsleutelsleutelsleutelsleutel3', naam: 'Daan', t: 1, since: 1792200000000, host: false, weg: false } } });
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[4.12] ' + W + 'x' + H + ': Vrienden met drie vrienden: elke knop binnen zijn rij en het scherm, minstens 44 hoog, en de pagina scrolt niet opzij';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, { schaakheld1: ${JSON.stringify(VRIENDEN_DOC)} });
+      await klik('#tabVrienden');
+      await page.waitForTimeout(300);
+      /* een lopend potje met Fien, waarin Mees aan zet is */
+      await page.evaluate(() => { MP = { room: 'kamerkamer1', seat: 'stoelstoel1', host: true, open: true, weg: true, peerName: 'Fien', myColor: 'w', gameNo: 1,
+        gameId: 'potjepotje12', S: newGame(), over: false, result: null, offer: null, viaFriend: 'vriendaaaaaa2' }; renderFriends(); });
+      await page.waitForTimeout(200);
+      const rijen = await page.evaluate(() => [...document.querySelectorAll('#friendList .friend')].map(r => {
+        const b = r.getBoundingClientRect();
+        return { rij: { left: b.left, right: b.right, top: b.top, bottom: b.bottom }, tekst: r.textContent,
+          knoppen: [...r.querySelectorAll('button')].map(k => { const x = k.getBoundingClientRect(); return { left: x.left, right: x.right, top: x.top, bottom: x.bottom, h: x.height }; }) };
+      }));
+      check(n, 'drie rijen', rijen.length === 3);
+      check(n, 'de rij van Fien zegt dat Mees aan zet is', rijen.some(r => /Fien/.test(r.tekst) && /Jij bent aan zet/.test(r.tekst) && /Speel verder/.test(r.tekst)));
+      check(n, 'elke rij heeft ⋯ en één knop, en geen kruisje', rijen.every(r => r.knoppen.length === 2 && !/✕/.test(r.tekst)));
+      check(n, 'elke knop binnen zijn rij en het scherm', rijen.every(r => r.knoppen.every(k => k.left >= r.rij.left - 0.5 && k.right <= r.rij.right + 0.5 &&
+        k.top >= r.rij.top - 0.5 && k.bottom <= r.rij.bottom + 0.5 && k.left >= 0 && k.right <= ${W} + 0.5)));
+      check(n, 'elke knop minstens 44 hoog', rijen.every(r => r.knoppen.every(k => k.h >= 44 - 0.5)));
+      const p = await pagina();
+      check(n, 'de pagina scrolt niet opzij', p.sw <= p.W + 1);` });
 }
 
 GEVALLEN.push({ regels: ['[3.5] 390x844: Ik begint met het level, dan bewaard, trofeeën, bordkleuren, de week, vorm en het trucboek'],

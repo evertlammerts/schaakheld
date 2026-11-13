@@ -418,7 +418,8 @@ async function alles() {
 
   /* ---------- 15. vriend weghalen: herkennen stopt ---------- */
   evert.ev('showHomeTab("vrienden")');
-  fire(evert.el('friendList'), 'click', { target: { dataset: { remove: fid } } });
+  fire(evert.el('friendList'), 'click', { target: { dataset: { meer: fid } } });
+  evert.tik('vrWeg');
   evert.tik('rmVrJa');
   await tik();
   ok('weghalen: bij Evert weg, bij Oscar blijft de vriendschap staan',

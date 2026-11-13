@@ -2703,6 +2703,30 @@ async function orakelFlow() {
     });
   }
 
+
+  /* regel 4.12: een vriend is een rij van twee regels; weghalen zit achter ⋯ */
+  const metVriend = function (a, id, naam) {
+    a.ev('setFriend(' + JSON.stringify(id) + ', { naam: ' + JSON.stringify(naam) + ', k: "geheimgeheimgeheimgeheimgeheim-' + id + '", since: Date.now(), host: true, weg: false })');
+  };
+  await regel('[4.12] een vriend weghalen gaat via ⋯ en een vraag; de rij heeft geen kruisje', async function (check) {
+    const a = nieuwKind();
+    metVriend(a, 'vriendvriend01', 'Mila');
+    a.tik('tabVrienden');
+    await wacht();
+    const lijst = a.el('friendList');
+    check('de rij: naam, vrienden sinds, Uitnodigen en ⋯, geen kruisje', /Mila/.test(a.doc.__tekst(lijst)) && /vrienden sinds/.test(a.doc.__tekst(lijst)) &&
+      kanTikken(a, 'Uitnodigen') && lijst.querySelectorAll('[data-meer]').length === 1 && lijst.querySelectorAll('[data-remove]').length === 0 && !/✕/.test(a.doc.__tekst(lijst)));
+    tikEl(a, lijst.querySelectorAll('[data-meer]')[0], '⋯');
+    await wacht();
+    check('⋯ opent Vriend weghalen', a.open() && kanTikken(a, 'Vriend weghalen'));
+    tikTekst(a, 'Vriend weghalen');
+    await wacht();
+    check('eerst de vraag', a.ziet('Mila weghalen') && a.get('P.friends.vriendvriend01.weg') === false);
+    a.tik('rmVrJa');
+    await wacht();
+    check('pas na ja is Mila weg', a.get('P.friends.vriendvriend01.weg') === true && /Nog geen vrienden/.test(a.doc.__tekst(lijst)));
+  });
+
   await regel('[4.8] voor vrienden zegt een onbekend woord dat het kind het zijn maatje nog eens kan vragen', async function (check) {
     const a = nieuwKind();
     a.ev('mpWordFlow()');
