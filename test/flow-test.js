@@ -1112,14 +1112,14 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     d.cnt['wk.' + curWeek() + '.online'] = { r1: 1 };
     return d;
   };
-  await nogNiet('[6.7] compat: een profiel van de release van nu laadt zonder verlies en krijgt een lege set getelde vriendenpotjes', function (check) {
+  await regel('[6.7] compat: een profiel van de release van nu laadt zonder verlies en krijgt een lege set getelde vriendenpotjes', function (check) {
     var d = normDoc(releaseDoc()), v = viewFromDoc(d);
     check('punten, tellers, trofeeën, de week en de vriend blijven', v.xp === 520 && v.stars === 40 && v.wins === 3 && v.c.gamesPlayed === 9 &&
       v.c.winsOnline === 2 && wkGet(curWeek(), 'online', v) === 1 && v.badges.winst === true && v.badges.potje === true &&
       v.name === 'Oscar' && v.theme === 'oceaan' && v.friends.vriendevert1.naam === 'Evert');
     check('een lege set getelde vriendenpotjes', !!d.set.potjes && typeof d.set.potjes === 'object' && Object.keys(d.set.potjes).length === 0);
   });
-  await nogNiet('[6.7] compat: samenvoegen met een profiel zonder de set houdt de getelde vriendenpotjes, in beide richtingen, en verliest niets', function (check) {
+  await regel('[6.7] compat: samenvoegen met een profiel zonder de set houdt de getelde vriendenpotjes, in beide richtingen, en verliest niets', function (check) {
     var oud = normDoc(releaseDoc()), raw = releaseDoc();
     raw.set.potjes = { abcdefghijkl: true };
     raw.cnt.xp.t2 = 30;
@@ -1127,7 +1127,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     check('de set blijft, in beide richtingen', !!ab.set.potjes && ab.set.potjes.abcdefghijkl === true && !!ba.set.potjes && ba.set.potjes.abcdefghijkl === true);
     check('en verder niets kwijt', viewFromDoc(ab).xp === 550 && viewFromDoc(ba).xp === 550 && viewFromDoc(ab).c.winsOnline === 2 && viewFromDoc(ba).c.winsOnline === 2);
   });
-  await nogNiet('[6.7] compat: de set houdt alleen echte potje-ids, en komt mee door koppelen, bewaren en laden', async function (check) {
+  await regel('[6.7] compat: de set houdt alleen echte potje-ids, en komt mee door koppelen, bewaren en laden', async function (check) {
     var raw = releaseDoc();
     raw.set.potjes = { abcdefghijkl: true, '<b>x</b>': true, kort: true, nietwaar1234: 'ja' };
     check('alleen het echte id', !!normDoc(raw).set.potjes && JSON.stringify(Object.keys(normDoc(raw).set.potjes)) === '["abcdefghijkl"]');

@@ -83,7 +83,7 @@ const DEV = (() => {
 })();
 
 function emptyDoc() {
-  return { v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: {}, max: { best: 0, goal: {} },
+  return { v: 2, epoch: 0, cnt: {}, set: { badges: {}, potjes: {} }, lww: {}, max: { best: 0, goal: {} },
     log: {}, friends: {},
     loc: { streak: 0, lastLevel: 0, day: null, weekSeen: null, shownBadges: [], lastKind: null, lastSeen: null } };
 }
@@ -141,7 +141,7 @@ function normFriend(f) {
    voorgoed vergiftigen (een G-Counter kan nooit meer zakken) of met een
    absurde timestamp elke toekomstige merge blijven winnen. Ook het eigen
    opgeslagen doc gaat hierdoorheen, zodat corruptie zichzelf geneest. */
-const MAX_BIJDRAGE = 1e7, MAX_BADGES = 128;
+const MAX_BIJDRAGE = 1e7, MAX_BADGES = 128, MAX_GETELD = 20000;
 function normDoc(raw) {
   const d = emptyDoc();
   if (!raw || typeof raw !== 'object') return d;
@@ -171,6 +171,14 @@ function normDoc(raw) {
     let i = 0;
     for (const k in badges) {
       if (badges[k] === true && k.length <= 40 && i++ < MAX_BADGES) d.set.badges[k] = true;
+    }
+  }
+  /* de vriendenpotjes waarvan dit kind de uitslag al telde; groeit alleen */
+  const potjes = raw.set && raw.set.potjes;
+  if (potjes && typeof potjes === 'object') {
+    let i = 0;
+    for (const k in potjes) {
+      if (potjes[k] === true && /^[A-Za-z0-9_-]{8,64}$/.test(k) && i++ < MAX_GETELD) d.set.potjes[k] = true;
     }
   }
   if (raw.lww && typeof raw.lww === 'object') {
@@ -406,6 +414,7 @@ function mergeDoc(a, b) {
   foldCnt(a.cnt, out.cnt);
   foldCnt(b.cnt, out.cnt);
   Object.assign(out.set.badges, a.set.badges, b.set.badges);
+  Object.assign(out.set.potjes, a.set.potjes, b.set.potjes);
   for (const f in Object.assign({}, a.lww, b.lww)) {
     const x = a.lww[f], y = b.lww[f];
     /* bij gelijke timestamp beslist de waarde, zodat beide kanten
@@ -1063,7 +1072,7 @@ function toonOudEinde(gameId) {
   if (!u || (MP && MP.gameId === gameId)) { renderVerder(); return; }
   const naam = b.r.peerName || 'je maatje';
   session = { kind: 'game', online: true, S: b.S, level: 0, tips: 0, over: false, pending: null, myColor: b.r.myColor,
-    oud: { naam }, eerderAfgelopen: true };
+    oud: { naam, gameId }, eerderAfgelopen: true };
   toonSamenScherm(b.S, b.r.myColor, naam);
   endGame(stVanUitslag(u));
   vergeetSamen(gameId);
@@ -5093,7 +5102,17 @@ function openHulp() {
 /* einde van een online potje: neutrale taal (geen Turbo), geen XP (dat
    zou een farm-route zijn), wel de tellers, en de revanche uit het memo:
    alleen binnen deze sessie, kleuren wisselen om */
-function endGameOnline(st, drawTxt, telt) {
+/* De uitslag van een potje samen telt per kind één keer, ook als twee gekoppelde apparaten het einde zien:
+   de potjes die al telden, staan in het profiel. */
+function eersteKeerGeteld(gameId) {
+  if (!gameId) return true;
+  if (DOC.set.potjes[gameId]) return false;
+  DOC.set.potjes[gameId] = true;
+  saveP();
+  syncSoon();
+  return true;
+}
+function endGameOnline(st, drawTxt, telt, nieuw) {
   const ik = session.myColor || 'w', oud = !!session.oud, naam = oud ? session.oud.naam : mpNaam();
   let h, p;
   /* gameStatus meldt remise als result 'd', nooit als een leeg result. Op
@@ -5111,7 +5130,7 @@ function endGameOnline(st, drawTxt, telt) {
        dag-'wins', want die geven via de dagmissies en de "versla Turbo"-
        trofee XP, en twee kinderen op een bank zouden dat zo farmen. Online
        potjes zijn eerlijk spel zonder XP (memo). */
-    bump('c.winsOnline', 1);
+    if (nieuw) bump('c.winsOnline', 1);
     snd.win();
     celebrate();
   } else {
@@ -5167,8 +5186,9 @@ function endGame(st, stil) {
   const drawTxt = { pat: 'Pat! De koning kan nergens meer heen, maar staat geen schaak.',
     '50': 'Vijftig zetten zonder slaan of pionzet.', materiaal: 'Te weinig stukken om mat te zetten.',
     remise: 'Remise afgesproken: jullie vonden het allebei gelijk.' };
-  /* opgeven of remise vlak na het begin telt nergens voor mee */
-  const telt = (st.reason !== 'opgave' && st.reason !== 'remise') || session.S.hist.length >= MIN_PLIES_TELT;
+  /* opgeven of remise vlak na het begin telt nergens voor mee; een potje samen telt per kind één keer */
+  const nieuw = !session.online || eersteKeerGeteld(session.oud ? session.oud.gameId : MP && MP.gameId);
+  const telt = nieuw && ((st.reason !== 'opgave' && st.reason !== 'remise') || session.S.hist.length >= MIN_PLIES_TELT);
   if (telt) bump('c.gamesPlayed', 1);
   if (!stil) afgemaakt('game');
   if (session.online) {
@@ -5180,7 +5200,7 @@ function endGame(st, stil) {
       stuurStand();
     }
     if (telt) bumpWeek('online', 1);
-    endGameOnline(st, drawTxt, telt);
+    endGameOnline(st, drawTxt, telt, nieuw);
     return;
   }
   if (telt) bumpWeek('potjes' + session.level, 1);
