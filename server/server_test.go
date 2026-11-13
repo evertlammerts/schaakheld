@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"io"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -39,6 +42,9 @@ func newTestServer(t *testing.T, mut func(*config)) (*server, *fakeClock) {
 		redeemDelay: 0,
 		redeemSlots: 8,
 		now:         clk.now,
+		// op macOS kost een fsync zo'n 8 ms en de grenstests schrijven duizenden
+		// bestanden; de schijftests zetten hem weer aan met fsync nil
+		fsync: func(*os.File) error { return nil },
 	}
 	if mut != nil {
 		mut(&cfg)
@@ -448,5 +454,41 @@ func TestHealthz(t *testing.T) {
 	}
 	if body, _ := io.ReadAll(w.Body); string(body) != "ok\n" {
 		t.Fatalf("body %q", body)
+	}
+}
+
+func TestSchrijvenSpoeltBestandEnMap(t *testing.T) {
+	dir := t.TempDir()
+	var gespoeld []string
+	s, _ := newTestServer(t, func(c *config) {
+		c.dataDir = dir
+		c.fsync = func(f *os.File) error { gespoeld = append(gespoeld, f.Name()); return nil }
+	})
+	eerstBestandDanMap := func(wat, waar string) {
+		t.Helper()
+		if len(gespoeld) != 2 || filepath.Dir(gespoeld[0]) != waar ||
+			!strings.HasPrefix(filepath.Base(gespoeld[0]), ".tmp-") || gespoeld[1] != waar {
+			t.Fatalf("%s spoelde %q; wil eerst het tijdelijke bestand, dan de map %s", wat, gespoeld, waar)
+		}
+		gespoeld = nil
+	}
+	bewijs, bus := potjeBus("a")
+	if a := schrijfPotjeAls(s, bewijs, bus, "staat", ""); a.code != 204 {
+		t.Fatalf("een staat schrijven: %+v", a)
+	}
+	eerstBestandDanMap("een staat schrijven", filepath.Join(dir, "potjes"))
+	if c := do(t, s, "PUT", "/v1/profile/a1b2c3d4e5f6a7b8", testSecret, []byte("profiel")).Code; c != 204 {
+		t.Fatalf("een profiel bewaren: %d", c)
+	}
+	eerstBestandDanMap("een profiel bewaren", dir)
+}
+
+func TestZonderInstellingSpoeltDeServerEcht(t *testing.T) {
+	s, err := newServer(config{dataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reflect.ValueOf(s.cfg.fsync).Pointer() != reflect.ValueOf((*os.File).Sync).Pointer() {
+		t.Fatal("zonder instelling hoort de server te spoelen met (*os.File).Sync")
 	}
 }
