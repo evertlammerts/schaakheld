@@ -1312,6 +1312,38 @@ async function orakelFlow5() {
     check('met een groene pijl naar dat veld', a.get('BD.arrows.length === 1 && BD.arrows[0].cls === "a-leaf" && BD.arrows[0].to === ' + sq));
   });
 
+  /* wat nog moest gebeuren na een truc (Turbo's antwoord, zijn tekens en zijn zin) hoort bij die truc: na Volgende
+     loopt of tekent er niets meer van, ook niet midden in Turbo's zet of na de laatste opdracht */
+  await regel('[5.5] Trucendoos: een tik op Volgende terwijl Turbo nog antwoordt, laat niets van de vorige truc zien en geeft geen fout', async function (check) {
+    const verder = async function (ms) {
+      const eind = __klok + ms;
+      while (__klok < eind) { const stap = Math.min(eind, __klok + 10); drainTot(400, stap); if (__klok < stap) __klok = stap; for (let j = 0; j < 40; j++) await null; }
+    };
+    const tot = async function (vraag, ms) { const eind = __klok + ms; while (!vraag() && __klok < eind) await verder(10); return !!vraag(); };
+    const gevallen = [['vlak voor Turbo\'s zet', 2, false, 1150], ['als Turbo\'s stuk gaat schuiven', 2, true, 0],
+      ['als Turbo\'s stuk bijna staat', 2, true, 200], ['op de vijfde opdracht', 5, false, 600]];
+    for (const [wanneer, ronde, naSchuiven, ms] of gevallen) {
+      const a = nieuwKind({ beweging: true });
+      const schuift = function () { return a.doc.querySelectorAll('.ghost').length > 0; };
+      await startOefening(a, 'trucs');
+      a.ev('session.round = ' + ronde);
+      zetOpdracht(a, VORK5[0], 'vork', [VORK5[1]]);
+      zet(a, VORK5[1]);
+      if (!check(wanneer + ': testopzet, de truc is gevonden', await tot(function () { return kanTikken(a, 'Volgende'); }, 2000))) continue;
+      if (naSchuiven && !check(wanneer + ': testopzet, Turbo\'s stuk schuift', await tot(schuift, 3000))) continue;
+      await verder(ms);
+      if (!check(wanneer + ': testopzet, Turbo\'s zet staat nog niet', a.get('session.S.hist.length') === 1)) continue;
+      let schoof = null;
+      try { tikTekst(a, 'Volgende'); schoof = schuift(); await wacht(5000); } catch (e) { check(wanneer + ': geen fout (' + (e && e.message) + ')', false); continue; }
+      check(wanneer + ': Turbo\'s stuk schuift niet door over de volgende opdracht', !schoof);
+      const bord = a.get('(function () { return { laatste: BD.last, pijlen: BD.arrows.length, tekens: BD.spy.size }; })()');
+      check(wanneer + ': geen teken van Turbo\'s zet of de truc op het bord (' + JSON.stringify(bord) + ')', !bord.laatste && bord.pijlen === 0 && bord.tekens === 0);
+      check(wanneer + ': geen uitleg van de vorige truc (' + norm5(tekstVan(a, 'taskBox')) + ')', !zichtbaar(a, 'taskBox') || !/Gevonden|Turbo speelt/.test(tekstVan(a, 'taskBox')));
+      if (ronde === 5) check(wanneer + ': het rondje is klaar', a.ziet('Rondje klaar'));
+      else check(wanneer + ': een nieuwe opdracht', isPuzzel5(a) && a.get('session.S.hist.length') === 0 && a.get('session.round') === ronde + 1);
+    }
+  });
+
   /* de laatste foute poging: geen oude zin naast de nieuwe zet, en wat die zet deed onderaan "Zo zit het" */
   await regel('[5.5] Trucendoos, de laatste foute poging: de strook onder het bord is leeg zolang Turbo antwoordt, daarna "Jouw zet: ..." als laatste reden', async function (check) {
     const a = nieuwKind();

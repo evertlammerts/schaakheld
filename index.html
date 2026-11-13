@@ -5048,19 +5048,23 @@ function animateMove(m, done) {
   setTimeout(() => { g.remove(); done(); }, 245);
 }
 
-/* Een timer van een opdracht of potje hoort bij die sessie: is het kind
-   intussen weg of met iets anders bezig, dan doet hij niets. */
+/* Wat een opdracht of potje nog moet doen (een timer, het eind van een zet) hoort daarbij: is het kind
+   intussen weg, met iets anders bezig of met Volgende verder, dan gebeurt het niet. */
+function nogVanNu() {
+  const mine = session, stap = mine && mine.stap;
+  return () => session === mine && (!mine || mine.stap === stap);
+}
 function later(fn, ms) {
-  const mine = session;
-  return setTimeout(() => { if (session === mine) fn(); }, ms);
+  const nog = nogVanNu();
+  return setTimeout(() => { if (nog()) fn(); }, ms);
 }
 
 /* Animate + apply a move on session.S, update highlights and sound. */
 function playMove(m, cb) {
-  const mine = session, S = session.S;
+  const mine = session, nog = nogVanNu(), S = session.S;
   const wasCap = isCapture(S, m);
   animateMove(m, () => {
-    if (session !== mine) return;
+    if (!nog()) return;
     if (wasCap) snd.cap(); else snd.move();
     makeMove(S, m);
     BD.last = [m.from, m.to];
@@ -5698,6 +5702,8 @@ function updateDrillStars() {
 
 function nextRound() {
   if (!session || session.kind === 'game') return;
+  session.stap = (session.stap || 0) + 1;
+  for (const g of document.querySelectorAll('.ghost')) g.remove();
   clearBD();
   session.S = null;
   renderBoard();
@@ -5963,7 +5969,7 @@ function puzzleAttempt(m) {
       awardRound(stars, type === 'mat1' ? 'Schaakmat! 👑' : 'Gevonden!',
         type === 'mat1' ? 'Turbo\'s koning kan zich niet meer redden.' : uitleg.zinnen);
       if (type === 'mat1' || gameStatus(S).over) return;
-      later(() => { if (session && session.task === t) turboNaTruc(S, t); }, 1200);
+      later(() => turboNaTruc(S), 1200);
     });
     return;
   }
@@ -6002,11 +6008,10 @@ function puzzleAttempt(m) {
 }
 /* Na een gevonden truc: Turbo verdedigt zich zo goed als hij kan, de tekens van de truc gaan weg,
    en de uitleg zegt wat Turbo deed en wat het kind nu kan pakken (een pijl, de zet wordt niet gespeeld) */
-function turboNaTruc(S, t) {
+function turboNaTruc(S) {
   clearTT();
   const reply = think(S, 60000, 8, { nodes: CHECK_NODES }).m, naam = moveNameNL(S, reply);
   playMove(reply, () => {
-    if (!session || session.task !== t) return;
     BD.spy = new Set();
     let zin = 'Turbo speelt ' + zetB(naam);
     if (!gameStatus(S).over) {
@@ -6358,7 +6363,7 @@ function buildBest3() {
   setActions([{ label: 'Deze kies ik! 🎯', cls: 'sun', fn: best3Confirm, id: 'confirm', disabled: true }]);
   /* na veilig of valstrik staan de keuzes waar Volgende stond: een tweede tik op Volgende kiest zo niets */
   session.keuzeOpen = false;
-  later(() => { if (session.task === task) session.keuzeOpen = true; }, 350);
+  later(() => { session.keuzeOpen = true; }, 350);
   for (const o of task.options) if (o !== task.best) lijnVerlies(task.S, o);
   return true;
 }

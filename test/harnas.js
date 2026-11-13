@@ -31,9 +31,12 @@ function maakApparaat(naam, opties) {
   const eigenFetch = function (url, o) {
     return netwerk.uit ? Promise.reject(new TypeError('Load failed')) : fetch(url, o);
   };
-  const maak = new Function('document', 'localStorage', 'location', 'history', '__els', 'setTimeout', 'WebSocket', 'fetch',
+  /* de shim vraagt minder beweging, zodat een zet meteen staat; een test die midden in een schuivend stuk
+     tikt, zet beweging aan */
+  const beweging = opties.beweging ? function () { return { matches: false }; } : matchMedia;
+  const maak = new Function('document', 'localStorage', 'location', 'history', '__els', 'setTimeout', 'WebSocket', 'fetch', 'matchMedia',
     __APP_SRC + '\n;return function (code) { return eval(code); };');
-  const ev = maak(doc, opslag, loc, loc.__history, doc.__els, eigenTimer, EigenSocket, eigenFetch);
+  const ev = maak(doc, opslag, loc, loc.__history, doc.__els, eigenTimer, EigenSocket, eigenFetch, beweging);
   const app = {
     naam, doc, els: doc.__els, opslag, location: loc, ev, leven, netwerk,
     get(expr) { return ev('(' + expr + ')'); },
