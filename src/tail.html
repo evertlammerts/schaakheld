@@ -2162,13 +2162,27 @@ function vriendBusInhoud(r) {
     moves: zettenNaarBus(r.moves), offer: r.offer && !r.offer.answer ? { by: r.offer.by, ply: r.offer.ply } : null,
     result: r.ingetrokken ? { kind: 'teruggetrokken', by: null, ply: 0 } : r.nee ? { kind: 'nee', by: null, ply: 0 } : r.claim || r.result || null };
 }
+/* De eigen potjesbus schrijft dit apparaat over wat er staat heen: het noemt de versie die het daar het laatst las of
+   schreef, en na een 409 de versie die de server toont. */
+const eigenBusVersie = new Map();
 async function schrijfPotjesbus(f, blob) {
   try {
     const to = await busFor(f, myRole(f), 'potje');
-    const r = await fetch(SYNC_URL + '/v1/potje', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob }) });
-    if (r.status === 404) geenPotjesbussen = true;
-    return r.status === 204;
+    let als = eigenBusVersie.get(to.bus) || '';
+    for (let poging = 0; poging < 3; poging++) {
+      const r = await fetch(SYNC_URL + '/v1/potje', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob, als }) });
+      if (r.status === 404) geenPotjesbussen = true;
+      if (r.status === 409) {
+        let d = null;
+        try { d = await r.json(); } catch (e) {}
+        als = d && typeof d.blob === 'string' && d.blob ? await sha256hex(d.blob) : '';
+        continue;
+      }
+      if (r.status === 204) eigenBusVersie.set(to.bus, await sha256hex(blob));
+      return r.status === 204;
+    }
+    return false;
   } catch (e) { return false; }
 }
 /* Schrijft de eigen potjesbus van een bewaard vriendenpotje als de inhoud veranderde, de bus er niet is (dwing)
@@ -2994,6 +3008,7 @@ async function friendPoll() {
     for (const id in potjes) {
       const p = potjes[id], f = P.friends[id];
       if (!f || (f.weg && !teBezorgen(id)) || !gelezen.has(p.eigen) || !gelezen.has(p.vriend)) continue;
+      eigenBusVersie.set(p.eigen, p.eigen in blobs ? await sha256hex(blobs[p.eigen]) : '');
       const O = p.eigen in blobs ? await leesPotjesbusEens(f, p.eigen, blobs[p.eigen]) : null;
       const F = p.vriend in blobs ? await leesPotjesbusEens(f, p.vriend, blobs[p.vriend]) : null;
       await potjesbusGelezen(id, O, F, +oud[p.eigen] || 0, +oud[p.vriend] || 0, blobs[p.eigen] || null);

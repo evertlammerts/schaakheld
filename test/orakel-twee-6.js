@@ -275,7 +275,7 @@ async function orakelTwee6() {
     check('de zet van Mees staat op het bord en Fien kan zetten', fien.get('session.S.hist.length') === n + 1 && magZetten(fien));
   });
 
-  await regel('[6.2] de server herstart tussen de zet van Mees en het openen van Fien: zodra Mees opent, krijgt Fien de zet', async function (check) {
+  await regel('[6.2] de server herstart en is zijn potjesbussen kwijt tussen de zet van Mees en het openen van Fien: zodra Mees opent, krijgt Fien de zet', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await vriendenpotje(mees, fien);
@@ -285,6 +285,7 @@ async function orakelTwee6() {
     const bus = await potjesbus(mees, fid, true);
     stopApparaat(mees);
     __herstartServer();
+    __potjesKwijt();
     schuifKlok(DAG);
     fien = await opent(fien);
     check('zonder de bus van Mees wacht Fien nog op Mees', /Mees is aan zet/.test(tekstVan(fien, 'verder')) && !/heeft gezet/.test(tekstVan(fien, 'verder')));
@@ -1225,7 +1226,7 @@ async function orakelTwee6() {
       plek[0] < plek[1] && plek[1] < plek[2] && /nog geen antwoord/.test(blad));
   });
 
-  await regel('[6.11] de server ziet geen naam en geen zet: alleen bus, bewijs en blob, en elke potjesbus even lang', async function (check) {
+  await regel('[6.11] de server ziet geen naam en geen zet: alleen bus, bewijs, blob en de versie die de schrijver las, en elke potjesbus even lang', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const log = [], echt = fetch;
     fetch = function (url, o) { log.push({ url, body: o && o.body }); return echt(url, o); };
@@ -1247,7 +1248,7 @@ async function orakelTwee6() {
     } finally { fetch = echt; }
     const potjes = log.filter(function (r) { return /\/v1\/potje$/.test(r.url); }).map(function (r) { return JSON.parse(r.body); });
     check('testopzet: potjesbussen geschreven', potjes.length >= 4);
-    check('alleen bus, bewijs en blob', potjes.every(function (b) { return JSON.stringify(Object.keys(b).sort()) === '["bewijs","blob","bus"]'; }));
+    check('alleen bus, bewijs, blob en als', potjes.every(function (b) { return JSON.stringify(Object.keys(b).sort()) === '["als","bewijs","blob","bus"]'; }));
     const lengtes = potjes.map(function (b) { return b.blob.length; }).filter(function (n) { return n > 0; });
     check('elke potjesbus is even lang', lengtes.length >= 4 && lengtes.every(function (n) { return n === lengtes[0]; }));
     const tekst = log.filter(function (r) { return typeof r.body === 'string'; }).map(function (r) { return r.body; }).join('\n');

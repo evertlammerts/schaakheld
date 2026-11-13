@@ -69,10 +69,11 @@ type config struct {
 	origin      string
 	redeemDelay time.Duration
 	redeemSlots int
-	maxLinks    int              // max openstaande koppelcodes tegelijk
-	maxAccounts int              // max profielen op schijf
-	queueWait   time.Duration    // hoe lang een verzoek op een slot wacht
-	now         func() time.Time // injecteerbaar voor de TTL-tests
+	maxLinks    int                  // max openstaande koppelcodes tegelijk
+	maxAccounts int                  // max profielen op schijf
+	queueWait   time.Duration        // hoe lang een verzoek op een slot wacht
+	now         func() time.Time     // injecteerbaar voor de TTL-tests
+	fsync       func(*os.File) error // injecteerbaar: de tests met duizenden bestanden slaan hem over
 }
 
 type linkEntry struct {
@@ -84,7 +85,7 @@ type server struct {
 	cfg config
 	mux *http.ServeMux
 
-	mu       sync.Mutex // beschermt alle tabellen hieronder en de profielbestanden
+	mu       sync.Mutex // beschermt alle tabellen hieronder en hun bestanden op schijf
 	links    map[string]linkEntry
 	accounts int // aantal profielbestanden, begrensd door maxAccounts
 	rooms    map[string]*room
@@ -109,6 +110,9 @@ type server struct {
 func newServer(cfg config) (*server, error) {
 	if cfg.now == nil {
 		cfg.now = time.Now
+	}
+	if cfg.fsync == nil {
+		cfg.fsync = (*os.File).Sync
 	}
 	if cfg.redeemSlots <= 0 {
 		cfg.redeemSlots = defaultSlots
@@ -152,6 +156,9 @@ func newServer(cfg config) (*server, error) {
 		if strings.HasPrefix(e.Name(), ".tmp-") {
 			os.Remove(filepath.Join(cfg.dataDir, e.Name()))
 		}
+	}
+	if err := s.laadPotjes(); err != nil {
+		return nil, err
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/link", s.handleLink)
@@ -440,7 +447,7 @@ func (s *server) handleProfilePut(w http.ResponseWriter, r *http.Request) {
 		Blob:       base64.StdEncoding.EncodeToString(body),
 		Updated:    s.cfg.now().Unix(),
 	}
-	if err := writeFileAtomic(s.profilePath(id), out); err != nil {
+	if err := s.writeFileAtomic(s.profilePath(id), out); err != nil {
 		log.Printf("profiel schrijven: %v", err)
 		http.Error(w, "opslag mislukt", http.StatusInternalServerError)
 		return
@@ -451,7 +458,7 @@ func (s *server) handleProfilePut(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func writeFileAtomic(path string, v any) error {
+func (s *server) writeFileAtomic(path string, v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -468,7 +475,7 @@ func writeFileAtomic(path string, v any) error {
 	// fsync van bestand en map: zonder dit kan een stroomstoring vlak na
 	// de rename een leeg of ontbrekend profiel achterlaten, en de
 	// eerstvolgende restic-run is pas dagen later
-	if err := tmp.Sync(); err != nil {
+	if err := s.cfg.fsync(tmp); err != nil {
 		tmp.Close()
 		return err
 	}
@@ -486,7 +493,7 @@ func writeFileAtomic(path string, v any) error {
 		return err
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return s.cfg.fsync(dir)
 }
 
 /* ---------- kleine helpers ---------- */
@@ -523,7 +530,12 @@ func readJSONStrict(w http.ResponseWriter, r *http.Request, limit int64, v any) 
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
+	writeJSONStatus(w, http.StatusOK, v)
+}
+
+func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		log.Printf("json schrijven: %v", err)
 	}
