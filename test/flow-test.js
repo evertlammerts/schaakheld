@@ -1489,9 +1489,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     p3.status === 200 && d3.room === d2.room && d3.seat !== d2.seat &&
     d3.host === true && d2.host === false);
 
-  /* anti-farm (memo): een online winst geeft NOOIT XP en telt niet mee voor
-     de gedeelde 'wins'-teller of de week-wins; wel winsOnline en het
-     weekdoel "potjes met een vriend". */
+  /* een online winst die telt, geeft 30 XP zoals elk potje tussen kinderen, maar telt niet mee voor de gedeelde
+     'wins'-teller of de week-wins (die horen bij Turbo); wel winsOnline en het weekdoel "potjes met een vriend". */
   var xpVoor = P.xp, pWinsVoor = P.wins, onlineVoor2 = P.c.winsOnline || 0;
   var wkWinsVoor = wkGet(curWeek(), 'wins1') + wkGet(curWeek(), 'wins2') + wkGet(curWeek(), 'wins3');
   var wkOnlineVoor = wkGet(curWeek(), 'online');
@@ -1503,8 +1502,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   commitKid(legalMoves(session.S).find(function (x) { return alg(x.to) === 'a8'; }));
   drainTimers();
   for (i = 0; i < 20; i++) await null;
-  ok('mp: online winst geeft geen XP en raakt de HUD-wins niet',
-    P.xp === xpVoor && P.wins === pWinsVoor && (P.c.winsOnline || 0) === onlineVoor2 + 1);
+  ok('mp: een online winst die telt geeft 30 XP en raakt de HUD-wins niet',
+    P.xp === xpVoor + 30 && P.wins === pWinsVoor && (P.c.winsOnline || 0) === onlineVoor2 + 1);
   ok('mp: online potje telt voor de week als "met een vriend", niet als Turbo-winst',
     wkGet(curWeek(), 'online') === wkOnlineVoor + 1 &&
     wkGet(curWeek(), 'wins1') + wkGet(curWeek(), 'wins2') + wkGet(curWeek(), 'wins3') === wkWinsVoor);

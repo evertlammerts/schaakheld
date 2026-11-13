@@ -1620,7 +1620,7 @@ async function orakelTwee() {
     check('Weghalen haalt alleen dat potje weg', !!d3 && !d3.games.mnopqrstuvwx && Object.keys(d3.games).length === 1);
   });
 
-  /* de eindkaart van een potje tussen kinderen zegt wat telde: geen XP, wel een weekdoel met vrienden */
+  /* de eindkaart van een potje tussen kinderen zegt wat telde: de XP van het potje, en het weekdoel als dat meetelt */
   async function potjeMetDoel(doelFien, doelDaan, kort) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     if (doelFien) a.ev('setPref("weekGoal", ' + JSON.stringify(doelFien) + ')');
@@ -1631,22 +1631,111 @@ async function orakelTwee() {
     await wacht();
     return { a, b };
   }
-  await regel('[4.1] de eindkaart van een potje tussen kinderen: het weekdoel met vrienden gehaald, of geen XP', async function (check) {
+  await regel('[4.1] de eindkaart van een potje tussen kinderen: het weekdoel met vrienden gehaald, of alleen de XP van het potje', async function (check) {
     const { a, b } = await potjeMetDoel({ kind: 'vriend', n: 1 }, null, false);
-    check('Fien haalde haar weekdoel', /Telt mee voor je weekdoel, en dat is nu gehaald: \+60 XP! 🎯/.test(tekstVan(a, 'eindkaart')));
-    check('Daan heeft geen weekdoel met vrienden', /Een potje met een vriend geeft geen XP\. Het telt wel voor een weekdoel met vrienden\./.test(tekstVan(b, 'eindkaart')));
+    check('Fien haalde haar weekdoel', tekstVan(a, 'eindkaart').indexOf('+30 XP. Je weekdoel is gehaald: +60 XP! 🎯') >= 0);
+    check('Daan heeft geen weekdoel met vrienden: alleen de XP van het potje', /\+30 XP/.test(tekstVan(b, 'eindkaart')) &&
+      !/weekdoel/.test(tekstVan(b, 'eindkaart')) && !/geen XP/.test(tekstVan(b, 'eindkaart')));
   });
 
   await regel('[4.1] de eindkaart van een potje tussen kinderen: telt mee voor het weekdoel, of telt niet want te kort', async function (check) {
     const lang = await potjeMetDoel({ kind: 'vriend', n: 3 }, null, false);
-    check('telt mee, het doel is nog niet gehaald', /Telt mee voor je weekdoel\. 🎯/.test(tekstVan(lang.a, 'eindkaart')) && !/gehaald/.test(tekstVan(lang.a, 'eindkaart')));
+    check('telt mee, het doel is nog niet gehaald', tekstVan(lang.a, 'eindkaart').indexOf('+30 XP. Telt mee voor je weekdoel. 🎯') >= 0 && !/gehaald/.test(tekstVan(lang.a, 'eindkaart')));
     const kort = await potjeMetDoel({ kind: 'vriend', n: 3 }, null, true);
     check('te kort: aan beide kanten', [kort.a, kort.b].every(function (x) { return /Dit potje telt niet mee: het was korter dan tien zetten\./.test(tekstVan(x, 'eindkaart')); }));
   });
 
+  /* een potje tussen kinderen dat telt, geeft XP; vanaf het vierde op een dag met hetzelfde kind de helft */
+  const SNEL_MAT = ['f2f3', 'e7e5', 'g2g4', 'd8h4'];
+  const xpVan = function (x) { return x.get('P.xp'); };
+  async function revanche(a, b) {
+    tikTekst(a, 'Revanche');
+    tikTekst(b, 'Revanche');
+    await wacht();
+  }
+  await regel('[4.1] een potje tussen kinderen dat telt, geeft beide kinderen 30 XP: winst en verlies, remise, en te kort niets', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    let xa = xpVan(a), xb = xpVan(b);
+    for (const z of SNEL_MAT) await speel(a, b, z);
+    await wacht();
+    check('mat: wie won en wie verloor, allebei 30', xpVan(a) === xa + 30 && xpVan(b) === xb + 30);
+    check('de kaart zegt het op de plek van de XP', [a, b].every(function (x) { return /\+30 XP/.test(tekstVan(x, 'eindkaart')) && !/geen XP/.test(tekstVan(x, 'eindkaart')); }));
+    await revanche(a, b);
+    xa = xpVan(a); xb = xpVan(b);
+    for (const z of ZETTEN22) await speel(a, b, z);
+    const wit = aanZet(a, b), zwart = wit === a ? b : a;
+    await biedRemise(wit);
+    await wacht(500);
+    tikTekst(zwart, 'Remise aannemen');
+    await wacht(2000);
+    check('remise na twintig halve zetten: allebei 30', eindziet(a, 'Gelijkspel') && xpVan(a) === xa + 30 && xpVan(b) === xb + 30);
+    await revanche(a, b);
+    xa = xpVan(a); xb = xpVan(b);
+    await speel(a, b, 'e2e4');
+    await speel(a, b, 'e7e5');
+    await geefOp(aanZet(a, b));
+    await wacht();
+    check('opgeven voor de twintigste halve zet: niets', xpVan(a) === xa && xpVan(b) === xb &&
+      /Dit potje telt niet mee: het was korter dan tien zetten\./.test(tekstVan(a, 'eindkaart')));
+  });
+
+  await regel('[4.1] vanaf het vierde potje op een dag met hetzelfde kind 15 XP, met de zin; een ander kind en de volgende dag weer 30', async function (check) {
+    zetDatum('2026-11-12T10:00:00');
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan'), c = maakApparaat('Lotte');
+    await samenSpelen(a, b);
+    const kregen = [], zin = /Vandaag krijg je voor potjes met (Daan|Fien) nog 15 XP per potje\./;
+    let eerderNergens = true;
+    for (let i = 0; i < 4; i++) {
+      if (i) await revanche(a, b);
+      const xa = xpVan(a), xb = xpVan(b);
+      for (const z of SNEL_MAT) await speel(a, b, z);
+      await wacht();
+      kregen.push((xpVan(a) - xa) + '/' + (xpVan(b) - xb));
+      if (i < 3) eerderNergens = eerderNergens && [a, b].every(function (x) { return !zin.test(tekstVan(x, 'eindkaart')) && !zin.test(tekstVan(x, 'bubble')); });
+    }
+    check('drie keer 30, dan 15 (' + kregen.join(', ') + ')', kregen.join() === '30/30,30/30,30/30,15/15');
+    check('in de eerste drie potjes nergens de zin over 15 XP', eerderNergens);
+    check('bij het vierde: de zin in de strook, niet op de kaart, en +15 XP op de kaart', [a, b].every(function (x) {
+      return zin.test(tekstVan(x, 'bubble')) && !zin.test(tekstVan(x, 'eindkaart')) && /\+15 XP/.test(tekstVan(x, 'eindkaart'));
+    }));
+    a.ev('if (MP) mpStop(); goHome()');
+    await wacht();
+    await samenSpelen(a, c);
+    let xa = xpVan(a);
+    for (const z of SNEL_MAT) await speel(a, c, z);
+    await wacht();
+    check('met een ander kind: 30', xpVan(a) === xa + 30);
+    a.ev('if (MP) mpStop(); goHome()');
+    b.ev('if (MP) mpStop(); goHome()');
+    await wacht();
+    zetDatum('2026-11-13T10:00:00');
+    await samenSpelen(a, b);
+    xa = xpVan(a);
+    for (const z of SNEL_MAT) await speel(a, b, z);
+    await wacht();
+    check('de volgende dag met hetzelfde kind: weer 30', xpVan(a) === xa + 30);
+  });
+
+  await regel('[3.10] compat: een profiel van de vorige versie houdt zijn XP, krijgt er niets bij door te laden, en zijn dagteller werkt met potjes tussen kinderen', async function (check) {
+    const a0 = maakApparaat('Fien'), b = maakApparaat('Daan');
+    const vandaag = a0.get('todayStr()');
+    const oud = { v: 2, epoch: 0, cnt: { xp: { d1: 500, d2: 20 }, stars: { d1: 40 } }, set: { badges: { winst: true } },
+      lww: { name: { v: 'Fien', t: 1 } }, max: { best: 6 },
+      loc: { streak: 2, lastLevel: 1, day: { date: vandaag, wins: 1, stars: 5, done: {}, allDone: false, winsByLvl: { 1: 2, 2: 0, 3: 0 } } } };
+    a0.opslag.setItem('schaakheld1', JSON.stringify(oud));
+    const a = herlaad(a0);
+    await wacht();
+    check('na laden precies de XP van de vorige versie', a.get('P.xp') === 520);
+    await samenSpelen(a, b);
+    for (const z of SNEL_MAT) await speel(a, b, z);
+    await wacht();
+    check('het eerste potje met Daan geeft 30, en de dagteller van Turbo blijft', a.get('P.xp') === 550 && a.get('P.day.winsByLvl[1]') === 2);
+  });
+
   const doelBijHetEinde = [
-    ['een weekdoel met vrienden', { kind: 'vriend', n: 1 }, 0, 'Telt mee voor je weekdoel, en dat is nu gehaald: +60 XP! 🎯'],
-    ['een weekdoel van een andere soort, dat net vol is van het andere apparaat', { kind: 'opdr', n: 10 }, 10, 'Je weekdoel is gehaald: +60 XP! 🎯']
+    ['een weekdoel met vrienden', { kind: 'vriend', n: 1 }, 0, '+30 XP. Je weekdoel is gehaald: +60 XP! 🎯'],
+    ['een weekdoel van een andere soort, dat net vol is van het andere apparaat', { kind: 'opdr', n: 10 }, 10, '+30 XP. Je weekdoel is gehaald: +60 XP! 🎯']
   ];
   for (const geval of doelBijHetEinde) {
     await regel('[4.1] ' + geval[0] + ', gehaald bij het einde van een potje tussen kinderen: de regel zegt het doel en zijn punten, en de kaart heeft geen tegel', async function (check) {
@@ -1663,13 +1752,13 @@ async function orakelTwee() {
       check('de regel: ' + geval[3], kaart.indexOf(geval[3]) >= 0);
       check('geen regel die zegt dat er geen XP is', !/geen XP/.test(kaart));
       check('geen tegel Weekdoel gehaald op de kaart', !/Weekdoel gehaald/.test(a.get('document.getElementById("eindkaart").innerHTML')));
-      check('de punten één keer', a.get('P.xp') === xp + 60);
+      check('de punten één keer: 30 voor het potje en 60 voor het doel', a.get('P.xp') === xp + 90);
     });
   }
 
   await regel('[4.1] een tweede potje nadat het weekdoel met vrienden gehaald is, zegt niet nog eens dat het nu gehaald is', async function (check) {
     const { a, b } = await potjeMetDoel({ kind: 'vriend', n: 1 }, null, false);
-    check('testopzet: het eerste potje haalde het doel', /nu gehaald/.test(tekstVan(a, 'eindkaart')));
+    check('testopzet: het eerste potje haalde het doel', /Je weekdoel is gehaald/.test(tekstVan(a, 'eindkaart')));
     const xp = a.get('P.xp');
     tikTekst(a, 'Revanche');
     tikTekst(b, 'Revanche');
@@ -1679,7 +1768,7 @@ async function orakelTwee() {
     await wacht();
     check('testopzet: het tweede potje is klaar en telde', a.get('session.S.hist.length') >= 22 &&
       /JIJ WINT|wint dit potje/.test(tekstVan(a, 'eindkaart')) && !/korter dan tien zetten/.test(tekstVan(a, 'eindkaart')));
-    check('niet nog eens gehaald, en er komt geen XP bij', !/gehaald/.test(tekstVan(a, 'eindkaart')) && a.get('P.xp') === xp);
+    check('niet nog eens gehaald, en alleen de 30 van het potje', !/gehaald/.test(tekstVan(a, 'eindkaart')) && a.get('P.xp') === xp + 30);
   });
 
   await regel('[4.1] met een weekdoel van een andere soort zegt de eindkaart van een potje tussen kinderen niet dat het meetelt', async function (check) {

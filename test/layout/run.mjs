@@ -693,30 +693,46 @@ for (const [W, H] of KLEIN) {
 }
 
 /* de volle kaart van een potje tussen kinderen: een potje dat telt (dus met de regel over wat telde), de trofee van
-   het eerste potje, de vriendschapsvraag en een naam van veertien letters, gewonnen of verloren */
-for (const [W, H, uitslag] of [[360, 640, 'w'], [375, 553, 'w'], [375, 647, 'w'], [360, 780, 'w'], [360, 640, 'b'], [360, 780, 'b']]) {
+   het eerste potje, de vriendschapsvraag en een naam van veertien letters, gewonnen of verloren; en het voller: het
+   vierde potje van vandaag met dit kind dat ook het weekdoel haalt; de zin dat het vandaag nog 15 XP geeft, staat dan in
+   de strook boven het bord, in hoogstens drie regels, en het bord blijft staan */
+for (const [W, H, uitslag, vol] of [[360, 640, 'w'], [375, 553, 'w'], [375, 647, 'w'], [360, 780, 'w'], [360, 640, 'b'], [360, 780, 'b'],
+  [360, 640, 'b', true], [375, 553, 'b', true], [375, 647, 'b', true], [360, 780, 'b', true]]) {
   const n = '[4.7] ' + W + 'x' + H + ': de volle eindkaart van een potje tussen kinderen, ' + (uitslag === 'w' ? 'gewonnen' : 'verloren') +
-    ', met een trofee, de vriendschapsvraag en een lange naam: alles past';
+    (vol ? ', het vierde potje van vandaag dat ook het weekdoel haalt' : '') + ', met een trofee, de vriendschapsvraag en een lange naam: alles past';
   GEVALLEN.push({ regels: [n], code: `
       const n = ${JSON.stringify(n)};
       await vers(${W}, ${H});
-      const k = await page.evaluate(async () => {
+      const k = await page.evaluate(async (vol) => {
+        if (vol) { setPref('weekGoal', { kind: 'vriend', n: 1 }); ensureDay(); P.day.vriend = { 'naam:Maximiliaantje': 3 }; saveP(); }
         MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false, revTheirs: false,
           peerName: 'Maximiliaantje', open: true, weg: false, gameId: 'potje-test-1', peerOn: true };
         mpBeginGame();
+        await new Promise(r => setTimeout(r, 300));
+        const bord = () => { const r = document.getElementById('board').getBoundingClientRect(); return [r.top, r.left, r.width, r.height].map(Math.round).join(); };
+        const bordVoor = bord();
         const S = session.S;
         for (let i = 0; i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
         endGame({ over: true, result: ${JSON.stringify(uitslag)}, reason: 'mat' });
         await new Promise(r => setTimeout(r, 300));
         mpOnVriendVraag({ t: 'vriend?', pub: 'A'.repeat(88) });
         await new Promise(r => setTimeout(r, 1200));
+        const st = document.querySelector('#strook .s-txt'), bub = document.getElementById('bubble');
+        const strook = { tekst: bub.textContent, regels: Math.round(bub.getBoundingClientRect().height / parseFloat(getComputedStyle(bub).lineHeight)),
+          past: st.scrollHeight <= st.clientHeight + 1, bordStil: bord() === bordVoor };
         const e = document.getElementById('eindkaart'), er = e.getBoundingClientRect();
         const knoppen = [...e.querySelectorAll('button')].filter(b => b.getClientRects().length);
         return { sh: e.scrollHeight, ch: e.clientHeight, vraag: /Maximiliaantje wil vrienden worden/.test(e.innerText),
           trofee: e.querySelectorAll('.ek-badge').length, telde: [...e.querySelectorAll('p')].some(p => /XP|telt/.test(p.textContent)),
+          vol: /nog 15 XP per potje/.test(strook.tekst) && !/nog 15 XP per potje/.test(e.innerText) && /Je weekdoel is gehaald/.test(e.innerText), strook,
           onder: Math.max(...knoppen.map(b => b.getBoundingClientRect().bottom)) - er.bottom };
-      });
+      }, ${!!vol});
       check(n, 'testopzet: een potje dat telde, een trofee en de vraag met de lange naam', k.vraag && k.trofee >= 1 && k.telde);
+      if (${!!vol}) {
+        check(n, 'testopzet: de zin over 15 XP in de strook en niet op de kaart, het weekdoel op de kaart', k.vol);
+        check(n, 'de zin in de strook: hoogstens drie regels (' + k.strook.regels + '), zonder scrollen', k.strook.regels <= 3 && k.strook.past);
+        check(n, 'het bord blijft staan', k.strook.bordStil);
+      }
       check(n, 'alles past in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
       check(n, 'geen knop onder de rand van de kaart (' + Math.round(k.onder) + ' px)', k.onder <= 1);` });
 }

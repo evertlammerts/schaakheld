@@ -633,6 +633,21 @@ async function orakelFlow() {
     check('na Terug staat er geen tweede venster', !a.open());
   });
 
+  await regel('[4.1] de zin dat een potje met hetzelfde kind vandaag 15 XP geeft, staat vanaf het vierde potje in de strook en niet op de kaart; ervoor nergens', async function (check) {
+    const zin = /Vandaag krijg je voor potjes met Daan nog 15 XP per potje\./;
+    for (const al of [2, 3]) {
+      const a = nieuwKind();
+      a.ev('ensureDay(); P.day.vriend = { "naam:Daan": ' + al + ' }; saveP();');
+      a.ev('MP = { room: "kamer-test-1", seat: "stoel-test-1", host: true, myColor: "w", gameNo: 1, revMine: false, revTheirs: false, ' +
+        'peerName: "Daan", open: false, weg: false, gameId: "potje-test-1", peerOn: true }; mpBeginGame(); var S = session.S; ' +
+        'for (var i = 0; i < 24; i++) { var ms = legalMoves(S); makeMove(S, ms[i % ms.length]); } endGame({ over: true, result: "b", reason: "mat" });');
+      await wacht();
+      const kaart = tekstVan(a, 'eindkaart'), strook = tekstVan(a, 'bubble');
+      if (al === 2) check('het derde potje: 30 XP, en de zin nergens', /\+30 XP/.test(kaart) && !zin.test(kaart) && !zin.test(strook));
+      else check('het vierde potje: 15 XP op de kaart, de zin in de strook en niet op de kaart', /\+15 XP/.test(kaart) && zin.test(strook) && !zin.test(kaart));
+    }
+  });
+
   await regel('[1.3] Revanche na afloop begint meteen een nieuw potje, zonder vraag', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
     a.tik('verderKaart');

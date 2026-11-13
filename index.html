@@ -3694,7 +3694,7 @@ function toonOudEinde(gameId) {
   if (!u || (MP && MP.gameId === gameId)) { renderVerder(); return; }
   const naam = b.r.peerName || 'je maatje';
   session = { kind: 'game', online: true, S: b.S, level: 0, tips: 0, over: false, pending: null, myColor: b.r.myColor,
-    oud: { naam }, eerderAfgelopen: true };
+    oud: { naam, fid: b.r.fid || null }, eerderAfgelopen: true };
   toonSamenScherm(b.S, b.r.myColor, naam);
   endGame(stVanUitslag(u));
   vergeetSamen(gameId);
@@ -7931,7 +7931,19 @@ function openHulp() {
 /* einde van een online potje: neutrale taal (geen Turbo), geen XP (dat
    zou een farm-route zijn), wel de tellers, en de revanche uit het memo:
    alleen binnen deze sessie, kleuren wisselen om */
-function endGameOnline(st, drawTxt, telt, doelGehaald) {
+/* Een potje met een ander kind dat telt, geeft elk kind XP, wie er ook wint. Vanaf het vierde potje op een dag met
+   hetzelfde kind de helft, zoals Turbo na twee winsten: anders is een mat in vier zetten steeds opnieuw een snelle
+   weg. De teller is per apparaat, net als die van Turbo, en begint elke dag opnieuw. */
+const VRIEND_XP = 30, VRIEND_VOL = 3;
+function vriendPotjeXP() {
+  ensureDay();
+  const wie = session.oud ? (session.oud.fid || 'naam:' + session.oud.naam) : (MP && MP.viaFriend) || 'naam:' + mpNaam();
+  const dag = P.day.vriend && typeof P.day.vriend === 'object' ? P.day.vriend : (P.day.vriend = {});
+  const al = +dag[wie] || 0;
+  dag[wie] = al + 1;
+  return al >= VRIEND_VOL ? TIRED_XP : VRIEND_XP;
+}
+function endGameOnline(st, drawTxt, xp, doelGehaald) {
   const ik = session.myColor || 'w', oud = !!session.oud, naam = oud ? session.oud.naam : mpNaam();
   let h, p;
   /* gameStatus meldt remise als result 'd', nooit als een leeg result. Op
@@ -7962,13 +7974,15 @@ function endGameOnline(st, drawTxt, telt, doelGehaald) {
     '<p>Je laatste zet telt niet mee: het potje was al klaar voor je hem deed. Dat kon je niet zien, want er was geen verbinding.</p>' : '';
   if (vervallen) MP.zetVervallen = false;
   const vriendKnop = !oud && MP && !MP.viaFriend ? '<button class="btn plain" id="mpVriend">🤝 Vrienden worden</button>' : '';
-  /* een potje tussen kinderen geeft geen XP; het telt als potje, en alleen een weekdoel met vrienden telt het mee */
+  /* op de plek van de XP, zoals tegen Turbo; het weekdoel staat erbij als het meetelt */
   const vriendDoel = !!(P.weekGoal && P.weekGoal.kind === 'vriend');
-  const week = '<p>' + (!telt ? 'Dit potje telt niet mee: het was korter dan tien zetten.' :
-    vriendDoel && doelGehaald ? 'Telt mee voor je weekdoel, en dat is nu gehaald: +' + GOAL_XP + ' XP! 🎯' :
-    doelGehaald ? 'Je weekdoel is gehaald: +' + GOAL_XP + ' XP! 🎯' :
-    vriendDoel ? 'Telt mee voor je weekdoel. 🎯' : 'Een potje met een vriend geeft geen XP. Het telt wel voor een weekdoel met vrienden.') + '</p>';
-  session.eindZin = vervallen ? 'Je laatste zet telt niet mee: het potje was al klaar.' : h;
+  const week = !xp ? '<p>Dit potje telt niet mee: het was korter dan tien zetten.</p>' :
+    '<p class="ek-xp">+' + xp + ' XP' + (doelGehaald ? '. Je weekdoel is gehaald: +' + GOAL_XP + ' XP! 🎯' :
+      vriendDoel ? '. Telt mee voor je weekdoel. 🎯' : '') + '</p>';
+  /* waarom vandaag minder XP: in de strook, waar anders de titel van de kaart herhaald wordt; de kaart houdt de uitslag,
+     wat verdiend is en wat het kind nu kan doen */
+  session.eindZin = vervallen ? 'Je laatste zet telt niet mee: het potje was al klaar.' :
+    xp === TIRED_XP ? 'Vandaag krijg je voor potjes met ' + escHtml(naam) + ' nog ' + TIRED_XP + ' XP per potje.' : h;
   say(session.eindZin);
   toonEindkaart('<div class="ek-turbo">🐢</div><h2 id="ekKop">' + h + '</h2><p id="ekZin">' + p + '</p>' + vervallen + week + '<!--trofeeen-->' +
     '<div id="ekVraag"></div><p id="ekWacht"></p>' +
@@ -8026,8 +8040,10 @@ function endGame(st, stil) {
       stuurStand();
     }
     const doelVoor = goalDoneWeek(curWeek());
+    const xp = telt ? vriendPotjeXP() : 0;
+    if (xp) addXP(xp, 'Goed gespeeld!');
     if (telt) bumpWeek('online', 1);
-    endGameOnline(st, drawTxt, telt, !doelVoor && goalDoneWeek(curWeek()));
+    endGameOnline(st, drawTxt, xp, !doelVoor && goalDoneWeek(curWeek()));
     return;
   }
   if (telt) bumpWeek('potjes' + session.level, 1);
@@ -8226,7 +8242,7 @@ function todayStr() {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0');
 }
-function freshDay(t) { return { date: t, winsByLvl: { 1: 0, 2: 0, 3: 0 } }; }
+function freshDay(t) { return { date: t, winsByLvl: { 1: 0, 2: 0, 3: 0 }, vriend: {} }; }
 function ensureDay() {
   const t = todayStr();
   if (!P.day || P.day.date !== t) { P.day = freshDay(t); saveP(); }
