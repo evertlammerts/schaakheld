@@ -3118,7 +3118,6 @@ async function haalProfiel() {
   if (r.status !== 200) return false;
   const remote = await openJSON(ACC.secret, 'profiel', new Uint8Array(await r.arrayBuffer()));
   /* alleen opnieuw tekenen als er iets nieuws was: een scherm dat steeds opnieuw opgebouwd wordt, laat een tik vallen */
-  saveP();
   const voor = JSON.stringify(DOC);
   applyRemoteDoc(remote);
   if (JSON.stringify(DOC) !== voor) refreshAfterSync();
@@ -4269,7 +4268,8 @@ function vriendschapOpen() { return !!(MP && (MP.ecdh || MP.vriendWacht) && !MP.
 function naEindeVervalt() {
   if ($('ekWacht')) $('ekWacht').textContent = '';
   if ($('ekVraag')) $('ekVraag').innerHTML = '';
-  if (MP) { MP.revMine = MP.revTheirs = false; MP.ecdh = null; MP.hunVraag = null; MP.vriendWacht = MP.vriendLaat = null; MP.nietVraag = MP.vraagOpzij = null; }
+  /* een ja dat op bevestiging wacht, blijft: wie vroeg kan de vriend al hebben, en alleen zijn antwoord beslist */
+  if (MP) { MP.revMine = MP.revTheirs = false; MP.ecdh = null; MP.hunVraag = null; MP.nietVraag = MP.vraagOpzij = null; }
   for (const id of ['mpRev', 'vrOk']) if ($(id)) { $(id).disabled = false; $(id).textContent = '🔁 Revanche!'; }
   naEindeTekenen();
 }
@@ -4288,7 +4288,7 @@ function naEindeWeg(naam, vriend, vroeg, revanche) {
    netwerk wisselt, neemt zijn stoel over zonder dat de server iemand ziet gaan. */
 function naEindeStaat() {
   if (!MP || !MP.S || !(MP.over || MP.result)) return undefined;
-  const ja = MP.vriendWacht || MP.vriendLaat;
+  const w = MP.vriendWacht || MP.vriendLaat, ja = w && w.pub ? w : null;
   return { rev: !!MP.revMine, vraag: MP.ecdh ? MP.ecdh.pub : null, ja: ja ? ja.pub : null, jaVraag: ja ? ja.vraag : null };
 }
 function mpOnNaEinde(s) {
@@ -4566,6 +4566,14 @@ async function vriendVragen() {
   try { MP.ecdh = await ecdhStart(); } catch (e) { say('Dat lukt hier niet 😕'); vriendKnopTerug(); return false; }
   /* de ander kan intussen weg zijn: dan is er niets gevraagd */
   if (!anderBereikbaar()) { MP.ecdh = null; return false; }
+  /* de vraag van de ander kwam terwijl de sleutel gemaakt werd: dan is ook dit ja zeggen */
+  if (MP.hunVraag) {
+    MP.ecdh = null;
+    dropModal('vriendvraag');
+    if ($('ekVraag')) $('ekVraag').innerHTML = '';
+    vriendJa();
+    return false;
+  }
   mpSend({ t: 'vriend?', pub: MP.ecdh.pub });
   say('Gevraagd! Wachten op ' + mpNaam() + '… 🤝');
   return true;
@@ -4574,14 +4582,18 @@ async function vriendJa() {
   if (!MP || MP.viaFriend || !MP.hunVraag) return;
   const pub = MP.hunVraag;
   MP.hunVraag = null;
+  /* vrienden pas als wie vroeg het bevestigt: anders kan maar één kant de ander als vriend hebben. Het ja staat er
+     meteen, nog zonder sleutel, zodat een groet die intussen komt dezelfde vraag niet opnieuw laat zien. */
+  const w = MP.vriendWacht = { vraag: pub };
   try {
     const e = await ecdhStart();
-    const k = await ecdhFinish(e.kp, pub);
-    /* vrienden pas als wie vroeg het bevestigt: anders kan maar één kant de ander als vriend hebben */
-    MP.vriendWacht = { k, pub: e.pub, vraag: pub };
+    w.k = await ecdhFinish(e.kp, pub);
+    w.pub = e.pub;
+    if (!MP || MP.vriendWacht !== w) return;
     mpSend({ t: 'vriend', pub: e.pub, vraag: pub });
     vriendJaKlok();
   } catch (err) {
+    if (MP && MP.vriendWacht === w) MP.vriendWacht = null;
     /* wie vroeg, wacht anders voor altijd op een antwoord */
     mpSend({ t: 'vriend', mislukt: true });
     say('Dat lukte niet 😕');
@@ -4596,11 +4608,12 @@ function mpOnVriendVraag(m) {
        opzij en wacht op dat antwoord. Zo komt er één K uit, aan beide kanten.
        Zegt dat antwoord nee, dan komt de vraag die opzij lag alsnog. */
     if (MP.ecdh.pub < m.pub) {
-      const e = MP.ecdh;
+      const e = MP.ecdh, w = MP.vriendWacht = { vraag: m.pub };
       MP.ecdh = null;
       ecdhFinish(e.kp, m.pub).then(k => {
-        if (!MP) return;
-        MP.vriendWacht = { k, pub: e.pub, vraag: m.pub };
+        if (!MP || MP.vriendWacht !== w) return;
+        w.k = k;
+        w.pub = e.pub;
         mpSend({ t: 'vriend', pub: e.pub, vraag: m.pub });
         vriendJaKlok();
       }).catch(() => {});
@@ -4638,42 +4651,45 @@ function mpOnVriendVraag(m) {
    sleutel en wacht; wie vroeg, maakt de vriend en zegt ok, of zegt mislukt als zijn vraag er niet meer is. */
 async function mpOnVriend(m) {
   if (!MP) return;
-  /* een ok dat pas na de tien tellen komt, maakt de vriendschap nog af: anders heeft alleen wie vroeg een vriend */
-  const w = MP.vriendWacht || (m.ok === true ? MP.vriendLaat : null);
-  if (w && (m.ok === true || m.mislukt === true)) {
-    MP.vriendWacht = MP.vriendLaat = null;
+  /* Een antwoord noemt het ja waar het bij hoort (ja: zijn sleutel) en geldt alleen voor dat ja: een antwoord op een
+     ouder ja verandert niets. Een ok dat pas na de tien tellen komt, maakt de vriendschap nog af: anders heeft alleen
+     wie vroeg een vriend. */
+  if (m.ja !== undefined && (m.ok === true || m.mislukt === true)) {
+    const wacht = !!MP.vriendWacht && MP.vriendWacht.pub === m.ja, laat = !!MP.vriendLaat && MP.vriendLaat.pub === m.ja;
+    if (!wacht && !laat) return;
+    const w = wacht ? MP.vriendWacht : MP.vriendLaat;
+    if (wacht) MP.vriendWacht = null; else MP.vriendLaat = null;
     if (m.ok === true) { await bewaarVriend(w.k, false); vriendKlaar(w.k); }
-    else { say('Dat lukte niet 😕'); vriendKnopTerug(); naEindeTekenen(); }
+    else if (wacht) { say('Dat lukte niet 😕'); vriendKnopTerug(); naEindeTekenen(); }
     return;
   }
   if (!MP.ecdh) {
     /* een ja dat opnieuw kwam omdat de lijn even weg was: was het al gelukt, dan nog eens ok */
-    if (geldigePub(m.pub)) mpSend(m.pub === MP.vriendKlaarPub ? { t: 'vriend', ok: true } : { t: 'vriend', mislukt: true });
+    if (geldigePub(m.pub)) mpSend(m.pub === MP.vriendKlaarPub ? { t: 'vriend', ok: true, ja: m.pub } : { t: 'vriend', mislukt: true, ja: m.pub });
     return;
   }
   if (m.nee === true) { MP.ecdh = null; say(mpNaam() + ' wil nu even niet 🙂'); vriendKnopTerug(); vraagVanOpzij(); return; }
-  if (m.mislukt === true) { MP.ecdh = null; say(mpNaam() + ' zei ja, maar het lukte niet. Probeer het nog eens.'); vriendKnopTerug(); vraagVanOpzij(); return; }
+  if (m.mislukt === true) { MP.ecdh = null; say(mpNaam() + ' zei ja, maar het lukte niet. Probeer het nog eens.'); vriendKnopTerug(); return; }
   if (!geldigePub(m.pub)) return;
   /* een ja hoort bij één vraag: is dat niet de vraag die hier nu openstaat, dan maakt hij geen vriend. Een app van voor
      deze versie noemt zijn vraag niet; zijn ja geldt, zoals toen, voor de vraag van nu. */
-  if (m.vraag !== undefined && m.vraag !== MP.ecdh.pub) { mpSend({ t: 'vriend', mislukt: true }); return; }
+  if (m.vraag !== undefined && m.vraag !== MP.ecdh.pub) { mpSend({ t: 'vriend', mislukt: true, ja: m.pub }); return; }
   try {
     const k = await ecdhFinish(MP.ecdh.kp, m.pub);
     MP.ecdh = null;
-    MP.vraagOpzij = null;
     MP.vriendKlaarPub = m.pub;
     await bewaarVriend(k, true);
-    mpSend({ t: 'vriend', ok: true });
+    mpSend({ t: 'vriend', ok: true, ja: m.pub });
     vriendKlaar(k);
-  } catch (err) { MP.ecdh = null; mpSend({ t: 'vriend', mislukt: true }); say('Dat lukte niet 😕'); vriendKnopTerug(); }
+  } catch (err) { MP.ecdh = null; mpSend({ t: 'vriend', mislukt: true, ja: m.pub }); say('Dat lukte niet 😕'); vriendKnopTerug(); }
 }
-/* een nee blijft onthouden: komt dezelfde vraag bij een groet weer mee, dan gaat het nee nog eens */
 function vraagVanOpzij() {
   const p = MP && MP.vraagOpzij;
   if (!p) return;
   MP.vraagOpzij = null;
   mpOnVriendVraag({ t: 'vriend?', pub: p });
 }
+/* een nee blijft onthouden: komt dezelfde vraag bij een groet weer mee, dan gaat het nee nog eens */
 function vriendNee() {
   if (MP) { MP.nietVraag = MP.hunVraag; MP.hunVraag = null; }
   naEindeTekenen();

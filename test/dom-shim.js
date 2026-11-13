@@ -723,9 +723,16 @@ function WebSocket(url) {
     self.readyState = 1;
     if (self.onopen) self.onopen({});
   }, 0);
-  const lever = (sock, data) => setTimeout(() => {
-    if (sock.readyState === 1 && sock.onmessage) sock.onmessage({ data });
-  }, 0);
+  /* __server.vertraging(sock, data) geeft een lijn die tijd kost (in ms); zoals een echte verbinding levert hij in
+     volgorde af, ook als een later bericht minder lang onderweg is */
+  const lever = (sock, data) => {
+    const d = typeof __server.vertraging === 'function' ? __server.vertraging(sock, data) : 0;
+    const op = Math.max(__klok + d, sock.__laatsteLevering || 0);
+    sock.__laatsteLevering = op;
+    setTimeout(() => {
+      if (sock.readyState === 1 && sock.onmessage) sock.onmessage({ data });
+    }, op - __klok);
+  };
   const peer = () => {
     const rm = self._rm;
     if (!rm) return null;
