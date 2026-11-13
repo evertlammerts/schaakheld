@@ -80,7 +80,7 @@ func TestPotjeTabelTeltUitnodigingenNietMee(t *testing.T) {
 func TestPotjeAlleenEenJSONObject(t *testing.T) {
 	s, _ := newTestServer(t, nil)
 	bewijs, bus := potjeBus("a")
-	goed := string(jsonBody(t, map[string]string{"bus": bus, "bewijs": bewijs, "blob": "x"}))
+	goed := string(jsonBody(t, map[string]string{"bus": bus, "bewijs": bewijs, "blob": "x", "als": ""}))
 	for _, staart := range []string{" x", `{"naam":"Fien"}`, "}", `]{"naam":"Fien"}`} {
 		if c := do(t, s, "POST", "/v1/potje", "", []byte(goed+staart)).Code; c != 400 {
 			t.Errorf("met %q erachter: %d, wil 400", staart, c)
@@ -110,7 +110,7 @@ func TestBusEnPotjeGrensInBytes(t *testing.T) {
 	if c := busPost(t, s, bus, bewijs, vol); c != 204 {
 		t.Errorf("uitnodiging, 2048 keer é: %d, wil 204", c)
 	}
-	getal := []byte(`{"bus":"` + bus + `","bewijs":"` + bewijs + `","blob":42}`)
+	getal := []byte(`{"bus":"` + bus + `","bewijs":"` + bewijs + `","blob":42,"als":""}`)
 	for _, pad := range []string{"/v1/potje", "/v1/bus"} {
 		if c := do(t, s, "POST", pad, "", getal).Code; c != 400 {
 			t.Errorf("%s met een getal als blob: %d, wil 400", pad, c)

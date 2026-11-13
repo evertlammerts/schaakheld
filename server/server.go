@@ -523,7 +523,12 @@ func readJSONStrict(w http.ResponseWriter, r *http.Request, limit int64, v any) 
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
+	writeJSONStatus(w, http.StatusOK, v)
+}
+
+func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		log.Printf("json schrijven: %v", err)
 	}

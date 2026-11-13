@@ -113,18 +113,41 @@ func (s *server) handleBusPost(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// versie van een briefje: sha256 van zijn tekst in kleine hex, zodat elk
+// apparaat hem zelf kan uitrekenen
+func versie(blob string) string {
+	sum := sha256.Sum256([]byte(blob))
+	return hex.EncodeToString(sum[:])
+}
+
+// als is een versie, of "" voor een bus waar niets in staat
+func versieGeldig(v string) bool {
+	return v == "" || busRe.MatchString(v)
+}
+
 // handlePotjePost schrijft de stand van een potje in een potjesbus, met
 // de regels van handleBusPost, behalve: een volle tabel maakt plaats in
 // plaats van te weigeren, want weigeren zou na een vloed van verzonnen
 // bussen een maand lang geen nieuw potje toelaten, terwijl een weggeduwde
 // bus gewoon opnieuw geschreven wordt door zijn kant. En onbekende velden
 // worden geweigerd.
+//
+// Een schrijven (ook wissen) zegt in als welke versie de schrijver las.
+// Alleen als dat de versie is die de server houdt, gaat het door; anders
+// verandert er niets en krijgt de schrijver 409 met wat er staat. Zo heeft
+// elke verandering precies een winnaar, en hoeft geen apparaat twee
+// versies samen te voegen.
 func (s *server) handlePotjePost(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Bus, Bewijs, Blob string }
+	var in struct {
+		Bus, Bewijs, Blob string
+		Als               *string
+	}
 	if !readJSONStrict(w, r, maxBusBlob+1024, &in) {
 		return
 	}
-	if !busGeldig(in.Bus, in.Bewijs, in.Blob) {
+	// zonder als zou een schrijven niet zeggen wat het las, en dan kunnen twee
+	// schrijvers allebei winnen
+	if !busGeldig(in.Bus, in.Bewijs, in.Blob) || in.Als == nil || !versieGeldig(*in.Als) {
 		http.Error(w, "ongeldig verzoek", http.StatusBadRequest)
 		return
 	}
@@ -136,13 +159,21 @@ func (s *server) handlePotjePost(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sweepPotjesLocked()
+	p, bestaat := s.potjes[in.Bus]
+	huidig := ""
+	if bestaat {
+		huidig = versie(p.blob)
+	}
+	if *in.Als != huidig {
+		writeJSONStatus(w, http.StatusConflict, map[string]string{"blob": p.blob})
+		return
+	}
 	if in.Blob == "" {
 		delete(s.potjes, in.Bus)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	now := s.cfg.now()
-	p, bestaat := s.potjes[in.Bus]
 	if !bestaat && len(s.potjes) >= maxPotjes {
 		s.evictOldestPotjeLocked()
 	}
@@ -207,5 +238,5 @@ func (s *server) handleBusCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.mu.Unlock()
-	writeJSON(w, map[string]any{"blobs": out, "ongewijzigd": ongewijzigd})
+	writeJSON(w, map[string]any{"blobs": out, "ongewijzigd": ongewijzigd, "nu": now.Unix()})
 }
