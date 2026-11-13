@@ -2342,4 +2342,116 @@ async function orakelTwee6() {
     fien = await opent(fien);
     check('Fien ziet dat Mees opgaf', /Mees gaf op\. Jij wint dit potje!/.test(tekstVan(fien, 'verder')));
   });
+
+  /* ================= deel E: het aanbod op twee apparaten, de eigen eindkaart van de remise, weghalen dat nog bezorgt ================= */
+
+  await regel('[6.6] een tweede apparaat van wie remise aanbood: geen tweede aanbod voor dezelfde zet, en neemt Fien het aan, dan is het remise op de tablet', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await aanbodVanMees(mees, fien);
+    const busM = await potjesbus(mees, fid, true);
+    let tab = await tweedeApparaat(mees);
+    await tijd(30000);
+    stopApparaat(mees);
+    const voor = JSON.parse(JSON.stringify(__server.potjes[busM]));
+    naarSpelen(tab);
+    tab.tik('verderKaart');
+    await wacht();
+    await biedRemise(tab);
+    await tijd(10000);
+    check('de strook zegt het eigen aanbod met de dag', /Je biedt Fien remise aan\./.test(zegt(tab)));
+    check('de bus is niet veranderd: geen tweede aanbod', __server.potjes[busM].blob === voor.blob && __server.potjes[busM].veranderd === voor.veranderd);
+    tab.tik('backBtn');
+    await wacht();
+    schuifKlok(DAG);
+    fien = await opent(fien);
+    fien.tik('verderKaart');
+    await wacht();
+    tikTekst(fien, 'Remise aannemen');
+    await tijd(10000);
+    stopApparaat(fien);
+    await tijd(40000);
+    check('op de tablet is het remise: Fien nam het aanbod aan', /Je potje met Fien is remise/.test(tekstVan(tab, 'verder')) || /nam je aanbod aan/.test(tekstVan(tab, 'eindkaart')));
+  });
+
+  await regel('[6.6] de remise na veertien dagen op een open potje: bij allebei de eigen woorden en Nieuw potje met, nooit "afgesproken" en geen Revanche', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await aanbodVanMees(mees, fien);
+    stopApparaat(mees);
+    schuifKlok(14 * DAG + UUR);
+    fien = await opent(fien);
+    fien.tik('verderKaart');
+    await wacht();
+    mees = herlaad(mees);
+    vierWeg(mees);
+    naarSpelen(mees);
+    mees.tik('verderKaart');
+    await tijd(60000);
+    const em = tekstVan(mees, 'eindkaart'), ef = tekstVan(fien, 'eindkaart');
+    check('Mees: zijn eigen woorden', /Je bood het op .+ aan, en na twee weken werd het vanzelf remise\./.test(em) && /Goed gespeeld, allebei!/.test(em));
+    check('Fien: de woorden van de remise na twee weken', /Mees bood het op .+ aan, en na twee weken werd het vanzelf remise\./.test(ef));
+    check('bij allebei Nieuw potje met, geen Revanche en geen "afgesproken"', kanTikken(mees, 'Nieuw potje met Fien') && kanTikken(fien, 'Nieuw potje met Mees') &&
+      !/Revanche|afgesproken/.test(em + ef));
+  });
+
+  for (const [hoe, netwerk] of [['zonder netwerk', 'uit'], ['met een herstart van de server voordat Fien leest', 'herstart']]) {
+    await regel('[6.8] Opgeven en weghalen ' + hoe + ': Fien staat niet meer in de lijst van Mees, en toch hoort Fien bij het openen dat Mees opgaf', async function (check) {
+      zetDatum('2026-11-14T10:00:00');
+      let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+      const fid = await vriendenpotje(mees, fien);
+      await potjeTot(mees, fien, 4, mees);
+      stopApparaat(fien);
+      mees.tik('backBtn');
+      await wacht();
+      if (netwerk === 'uit') geenNetwerk(mees);
+      tikInRij(mees, fid, '⋯');
+      await wacht();
+      tikTekst(mees, 'Vriend weghalen');
+      await wacht();
+      tikTekst(mees, 'Opgeven en weghalen');
+      await tijd(10000);
+      mees.tik('tabVrienden');
+      check('Fien staat niet meer in de lijst', !vriendRij(mees, fid));
+      if (netwerk === 'uit') { weerNetwerk(mees); await tijd(40000); }
+      else { await tijd(20000); stopApparaat(mees); __herstartServer(); mees = await opent(mees); await tijd(40000); }
+      stopApparaat(mees);
+      schuifKlok(DAG);
+      fien = await opent(fien);
+      check('Fien ziet dat Mees opgaf', /Mees gaf op\. Jij wint dit potje!/.test(tekstVan(fien, 'verder')));
+    });
+  }
+
+  await regel('[6.8] een vriend weghalen die jou uitdaagde, is een Nu niet: die vriend hoort dat je even niet kunt', async function (check) {
+    const { mees, fien, fid } = await uitdagingVanMees();
+    stopApparaat(mees);
+    tikInRij(fien, fid, '⋯');
+    await wacht();
+    tikTekst(fien, 'Vriend weghalen');
+    await wacht();
+    tikTekst(fien, 'Ja, weghalen');
+    await tijd(20000);
+    const m = await opent(mees);
+    check('Mees hoort dat Fien even niet kan', /Fien kan nu even niet/.test(m.scherm()));
+  });
+
+  await regel('[6.6] een remise-aanbod zonder netwerk: tot het op de server staat, zegt de strook dat het gaat zodra er verbinding is, en de laatste dag telt vanaf dat moment', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 22, mees);
+    stopApparaat(fien);
+    geenNetwerk(mees);
+    await tijd(3000);
+    await biedRemise(mees);
+    await zetUit(RUSTIG, mees);
+    await wacht();
+    check('de strook zegt dat het aanbod gaat zodra er verbinding is', /zodra er weer verbinding is/.test(zegt(mees)) && /remise/.test(zegt(mees)));
+    schuifKlok(3 * DAG);
+    const tNet = Date.now();
+    weerNetwerk(mees);
+    await tijd(40000);
+    const r = vriendenpotjeMet(mees, fid);
+    check('de dag van het aanbod is de dag dat het op de server kwam', !!r && !!r.offer && r.offer.t >= tNet);
+  });
 }
