@@ -55,7 +55,7 @@ async function orakelFlow6() {
 
   /* ================= vriendenpotjes die dagen doorlopen ================= */
 
-  await nogNiet('[6.9] twee potjes tegen Turbo, een rondje en twee vriendenpotjes: de kaart, één telregel en het blad in de vaste volgorde', async function (check) {
+  await regel('[6.9] twee potjes tegen Turbo, een rondje en twee vriendenpotjes: de kaart, één telregel en het blad in de vaste volgorde', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const nu = Date.now();
     const a = await kind(opslagMetVrienden([MET_FIEN_MEES_AAN_ZET, { fid: 'vriendsem01', naam: 'Sem', zetten: ['c2c4'], updated: nu - 2 * DAG }], {
@@ -89,7 +89,7 @@ async function orakelFlow6() {
     check('alleen het vriendenpotje: de kaart, en geen regel', /Fien heeft gezet\. Jij bent aan zet\./.test(tekstVan(b, 'verder')) && ookNogRegels(b).length === 0);
   });
 
-  await nogNiet('[6.9] de telregel noemt de soorten in de vaste volgorde, met "een" bij één en een getal bij meer', async function (check) {
+  await regel('[6.9] de telregel noemt de soorten in de vaste volgorde, met "een" bij één en een getal bij meer', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const turbo = turboPotjes({ 2: [['e2e4', 'e7e5'], Date.now() - UUR] });
     const a = await kind(opslagMetVrienden([MET_FIEN_MEES_AAN_ZET], { 'schaakheld-potje': turbo,

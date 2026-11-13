@@ -1669,8 +1669,15 @@ function mpStopVragen() {
 function renderFriends() {
   const el = $('friendList');
   if (!el) return;
+  /* een vriend met een stil potje (een week of langer geen zet) zakt naar het eind van de lijst */
+  const stand = {};
+  for (const id in P.friends || {}) {
+    const g = !P.friends[id].weg && samenMet(id), r = g && (g.r || (samenRauw() || {})[g.gameId]);
+    const dagen = g && g.S.turn !== g.kleur && r ? dagenGeleden(r.beurtT || r.updated || Date.now()) : 0;
+    stand[id] = { g, dagen, stil: dagen >= 7 };
+  }
   const ids = Object.keys(P.friends || {}).filter(id => !P.friends[id].weg)
-    .sort((a, b) => (P.friends[b].since || 0) - (P.friends[a].since || 0));
+    .sort((a, b) => (stand[a].stil - stand[b].stil) || ((P.friends[b].since || 0) - (P.friends[a].since || 0)));
   if (!ids.length) {
     el.innerHTML = '<div class="note" style="margin:0 0 4px">Nog geen vrienden. Speel eerst een potje samen (hieronder), dan kunnen jullie vrienden worden.</div>';
     return;
@@ -1678,13 +1685,14 @@ function renderFriends() {
   el.innerHTML = ids.map(id => {
     const f = P.friends[id], naam = escHtml(f.naam);
     const wacht = !!INV && INV.fid === id, loopt = !wacht && lopendMet(id), uitd = loopt && loopt.state === 'uitdaging' ? loopt : null;
-    const g = !wacht && !uitd && samenMet(id), beurt = !!g && g.S.turn === g.kleur;
+    const g = !wacht && !uitd && stand[id].g, beurt = !!g && g.S.turn === g.kleur;
     const sub = wacht ? 'Wachten tot ' + naam + ' SchaakHeld opent…' :
       uitd ? (uitd.mijnUitdaging ? 'Uitgedaagd · nog geen antwoord' : naam + ' daagt je uit · Jij speelt met ' + (uitd.myColor === 'w' ? 'wit' : 'zwart') + '.') :
-      g ? (beurt ? 'Jij bent aan zet.' : naam + ' is aan zet.') : 'vrienden sinds ' + friendSince(f);
+      g ? (beurt ? (g.S.hist.length ? naam + ' heeft gezet.' : 'Jij bent aan zet.') : stand[id].stil ? escHtml(stilZin(f.naam, stand[id].dagen)) :
+        naam + ' is aan zet · ' + dagWoord(stand[id].dagen)) : 'vrienden sinds ' + friendSince(f);
     const knop = wacht ? '<button class="btn plain small" data-cancel="' + id + '">Stop</button>' :
       uitd ? (uitd.mijnUitdaging ? '' : '<button class="btn plain small" data-uitdja="' + uitd.gameId + '">Ja, spelen!</button>') :
-      g ? '<button class="btn plain small" data-speel="' + id + '">Speel verder</button>' :
+      g ? '<button class="btn plain small" data-speel="' + id + '">' + (beurt ? 'Jij bent aan zet' : 'Bekijk') + '</button>' :
       '<button class="btn plain small" data-invite="' + id + '">Uitnodigen</button>';
     return '<div class="friend' + (wacht ? ' wait' : '') + (beurt ? ' beurt' : '') + '" data-fid="' + id + '">' +
       '<div class="f-kop"><span class="f-emo">' + friendTrio(f.k) + '</span><span class="f-naam">' + naam + '</span>' +
@@ -3621,18 +3629,35 @@ function kiesOefening(P, st, now) {
    worden, belooft niet dat het blijft staan. */
 function samenItem(s) {
   const naam = s.peerName || 'je maatje', n = (s.moves || []).length, ikWit = s.myColor !== 'b', beurt = (n % 2 === 0) === ikWit;
-  const actie = { go: 'samen', gameId: s.gameId };
+  const actie = { go: 'samen', gameId: s.gameId }, titel = 'Je potje met ' + naam, tijd = +s.beurtT || 0;
   /* tussen vrienden staat een aanbod veertien dagen: de kaart zegt tot welke dag het kind kan antwoorden */
-  if (s.bod) return { rule: 'R1', title: naam + ' biedt remise aan', button: 'Antwoord', vriend: true, volgorde: 1,
-    text: !s.vriend ? 'Remise is gelijkspel: niemand wint, niemand verliest.' : s.bodT && antwoordDagVoorbij(s.bodT) ?
-      'Antwoorden kan nu nog.' : 'Antwoorden kan tot en met ' + antwoordDag(s.bodT || Date.now()) + '.',
-    ook: naam + ' biedt remise aan', action: actie };
-  return { rule: 'R1', title: 'Verder: je potje met ' + naam, button: 'Speel verder', vriend: true, naam,
-    wat: s.nietBewaard || s.eigenBod ? null : 'potje', volgorde: beurt ? 1 : 5,
-    text: s.zonderNet ? 'Er is nu geen verbinding. Probeer het straks nog eens.' : s.eigenBod ? 'Je bood remise aan. ' + naam + ' is aan zet.' :
-      zinDoetMee(s.mijnUitdaging, n, s.myColor, naam) || (!beurt ? naam + ' is aan zet.' :
-        s.vriend && n ? naam + ' heeft gezet. Jij bent aan zet.' : 'Jij bent aan zet.'),
-    ook: 'je potje met ' + naam, action: actie };
+  if (s.bod) {
+    const zin = !s.vriend ? 'Remise is gelijkspel: niemand wint, niemand verliest.' : s.bodT && antwoordDagVoorbij(s.bodT) ?
+      'Antwoorden kan nu nog.' : 'Antwoorden kan tot en met ' + antwoordDag(s.bodT || Date.now()) + '.';
+    return { rule: 'R1', title: naam + ' biedt remise aan', button: 'Antwoord', vriend: true, volgorde: 1, tijd, soort: 'potje',
+      text: zin, ook: naam + ' biedt remise aan', rij: { titel, plek: naam + ' biedt remise aan. ' + zin }, action: actie };
+  }
+  /* een vriend die een week of langer niet zette: het potje zakt naar het eind, en de kaart zegt hoe lang al */
+  const dagen = s.vriend && !beurt && tijd ? dagenGeleden(tijd) : 0, stil = dagen >= 7;
+  const zin = s.zonderNet ? 'Er is nu geen verbinding. Probeer het straks nog eens.' : s.eigenBod ? 'Je bood remise aan. ' + naam + ' is aan zet.' :
+    stil ? stilZin(naam, dagen) : zinDoetMee(s.mijnUitdaging, n, s.myColor, naam) || (!beurt ? naam + ' is aan zet.' :
+      s.vriend && n ? naam + ' heeft gezet. Jij bent aan zet.' : 'Jij bent aan zet.');
+  return { rule: 'R1', title: 'Verder: je potje met ' + naam, button: 'Speel verder', vriend: true, naam, opDagen: !!s.vriend,
+    wat: s.nietBewaard || s.eigenBod ? null : 'potje', volgorde: beurt ? 1 : stil ? 7 : 5, tijd, soort: 'potje', text: zin,
+    ook: 'je potje met ' + naam, action: actie,
+    rij: { titel, plek: s.vriend && !beurt && !stil && !s.eigenBod && !s.zonderNet ? naam + ' is aan zet · ' + dagWoord(dagen) : zin } };
+}
+/* kalenderdagen op de klok van dit apparaat, en hoe een kind ze leest */
+function dagenGeleden(t) {
+  const a = new Date(t), b = new Date();
+  a.setHours(0, 0, 0, 0);
+  b.setHours(0, 0, 0, 0);
+  return Math.round((b - a) / 86400000);
+}
+function dagWoord(n) { return n <= 0 ? 'vandaag' : n === 1 ? 'gisteren' : n + ' dagen geleden'; }
+function stilZin(naam, n) {
+  return naam + ' heeft al ' + (n < 14 ? 'een week' : n < 21 ? 'twee weken' : n < 30 ? 'drie weken' : n < 60 ? 'een maand' :
+    Math.floor(n / 30) + ' maanden') + ' niet gezet.';
 }
 /* wie uitdaagde, hoort tot de eigen eerste zet dat de vriend meedoet */
 function zinDoetMee(mijn, n, kleur, naam) {
@@ -3647,9 +3672,12 @@ function nextStep(P, ctx) {
   if (ctx.samen) bezig.push(samenItem(ctx.samen));
   /* de volgorde van wat bezig is: een vriendenpotje waarin het kind aan zet is, een vraag om te spelen, een potje
      tegen Turbo, een rondje, een vriendenpotje waarin de vriend aan zet is, de eigen uitdaging, stille potjes */
-  if (ctx.uitnodiging) bezig.push({ rule: 'R1i', title: ctx.uitnodiging.naam + ' wil spelen', button: 'Ja, spelen!', volgorde: 2,
-    text: 'De uitnodiging is nog ' + ctx.uitnodiging.minuten + ' minuten geldig.', ook: ctx.uitnodiging.naam + ' wil spelen',
-    action: { go: 'uitnodiging' }, nee: { go: 'uitnodigingNee' } });
+  if (ctx.uitnodiging) {
+    const zin = 'De uitnodiging is nog ' + ctx.uitnodiging.minuten + ' minuten geldig.';
+    bezig.push({ rule: 'R1i', title: ctx.uitnodiging.naam + ' wil spelen', button: 'Ja, spelen!', volgorde: 2, soort: 'uitdaging',
+      text: zin, ook: ctx.uitnodiging.naam + ' wil spelen', rij: { titel: ctx.uitnodiging.naam + ' wil spelen', plek: zin },
+      action: { go: 'uitnodiging' }, nee: { go: 'uitnodigingNee' }, vraag: { go: 'uitnodigingVraag' } });
+  }
   if (ctx.potje) {
     const n = ctx.potje.moves.length, zet = Math.floor(n / 2) + 1, naam = TURBO_NAMES[ctx.potje.level];
     bezig.push({ rule: 'R2', title: 'Verder: je potje tegen ' + naam, button: 'Speel verder', wat: 'potje', volgorde: 3,
@@ -3658,7 +3686,8 @@ function nextStep(P, ctx) {
   }
   for (const k of DRILL_KINDS) {
     const r = ctx.rondjes && ctx.rondjes[k];
-    if (r) bezig.push({ rule: 'R2b', title: 'Verder: ' + DRILLS[k].naam, button: 'Ga verder', wat: 'rondje', volgorde: 4,
+    if (r) bezig.push({ rule: 'R2b', title: 'Verder: ' + DRILLS[k].naam, button: 'Ga verder', wat: 'rondje', volgorde: 4, soort: 'rondje',
+      rij: { titel: 'Je rondje ' + DRILLS[k].naam, plek: 'opdracht ' + (r.round + 1) + ' van 5' },
       text: 'Opdracht ' + (r.round + 1) + ' van 5. Je sterren van dit rondje staan er nog.',
       ook: 'je rondje ' + DRILLS[k].naam + ', opdracht ' + (r.round + 1) + ' van 5', action: { go: 'rondje', kind: k } });
   }
@@ -3714,6 +3743,8 @@ function doeActie(a) {
   else if (a.go === 'uitdagingJa') uitdagingJa(a.gameId);
   else if (a.go === 'uitdagingNee') uitdagingNee(a.gameId);
   else if (a.go === 'uitnodigingNee') uitnodigingNee();
+  else if (a.go === 'uitdagingVraag') uitdagingVraag(a.gameId);
+  else if (a.go === 'uitnodigingVraag') { if (uitnodigingWacht && !showInvite(uitnodigingWacht.fid, uitnodigingWacht.inv)) renderVerder(); }
   else if (a.go === 'gestopt') toonKamerWeg();
   else if (a.go === 'oud') toonOudEinde(a.gameId);
   else if (a.go === 'uitnodiging') { if (uitnodigingWacht) uitnodigingJa(uitnodigingWacht.fid, uitnodigingWacht.inv); }
@@ -3725,8 +3756,9 @@ function doeActie(a) {
    worden. */
 function vriendItems(alle) {
   const uit = [];
-  if (samenWeg) uit.push({ rule: 'R1', title: 'Je potje met ' + samenWeg.naam + ' is gestopt', button: 'Bekijk', volgorde: 0,
-    text: 'De verbinding viel weg. Dit potje telt voor niemand mee.', ook: 'je potje met ' + samenWeg.naam, action: { go: 'gestopt' } });
+  if (samenWeg) uit.push({ rule: 'R1', title: 'Je potje met ' + samenWeg.naam + ' is gestopt', button: 'Bekijk', volgorde: 0, soort: 'potje',
+    text: 'De verbinding viel weg. Dit potje telt voor niemand mee.', ook: 'je potje met ' + samenWeg.naam, action: { go: 'gestopt' },
+    rij: { titel: 'Je potje met ' + samenWeg.naam + ' is gestopt', plek: 'De verbinding viel weg.' } });
   const lijst = alle.slice();
   if (MP && MP.S && MP.gameId && !lijst.some(b => b.r.gameId === MP.gameId)) lijst.push({ r: { gameId: MP.gameId }, S: MP.S });
   for (const b of lijst) {
@@ -3736,20 +3768,23 @@ function vriendItems(alle) {
     const uitslag = hier ? MP.result : b.r.result, gezien = hier ? MP.shown : b.r.shown === true;
     const bod = hier ? remiseVraagOpen() : !!b.r.offer && b.r.offer.by !== kleur && !b.r.offer.answer && b.r.offer.ply === S.hist.length;
     const aanbod = hier ? MP.offer : b.r.offer;
+    const kleurZin = 'Jij speelt met ' + (kleur === 'w' ? 'wit' : 'zwart') + '.';
     if (b.r.state === 'uitdaging') uit.push(b.r.mijnUitdaging ?
-      { rule: 'R1', title: 'Je uitdaging aan ' + naam, button: 'Bekijk', volgorde: 6, text: 'Nog geen antwoord van ' + naam + '.',
-        ook: 'je uitdaging aan ' + naam + ', nog geen antwoord', action: { go: 'vrienden' } } :
-      { rule: 'R1u', title: naam + ' daagt je uit', button: 'Ja, spelen!', volgorde: 2, text: 'Jij speelt met ' + (kleur === 'w' ? 'wit' : 'zwart') + '.',
-        ook: naam + ' daagt je uit', action: { go: 'uitdagingJa', gameId: b.r.gameId }, nee: { go: 'uitdagingNee', gameId: b.r.gameId } });
+      { rule: 'R1', title: 'Je uitdaging aan ' + naam, button: 'Bekijk', volgorde: 6, soort: 'uitdaging', text: 'Nog geen antwoord van ' + naam + '.',
+        ook: 'je uitdaging aan ' + naam + ', nog geen antwoord', action: { go: 'vrienden' }, rij: { titel: 'Je uitdaging aan ' + naam, plek: 'nog geen antwoord' } } :
+      { rule: 'R1u', title: naam + ' daagt je uit', button: 'Ja, spelen!', volgorde: 2, soort: 'uitdaging', text: kleurZin,
+        ook: naam + ' daagt je uit', action: { go: 'uitdagingJa', gameId: b.r.gameId }, nee: { go: 'uitdagingNee', gameId: b.r.gameId },
+        vraag: { go: 'uitdagingVraag', gameId: b.r.gameId }, rij: { titel: naam + ' daagt je uit', plek: kleurZin } });
     /* een afgelopen potje dat dit kind al zag, wacht alleen nog tot de ander het weet: geen kaart */
     else if (uitslag && !gezien) {
       /* een potje met een vriend dat telde op een ander apparaat van dit kind, toonde dat apparaat al */
       if (vriend && DOC.set.potjes[b.r.gameId]) continue;
       const e = vriend ? kaartEinde(uitslag, kleur, naam) : { titel: 'Je potje met ' + naam + ' is klaar', zin: 'Kijk hoe het afliep.' };
-      uit.push({ rule: 'R1', title: e.titel, button: 'Bekijk', volgorde: 0, text: e.zin, ook: 'je potje met ' + naam,
-        action: hier ? { go: 'samen', gameId: b.r.gameId } : { go: 'oud', gameId: b.r.gameId } });
+      uit.push({ rule: 'R1', title: e.titel, button: 'Bekijk', volgorde: 0, soort: 'potje', text: e.zin, ook: 'je potje met ' + naam,
+        rij: { titel: e.titel, plek: e.zin }, action: hier ? { go: 'samen', gameId: b.r.gameId } : { go: 'oud', gameId: b.r.gameId } });
     }
     else if (!uitslag) uit.push(samenItem({ peerName: naam, moves: S.hist.map(u => moveKey(u.m)), myColor: kleur, bod, vriend,
+      beurtT: b.r.beurtT || b.r.updated || ((samenRauw() || {})[b.r.gameId] || {}).beurtT,
       bodT: bod ? (hier ? MP.offer : b.r.offer).t : null, eigenBod: vriend && !!aanbod && aanbod.by === kleur && !aanbod.answer && aanbod.ply === S.hist.length,
       gameId: b.r.gameId, mijnUitdaging: !!b.r.mijnUitdaging, zonderNet: (hier && !!MP.room && !MP.open && MP.pogingen > 0) || (vriend && potjesNetFout),
       nietBewaard: hier && !!MP.nietBewaard }));
@@ -3760,11 +3795,12 @@ function vriendItems(alle) {
 /* De Verder-kaart: wat er bezig is, het vriendenpotje en dan het bewaarde potje eerst; anders het voorstel */
 function renderVerder() {
   const el = $('verder');
-  const b = leesPotje(), rj = leesRondjes(), alle = leesSamenAlles();
+  const rj = leesRondjes(), alle = leesSamenAlles();
   const v = vriendItems(alle);
-  const r = nextStep(P, { now: Date.now(), potje: b && !b.kapot ? b.r : null, rondjes: Object.keys(rj).length ? rj : null,
+  const r = nextStep(P, { now: Date.now(), potje: null, rondjes: Object.keys(rj).length ? rj : null,
     samen: v.samen, uitnodiging: uitnodigingOpKaart(), moment: null });
-  const bezig = v.items.concat(r.bezig).sort((x, y) => (x.volgorde || 0) - (y.volgorde || 0));
+  /* in volgorde, en binnen dezelfde soort het nieuwste eerst: de laatste zet, het laatst gespeelde potje */
+  const bezig = v.items.concat(turboItems(), r.bezig).sort((x, y) => ((x.volgorde || 0) - (y.volgorde || 0)) || ((y.tijd || 0) - (x.tijd || 0)));
   const kapotKey = alle.kapot ? SAMEN_KEY : potjeKapot() ? POTJE_KEY : null;
   const eerste = kapotKey || !bezig.length ? r : bezig[0];
   const ook = kapotKey ? bezig : bezig.slice(1);
@@ -3778,12 +3814,13 @@ function renderVerder() {
     '<button class="verder-kaart" id="verderKaart"><span class="vk-titel">' + escHtml(eerste.title) + '</span>' +
     '<span class="vk-zin">' + escHtml(eerste.text) + '</span><span class="vk-knop">' + (eerste.button === 'Bekijk' ? '' : '▶ ') +
     escHtml(eerste.button) + '</span></button>';
-  ook.forEach((it, i) => {
-    h += '<button class="verder-ook" data-ook="' + i + '"><span>Ook nog: ' + escHtml(it.ook) + '</span><span class="vo-pijl">›</span></button>';
-  });
-  /* een vriendenpotje leeft hoogstens een dag in de kamer: geen belofte voor altijd */
-  if (!kapotKey && eerste.wat) h += '<div class="verder-bewaard">✔ Je ' + eerste.wat + (eerste.vriend ?
-    ' blijft vandaag staan op ' + ditApparaat() + '.' : ' blijft staan op ' + ditApparaat() + ', ook als je de app dichtdoet.') + '</div>';
+  /* onder de kaart één regel, hoeveel er ook bezig is: die noemt het ene andere ding, of telt de rest en opent het blad */
+  if (ook.length) h += '<button class="verder-ook" id="ookNog"><span>' + escHtml(ook.length === 1 ? 'Ook nog: ' + ook[0].ook : 'Ook nog ' + telLijst(ook)) +
+    '</span><span class="vo-pijl">›</span></button>';
+  /* een potje met een vriend blijft staan zolang het loopt; een potje met iemand anders leeft hoogstens een dag in zijn kamer */
+  if (!kapotKey && eerste.wat) h += '<div class="verder-bewaard">✔ ' + (eerste.opDagen ? 'Je potje met ' + escHtml(eerste.naam) +
+    ' blijft staan, ook als jullie allebei de app dichtdoen.' : 'Je ' + eerste.wat + (eerste.vriend ? ' blijft vandaag staan op ' + ditApparaat() + '.' :
+      ' blijft staan op ' + ditApparaat() + ', ook als je de app dichtdoet.')) + '</div>';
   el.innerHTML = h;
   el.classList.remove('hidden');
   /* het welkom hoort bij de groet, zodat de naam niet twee keer onder elkaar staat */
@@ -3794,7 +3831,47 @@ function renderVerder() {
     $('verderJa').addEventListener('click', () => doeActie(eerste.action));
     $('verderNee').addEventListener('click', () => doeActie(eerste.nee));
   } else $('verderKaart').addEventListener('click', () => doeActie(eerste.action));
-  el.querySelectorAll('.verder-ook').forEach(o => o.addEventListener('click', () => doeActie(ook[+o.dataset.ook].action)));
+  if (ook.length) $('ookNog').addEventListener('click', () => { if (ook.length === 1) doeActie(ook[0].vraag || ook[0].action); else bezigBlad(bezig); });
+}
+/* elk potje tegen Turbo dat bewaard staat, één per niveau, met het laatst gespeelde eerst */
+function turboItems() {
+  const alle = leesPotjes() || {};
+  return Object.keys(alle).filter(k => !alle[k].kapot).map(k => {
+    const b = alle[k], n = b.r.moves.length, zet = Math.floor(n / 2) + 1, naam = TURBO_NAMES[+k].replace(/^\S+\s/, '');
+    return { rule: 'R2', title: 'Verder: je potje tegen ' + naam, button: 'Speel verder', wat: 'potje', volgorde: 3, tijd: +b.r.updated || 0,
+      soort: 'potje', text: 'Zet ' + zet + '. ' + (n % 2 === 0 ? 'Jij bent aan zet.' : 'Turbo is aan zet.'), ook: 'je potje tegen ' + naam + ', zet ' + zet,
+      rij: { titel: 'Je potje tegen ' + naam, plek: 'zet ' + zet }, action: { go: 'game', level: +k } };
+  });
+}
+/* de regel die de rest telt: potjes, dan uitdagingen, dan rondjes; "een" bij één, "je rondje" bij één rondje */
+function telLijst(items) {
+  const n = s => items.filter(i => (i.soort || 'potje') === s).length, p = n('potje'), u = n('uitdaging'), r = n('rondje'), delen = [];
+  if (p) delen.push(p === 1 ? 'een potje' : p + ' potjes');
+  if (u) delen.push(u === 1 ? 'een uitdaging' : u + ' uitdagingen');
+  if (r) delen.push(r === 1 ? 'je rondje' : r + ' rondjes');
+  return delen.length > 1 ? delen.slice(0, -1).join(', ') + ' en ' + delen[delen.length - 1] : delen[0];
+}
+/* alles wat nog bezig is, in de volgorde van de kaart; een rij opent zijn potje of rondje, een vraag krijgt zijn antwoorden */
+function bezigBlad(lijst) {
+  showModal('<h2>Wat nog bezig is</h2><div class="m-btns lopend-lijst">' + lijst.map((it, i) => '<button class="btn plain lopend" data-rij="' + i + '">' +
+    '<span class="l-titel">' + escHtml(it.rij ? it.rij.titel : it.title) + '</span><span class="l-plek">' + escHtml(it.rij ? it.rij.plek : it.text) +
+    '</span></button>').join('') + '</div>', () => {
+      document.querySelectorAll('.lopend').forEach(k => k.addEventListener('click', () => {
+        const it = lijst[+k.dataset.rij];
+        closeModal();
+        doeActie(it.vraag || it.action);
+      }));
+    }, true);
+}
+/* een uitdaging of uitnodiging uit het blad: dezelfde twee antwoorden als op de kaart */
+function uitdagingVraag(gameId) {
+  const r = (samenRauw() || {})[gameId], naam = r ? escHtml(r.peerName || 'je maatje') : '';
+  if (!r || r.state !== 'uitdaging' || r.mijnUitdaging) return;
+  showModal('<div class="m-emoji">♟️</div><h2>' + naam + ' daagt je uit</h2><p>Jij speelt met ' + (r.myColor === 'w' ? 'wit' : 'zwart') + '.</p>' +
+    '<div class="m-btns"><button class="btn sun" id="uvJa">Ja, spelen!</button><button class="btn plain" id="uvNee">Nu niet</button></div>', () => {
+      $('uvJa').addEventListener('click', () => { closeModal(); uitdagingJa(gameId); });
+      $('uvNee').addEventListener('click', () => { closeModal(); uitdagingNee(gameId); });
+    }, true);
 }
 
 function hervatPotje() {

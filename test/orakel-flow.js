@@ -500,7 +500,7 @@ async function orakelFlow() {
   await regel('[4.13] de Verder-kaart toont het potje dat het laatst gespeeld is, en Verder opent dat potje', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotjes({ 1: ['e2e4', 'e7e5'], 3: ['d2d4', 'd7d5', 'c2c4'] }, { 1: 1794700009000, 3: 1794700001000 }) });
     await wacht();
-    check('de kaart noemt Slaapkop Turbo', /Slaapkop Turbo/.test(tekstVan(a, 'verder')) && !/Super Turbo/.test(tekstVan(a, 'verder')));
+    check('de kaart noemt Slaapkop Turbo', /Slaapkop Turbo/.test(tekstVan(a, 'verderKaart')) && !/Super Turbo/.test(tekstVan(a, 'verderKaart')));
     a.tik('verderKaart');
     await wacht();
     check('Verder opent het potje op niveau 1', opSpeelscherm(a) && a.get('session.level') === 1 && a.get('session.S.hist.length') === 2);

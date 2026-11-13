@@ -986,7 +986,7 @@ async function orakelTwee6() {
     check('op de telefoon loopt het potje', /je potje met Fien/i.test(tekstVan(tel, 'verder')) && !!vriendenpotjeMet(tel, fid));
   });
 
-  await nogNiet('[6.8] een week zonder zet van de vriend: stil, onderaan, en weer bovenaan zodra de vriend zet', async function (check) {
+  await regel('[6.8] een week zonder zet van de vriend: stil, onderaan, en weer bovenaan zodra de vriend zet', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien'), lotte = maakApparaat('Lotte');
     mees.ev('setPref("predict", false); setPref("guard", false)');
@@ -1041,7 +1041,7 @@ async function orakelTwee6() {
       /Fien heeft gezet\. Jij bent aan zet\./.test(tekstVan(mees, 'verder')));
   });
 
-  await nogNiet('[6.8] een potje zonder aanbod is na 400 dagen nog een potje, en er telt niets', async function (check) {
+  await regel('[6.8] een potje zonder aanbod is na 400 dagen nog een potje, en er telt niets', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await vriendenpotje(mees, fien);
@@ -1147,7 +1147,7 @@ async function orakelTwee6() {
     check('het potje met Daan blijft staan, met zijn zet', !!d && d.moves.length === 1 && !!vriendenpotjeMet(fien, fidS));
   });
 
-  await nogNiet('[6.9] een uitdaging om te beantwoorden staat vóór het potje tegen Turbo, de eigen uitdaging erna, en de telregel noemt ze', async function (check) {
+  await regel('[6.9] een uitdaging om te beantwoorden staat vóór het potje tegen Turbo, de eigen uitdaging erna, en de telregel noemt ze', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     let mees = maakApparaat('Mees'), daan = maakApparaat('Daan'), lotte = maakApparaat('Lotte');
     mees.ev('setPref("predict", false); setPref("guard", false)');

@@ -971,7 +971,7 @@ async function orakelTwee() {
     await wacht();
     fien2.tik('tabVrienden');
     await wacht();
-    check('de rij van Daan biedt Speel verder, geen Uitnodigen', kanTikken(fien2, 'Speel verder') && !kanTikken(fien2, 'Uitnodigen'));
+    check('de rij van Daan biedt het potje, geen Uitnodigen', (kanTikken(fien2, 'Jij bent aan zet') || kanTikken(fien2, 'Bekijk')) && !kanTikken(fien2, 'Uitnodigen'));
     fien2.ev('inviteFriend(' + JSON.stringify(fid) + ')');
     await wacht(100);
     check('Daan nog eens uitnodigen opent het potje dat loopt', opSpeelscherm(fien2) && fien2.fen() === naE4);
@@ -1185,7 +1185,7 @@ async function orakelTwee() {
   });
 
   /* regel 4.12 met D38: de rij van een vriend toont het ene lopende potje */
-  await regel('[4.12] de rij van een vriend toont het lopende potje: wie aan zet is, en Speel verder opent het', async function (check) {
+  await regel('[4.12] de rij van een vriend toont het lopende potje: wie aan zet is, en de knop opent het', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     await wordenVrienden(fien, daan);
     await nodigUit(fien);
@@ -1199,13 +1199,15 @@ async function orakelTwee() {
     const wit = aanZet(fien, daan), zwart = wit === fien ? daan : fien;
     for (const x of [wit, zwart]) { x.tik('backBtn'); await wacht(); x.tik('tabVrienden'); await wacht(); }
     const rij = function (x) { return x.doc.__tekst(x.el('friendList')); };
-    check('wit leest dat het aan zet is, met Speel verder', /Jij bent aan zet\./.test(rij(wit)) && kanTikken(wit, 'Speel verder') && !/Uitnodigen/.test(rij(wit)));
-    check('zwart leest wie aan zet is', new RegExp(wit.naam + ' is aan zet\\.').test(rij(zwart)) && !/Uitnodigen/.test(rij(zwart)));
-    tikTekst(wit, 'Speel verder');
+    check('wit leest dat het aan zet is, met de knop Jij bent aan zet', /Jij bent aan zet\./.test(rij(wit)) && kanTikken(wit, 'Jij bent aan zet') && !/Uitnodigen/.test(rij(wit)));
+    check('zwart leest wie aan zet is en sinds wanneer, met Bekijk', new RegExp(wit.naam + ' is aan zet · vandaag').test(rij(zwart)) &&
+      kanTikken(zwart, 'Bekijk') && !/Uitnodigen/.test(rij(zwart)));
+    tikTekst(wit, 'Jij bent aan zet');
     await wacht();
-    check('Speel verder opent het potje', opSpeelscherm(wit) && aanDeBeurt(wit));
+    check('de knop opent het potje', opSpeelscherm(wit) && aanDeBeurt(wit));
     await speel(wit, zwart, 'e2e4');
-    check('na de zet van wit leest zwart op Vrienden dat het aan zet is', /Jij bent aan zet\./.test(rij(zwart)));
+    check('na de zet van wit leest zwart op Vrienden dat wit zette en dat het aan zet is', new RegExp(wit.naam + ' heeft gezet\\.').test(rij(zwart)) &&
+      kanTikken(zwart, 'Jij bent aan zet'));
   });
 
   await regel('[4.2] een zet van de ander terwijl het kind thuis is: meteen bewaard, en de kaart zegt wie aan zet is', async function (check) {
