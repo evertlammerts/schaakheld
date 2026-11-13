@@ -538,43 +538,6 @@ func TestOrakelPotjeVastVertraagd(t *testing.T) {
 	}(t)
 }
 
-func TestOrakelPotjeWegNaHerstart(tt *testing.T) {
-	dir := tt.TempDir()
-	s1, _ := newTestServer(tt, func(c *config) { c.dataDir = dir })
-	// [6.10] een herstart verliest de potjesbussen en verder niets
-	func(t tb) {
-		bewijs, bus := potjeBus("a")
-		if c := schrijfPotje(s1, bewijs, bus, "x"); c != 204 {
-			t.Fatalf("schrijven: %d", c)
-		}
-		req := httptest.NewRequest("PUT", "/v1/profile/a1b2c3d4e5f6a7b8", strings.NewReader("profiel"))
-		req.Header.Set("Authorization", "Bearer "+testSecret)
-		w := httptest.NewRecorder()
-		s1.ServeHTTP(w, req)
-		if w.Code != 204 {
-			t.Fatalf("profiel bewaren: %d", w.Code)
-		}
-		s2, clk2 := newTestServer(tt, func(c *config) { c.dataDir = dir })
-		if g := leesPotjes(s2, bus); len(g.Blobs) != 0 {
-			t.Fatalf("na de herstart hoort er geen potje meer te zijn: %+v", g)
-		}
-		req = httptest.NewRequest("GET", "/v1/profile/a1b2c3d4e5f6a7b8", nil)
-		req.Header.Set("Authorization", "Bearer "+testSecret)
-		w = httptest.NewRecorder()
-		s2.ServeHTTP(w, req)
-		if w.Code != 200 || w.Body.String() != "profiel" {
-			t.Fatalf("het profiel hoort de herstart te overleven: %d %q", w.Code, w.Body.String())
-		}
-		if c := schrijfPotje(s2, bewijs, bus, "x"); c != 204 {
-			t.Fatalf("opnieuw schrijven na de herstart: %d", c)
-		}
-		clk2.advance(time.Hour)
-		if g := leesPotjes(s2, bus); g.Ongewijzigd[bus] != 3600 {
-			t.Fatalf("na de herstart telt de tijd vanaf het opnieuw schrijven: %+v", g)
-		}
-	}(tt)
-}
-
 // een klok die op verzoek bij elke vraag een seconde verder loopt
 type tikKlok struct {
 	mu     sync.Mutex

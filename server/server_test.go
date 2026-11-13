@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -39,6 +40,9 @@ func newTestServer(t *testing.T, mut func(*config)) (*server, *fakeClock) {
 		redeemDelay: 0,
 		redeemSlots: 8,
 		now:         clk.now,
+		// op macOS kost een fsync zo'n 8 ms en de grenstests schrijven duizenden
+		// bestanden; de schijftests zetten hem weer aan met fsync nil
+		fsync: func(*os.File) error { return nil },
 	}
 	if mut != nil {
 		mut(&cfg)

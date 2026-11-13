@@ -11,18 +11,24 @@ package main
 // Een bus houdt precies één briefje (de laatste uitnodiging), tien
 // minuten. Een leeg briefje wist de bus (uitnodiging ingetrokken).
 //
-// Een potjesbus is dezelfde soort bus voor een potje dat over dagen loopt:
-// elk kind schrijft de stand in zijn eigen bus en leest die van de ander.
-// Hij leeft dertig dagen na het laatste schrijven, en de check meldt hoe
-// lang zijn bytes gelijk bleven. Het potje zelf staat op beide apparaten;
-// de bus is alleen de weg ernaartoe, dus een herstart of een weggeduwde
-// bus kost een zet vertraging, nooit een potje.
+// Een potjesbus houdt de ene staat van een potje of uitdaging tussen twee
+// vrienden, versleuteld met hun K. Hij verandert alleen met een schrijven
+// dat de versie noemt die het las, leeft dertig dagen na het laatste
+// schrijven en staat op schijf (een bestand per bus in de map potjes), zodat
+// een herstart van de server geen oude staat terug laat komen.
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"io/fs"
+	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -45,7 +51,76 @@ type busEntry struct {
 type potjeEntry struct {
 	blob    string
 	expires time.Time // laatste schrijven plus potjeTTL, dus ook de volgorde van plaatsmaken
-	changed time.Time // laatste schrijven met andere bytes
+	changed time.Time // laatste schrijven met andere bytes, of de start van de server
+}
+
+// op schijf staat wat in het geheugen staat: de versleutelde bytes en tot
+// wanneer ze leven; het id is de bestandsnaam
+type potjeFile struct {
+	Tot  time.Time `json:"tot"`
+	Blob string    `json:"blob"`
+}
+
+const potjesMap = "potjes"
+
+// alleen aangeroepen met een id dat busRe doorstond (busGeldig of
+// laadPotjes), dus de naam blijft in de map
+func (s *server) potjePad(id string) string {
+	return filepath.Join(s.cfg.dataDir, potjesMap, id+".json")
+}
+
+// laadPotjes leest de staten die een vorige server op schijf liet. Wat geen
+// geldige, levende staat is (verlopen, half geschreven, een tempbestand,
+// een vreemde naam) wordt weggehaald en houdt de start niet tegen; een
+// bestand dat niet te lezen is blijft staan.
+func (s *server) laadPotjes() error {
+	dir := filepath.Join(s.cfg.dataDir, potjesMap)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	items, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	now := s.cfg.now()
+	for _, e := range items {
+		if e.IsDir() {
+			continue
+		}
+		pad := filepath.Join(dir, e.Name())
+		id, isJSON := strings.CutSuffix(e.Name(), ".json")
+		if !isJSON || !busRe.MatchString(id) {
+			os.Remove(pad)
+			continue
+		}
+		data, err := os.ReadFile(pad)
+		if err != nil {
+			continue
+		}
+		var pf potjeFile
+		if json.Unmarshal(data, &pf) != nil || pf.Blob == "" || len(pf.Blob) > maxBusBlob || !now.Before(pf.Tot) {
+			os.Remove(pad)
+			continue
+		}
+		s.potjes[id] = potjeEntry{blob: pf.Blob, expires: pf.Tot, changed: now}
+	}
+	for len(s.potjes) > maxPotjes {
+		s.evictOldestPotjeLocked()
+	}
+	return nil
+}
+
+// zonderPad: de bestandsnaam is het id van een bus, en dat hoort niet in de log
+func zonderPad(err error) error {
+	var pe *fs.PathError
+	if errors.As(err, &pe) {
+		return pe.Err
+	}
+	var le *os.LinkError
+	if errors.As(err, &le) {
+		return le.Err
+	}
+	return err
 }
 
 // busGeldig: de bus moet sha256(bewijs) zijn, anders 400. Dat verraadt
@@ -65,11 +140,13 @@ func (s *server) sweepBusesLocked() {
 	}
 }
 
+// een bestand dat niet weg wil, ruimt de volgende start op: dan is het verlopen
 func (s *server) sweepPotjesLocked() {
 	now := s.cfg.now()
 	for id, p := range s.potjes {
 		if !now.Before(p.expires) {
 			delete(s.potjes, id)
+			os.Remove(s.potjePad(id))
 		}
 	}
 }
@@ -168,15 +245,17 @@ func (s *server) handlePotjePost(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusConflict, map[string]string{"blob": p.blob})
 		return
 	}
+	// eerst de schijf: lukt die niet, dan verandert er ook in het geheugen niets
 	if in.Blob == "" {
+		if err := os.Remove(s.potjePad(in.Bus)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			opslagMislukt(w, err)
+			return
+		}
 		delete(s.potjes, in.Bus)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	now := s.cfg.now()
-	if !bestaat && len(s.potjes) >= maxPotjes {
-		s.evictOldestPotjeLocked()
-	}
 	// dezelfde bytes opnieuw verlengen alleen: zo meet ongewijzigd hoe lang
 	// een kant niets nieuws schreef, ook als de app zijn bus vernieuwt
 	if !bestaat || p.blob != in.Blob {
@@ -184,8 +263,20 @@ func (s *server) handlePotjePost(w http.ResponseWriter, r *http.Request) {
 	}
 	p.blob = in.Blob
 	p.expires = now.Add(potjeTTL)
+	if err := s.writeFileAtomic(s.potjePad(in.Bus), potjeFile{Tot: p.expires, Blob: p.blob}); err != nil {
+		opslagMislukt(w, err)
+		return
+	}
+	if !bestaat && len(s.potjes) >= maxPotjes {
+		s.evictOldestPotjeLocked()
+	}
 	s.potjes[in.Bus] = p
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func opslagMislukt(w http.ResponseWriter, err error) {
+	log.Printf("potjesbus opslaan: %v", zonderPad(err))
+	http.Error(w, "opslag mislukt", http.StatusInternalServerError)
 }
 
 func (s *server) evictOldestPotjeLocked() {
@@ -196,6 +287,7 @@ func (s *server) evictOldestPotjeLocked() {
 		}
 	}
 	delete(s.potjes, oudste)
+	os.Remove(s.potjePad(oudste))
 }
 
 // handleBusCheck geeft de briefjes uit de opgegeven bussen terug (alleen
