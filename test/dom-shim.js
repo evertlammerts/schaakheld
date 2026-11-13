@@ -484,14 +484,15 @@ var crypto = {
    profielblobs met bearer secret, kamers en wederzijdse paren), zodat de
    flows end-to-end testbaar zijn. */
 var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, potjes: {}, klok: 0, teller: 0 };
-/* grenzen en TTL uit bus.go, room.go en server.go; __server.klok schuift de
-   klok van de nep-server vooruit zodat een test een bus, een kamer of een
-   koppelcode kan laten verlopen */
+/* grenzen en TTL uit bus.go, room.go en server.go. De nep-server meet tijd op
+   de klok van de wereld, de virtuele klok van de timers, zoals de Go-server
+   op die van zijn eigen machine; __server.klok schuift hem vooruit zodat een
+   test een bus, een kamer of een koppelcode kan laten verlopen */
 var BUS_TTL = 10 * 60000, MAX_BUSES = 512, MAX_BUS_BLOB = 4 << 10, MAX_BUS_CHECK = 64;
 var POTJE_TTL = 30 * 24 * 3600000, MAX_POTJES = 1024;
 var LINK_TTL = 10 * 60000, MAX_LINKS = 8192;
 var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000, MAX_KAMERS = 64, KAMER_RUST = 3000;
-function __busNu() { return Date.now() + __server.klok; }
+function __busNu() { return __klok + __server.klok; }
 function __veegBussen() {
   for (var id in __server.buses) if (__server.buses[id].tot <= __busNu()) delete __server.buses[id];
 }
@@ -691,6 +692,9 @@ var fetch = function (url, opts) {
       const p = __server.links[body.code];
       delete __server.links[body.code];
       (p === undefined || p.tot <= __busNu()) ? res(404) : res(200, { payload: p.payload });
+    } else if (m === 'GET' && path === '/healthz') {
+      /* zoals server.go: de server leeft */
+      res(200, 'ok\n');
     } else if (path.indexOf('/v1/profile/') === 0) {
       const id = path.slice('/v1/profile/'.length);
       const prof = __server.profiles[id];
@@ -738,9 +742,16 @@ function WebSocket(url) {
     self.readyState = 1;
     if (self.onopen) self.onopen({});
   }, 0);
-  const lever = (sock, data) => setTimeout(() => {
-    if (sock.readyState === 1 && sock.onmessage) sock.onmessage({ data });
-  }, 0);
+  /* __server.vertraging(sock, data) geeft een lijn die tijd kost (in ms); zoals een echte verbinding levert hij in
+     volgorde af, ook als een later bericht minder lang onderweg is */
+  const lever = (sock, data) => {
+    const d = typeof __server.vertraging === 'function' ? __server.vertraging(sock, data) : 0;
+    const op = Math.max(__klok + d, sock.__laatsteLevering || 0);
+    sock.__laatsteLevering = op;
+    setTimeout(() => {
+      if (sock.readyState === 1 && sock.onmessage) sock.onmessage({ data });
+    }, op - __klok);
+  };
   const peer = () => {
     const rm = self._rm;
     if (!rm) return null;
@@ -775,8 +786,10 @@ function WebSocket(url) {
           oud._sluit(1006, '', false);
         }, 0);
       }
-      lever(self, '{"t":"welkom"}');
+      /* zoals room.go: het welkom zegt of de ander nu verbonden is */
       const p = peer();
+      /* __server.welkomZonderAnder speelt een server die nog niet bijgewerkt is: zijn welkom zegt niets over de ander */
+      lever(self, __server.welkomZonderAnder ? '{"t":"welkom"}' : '{"t":"welkom","peer":' + !!p + '}');
       if (p) lever(p, '{"t":"peer","aan":true}');
       return;
     }

@@ -5,6 +5,14 @@ function ok(name, cond) {
   print((cond ? 'PASS' : 'FAIL') + '  ' + name);
 }
 
+/* "Nu niet" legt een briefje in de bus van wie uitnodigde (regel 4.6); de tests hieronder tellen de
+   bussen van hun eigen briefjes, dus dat antwoord gaat na de tik weer weg */
+async function nuNiet() {
+  var voor = Object.keys(__server.buses);
+  fire(__els.invNee, 'click');
+  for (var j = 0; j < 40; j++) await null;
+  Object.keys(__server.buses).forEach(function (b) { if (voor.indexOf(b) < 0) delete __server.buses[b]; });
+}
 /* init already ran at load; name modal should be open (no stored name) */
 ok('init: name modal open', !__els.overlay.classList.contains('hidden'));
 P.name = 'Testkind'; closeModal();
@@ -869,6 +877,17 @@ ok('modal zonder cancel: eigen knop sluit', modalOpen === false &&
   ok('compat: een doc van nu houdt zijn lijst, alleen met trofeeën die er zijn', JSON.stringify(normDoc(metLijst).loc.shownBadges) === '["winst"]');
   ok('compat: de lijst gaat mee door bewaren en laden', JSON.stringify(normDoc(JSON.parse(JSON.stringify(normDoc(metLijst)))).loc.shownBadges) === '["winst"]');
   ok('compat: een oud plat profiel: elke trofee telt als getoond', JSON.stringify(migrateLegacy({ badges: { winst: true } }, 'd1').loc.shownBadges || null) === '["winst"]');
+  /* een gekoppeld apparaat schrijft een 0 onder zijn eigen naam in de XP-teller: de check houdt hem, elke som
+     blijft gelijk, en een doc van de vorige release blijft precies zoals hij was */
+  var metNul = JSON.parse(JSON.stringify(oud));
+  metNul.cnt.xp.d3 = 0;
+  var dn = normDoc(JSON.parse(JSON.stringify(metNul))), vn = viewFromDoc(dn);
+  ok('compat: een doc met een 0 laadt, de 0 blijft staan, en elke som is gelijk', dn.cnt.xp.d3 === 0 && vn.xp === 520 && vn.stars === 40 &&
+    vn.wins === 3 && vn.c.pat.vork === 4);
+  ok('compat: een doc van de vorige release blijft na de check precies zoals hij was',
+    JSON.stringify(normDoc(JSON.parse(JSON.stringify(oud))).cnt) === JSON.stringify(oud.cnt));
+  var samen = mergeDoc(normDoc(JSON.parse(JSON.stringify(oud))), dn);
+  ok('compat: samenvoegen met een doc met een 0: de 0 blijft, de sommen zijn gelijk', samen.cnt.xp.d3 === 0 && viewFromDoc(samen).xp === 520);
   ok('een nieuw profiel: niets getoond, en het kent zijn level', (emptyDoc().loc.shownBadges || [1]).length === 0 && emptyDoc().loc.lastLevel === 0);
 })();
 /* de velden van het startadvies: start (LWW), lastKind en lastSeen (per apparaat) en de teller c.drie */
@@ -1156,9 +1175,10 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await linkShareFlow();
   ok('link A: account aangemaakt', !!ACC && geldigAcc(ACC));
   var mHtml = __els.modalBox.innerHTML;
-  ok('link A: QR en woordcode getoond', mHtml.indexOf('<svg') >= 0 &&
-    /[a-z]+-[a-z]+-[a-z]+-[a-z]+/.test(mHtml));
-  var code = mHtml.match(/([a-z]+-[a-z]+-[a-z]+-[a-z]+)/)[1];
+  /* de code staat als vier genummerde woorden, nooit met streepjes aan elkaar (regel 4.8) */
+  var linkWoorden = (mHtml.match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
+  ok('link A: QR en woordcode getoond', mHtml.indexOf('<svg') >= 0 && linkWoorden.length === 4);
+  var code = linkWoorden.join('-');
   var urlA = linkURL();
   var accA = ACC;
   fire(__els.linkDone, 'click');
@@ -1384,8 +1404,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await tikje();
   hostSock.send(JSON.stringify({ t: 'hallo', naam: 'Mo' }));
   await tikje();
-  ok('mp gast: wachten tot de host start', __els.modalBox.innerHTML.indexOf('Mo') >= 0 &&
-    __els.modalBox.innerHTML.indexOf('start drukt') >= 0);
+  ok('[4.7] mp gast: wachten tot de host start, en de kaart zegt wie', __els.modalBox.innerHTML.indexOf('Mo start het potje. Even wachten.') >= 0);
   hostSock.send(JSON.stringify({ t: 'start', jij: 'b', n: 1 }));
   await tikje();
   ok('mp gast: potje als zwart, wit is aan zet', !!session && session.online === true &&
@@ -1484,9 +1503,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     p3.status === 200 && d3.room === d2.room && d3.seat !== d2.seat &&
     d3.host === true && d2.host === false);
 
-  /* anti-farm (memo): een online winst geeft NOOIT XP en telt niet mee voor
-     de gedeelde 'wins'-teller of de week-wins; wel winsOnline en het
-     weekdoel "potjes met een vriend". */
+  /* een online winst die telt, geeft 30 XP zoals elk potje tussen kinderen, maar telt niet mee voor de gedeelde
+     'wins'-teller of de week-wins (die horen bij Turbo); wel winsOnline en het weekdoel "potjes met een vriend". */
   var xpVoor = P.xp, pWinsVoor = P.wins, onlineVoor2 = P.c.winsOnline || 0;
   var wkWinsVoor = wkGet(curWeek(), 'wins1') + wkGet(curWeek(), 'wins2') + wkGet(curWeek(), 'wins3');
   var wkOnlineVoor = wkGet(curWeek(), 'online');
@@ -1498,8 +1516,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   commitKid(legalMoves(session.S).find(function (x) { return alg(x.to) === 'a8'; }));
   drainTimers();
   for (i = 0; i < 20; i++) await null;
-  ok('mp: online winst geeft geen XP en raakt de HUD-wins niet',
-    P.xp === xpVoor && P.wins === pWinsVoor && (P.c.winsOnline || 0) === onlineVoor2 + 1);
+  ok('mp: een online winst die telt geeft 30 XP en raakt de HUD-wins niet',
+    P.xp === xpVoor + 30 && P.wins === pWinsVoor && (P.c.winsOnline || 0) === onlineVoor2 + 1);
   ok('mp: online potje telt voor de week als "met een vriend", niet als Turbo-winst',
     wkGet(curWeek(), 'online') === wkOnlineVoor + 1 &&
     wkGet(curWeek(), 'wins1') + wkGet(curWeek(), 'wins2') + wkGet(curWeek(), 'wins3') === wkWinsVoor);
@@ -1568,19 +1586,57 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   closeModal();
   mpStop();
 
-  /* ← Home midden in een potje is ook opgeven en vraagt dus ook */
-  MP = { room: 'r', seat: 's', host: true, myColor: 'w', gameNo: 1, revMine: false,
-    revTheirs: false, peerName: 'Fien', open: false, weg: false };
+  /* ← Home midden in een potje gaat naar huis en houdt potje en verbinding (regel 4.2) */
+  MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false,
+    revTheirs: false, peerName: 'Fien', open: false, weg: false, gameId: 'potje-test-1' };
   mpBeginGame();
   fire(__els.backBtn, 'click');
-  ok('mp: ← Home vraagt ook eerst',
-    __els.modalBox.innerHTML.indexOf('Opgeven?') >= 0 && !!MP && session.over !== true);
-  fire(__els.rsJa, 'click');
+  var bewaardSamen = leesSamen();
+  ok('[4.2] mp: ← Home gaat naar huis zonder vraag; potje en verbinding blijven',
+    __els.overlay.classList.contains('hidden') && !!MP && session === null && !!bewaardSamen && !bewaardSamen.kapot);
+  MP.open = true; /* zonder echte lijn: Verder vraagt dan alleen de stand op */
+  openSamen();
+  ok('[4.2] mp: Verder brengt hetzelfde potje terug', !!session && session.online === true && session.S === MP.S);
+  resignNow();
   await tikje();
-  ok('mp: ← Home geeft na ja op', session.over === true);
+  /* de uitslag blijft bewaard tot de ander hem kent; hier is er geen ander die antwoordt */
+  var naOpgave = leesSamen();
+  ok('mp: na opgeven is het potje over, en de uitslag staat bewaard tot de ander hem kent', session.over === true &&
+    !!naOpgave && !naOpgave.kapot && naOpgave.r.result.kind === 'opgave' && naOpgave.r.shown === true);
   closeModal();
   fire(__els.backBtn, 'click');
-  ok('mp: na afloop gaat ← Home gewoon naar huis', MP === null && session === null);
+  ok('mp: na afloop gaat ← Home gewoon naar huis, zonder kaart voor dit potje', session === null && !/Verder: je potje met Fien/.test(__els.verder.innerHTML || ''));
+  mpStop(true);
+  /* een tweede vriendenpotje zou het bewaarde overschrijven: dat kan pas als het eerste klaar is */
+  MP = { room: 'kamer-test-2', seat: 'stoel-test-2', host: true, myColor: 'w', gameNo: 1, revMine: false,
+    revTheirs: false, peerName: 'Fien', open: false, weg: false, gameId: 'potje-test-2' };
+  mpBeginGame();
+  fire(__els.backBtn, 'click');
+  var mpVoor = MP;
+  await mpHostQR();
+  ok('[4.1] mp: met een bewaard vriendenpotje geen nieuw potje erover heen', MP === mpVoor &&
+    !!leesSamen() && leesSamen().r.gameId === 'potje-test-2' && /Je potje met Fien loopt nog/.test(__els.toast.textContent));
+  mpStop(true);
+  opslag(SAMEN_KEY, null);
+  /* terug in de kamer na een herlading: de sessie is een hoger dan bewaard, en dat staat meteen bewaard */
+  var hervatMet = function (extra) {
+    var r = Object.assign({ gameId: 'potje-sessie', room: 'kamer-sessie', seat: 'stoel-sessie', host: true, myColor: 'w', gameNo: 1,
+      moves: ['e2e4'], peerName: 'Fien', fid: null, result: null, offer: null, shown: false, updated: Date.now() }, extra);
+    schrijfSamen({ 'potje-sessie': r });
+    samenHervat(leesSamen());
+    var uit = { sessie: MP.vr.sessie, kamer: MP.kamer, bewaard: leesSamen().r.sessie, kamerBewaard: leesSamen().r.kamer };
+    mpStop(true);
+    opslag(SAMEN_KEY, null);
+    return uit;
+  };
+  var hv = hervatMet({ sessie: 3, kamer: { fid: 'vriend-in-kamer1', paar: 'a b', voor: 2, mijn: 3 } });
+  ok('[2.5] mp: terug in de kamer is een nieuwe sessie, en de vriend van deze kamer blijft bij zijn twee sessies',
+    hv.sessie === 4 && hv.bewaard === 4 && !!hv.kamer && hv.kamer.fid === 'vriend-in-kamer1' && hv.kamer.voor === 2 && hv.kamer.mijn === 3 &&
+    hv.kamerBewaard.mijn === 3);
+  hv = hervatMet({});
+  ok('[2.5] mp: een bewaard potje zonder sessie en kamer komt terug als sessie 1, zonder vriend van deze kamer', hv.sessie === 1 && hv.kamer === null);
+  hv = hervatMet({ sessie: -2, kamer: { fid: '<b>', paar: 'a b', voor: '1', mijn: 1 } });
+  ok('[2.5] mp: een onzinnige sessie of kamer telt niet, en breekt niets', hv.sessie === 1 && hv.kamer === null);
 
   /* het maatje geeft op: wij winnen, zonder XP en zonder gedeelde wins */
   MP = { room: 'r', seat: 's', host: true, myColor: 'w', gameNo: 1, revMine: false,
@@ -1598,13 +1654,14 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     revTheirs: false, peerName: 'Fien', open: false, weg: false };
   mpBeginGame();
   mpMsg({ t: 'remise?', gameNo: 1 });
-  ok('mp: remise-aanbod van het maatje vraagt jou', __els.modalBox.innerHTML.indexOf('Fien biedt remise aan') >= 0);
-  fire(__els.rmNee, 'click');
-  ok('mp: nee = doorspelen', session.over !== true && __els.overlay.classList.contains('hidden'));
+  ok('mp: remise-aanbod van het maatje vraagt jou, onder het bord', __els.bubble.innerHTML.indexOf('Fien biedt remise aan') >= 0 &&
+    !!actionBtns.rmJa && __els.overlay.classList.contains('hidden'));
+  fire(actionBtns.rmNee, 'click');
+  ok('mp: nee = doorspelen', session.over !== true && !actionBtns.rmJa);
   mpMsg({ t: 'remise?', gameNo: 1 });
-  fire(__els.rmJa, 'click');
+  fire(actionBtns.rmJa, 'click');
   await tikje();
-  ok('mp: ja = gelijkspel', session.over === true && __els.modalBox.innerHTML.indexOf('Gelijkspel') >= 0);
+  ok('mp: ja = gelijkspel', session.over === true && __els.eindkaart.innerHTML.indexOf('Gelijkspel') >= 0);
   closeModal();
   mpStop();
   /* ons eigen aanbod: alleen een antwoord op een echt aanbod telt */
@@ -1620,7 +1677,11 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   offerDraw();
   ok('mp: niet meteen nog eens vragen', __els.bubble.innerHTML.indexOf('net al') >= 0);
   mpMsg({ t: 'remise', ok: true, gameNo: 1 });
-  ok('mp: aangenomen aanbod = gelijkspel', session.over === true && __els.modalBox.innerHTML.indexOf('Gelijkspel') >= 0);
+  ok('mp: een ja op een aanbod dat al nee kreeg, eindigt niets', session.over !== true);
+  session.drawAsked = null;
+  offerDraw();
+  mpMsg({ t: 'remise', ok: true, gameNo: 1 });
+  ok('mp: aangenomen aanbod = gelijkspel', session.over === true && __els.eindkaart.innerHTML.indexOf('Gelijkspel') >= 0);
   closeModal();
   mpStop();
 
@@ -1642,30 +1703,35 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var vmaat = new WebSocket('ws://nep');
   vmaat.inbox = [];
   vmaat.onmessage = function (e) { vmaat.inbox.push(JSON.parse(e.data)); };
+  /* wat Mila over vrienden vasthoudt, gaat zoals in de app met een groet mee */
+  var milaGroet = function (vr) { vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', sessie: vr.sessie, vr: vr })); };
   await tikje();
   vmaat.send(JSON.stringify({ room: vk.id, seat: vk.gast }));
   await tikje();
-  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila' }));
+  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', sessie: 1 }));
   await tikje();
   closeModal();
   /* een afgelopen online potje biedt "vrienden worden" aan, tenzij je al vrienden bent */
   session = { kind: 'game', online: true, myColor: 'w', over: false, S: parseFEN('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1') };
+  MP.S = session.S;
   BD.mode = 'move';
   commitKid(legalMoves(session.S).find(function (x) { return alg(x.to) === 'a8'; }));
   await tikje();
   ok('vriend: eindscherm biedt vrienden worden aan', __els.eindkaart.innerHTML.indexOf('Vrienden worden') >= 0);
   fire(__els.mpVriend, 'click');
+  for (i = 0; i < 30; i++) await null;
   await tikje();
-  var vraag = vmaat.inbox.filter(function (m) { return m.t === 'vriend?'; })[0];
-  ok('vriend: vraag met publieke sleutel over de relay, K zelf niet', !!vraag && geldigePub(vraag.pub) && !vraag.k && !!MP.ecdh);
-  /* het maatje zegt ja: eigen sleutelpaar, antwoord met zijn publieke sleutel */
+  var vraag = vmaat.inbox.filter(function (m) { return m.t === 'hallo' && m.vr && m.vr.wil === 1 && m.vr.pub; }).pop();
+  ok('vriend: wat dit kind wil, gaat als toestand met de publieke sleutel over de relay, K zelf niet',
+    !!vraag && geldigePub(vraag.vr.pub) && !vraag.vr.k && !vraag.k && !P.friends[Object.keys(P.friends)[0]]);
+  /* het maatje zegt ja: eigen sleutelpaar, en het zag ons willen */
   var mKp = await ecdhStart();
-  var mK = await ecdhFinish(mKp.kp, vraag.pub);
-  vmaat.send(JSON.stringify({ t: 'vriend', pub: mKp.pub }));
+  var mK = await ecdhFinish(mKp.kp, vraag.vr.pub);
+  milaGroet({ sessie: 1, pub: mKp.pub, wil: 1, nee: 0, zag: 1, voor: vraag.vr.sessie });
   await tikje();
   var fids = Object.keys(P.friends);
-  ok('vriend: opgeslagen in de CRDT met hetzelfde geheim als het maatje', fids.length === 1 &&
-    P.friends[fids[0]].k === mK && P.friends[fids[0]].host === true && P.friends[fids[0]].naam === 'Mila' &&
+  ok('vriend: opgeslagen in de CRDT met hetzelfde geheim als het maatje, de rol uit de volgorde van de sleutels', fids.length === 1 &&
+    P.friends[fids[0]].k === mK && P.friends[fids[0]].host === (vraag.vr.pub < mKp.pub) && P.friends[fids[0]].naam === 'Mila' &&
     fids[0] === (await sha256hex(mK)).slice(0, 16) && !!DOC.friends[fids[0]]);
   ok('vriend: bevestiging met dezelfde drie plaatjes', __els.modalBox.innerHTML.indexOf('nu vrienden') >= 0 &&
     __els.modalBox.innerHTML.indexOf(friendTrio(mK)) >= 0 && MP.viaFriend === fids[0]);
@@ -1726,84 +1792,131 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     !!volHallo && volHallo.bewijzen.length === MAX_FRIENDS && JSON.stringify(volHallo).length < 4096 &&
     volHallo.bewijzen.length === onsHallo.bewijzen.length);
   P.friends = echteVrienden;
-  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila' })); /* haar naam terug op de verse verbinding */
+  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', sessie: 1 })); /* haar naam terug op de verse verbinding */
   await tikje();
   modalQueue.length = 0;
   closeModal();
-  /* andersom: het maatje vraagt, wij zeggen nee en daarna ja */
+  /* andersom: het maatje wil, wij zeggen nee en daarna ja; elk deel begint met een verse toestand na een einde */
+  var mijnVr = function () { var l = vmaat.inbox.filter(function (m) { return m.t === 'hallo' && m.vr; }); return l.length ? l[l.length - 1].vr : null; };
+  var vers = function () { Object.assign(MP, vrBegin(1)); MP.anderKent = true; MP.S = parseFEN('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1'); MP.over = true; vmaat.inbox.length = 0; };
   MP.viaFriend = null;
+  vers();
   var mKp2 = await ecdhStart();
-  vmaat.send(JSON.stringify({ t: 'vriend?', pub: mKp2.pub }));
+  milaGroet({ sessie: 1, pub: mKp2.pub, wil: 1, nee: 0, zag: 0, voor: null });
   await tikje();
-  ok('vriend: vraag van het maatje = modal', __els.modalBox.innerHTML.indexOf('Mila wil vrienden worden') >= 0);
+  ok('vriend: wil van het maatje = venster', __els.modalBox.innerHTML.indexOf('Mila wil vrienden worden') >= 0);
   fire(__els.vrNee, 'click');
   await tikje();
-  ok('vriend: nee gaat terug', vmaat.inbox.some(function (m) { return m.t === 'vriend' && m.nee === true; }));
-  vmaat.send(JSON.stringify({ t: 'vriend?', pub: mKp2.pub }));
+  ok('vriend: het nee gaat terug als toestand', !!mijnVr() && mijnVr().nee === 1 && mijnVr().voor === 1 && mijnVr().wil === 0);
+  milaGroet({ sessie: 1, pub: mKp2.pub, wil: 2, nee: 0, zag: 0, voor: 1 });
   await tikje();
   fire(__els.vrJa, 'click');
-  await tikje();
-  var antw = vmaat.inbox.filter(function (m) { return m.t === 'vriend' && m.pub; })[0];
-  var mK2 = await ecdhFinish(mKp2.kp, antw.pub);
-  var fid2 = (await sha256hex(mK2)).slice(0, 16);
-  ok('vriend: als ja-zegger opgeslagen met rol b', !!P.friends[fid2] && P.friends[fid2].host === false && P.friends[fid2].k === mK2);
-  closeModal();
-  ok('vriend: kapotte sleutel wordt genegeerd', (function () { mpOnVriendVraag({ t: 'vriend?', pub: 'x<script>' }); return __els.overlay.classList.contains('hidden'); })());
-  /* zijn vraag komt binnen terwijl het eindscherm nog open staat: dan wacht
-     hij in de rij en zien wij hem niet. Tikken wij dan zelf op "vrienden
-     worden", dan is dat ja zeggen op zijn vraag. Twee losse vragen zouden
-     twee geheimen maken, waarvan de ander er maar een kent. */
-  MP.viaFriend = null;
-  MP.hunVraag = null;
-  var voorDub = Object.keys(P.friends).length;
-  vmaat.inbox.length = 0;
-  showModal('<div class="m-emoji">🏆</div><h2>JIJ WINT!</h2>', function () {});
-  var dubKp = await ecdhStart();
-  vmaat.send(JSON.stringify({ t: 'vriend?', pub: dubKp.pub }));
-  await tikje();
-  ok('vriend: zijn vraag wacht achter het eindscherm', modalQueue.length === 1 &&
-    __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0);
-  await vriendVragen();
   for (i = 0; i < 30; i++) await null;
   await tikje();
-  var dubAntw = vmaat.inbox.filter(function (m) { return m.t === 'vriend' && m.pub; })[0];
-  var dubK = dubAntw ? await ecdhFinish(dubKp.kp, dubAntw.pub) : null;
-  var dubFid = dubK ? (await sha256hex(dubK)).slice(0, 16) : null;
+  var antw = mijnVr();
+  var mK2 = await ecdhFinish(mKp2.kp, antw.pub);
+  var fid2 = (await sha256hex(mK2)).slice(0, 16);
+  ok('vriend: wie ja zei, bewaart pas als de ander zijn willen zag', !P.friends[fid2] && antw.wil === 1 && antw.zag === 2);
+  milaGroet({ sessie: 1, pub: mKp2.pub, wil: 2, nee: 0, zag: 1, voor: 1 });
+  await tikje();
+  ok('vriend: dan opgeslagen, met de rol uit de volgorde van de sleutels', !!P.friends[fid2] && P.friends[fid2].host === (antw.pub < mKp2.pub) && P.friends[fid2].k === mK2);
+  closeModal();
+  vers();
+  var voorKapot = Object.keys(P.friends).length;
+  milaGroet({ sessie: 1, pub: 'x<script>', wil: 1, nee: 0, zag: 1, voor: 1 });
+  await tikje();
+  closeModal();
+  ok('vriend: een kapotte sleutel maakt geen vriend en breekt niets', (await vrWil(), true) && Object.keys(P.friends).length === voorKapot);
+  closeModal();
+  /* zijn willen komt binnen terwijl er een ander venster openstaat: dan wacht zijn vraag in de rij. Tikken wij
+     zelf op "vrienden worden", dan is dat dezelfde tik als ja: één vriendschap met één geheim */
+  MP.viaFriend = null;
+  vers();
+  var voorDub = Object.keys(P.friends).length;
+  showModal('<div class="m-emoji">🏆</div><h2>JIJ WINT!</h2>', function () {});
+  var dubKp = await ecdhStart();
+  milaGroet({ sessie: 1, pub: dubKp.pub, wil: 1, nee: 0, zag: 0, voor: null });
+  await tikje();
+  ok('vriend: zijn vraag wacht achter het andere venster', modalQueue.length === 1 && __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0);
+  await vrWil();
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  var dubAntw = mijnVr();
+  milaGroet({ sessie: 1, pub: dubKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 });
+  await tikje();
+  var dubK = await ecdhFinish(dubKp.kp, dubAntw.pub);
+  var dubFid = (await sha256hex(dubK)).slice(0, 16);
   ok('vriend: zelf vragen is dan ja zeggen, één vriendschap met hetzelfde geheim',
-    !vmaat.inbox.some(function (m) { return m.t === 'vriend?'; }) &&
-    Object.keys(P.friends).length === voorDub + 1 && !!dubFid && !!P.friends[dubFid] &&
-    P.friends[dubFid].k === dubK && P.friends[dubFid].host === false);
-  ok('vriend: de wachtende vraag is weg en kan niet alsnog beantwoord worden',
-    modalQueue.length === 0 && __els.modalBox.innerHTML.indexOf('wil vrienden worden') < 0 &&
-    MP.hunVraag === null);
-  /* en andersom: is de vraag wel op tijd te zien, dan blijft ja zeggen ja zeggen */
+    Object.keys(P.friends).length === voorDub + 1 && !!P.friends[dubFid] && P.friends[dubFid].k === dubK);
+  ok('vriend: de wachtende vraag is weg', !modalQueue.some(function (q) { return q[3] === 'vriendvraag'; }) &&
+    __els.modalBox.innerHTML.indexOf('wil vrienden worden') < 0);
   setFriend(dubFid, Object.assign({}, P.friends[dubFid], { weg: true }));
   closeModal();
   await tikje();
-  /* allebei tegelijk gevraagd: één K aan beide kanten, geen dubbele vrienden */
+  /* allebei tegelijk: één K aan beide kanten, geen dubbele vrienden, niets dat kruist */
   MP.viaFriend = null;
+  vers();
   var voorKruis = Object.keys(P.friends).length;
-  await vriendVragen();
+  await vrWil();
+  for (i = 0; i < 30; i++) await null;
   await tikje();
-  var onzePub = MP.ecdh.pub;
+  var onzePub = mijnVr().pub;
   var kruisKp = await ecdhStart();
-  vmaat.send(JSON.stringify({ t: 'vriend?', pub: kruisKp.pub }));
+  milaGroet({ sessie: 1, pub: kruisKp.pub, wil: 1, nee: 0, zag: 0, voor: 1 });
   await tikje();
-  var wijKleiner = onzePub < kruisKp.pub;
-  var kruisAntw = vmaat.inbox.filter(function (m) { return m.t === 'vriend' && m.pub === onzePub; }).length;
-  ok('vriend: gekruiste vraag, de kant met de kleinste sleutel antwoordt', wijKleiner ? (kruisAntw === 1 && MP.ecdh === null) : (kruisAntw === 0 && !!MP.ecdh));
-  if (!wijKleiner) {
-    /* het maatje is de kleinste: die antwoordt met zijn eigen sleutel op onze vraag */
-    vmaat.send(JSON.stringify({ t: 'vriend', pub: kruisKp.pub }));
-    await tikje();
-  }
+  ok('vriend: tegelijk gevraagd: wij zagen het willen van het maatje en zeggen dat, zonder vriend tot het ons willen zag',
+    mijnVr().zag === 1 && Object.keys(P.friends).length === voorKruis);
+  milaGroet({ sessie: 1, pub: kruisKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 });
+  await tikje();
   var kKruis = await ecdhFinish(kruisKp.kp, onzePub);
   var fidKruis = (await sha256hex(kKruis)).slice(0, 16);
-  ok('vriend: gekruist levert aan beide kanten hetzelfde geheim, precies één nieuwe vriend',
+  ok('vriend: tegelijk levert aan beide kanten hetzelfde geheim, precies één nieuwe vriend',
     !!P.friends[fidKruis] && P.friends[fidKruis].k === kKruis && Object.keys(P.friends).length === voorKruis + 1 &&
-    P.friends[fidKruis].host === !wijKleiner);
+    P.friends[fidKruis].host === (onzePub < kruisKp.pub));
   closeModal();
   setFriend(fidKruis, Object.assign({}, P.friends[fidKruis], { weg: true }));
+  /* een toestand van een nieuwe sessie van het maatje komt binnen terwijl wij het geheim maken */
+  MP.viaFriend = null;
+  vers();
+  var voorTraag = Object.keys(P.friends).length;
+  await vrWil();
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  var traagKp = await ecdhStart();
+  var poortOpen, poort = new Promise(function (r) { poortOpen = r; });
+  var echteFinish = ecdhFinish;
+  ecdhFinish = async function (a, b) { await poort; return echteFinish(a, b); };
+  milaGroet({ sessie: 1, pub: traagKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 });
+  await tikje();
+  milaGroet({ sessie: 2, pub: null, wil: 0, nee: 0, zag: 0, voor: null });
+  await tikje();
+  poortOpen();
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  ecdhFinish = echteFinish;
+  ok('vriend: een nieuwe sessie van het maatje terwijl het geheim gemaakt wordt: geen vriend, en wij wachten weer op een ja',
+    Object.keys(P.friends).length === voorTraag && !MP.kamer && vrKaart() === 'gevraagd');
+  closeModal();
+  /* een vriend van deze kamer, en dan een groet van een nieuwe sessie van het maatje die hem niet bewijst */
+  MP.viaFriend = null;
+  vers();
+  var terugKp = await ecdhStart();
+  milaGroet({ sessie: 1, pub: terugKp.pub, wil: 1, nee: 0, zag: 0, voor: null });
+  await tikje();
+  await vrWil();
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  milaGroet({ sessie: 1, pub: terugKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 });
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  var terugFid = MP.kamer && MP.kamer.fid;
+  ok('vriend: testopzet: een vriend van deze kamer, met het venster', !!terugFid && !!P.friends[terugFid] && !P.friends[terugFid].weg && modalKey === 'vriendklaar');
+  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', sessie: 2, bewijzen: [] }));
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  ok('vriend: een groet van een nieuwe sessie zonder bewijs neemt de vriend van deze kamer meteen terug, en het venster gaat dicht',
+    !MP.kamer && P.friends[terugFid].weg === true && modalKey !== 'vriendklaar' && /kwam net niet aan bij Mila/.test(__els.bubble.textContent));
+  closeModal();
   mpStop();
   setFriend(fid2, Object.assign({}, P.friends[fid2], { weg: true }));
   goHome();
@@ -1825,7 +1938,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     catch (e) { return true; }
   })());
   renderFriends();
-  ok('uitnodiging: lijst toont het wachten', __els.friendList.innerHTML.indexOf('Wachten tot Mila') >= 0 &&
+  ok('uitnodiging: lijst toont het wachten', __els.friendList.innerHTML.indexOf('Wachten op Mila') >= 0 &&
     __els.friendList.innerHTML.indexOf('data-cancel') >= 0);
   var kamerInv = MP.room;
   /* nu de kant van Mila: zelfde geheim, andere rol. Haar app vraagt haar bus op. */
@@ -1857,8 +1970,14 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('uitnodiging: druk = niet gemarkeerd, later opnieuw', seenInv.length === 0);
   await friendPoll();
   for (i = 0; i < 30; i++) await null;
-  ok('uitnodiging: en dan wel getoond', __els.modalBox.innerHTML.indexOf('wil een potje spelen') >= 0 && seenInv.length === 1);
-  fire(__els.invNee, 'click');
+  /* regel 4.5: wat binnenkwam tijdens een rondje, wacht op de Verder-kaart, met beide antwoorden */
+  ok('uitnodiging: en dan op de Verder-kaart, zonder venster', __els.verder.innerHTML.indexOf('Mila wil spelen') >= 0 &&
+    __els.overlay.classList.contains('hidden') && seenInv.length === 0);
+  var voorKaart = Object.keys(__server.buses);
+  fire(__els.verderNee, 'click');
+  for (i = 0; i < 40; i++) await null;
+  Object.keys(__server.buses).forEach(function (b) { if (voorKaart.indexOf(b) < 0) delete __server.buses[b]; });
+  ok('uitnodiging: Nu niet op de kaart = gezien, en de kaart is weer gewoon', seenInv.length === 1 && __els.verder.innerHTML.indexOf('wil spelen') < 0);
   /* twee vrienden nodigen elkaar tegelijk uit: rol b (wij, host=false) krijgt
      de vraag te zien en houdt zijn eigen uitnodiging tot het kind ja zegt */
   seenInv = [];
@@ -1868,7 +1987,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   for (i = 0; i < 30; i++) await null;
   ok('uitnodiging: gekruist, rol b krijgt de vraag en houdt zolang zijn eigen uitnodiging',
     INV !== null && __els.modalBox.innerHTML.indexOf('wil een potje spelen') >= 0);
-  fire(__els.invNee, 'click');
+  await nuNiet();
   ok('uitnodiging: nu niet = ons eigen wachtscherm komt terug',
     INV !== null && __els.modalBox.innerHTML.indexOf('Wachten op Mila') >= 0);
   closeModal();
@@ -2044,22 +2163,16 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var stK5 = await nieuwBezet();
   __server.klok -= 3000;
   ok('kamers: na drie seconden wijkt de kamer van net weer gewoon', stK5 === 200 && !('vers' in __server.wsrooms));
-  /* de grens van precies drie seconden, op een stilgezette klok: de klok van
-     de nep-server is de echte tijd plus een stap, dus anders lopen er altijd
-     een paar milliseconden bij */
-  var echtNu = Date.now, vastNu = Date.now();
-  Date.now = function () { return vastNu; };
-  try {
-    __server.wsrooms = {};
-    nuK = __busNu();
-    nepKamer('grens', false, false, 0, 2999);
-    for (j = 0; Object.keys(__server.wsrooms).length < MAX_KAMERS; j++) nepKamer('bezet' + j, false, true, 0);
-    var stG1 = await nieuwBezet();
-    __server.wsrooms.grens.created = nuK - 3000;
-    var stG2 = await nieuwBezet();
-    ok('kamers: een lege kamer van 2999 ms wijkt niet, een van precies 3000 ms wel',
-      stG1 === 429 && stG2 === 200 && !('grens' in __server.wsrooms));
-  } finally { Date.now = echtNu; }
+  /* de grens van precies drie seconden */
+  __server.wsrooms = {};
+  nuK = __busNu();
+  nepKamer('grens', false, false, 0, 2999);
+  for (j = 0; Object.keys(__server.wsrooms).length < MAX_KAMERS; j++) nepKamer('bezet' + j, false, true, 0);
+  var stG1 = await nieuwBezet();
+  __server.wsrooms.grens.created = nuK - 3000;
+  var stG2 = await nieuwBezet();
+  ok('kamers: een lege kamer van 2999 ms wijkt niet, een van precies 3000 ms wel',
+    stG1 === 429 && stG2 === 200 && !('grens' in __server.wsrooms));
   nuK = __busNu();
   /* een speelcode-verzoek ruimt verlopen kamers op, zoals handlePair */
   __server.wsrooms = {};
@@ -2295,7 +2408,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   for (i = 0; i < 30; i++) await null;
   ok('twee kanten: de uitnodiging van Bo komt langs ons eigen wachtscherm heen',
     __els.modalBox.innerHTML.indexOf('Bo wil een potje spelen') >= 0 && !!INV && INV.fid === fid);
-  fire(__els.invNee, 'click');
+  await nuNiet();
   ok('twee kanten: nu niet = ons wachtscherm terug en onze uitnodiging staat nog',
     !!INV && INV.fid === fid && __els.modalBox.innerHTML.indexOf('Wachten op Mila') >= 0);
   /* een tweede briefje van Bo staat op het scherm als onze eigen uitnodiging
@@ -2315,7 +2428,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('twee kanten: onze uitnodiging verloopt, maar de vraag van Bo blijft staan',
     INV === null && MP === null && __els.modalBox.innerHTML.indexOf('Bo wil een potje spelen') >= 0 &&
     modalQueue.length === 1);
-  fire(__els.invNee, 'click');
+  await nuNiet();
   for (i = 0; i < 20; i++) await null;
   ok('twee kanten: een verlopen uitnodiging stopt met wachten en zegt het',
     INV === null && MP === null && __els.modalBox.innerHTML.indexOf('heeft niet gekeken') >= 0);
@@ -2404,7 +2517,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   showHomeTab('spelen');
   showHomeTab('vrienden');
   renderFriends();
-  fire(__els.friendList, 'click', { target: { dataset: { remove: fid } } });
+  fire(__els.friendList, 'click', { target: { dataset: { meer: fid } } });
+  fire(__els.vrWeg, 'click');
   ok('vriend: weghalen vraagt eerst, en na vier keer tekenen nog steeds maar een keer',
     __els.modalBox.innerHTML.indexOf('Mila weghalen') >= 0 && modalQueue.length === 0);
   fire(__els.rmVrJa, 'click');
