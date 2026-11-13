@@ -2091,8 +2091,10 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     var bewijs = 'potje-' + naam + '-0123456789abcdef';
     return { bewijs: bewijs, bus: await __sha256hex(bewijs) };
   };
+  /* schrijft zoals een apparaat dat net las wat er staat */
   var pSchrijf = async function (b, blob, extra) {
-    var body = Object.assign({ bus: b.bus, bewijs: b.bewijs, blob: blob }, extra || {});
+    var oud = __server.potjes[b.bus], als = oud && oud.tot > __busNu() ? await __sha256hex(oud.blob) : '';
+    var body = Object.assign({ bus: b.bus, bewijs: b.bewijs, blob: blob, als: als }, extra || {});
     return (await fetch(SYNC_URL + '/v1/potje', { method: 'POST', headers: {}, body: JSON.stringify(body) })).status;
   };
   var pLees = async function (ids) {
@@ -2110,13 +2112,13 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     return (await fetch(SYNC_URL + pad, { method: 'POST', headers: {}, body: tekst })).status;
   };
   var eeVol = 'é'.repeat(2048), eeTeVeel = 'é'.repeat(2049);
-  var pGetal = JSON.stringify({ bus: pb.bus, bewijs: pb.bewijs, blob: 42 });
+  var pGetal = JSON.stringify({ bus: pb.bus, bewijs: pb.bewijs, blob: 42, als: '' });
   ok('potje en uitnodiging: de grens is 4096 bytes en niet 4096 tekens, en een blob is tekst',
     await pSchrijf(pb, eeTeVeel) === 400 && await pSchrijf(pb, eeVol) === 204 &&
     await pRauw('/v1/bus', JSON.stringify({ bus: pb.bus, bewijs: pb.bewijs, blob: eeTeVeel })) === 400 &&
     await pRauw('/v1/potje', pGetal) === 400 && await pRauw('/v1/bus', pGetal) === 400 &&
     (await pLees([pb.bus])).blobs[pb.bus] === eeVol);
-  var pStaart = JSON.stringify({ bus: pb.bus, bewijs: pb.bewijs, blob: 'staart' });
+  var pStaart = JSON.stringify({ bus: pb.bus, bewijs: pb.bewijs, blob: 'staart', als: await __sha256hex(eeVol) });
   ok('potje en uitnodiging: tekst na het json-object weigert de server, ook een losse }, witruimte niet',
     await pRauw('/v1/potje', pStaart + '}') === 400 && await pRauw('/v1/potje', pStaart + ']{"naam":"Fien"}') === 400 &&
     await pRauw('/v1/bus', pStaart + '}') === 400 && (await pLees([pb.bus])).blobs[pb.bus] === eeVol &&
@@ -2124,6 +2126,53 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var rKamer = await fetch(SYNC_URL + '/v1/room', { method: 'POST', headers: {}, body: 'geen json' });
   if (rKamer.status === 200) delete __server.wsrooms[(await rKamer.json()).room];
   ok('kamer: POST /v1/room leest geen body, dus een kapotte body maakt niets uit', rKamer.status === 200);
+
+  /* zoals handlePotjePost: een schrijven noemt in als de versie die het las
+     (sha256 van het briefje, of '' voor niets), en alleen de versie die er
+     staat gaat door; anders 409 met wat er staat */
+  var pAls = async function (b, blob, als) {
+    var r = await fetch(SYNC_URL + '/v1/potje', { method: 'POST', headers: {},
+      body: JSON.stringify({ bus: b.bus, bewijs: b.bewijs, blob: blob, als: als }) });
+    return { status: r.status, blob: r.status === 409 ? (await r.json()).blob : undefined };
+  };
+  __server.potjes = {};
+  var v0 = await __sha256hex('staat-0'), v1 = await __sha256hex('staat-1'), v2 = await __sha256hex('staat-2');
+  var aC = [await pAls(pa, 'staat-1', v0), await pAls(pa, 'staat-1', ''), await pAls(pa, 'staat-2', ''),
+    await pAls(pa, 'staat-2', v0), await pAls(pa, 'staat-2', v1)];
+  ok('potje: alleen een schrijven met de versie die er staat gaat door, anders 409 met wat er staat',
+    aC[0].status === 409 && aC[0].blob === '' && aC[1].status === 204 && aC[2].status === 409 && aC[2].blob === 'staat-1' &&
+    aC[3].status === 409 && aC[3].blob === 'staat-1' && aC[4].status === 204 && (await pLees([pa.bus])).blobs[pa.bus] === 'staat-2');
+  var aW = [await pAls(pa, '', v2), await pAls(pa, '', ''), await pAls(pa, '', v1)];
+  ok('potje: een leeg briefje weigert de server, ook met de goede versie, en de staat blijft',
+    aW.every(function (a) { return a.status === 400; }) && (await pLees([pa.bus])).blobs[pa.bus] === 'staat-2');
+  await pAls(pa, 'staat-0', v2);
+  var duo = await Promise.all([pAls(pa, 'staat-x', v0), pAls(pa, 'staat-y', v0)]);
+  var duoWint = duo[0].status === 204 ? 'staat-x' : 'staat-y';
+  ok('potje: twee schrijvers op een versie, precies een gaat door en de ander krijgt wat die schreef',
+    duo.filter(function (a) { return a.status === 204; }).length === 1 &&
+    duo.some(function (a) { return a.status === 409 && a.blob === duoWint; }) && (await pLees([pa.bus])).blobs[pa.bus] === duoWint);
+  await pAls(pb, 'staat-b', '');
+  var zonderAls = function (extra) { return JSON.stringify(Object.assign({ bus: pb.bus, bewijs: pb.bewijs, blob: 'z' }, extra)); };
+  var aZ = [await pRauw('/v1/potje', zonderAls({})), await pRauw('/v1/potje', zonderAls({ als: null })),
+    await pRauw('/v1/potje', zonderAls({ als: 'staat-b' })),
+    await pRauw('/v1/potje', zonderAls({ als: (await __sha256hex('staat-b')).toUpperCase() }))];
+  ok('potje: zonder als, of met een als die geen versie is, weigert de server',
+    aZ.every(function (st) { return st === 400; }) && (await pLees([pb.bus])).blobs[pb.bus] === 'staat-b');
+  __server.potjes = {};
+  for (j = 0; j < 1024; j++) __server.potjes['f' + j.toString(16).padStart(63, '0')] = { blob: 'x', tot: __busNu() + POTJE_TTL + j, veranderd: __busNu() };
+  var aVol = await pAls(pa, 'x', await __sha256hex('x'));
+  ok('potje: een geweigerd schrijven bij een volle tabel duwt niemand weg',
+    aVol.status === 409 && Object.keys(__server.potjes).length === 1024 && ('f' + '0'.repeat(63)) in __server.potjes);
+  var echtNuP = Date.now, vastNuP = Date.now();
+  Date.now = function () { return vastNuP; };
+  try {
+    var b0 = __busNu(), lN0 = await pLees([]);
+    __server.klok += 90500;
+    var lN1 = await pLees([pa.bus]);
+    __server.klok -= 90500;
+    ok('bus check: nu is de klok van de server in hele seconden, ook bij een lege vraag',
+      lN0.nu === Math.floor(b0 / 1000) && lN1.nu === Math.floor((b0 + 90500) / 1000));
+  } finally { Date.now = echtNuP; }
 
   __server.potjes = {};
   await pSchrijf(pa, 'x');
@@ -2152,12 +2201,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var oAnders = (await pLees([pa.bus])).ongewijzigd[pa.bus];
   __server.klok += 1800000;
   var oHalf = (await pLees([pa.bus])).ongewijzigd[pa.bus];
-  await pSchrijf(pa, '');
-  var oGewist = pa.bus in (await pLees([pa.bus])).blobs;
-  await pSchrijf(pa, 'zet-2');
-  var oVers = (await pLees([pa.bus])).ongewijzigd[pa.bus];
-  ok('potje: ongewijzigd loopt door bij dezelfde bytes en begint opnieuw bij andere bytes of na wissen',
-    oZelfde === 7200 && oAnders === 0 && oHalf === 1800 && !oGewist && oVers === 0);
+  ok('potje: ongewijzigd loopt door bij dezelfde bytes en begint opnieuw bij andere bytes',
+    oZelfde === 7200 && oAnders === 0 && oHalf === 1800);
   __server.klok = klokP;
   __server.potjes = {};
   await pSchrijf(pa, 'zet-1');
@@ -2200,6 +2245,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('potje: de uitnodigingen tellen niet mee voor de 1024 potjesbussen',
     await pSchrijf(pb, 'x') === 204 && Object.keys(__server.potjes).length === 1024 && (pa.bus in __server.potjes));
 
+  __server.klok += 2 * 3600000;
   __server.links = { 'een-code': { payload: 'x', tot: __busNu() + LINK_TTL } };
   __server.wsrooms = {};
   __server.pending = { 'a|b': { dirA: 'a' } };
@@ -2210,13 +2256,15 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   drainTimers(50, 0);
   __herstartServer();
   drainTimers(50, 0);
-  ok('potje: een herstart verliest potjes, uitnodigingen, codes, kamers en paren, breekt open lijnen en houdt de profielen',
-    !(pa.bus in (await pLees([pa.bus])).blobs) && Object.keys(__server.buses).length === 0 &&
+  ok('potje: een herstart houdt de potjes en de profielen, verliest uitnodigingen, codes, kamers en paren en breekt open lijnen',
+    (await pLees([pa.bus])).blobs[pa.bus] === 'x' && Object.keys(__server.buses).length === 0 &&
     Object.keys(__server.links).length === 0 && Object.keys(__server.wsrooms).length === 0 &&
     Object.keys(__server.pending).length === 0 && wsHDicht === 1006 && !!__server.profiles.herstartproef);
-  await pSchrijf(pa, 'x');
   __server.klok += 3600000;
-  ok('potje: na een herstart telt ongewijzigd vanaf het opnieuw schrijven', (await pLees([pa.bus])).ongewijzigd[pa.bus] === 3600);
+  ok('potje: na een herstart telt ongewijzigd vanaf de herstart, zoals bij het laden van schijf', (await pLees([pa.bus])).ongewijzigd[pa.bus] === 3600);
+  __potjesKwijt();
+  ok('potje: zijn de potjes kwijt, dan staat er niets meer en blijven de profielen',
+    !(pa.bus in (await pLees([pa.bus])).blobs) && !!__server.profiles.herstartproef && await pSchrijf(pa, 'terug') === 204);
   __server.klok = klokP;
   delete __server.profiles.herstartproef;
   __server.links = tabellenVoor.links;
