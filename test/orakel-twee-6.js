@@ -297,6 +297,28 @@ async function orakelTwee6() {
       vriendenpotjeMet(mees, fid).moves.length === n + 2);
   });
 
+  await regel('[6.2] zonder netwerk zegt de kaart wat het kind wel kan, en na een zet zegt de strook dat de zet hier bewaard is en naar de vriend gaat zodra er verbinding is', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 2, mees);
+    stopApparaat(fien);
+    stopApparaat(mees);
+    schuifKlok(DAG);
+    mees.netwerk.uit = true;
+    mees = await opent(mees);
+    check('de kaart op de eigen beurt, met Speel verder', /Er is nu geen verbinding\. Je kunt wel je zet doen\./.test(tekstVan(mees, 'verder')) &&
+      kanTikken(mees, 'Speel verder'));
+    mees.tik('verderKaart');
+    await wacht();
+    await zetUit(RUSTIG, mees);
+    await wacht();
+    check('de strook na de zet', /Je zet is bewaard op .+\. Heb je weer verbinding, dan gaat hij naar Fien\./.test(zegt(mees)) && !/ziet hem bij het openen/.test(zegt(mees)));
+    mees.tik('backBtn');
+    await wacht();
+    check('de kaart op de beurt van de vriend', /Er is nu geen verbinding\. Fien is aan zet\./.test(tekstVan(mees, 'verder')));
+  });
+
   await regel('[6.2] een eigen potjesbus wordt na zeven dagen opnieuw geschreven, met precies dezelfde bytes, en niet eerder', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');

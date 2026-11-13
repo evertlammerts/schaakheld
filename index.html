@@ -4868,6 +4868,8 @@ function mpVolgtRecord(r, ev) {
   else if (remiseVraagOpen()) toonRemiseVraag();
   else if (bord) say(MP.S.turn === MP.myColor ? 'Jij weer! Wat wordt je plan? 💭' : zinWeg());
 }
+/* een zet zonder verbinding: hij staat hier, en de potjesbus krijgt hem zodra er weer verbinding is */
+function zinZonderNet() { return 'Je zet is bewaard op ' + ditApparaat() + '. Heb je weer verbinding, dan gaat hij naar ' + mpNaam() + '.'; }
 /* de vriend is er nu niet: wat de strook zegt, op de eigen beurt en daarna */
 function zinWeg() {
   const naam = mpNaam();
@@ -4900,6 +4902,8 @@ async function potjeNaarBusNu(gameId, dwing) {
   const blob = zelfde ? oud.blob : b64url(await sealJSON(f.k, 'potje', vasteLengte(JSON.parse(inhoud), POTJE_LENGTE)));
   const gelukt = await schrijfPotjesbus(f, blob);
   bijSamen(gameId, gelukt ? { bus: { inhoud, blob, t: Date.now() }, busOnzeker: false } : { busOnzeker: true });
+  /* de zet die het kind net deed, kwam niet aan: de strook belooft niet dat de vriend hem ziet */
+  if (!gelukt && MP && MP.gameId === gameId && samenInBeeld() && !session.over && !MP.peerOn && MP.S.turn !== MP.myColor) say(zinZonderNet());
 }
 async function ecdhStart() {
   const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
@@ -6419,7 +6423,8 @@ function samenItem(s) {
   }
   /* een vriend die een week of langer niet zette: het potje zakt naar het eind, en de kaart zegt hoe lang al */
   const dagen = s.vriend && !beurt && tijd ? dagenGeleden(tijd) : 0, stil = dagen >= 7;
-  const zin = s.zonderNet ? 'Er is nu geen verbinding. Probeer het straks nog eens.' : s.eigenBod ? 'Je bood remise aan. ' + naam + ' is aan zet.' :
+  /* zonder verbinding kan het kind wel zetten: de zet blijft hier bewaard en gaat later */
+  const zin = s.zonderNet ? 'Er is nu geen verbinding. ' + (beurt ? 'Je kunt wel je zet doen.' : naam + ' is aan zet.') : s.eigenBod ? 'Je bood remise aan. ' + naam + ' is aan zet.' :
     stil ? stilZin(naam, dagen) : zinDoetMee(s.mijnUitdaging, n, s.myColor, naam) || (!beurt ? naam + ' is aan zet.' :
       s.vriend && n ? naam + ' heeft gezet. Jij bent aan zet.' : 'Jij bent aan zet.');
   return { rule: 'R1', title: 'Verder: je potje met ' + naam, button: 'Speel verder', vriend: true, naam, opDagen: !!s.vriend,
@@ -8239,7 +8244,7 @@ function commitKid(m) {
       remiseRij();
       /* zonder verbinding geen belofte dat de ander de zet al ziet */
       say(!session.samenBewaard ? SAMEN_NIET_BEWAARD : bodMee ? zinEigenBod() :
-        MP && MP.zetZonderNet ? 'Je zet is bewaard. Er is nu geen verbinding, dus ' + mpNaam() + ' ziet hem nog niet.' :
+        MP && vriendZonderKamer() && (MP.zetZonderNet || potjesNetFout) ? zinZonderNet() : MP && MP.zetZonderNet ? 'Je zet is bewaard. Er is nu geen verbinding, dus ' + mpNaam() + ' ziet hem nog niet.' :
         MP && !MP.peerOn && vriendZonderKamer() ? zinWeg() : 'Nu ' + mpNaam() + '… 💭');
       return;
     }
