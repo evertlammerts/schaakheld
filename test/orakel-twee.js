@@ -1388,6 +1388,25 @@ async function orakelTwee() {
     }
   });
 
+  await regel('[2.5] twee snelle tikken tellen als één, ook als het nee van de ander al onderweg is: wie Nu niet zei, krijgt de vraag niet nog eens', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    /* bij Fien blijven de groeten van Daan liggen, zodat ze er een voor een uit kunnen */
+    fien.ev('globalThis.__houdA = []; var __mma = mpMsg; globalThis.__losA = function (n) { var h = globalThis.__houdA, nu = h.splice(0, n == null ? h.length : n); if (n == null) globalThis.__houdA = null; nu.forEach(function (m) { __mma(m); }); }; mpMsg = function (m) { if (globalThis.__houdA && m && m.t === "hallo") { globalThis.__houdA.push(m); return; } return __mma(m); }');
+    const knop = daan.el('mpVriend');
+    fire(knop, 'click', { target: knop });
+    fire(knop, 'click', { target: knop });
+    await tel(3);
+    check('testopzet: een groet van Daan ligt klaar', globalThis.__houdA.length >= 1);
+    globalThis.__losA(1);
+    await wacht();
+    check('testopzet: Fien heeft de vraag', vraagOpKaart(fien));
+    tikTekst(fien, 'Nu niet');
+    globalThis.__losA();
+    await tel(5);
+    check('Fien krijgt de vraag niet nog eens, en Daan leest het nee en heeft zijn knop weer', !vraagOpKaart(fien) &&
+      /wil nu even niet/.test(tekstVan(daan, 'bubble')) && kanTikken(daan, 'Vrienden worden'));
+  });
+
   await regel('[2.5] twee snelle tikken op Vrienden worden tellen als één: één Nu niet beantwoordt de vraag', async function (check) {
     const { fien, daan } = await eindeTussenTwee();
     const knop = daan.el('mpVriend');
@@ -1603,12 +1622,13 @@ async function orakelTwee() {
     tikTekst(fien, 'Nu niet');
     await wacht();
     check('testopzet: Daan leest het', /wil nu even niet/.test(tekstVan(daan, 'bubble')));
-    tikTekst(fien, 'Revanche');
+    /* Daan tikt zelf iets anders, zodat zijn strook iets anders zegt */
+    tikTekst(daan, 'Revanche');
     await wacht();
     check('testopzet: de strook van Daan zegt nu iets anders', !/wil nu even niet/.test(tekstVan(daan, 'bubble')));
     wissel(fien);
-    await tel(5);
-    check('na een nieuwe groet van Fien zegt de strook het niet nog eens', !/wil nu even niet/.test(tekstVan(daan, 'bubble')));
+    const weer = await zagOoit(function () { return /wil nu even niet/.test(tekstVan(daan, 'bubble')); }, 5000);
+    check('na een nieuwe groet van Fien zegt de strook het niet nog eens, ook niet even', !weer);
   });
 
   await regel('[2.5] twee kinderen die al vrienden waren, met een app die deze uitwisseling niet kent: geen knop en geen zin over de nieuwste SchaakHeld', async function (check) {
@@ -2045,9 +2065,10 @@ async function orakelTwee() {
     check('drie keer 30, dan 15 (' + kregen.join(', ') + ')', kregen.join() === '30/30,30/30,30/30,15/15');
   });
 
-  await regel('[4.1] een vriend die midden in het vierde potje van de dag bewaard wordt, verandert niet hoe dat potje telt: 15 XP', async function (check) {
+  await regel('[4.1] een vriend die midden in het vierde potje van de dag bewaard wordt, verandert niet hoe dat potje telt, ook niet na een herlading: 15 XP', async function (check) {
     zetDatum('2026-11-12T10:00:00');
-    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    let a = maakApparaat('Fien');
+    const b = maakApparaat('Daan');
     await samenSpelen(a, b);
     const kregen = [];
     for (let i = 0; i < 4; i++) {
@@ -2065,6 +2086,9 @@ async function orakelTwee() {
         globalThis.__losX();
         await tel(3);
         check('testopzet: Fien bewaarde de vriend midden in het vierde potje', !!geheimen(a) && geheimen(a) === geheimen(b) && a.get('!!(session && !session.over)'));
+        /* en Fien laadt opnieuw voor het potje uit is */
+        a = await terugInPotje(a);
+        check('testopzet: Fien is terug in het vierde potje', a.get('!!(session && session.online && !session.over)'));
       } else if (i) await revanche(a, b);
       const xa = xpVan(a), xb = xpVan(b);
       for (const z of SNEL_MAT) await speel(a, b, z);
@@ -2074,7 +2098,7 @@ async function orakelTwee() {
     check('drie keer 30, dan 15 (' + kregen.join(', ') + ')', kregen.join() === '30/30,30/30,30/30,15/15');
   });
 
-  await regel('[4.1] een einde dat een kind pas later ziet, geeft één keer XP, geteld bij hetzelfde kind: het vierde potje van de dag geeft 15', async function (check) {
+  await regel('[4.1] een einde dat een kind pas later bij Verder ziet, geeft één keer XP, geteld bij hetzelfde kind: het vierde potje van de dag geeft 15', async function (check) {
     zetDatum('2026-11-12T10:00:00');
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
@@ -2084,22 +2108,28 @@ async function orakelTwee() {
       await wacht();
     }
     await revanche(a, b);
-    const wit = a.get('MP.myColor') === 'w' ? a : b, zwart = wit === a ? b : a;
-    const xw = xpVan(wit);
-    for (const z of SNEL_MAT.slice(0, 3)) await speel(a, b, z);
+    for (const z of ZETTEN22) await speel(a, b, z);
+    const op = aanZet(a, b), ander = op === a ? b : a, kamer = ander.get('MP.room');
+    const xp = xpVan(ander);
+    /* het kind is thuis als de ander opgeeft, en daarna is de kamer weg: het einde komt uit het bewaarde potje */
+    ander.tik('backBtn');
     await wacht();
-    stopApparaat(wit);
+    await geefOp(op);
+    await wacht(3000);
+    stopApparaat(op);
+    stopApparaat(ander);
+    delete __server.wsrooms[kamer];
+    const ander2 = herlaad(ander);
+    await wacht(30000);
+    check('testopzet: de kaart zegt dat het potje klaar is', kanTikken(ander2, 'Bekijk'));
+    tikTekst(ander2, 'Bekijk');
     await wacht();
-    await speel(zwart, zwart, SNEL_MAT[3]);
-    await tel(3);
-    let w2 = maakApparaat(wit.naam, { opslag: wit.opslag, locatie: wit.location, netwerk: wit.netwerk, herstart: true });
-    await tel(5);
-    if (w2.el('verderKaart') && zichtbaar(w2, 'verderKaart')) { w2.tik('verderKaart'); await tel(3); }
-    check('wit ziet het einde later en krijgt 15 XP', xpVan(w2) === xw + 15);
-    w2 = herlaad(w2);
-    await tel(5);
-    if (w2.el('verderKaart') && zichtbaar(w2, 'verderKaart')) { w2.tik('verderKaart'); await tel(3); }
-    check('nog eens laden geeft niets erbij', xpVan(w2) === xw + 15);
+    check('het einde later gezien: 15 XP, want het is het vierde potje van de dag met dit kind', xpVan(ander2) === xp + 15);
+    tikTekst(ander2, 'Naar huis');
+    await wacht();
+    const ander3 = herlaad(ander2);
+    await wacht(30000);
+    check('nog eens laden geeft niets erbij', xpVan(ander3) === xp + 15);
   });
 
   await regel('[3.10] compat: een profiel van de vorige versie houdt zijn XP, krijgt er niets bij door te laden, en zijn dagteller werkt met potjes tussen kinderen', async function (check) {
