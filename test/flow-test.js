@@ -2238,6 +2238,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('potje: de uitnodigingen tellen niet mee voor de 1024 potjesbussen',
     await pSchrijf(pb, 'x') === 204 && Object.keys(__server.potjes).length === 1024 && (pa.bus in __server.potjes));
 
+  __server.klok += 2 * 3600000;
   __server.links = { 'een-code': { payload: 'x', tot: __busNu() + LINK_TTL } };
   __server.wsrooms = {};
   __server.pending = { 'a|b': { dirA: 'a' } };
@@ -2248,13 +2249,15 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   drainTimers(50, 0);
   __herstartServer();
   drainTimers(50, 0);
-  ok('potje: een herstart verliest potjes, uitnodigingen, codes, kamers en paren, breekt open lijnen en houdt de profielen',
-    !(pa.bus in (await pLees([pa.bus])).blobs) && Object.keys(__server.buses).length === 0 &&
+  ok('potje: een herstart houdt de potjes en de profielen, verliest uitnodigingen, codes, kamers en paren en breekt open lijnen',
+    (await pLees([pa.bus])).blobs[pa.bus] === 'x' && Object.keys(__server.buses).length === 0 &&
     Object.keys(__server.links).length === 0 && Object.keys(__server.wsrooms).length === 0 &&
     Object.keys(__server.pending).length === 0 && wsHDicht === 1006 && !!__server.profiles.herstartproef);
-  await pSchrijf(pa, 'x');
   __server.klok += 3600000;
-  ok('potje: na een herstart telt ongewijzigd vanaf het opnieuw schrijven', (await pLees([pa.bus])).ongewijzigd[pa.bus] === 3600);
+  ok('potje: na een herstart telt ongewijzigd vanaf de herstart, zoals bij het laden van schijf', (await pLees([pa.bus])).ongewijzigd[pa.bus] === 3600);
+  __potjesKwijt();
+  ok('potje: zijn de potjes kwijt, dan staat er niets meer en blijven de profielen',
+    !(pa.bus in (await pLees([pa.bus])).blobs) && !!__server.profiles.herstartproef && await pSchrijf(pa, 'terug') === 204);
   __server.klok = klokP;
   delete __server.profiles.herstartproef;
   __server.links = tabellenVoor.links;

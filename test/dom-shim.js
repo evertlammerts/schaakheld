@@ -520,7 +520,7 @@ function __busGeldig(body, hex) {
     new TextEncoder().encode(body.blob == null ? '' : body.blob).length <= MAX_BUS_BLOB;
 }
 /* een herstart van de server: alles wat alleen in het geheugen staat is weg
-   en elke open lijn breekt; de profielen op schijf blijven */
+   en elke open lijn breekt; de profielen en potjesbussen op schijf blijven */
 function __herstartServer() {
   for (const id in __server.wsrooms) {
     const rm = __server.wsrooms[id];
@@ -530,8 +530,14 @@ function __herstartServer() {
   __server.wsrooms = {};
   __server.pending = {};
   __server.buses = {};
-  __server.potjes = {};
+  /* de potjesbussen staan op schijf, zoals in bus.go: ze blijven, en hun
+     ongewijzigd telt vanaf de start, want alleen tot staat op schijf */
+  __veegPotjes();
+  for (const id in __server.potjes) __server.potjes[id].veranderd = __busNu();
 }
+/* alleen de potjesbussen kwijt, zoals een verloren map potjes: voor een
+   apparaat dat zijn staat terug moet schrijven */
+function __potjesKwijt() { __server.potjes = {}; }
 /* zoals room.go: een kamer heeft een potje zodra beide stoeltjes ooit
    verbonden waren; stil is pas stil als er niemand verbonden is */
 function __heeftPotje(rm) { return rm.order.every(tok => rm.joined[tok]); }
