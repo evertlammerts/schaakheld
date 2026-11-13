@@ -481,14 +481,15 @@ var crypto = {
    profielblobs met bearer secret, kamers en wederzijdse paren), zodat de
    flows end-to-end testbaar zijn. */
 var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, potjes: {}, klok: 0, teller: 0 };
-/* grenzen en TTL uit bus.go, room.go en server.go; __server.klok schuift de
-   klok van de nep-server vooruit zodat een test een bus, een kamer of een
-   koppelcode kan laten verlopen */
+/* grenzen en TTL uit bus.go, room.go en server.go. De nep-server meet tijd op
+   de klok van de wereld, de virtuele klok van de timers, zoals de Go-server
+   op die van zijn eigen machine; __server.klok schuift hem vooruit zodat een
+   test een bus, een kamer of een koppelcode kan laten verlopen */
 var BUS_TTL = 10 * 60000, MAX_BUSES = 512, MAX_BUS_BLOB = 4 << 10, MAX_BUS_CHECK = 64;
 var POTJE_TTL = 30 * 24 * 3600000, MAX_POTJES = 1024;
 var LINK_TTL = 10 * 60000, MAX_LINKS = 8192;
 var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000, MAX_KAMERS = 64, KAMER_RUST = 3000;
-function __busNu() { return Date.now() + __server.klok; }
+function __busNu() { return __klok + __server.klok; }
 function __veegBussen() {
   for (var id in __server.buses) if (__server.buses[id].tot <= __busNu()) delete __server.buses[id];
 }

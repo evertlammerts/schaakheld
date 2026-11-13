@@ -1136,6 +1136,28 @@ async function orakelTwee() {
     check('te kort: aan beide kanten', [kort.a, kort.b].every(function (x) { return /Dit potje telt niet mee: het was korter dan tien zetten\./.test(tekstVan(x, 'eindkaart')); }));
   });
 
+  await regel('[4.1] een tweede potje nadat het weekdoel met vrienden gehaald is, zegt niet nog eens dat het nu gehaald is', async function (check) {
+    const { a, b } = await potjeMetDoel({ kind: 'vriend', n: 1 }, null, false);
+    check('testopzet: het eerste potje haalde het doel', /nu gehaald/.test(tekstVan(a, 'eindkaart')));
+    const xp = a.get('P.xp');
+    tikTekst(a, 'Revanche');
+    tikTekst(b, 'Revanche');
+    await wacht();
+    for (const z of ZETTEN22) await speel(a, b, z);
+    await geefOp(aanZet(a, b));
+    await wacht();
+    check('testopzet: het tweede potje is klaar en telde', a.get('session.S.hist.length') >= 22 &&
+      /JIJ WINT|wint dit potje/.test(tekstVan(a, 'eindkaart')) && !/korter dan tien zetten/.test(tekstVan(a, 'eindkaart')));
+    check('niet nog eens gehaald, en er komt geen XP bij', !/gehaald/.test(tekstVan(a, 'eindkaart')) && a.get('P.xp') === xp);
+  });
+
+  await regel('[4.1] met een weekdoel van een andere soort zegt de eindkaart van een potje tussen kinderen niet dat het meetelt', async function (check) {
+    const { a } = await potjeMetDoel({ kind: 'opdr', n: 10 }, null, false);
+    const kaart = tekstVan(a, 'eindkaart');
+    check('testopzet: het potje is klaar en telde', /JIJ WINT|wint dit potje/.test(kaart) && !/korter dan tien zetten/.test(kaart));
+    check('geen Telt mee voor je weekdoel', !/Telt mee voor je weekdoel/.test(kaart));
+  });
+
   await regel('[4.2] Pauze uit een potje met een ander kind gaat naar Spelen, waar de kaart het potje toont, ook als het van Vrienden kwam', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     a.tik('tabVrienden');
