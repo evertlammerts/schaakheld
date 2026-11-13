@@ -193,7 +193,7 @@ for (const [W, H] of KLEIN) {
         session.phase = 'marking'; BD.marks.clear(); BD.mode = 'mark'; renderBoard(); });
       await klikTekst(/Klaar/);
       await page.waitForTimeout(500);
-      const reden = await rect('#taskBox .e-body > :first-child'), onder = await rect('#onder');
+      const reden = await rect('#taskBox .e-body p, #taskBox .e-body li'), onder = await rect('#onder');
       check(n, 'de eerste reden staat helemaal in beeld', !!reden && !!onder && binnen(reden, ${W}, ${H}) &&
         reden.top >= onder.top - 0.5 && reden.bottom <= onder.bottom + 0.5);`
   });
@@ -340,6 +340,39 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
             (e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1) && getComputedStyle(e).overflow !== 'visible')
           .map(e => e.textContent.trim().slice(0, 30)));
         check(n, 'geen tekst afgeknipt' + (geknipt.length ? ': ' + geknipt.join(' | ') : ''), geknipt.length === 0);
+      }` });
+}
+
+/* plan.md 5.5: een reden over een stuk is een punt in de lijst, ook met twee zinnen; de eerste zin
+   past helemaal onder het bord, de tweede mag scrollen. De langste: SG13 voor het paard en SG20. */
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n = '[5.5] ' + W + 'x' + H + ': de eerste zin van een reden over een stuk past onder het bord, ook als er een tweede zin volgt';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const gevallen = [
+        ['SG13, het paard', '6k1/8/8/8/3N4/8/8/6K1 w - - 0 1', 'mobility', 'd4', ['b3', 'b5', 'c2', 'c6', 'e2', 'e6', 'f3', 'f5', 'd6']],
+        ['SG20', '6k1/8/4p3/3n4/8/2N5/8/6K1 w - - 0 1', 'free', null, ['d5']]
+      ];
+      for (const [naam, fen, type, stuk, tikken] of gevallen) {
+        await vers(${W}, ${H});
+        await startOefening('scan');
+        await page.evaluate(([fen, type, stuk]) => {
+          const S = parseFEN(fen), extra = stuk ? sqFromAlg(stuk) : null, details = type === 'free' ? freePiecesEx(S) : null;
+          const targets = type === 'mobility' ? legalMoves(S).filter(m => m.from === extra).map(m => m.to) : details.map(x => x.sq);
+          session.S = S; session.task = { S, type, targets, extra, details };
+          session.phase = 'marking'; BD.marks.clear(); BD.glow.clear(); if (extra != null) BD.glow.add(extra); BD.mode = 'mark'; renderBoard();
+        }, [fen, type, stuk]);
+        for (const v of tikken) await veld(v);
+        await klikTekst(/Klaar/);
+        await page.waitForTimeout(1200);
+        const r = await page.evaluate(() => {
+          const li = document.querySelector('#taskBox .e-body p, #taskBox .e-body li'), e = li && li.querySelector('.zin1'), o = document.getElementById('onder');
+          if (!e || !o) return null;
+          const a = e.getBoundingClientRect(), b = o.getBoundingClientRect();
+          return { tekst: e.textContent, heel: li.textContent, top: a.top, bottom: a.bottom, left: a.left, right: a.right, w: a.width, h: a.height, onderTop: b.top, onderBottom: b.bottom };
+        });
+        check(n, naam + ': een reden met twee zinnen voorop (' + (r && r.heel) + ')', !!r && r.heel.length > r.tekst.length);
+        if (r) check(n, naam + ': de eerste zin helemaal in beeld (' + r.tekst + ')', binnen(r, ${W}, ${H}) && r.top >= r.onderTop - 0.5 && r.bottom <= r.onderBottom + 0.5);
       }` });
 }
 
@@ -662,7 +695,7 @@ for (const [W, H] of KLEIN) {
         await page.evaluate(k => { const m = legalMoves(session.S).find(x => moveKey(x) === k); onCell(m.from); onCell(m.to); }, k);
         await page.waitForTimeout(7000);
       }
-      const reden = await rect('#taskBox .e-body > :first-child'), onder = await rect('#onder');
+      const reden = await rect('#taskBox .e-body p, #taskBox .e-body li'), onder = await rect('#onder');
       check(n, 'testopzet: de uitleg staat er', !!reden);
       check(n, 'de eerste reden helemaal in beeld', !!reden && !!onder && binnen(reden, ${W}, ${H}) && reden.bottom <= onder.bottom + 0.5);`
   });

@@ -65,9 +65,9 @@ BD.marks.add(sqFromAlg('g4'));   /* wrong: knight nobody can capture */
 scanCheck();
 /* [2.4] de redenen staan onder het bord */
 var explHtml = __els.bubble.innerHTML + __els.taskBox.innerHTML;
-ok('expl: missed c6 explained as trade', explHtml.indexOf('goede ruil') >= 0);
+ok('expl: missed c6 explained as trade', explHtml.indexOf('Winst voor jou') >= 0);
 ok('expl: mentions capturing pawn d5', explHtml.indexOf('pion op d5') >= 0);
-ok('expl: wrong g4 explained (not capturable)', explHtml.indexOf('geen enkel wit stuk') >= 0);
+ok('expl: wrong g4 explained (not capturable)', explHtml.indexOf('Geen enkel wit stuk') >= 0);
 ok('expl: points math 3 vs 1', explHtml.indexOf('3 punten') >= 0 && explHtml.indexOf('1 punt') >= 0);
 
 /* attacked-type explanations */
@@ -121,7 +121,7 @@ puzzleAttempt(legalMoves(m2S2).find(function (m) { return alg(m.to) === 'h7'; })
 drainTimers();
 ok('mat2: tweede misser = voorgespeeld tot mat, 0 sterren', session.phase === 'review' &&
   session.earned === m2Earned && gameStatus(session.S).reason === 'mat' &&
-  __els.taskBox.innerHTML.indexOf('dan kan Turbo de mat niet meer tegenhouden') >= 0);
+  __els.taskBox.innerHTML.indexOf('Daarna kon Turbo de mat niet meer tegenhouden') >= 0);
 
 /* ---------- koning ontsnapt ---------- */
 startDrill('koning');
@@ -371,7 +371,7 @@ best3Confirm();
 drainTimers();
 ok('best3: correct on 2nd try = 1 star', session.earned === 1 && session.phase === 'review');
 ok('best3: explanation shown on correct', /Goud|Ja, die is het/.test(__els.taskBox.innerHTML) &&
-  __els.taskBox.innerHTML.indexOf('🥇') >= 0);
+  __els.taskBox.innerHTML.indexOf('De beste was') >= 0);
 /* wrong-wrong -> auto reveal (ronde 2 is de valstrik-vraag, die eerst beantwoorden) */
 nextRound();
 drainTimers();
@@ -385,7 +385,7 @@ earnedBefore = session.earned;
 pickOption(w1); best3Confirm(); drainTimers();
 pickOption(w2); best3Confirm(); drainTimers();
 ok('best3: auto-reveal after 2 wrong', session.phase === 'review' && session.earned === earnedBefore);
-ok('best3: explanation shown on reveal', __els.taskBox.innerHTML.indexOf('🥇') >= 0);
+ok('best3: explanation shown on reveal', __els.taskBox.innerHTML.indexOf('De beste was') >= 0);
 /* deterministic explanation content: Qb4?? hangs the queen, Qb2+ is safe with check */
 var eS = parseFEN('7k/8/8/8/7r/8/8/KQ6 w - - 0 1');
 var eMoves = legalMoves(eS);
@@ -394,9 +394,8 @@ var eGood = eMoves.find(function (m) { return m.from === 1 && m.to === 17; });
 var eTask = { S: eS, options: [{ m: eBad, score: 0 }, { m: eGood, score: 0 }], best: null };
 eTask.best = eTask.options[1];
 var eLines = best3Explanations(eTask);
-ok('best3 expl: hanging queen costs 9 points', eLines[0].indexOf('kost je') >= 0 &&
-  eLines[0].indexOf('9 punten') >= 0);
-ok('best3 expl: best line marked gold', eLines[1].indexOf('🥇') === 0);
+ok('best3 expl: hanging queen costs 9 points', eLines[1].indexOf('9 punten kwijt') >= 0);
+ok('best3 expl: best line marked gold', eLines[0] === 'De beste was B: <b>Dame b1 → b2</b>.');
 ok('best3 expl: board untouched', eS.hist.length === 0 && toFEN(eS) === '7k/8/8/8/7r/8/8/KQ6 w - - 0 1');
 
 /* ---------- trucendrills ---------- */

@@ -677,15 +677,19 @@ function blunderCheck(S, m) {
   if (!mate && loss >= 150) {
     const reply = rootScores(S, 2);
     punish = reply.length ? reply[0].m : null;
-    take = punish && isCapture(S, punish) ? punish : null;
-    if (!take) {
-      const w = winnableCaptures(S);
-      if (w.length) take = w.reduce((a, b) => b.gain > a.gain ? b : a).move;
-    }
+    take = lossStart(S, punish);
   }
   unmakeMove(S);
   if (mate) return { loss, punish, take: null, mate: true };
   return loss >= 150 ? { loss, punish, take } : null;
+}
+
+/* The capture that starts a loss in S, for the side to move: its best move
+   when that captures, otherwise its capture that wins the most, or null. */
+function lossStart(S, best) {
+  if (best && isCapture(S, best)) return best;
+  const w = winnableCaptures(S);
+  return w.length ? w.reduce((a, b) => b.gain > a.gain ? b : a).move : null;
 }
 
 /* A reply that mates at once, or null. Only a reply that gives check can

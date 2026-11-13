@@ -1303,7 +1303,7 @@ async function orakelFlow() {
   }
 
   /* F2: bij elke truc van de Trucendoos horen de poging en de uitleg bij die truc, niet bij een andere */
-  const TRUC_WOORD = { vork: /vork/i, penning: /penning/i, spies: /spies/i, aftrek: /aftrek/i, mat1: /^Dit was mat: .+\.$/, mat2: /dan kan Turbo de mat niet meer tegenhouden/ };
+  const TRUC_WOORD = { vork: /vork/i, penning: /penning/i, spies: /spies/i, aftrek: /aftrek/i, mat1: /^Dit was mat: .+\.$/, mat2: /Daarna kon Turbo de mat niet meer tegenhouden/ };
   for (const type of Object.keys(TRUC_WOORD)) {
     await regel('[2.4] Trucendoos, ' + type + ': de foute poging en de uitleg na twee missers horen bij deze truc', async function (check) {
       const a = nieuwKind();
