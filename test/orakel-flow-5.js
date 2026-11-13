@@ -249,7 +249,7 @@ async function orakelFlow5() {
     ['een kind dat al sterk is', 1, 'sterk', 'Na deze zet kan Turbo iets van je pakken.']
   ];
   for (const g of ALARM) {
-    await nogNiet('[5.4] het blunderalarm, ' + g[0] + ': "' + g[3] + '"', async function (check) {
+    await regel('[5.4] het blunderalarm, ' + g[0] + ': "' + g[3] + '"', async function (check) {
       const a = nieuwKind({ opslag: opslagMetPotje(g[1], ['e2e4', 'e7e5', 'g1f3', 'd7d6']) });
       a.ev('setPref("guard", true)');
       if (g[2]) a.ev('setPref("start", ' + JSON.stringify(g[2]) + ')');
@@ -264,7 +264,7 @@ async function orakelFlow5() {
   }
 
   for (const g of [['tegen Slaapkop Turbo', 1, null], ['tegen Super Turbo voor een kind dat al sterk is', 3, 'sterk']]) {
-    await nogNiet('[5.4] het blunderalarm voor mat in één, ' + g[0] + ': "Na deze zet kan Turbo je schaakmat zetten."', async function (check) {
+    await regel('[5.4] het blunderalarm voor mat in één, ' + g[0] + ': "Na deze zet kan Turbo je schaakmat zetten."', async function (check) {
       const a = nieuwKind({ opslag: opslagMetPotje(g[1], ['f2f3', 'e7e5']) });
       a.ev('setPref("guard", true)');
       if (g[2]) a.ev('setPref("start", ' + JSON.stringify(g[2]) + ')');
@@ -662,7 +662,7 @@ async function orakelFlow5() {
 
   /* ---------- 5.4: de openingscoach waarschuwt alleen voor een zet die iets kost ---------- */
 
-  await nogNiet('[5.4] de openingscoach: een zet die een stuk kost zegt "Pas op: na deze zet wint Turbo 3 punten." en wat Turbo dan speelt', async function (check) {
+  await regel('[5.4] de openingscoach: een zet die een stuk kost zegt "Pas op: na deze zet wint Turbo 3 punten." en wat Turbo dan speelt', async function (check) {
     const a = nieuwKind();
     a.ev('startOpening("coach", null)');
     await wacht();
@@ -674,12 +674,40 @@ async function orakelFlow5() {
     const bc = m ? blunderCheck(S, m) : null;
     if (!check('testopzet: Lf1-a6 kost de loper', !!bc && !bc.mate && bc.loss >= 250)) return;
     makeMove(S, m);
-    const tweede = 'Turbo speelt dan ' + moveNameNL(S, bc.punish) + '.';
+    const tweede = 'Turbo speelt dan ' + moveNameNL(S, bc.take) + '.';
     zet(a, 'f1a6');
     await wacht(400);
     check('de waarschuwing (' + onder5(a) + ')', onder5(a).indexOf('Pas op: na deze zet wint Turbo 3 punten.') === 0);
     check('en wat Turbo dan speelt', onder5(a).indexOf(tweede) >= 0);
   });
+
+  /* D40: na 1.e4 e5 2.Pf3 Dg5 staat Turbo's dame gratis. 3.a3 laat haar staan,
+     maar verliest zelf niets: dat is een gemiste kans, geen gevaar. */
+  const DG5 = ['e2e4', 'e7e5', 'g1f3', 'd8g5'];
+  await regel('[5.4] de openingscoach: een gemiste kans is geen "Pas op", maar "Er was een sterkere zet." met 1 ster', async function (check) {
+    const a = nieuwKind();
+    a.ev('startOpening("coach", null)');
+    const r = a.ev('(function () { var S = newGame(); ' + JSON.stringify(DG5) + '.forEach(function (k) { makeMove(S, legalMoves(S).find(function (m) { return moveKey(m) === k; })); });' +
+      ' var e = coachEval(S, legalMoves(S).find(function (m) { return moveKey(m) === "a2a3"; })); return JSON.stringify(e); })()');
+    const e = JSON.parse(r);
+    check('geen waarschuwing (' + e.msg + ')', e.msg.indexOf('Pas op') < 0);
+    check('wel de sterkere zet, met 1 ster (' + e.stars + ')', e.msg === 'Er was een sterkere zet.' && e.stars === 1);
+  });
+
+  for (const g of [['3.a3 laat Turbo\'s dame staan: geen alarm', DG5, 'a2a3', null],
+    ['3.Pxe5 geeft een paard voor een pion: "Na deze zet kan Turbo je paard op e5 pakken."', ['e2e4', 'e7e5', 'g1f3', 'b8c6'], 'f3e5', 'Na deze zet kan Turbo je paard op e5 pakken.']]) {
+    await regel('[5.4] het blunderalarm meet tegen het bord nu, ' + g[0], async function (check) {
+      const a = nieuwKind({ opslag: opslagMetPotje(1, g[1]) });
+      a.ev('setPref("guard", true)');
+      a.tik('verderKaart');
+      await wacht();
+      if (!check('testopzet: het potje loopt', a.get('!!session && session.kind === "game" && session.S.hist.length === 4'))) return;
+      zet(a, g[2]);
+      await wacht(500);
+      if (g[3]) check('het alarm met de zin (' + a.scherm() + ')', a.open() && a.scherm().indexOf(g[3]) >= 0);
+      else check('geen alarm, de zet staat (' + a.get('session.S.hist.length') + ')', !a.open() && a.get('session.S.hist.length') >= 5);
+    });
+  }
 
   /* ---------- 5.5: Veilig of valstrik zegt waarom ---------- */
 

@@ -1652,32 +1652,30 @@ function pickMove(S, level, rng, budgetMs) {
   return top[Math.floor(rng() * top.length)].m;
 }
 
-/* Blunder guard: does move m allow mate in one, or lose >=250cp of material by
-   force while a clearly better option exists? Returns null or {loss, punish}
-   (punish = opponent's reply), with mate: true when that reply mates. */
+/* Blunder guard: does move m allow mate in one, or lose 150cp or more by force
+   against the material on the board now (plan rule 5.4, decision D40)? A
+   better move that was not played is no danger, so it is never the baseline.
+   Returns null or {loss, punish, take}: punish is the opponent's best reply
+   (with mate: true when it mates), take the capture that starts the loss, so
+   a text that says what is lost never shows a quiet move. */
 function blunderCheck(S, m) {
+  const mySign = S.turn === 'w' ? 1 : -1, now = material(S) * mySign;
   makeMove(S, m);
   const mate = mateReply(S);
-  const afterMine = mate ? 0 : forcedMaterial(S);
-  unmakeMove(S);
-  if (mate) return { loss: MATE, punish: mate, mate: true };
-  const mySign = S.turn === 'w' ? 1 : -1;
-  let bestAlt = -Infinity;
-  for (const alt of legalMoves(S)) {
-    makeMove(S, alt);
-    const v = forcedMaterial(S) * mySign;
-    unmakeMove(S);
-    if (v > bestAlt) bestAlt = v;
-  }
-  const loss = bestAlt - afterMine * mySign;
-  if (loss >= 250) {
-    makeMove(S, m);
+  const loss = mate ? MATE : now - forcedMaterial(S) * mySign;
+  let punish = mate, take = null;
+  if (!mate && loss >= 150) {
     const reply = rootScores(S, 2);
-    unmakeMove(S);
-    const punish = reply.length ? reply[0].m : null;
-    return { loss, punish };
+    punish = reply.length ? reply[0].m : null;
+    take = punish && isCapture(S, punish) ? punish : null;
+    if (!take) {
+      const w = winnableCaptures(S);
+      if (w.length) take = w.reduce((a, b) => b.gain > a.gain ? b : a).move;
+    }
   }
-  return null;
+  unmakeMove(S);
+  if (mate) return { loss, punish, take: null, mate: true };
+  return loss >= 150 ? { loss, punish, take } : null;
 }
 
 /* A reply that mates at once, or null. Only a reply that gives check can
@@ -2479,8 +2477,8 @@ function capturedSq(S, m) { return m.flags === 'e' ? m.to + (S.turn === 'w' ? -1
 function isPattern(info) { return info.fork.length >= 2 || !!info.pin || !!info.skewer || info.discovered.length > 0; }
 
 /* What one move m of White meant, from the position before it: at most one
-   moment, the first kind that applies, or null. A loss is in centipawns; 250
-   is a minor piece minus a little, so a pawn lost in a trade never counts. */
+   moment, the first kind that applies, or null. A loss is in centipawns;
+   blunderCheck counts one from 150, so the exchange counts and one pawn never. */
 function moveMoment(S, m) {
   const base = { moveNo: S.full, ply: S.hist.length, move: moveKey(m) };
   const bc = blunderCheck(S, m);
@@ -6723,7 +6721,9 @@ function coachEval(S, m) {
   const before = principles(S, col);
   const scored = rootScores(S, 2);
   const mine = scored.find(x => sameMove(x.m, m));
-  const blunder = mine && scored[0].score - mine.score >= 150;
+  /* "pas op" alleen voor een zet die zelf iets kost of mat toelaat (plan rule 5.4, learning.md 6.4.1) */
+  const blunder = blunderCheck(S, m);
+  const sterker = !blunder && mine && scored[0].score - mine.score >= 150;
   const book = bookMoves(S).has(moveKey(m));
   const piece = S.board[m.from].toLowerCase();
   const cap = isCapture(S, m);
@@ -6734,7 +6734,8 @@ function coachEval(S, m) {
   makeMove(S, m);
   const after = principles(S, col);
   let punish = null;
-  if (blunder) { const r = rootScores(S, 2); punish = r.length ? moveNameNL(S, r[0].m) : null; }
+  const zijn = blunder && (blunder.mate ? blunder.punish : blunder.take);
+  if (zijn) punish = moveNameNL(S, zijn);
   unmakeMove(S);
   const dC = after.centrum - before.centrum, dD = after.dev - before.dev;
   let score = (book ? 3 : 0) + dC * .5 + dD * 2 + (castled ? 3 : 0) + (goodCap ? 2 : 0) - (again ? 2 : 0) - (queenEarly ? 2 : 0);
@@ -6751,7 +6752,11 @@ function coachEval(S, m) {
   let stars, msg;
   if (blunder) {
     stars = 0;
-    msg = punish ? 'Er was een sterkere zet. Kijk wat Turbo nu kan doen: <b>' + punish + '</b>.' : 'Er was een sterkere zet.';
+    msg = (blunder.mate ? 'Pas op: na deze zet kan Turbo je schaakmat zetten.' : 'Pas op: na deze zet wint Turbo ' + ptsNL(blunder.loss) + '.') +
+      (punish ? ' Turbo speelt dan <b>' + punish + '</b>.' : '');
+  } else if (sterker) {
+    stars = 1;
+    msg = 'Er was een sterkere zet.';
   } else {
     stars = score >= 2.5 ? 3 : (score >= 1 ? 2 : (score >= 0 ? 1 : 0));
     msg = plus.length ? plus[0] + (min.length ? ' ' + min[0] : '') :
@@ -7266,6 +7271,18 @@ function trySelect(sq) {
   renderBoard();
 }
 
+/* Het blunderalarm noemt wat in gevaar is, nooit de betere zet (plan rule 5.4): het stuk
+   voor een kind dat begint of speelt, onder Super Turbo; daarna alleen dat er iets kan */
+function alarmZin(S, m, bl) {
+  if (bl.mate) return 'Na deze zet kan Turbo je schaakmat zetten.';
+  if (session.level < 3 && stadium(P) !== 'sterk' && bl.take) {
+    makeMove(S, m);
+    const t = bl.take.flags === 'e' ? bl.take.to + 16 : bl.take.to, x = S.board[t];
+    unmakeMove(S);
+    if (x) return 'Na deze zet kan Turbo je ' + NAME_NL[x.toLowerCase()] + ' op ' + alg(t) + ' pakken.';
+  }
+  return 'Na deze zet kan Turbo iets van je pakken.';
+}
 function onKidMove(m) {
   BD.mode = 'off';
   const S = session.S;
@@ -7275,7 +7292,7 @@ function onKidMove(m) {
     if (bl) {
       snd.bad();
       showModal('<div class="m-emoji">🐢❗</div><h2>Wacht even!</h2>' +
-        '<p>Deze zet kan je een stuk kosten!<br>Kijk nog eens goed: wat kan Turbo hierna állemaal doen?</p>' +
+        '<p>' + alarmZin(S, m, bl) + '</p>' +
         '<div class="m-btns"><button class="btn sun" id="gLook">🔍 Ik kijk nog even</button>' +
         '<button class="btn plain" id="gGo">Ik weet het zeker</button></div>', () => {
           $('gLook').addEventListener('click', () => { closeModal(); BD.mode = 'move'; renderBoard(); });

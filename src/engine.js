@@ -662,32 +662,30 @@ function pickMove(S, level, rng, budgetMs) {
   return top[Math.floor(rng() * top.length)].m;
 }
 
-/* Blunder guard: does move m allow mate in one, or lose >=250cp of material by
-   force while a clearly better option exists? Returns null or {loss, punish}
-   (punish = opponent's reply), with mate: true when that reply mates. */
+/* Blunder guard: does move m allow mate in one, or lose 150cp or more by force
+   against the material on the board now (plan rule 5.4, decision D40)? A
+   better move that was not played is no danger, so it is never the baseline.
+   Returns null or {loss, punish, take}: punish is the opponent's best reply
+   (with mate: true when it mates), take the capture that starts the loss, so
+   a text that says what is lost never shows a quiet move. */
 function blunderCheck(S, m) {
+  const mySign = S.turn === 'w' ? 1 : -1, now = material(S) * mySign;
   makeMove(S, m);
   const mate = mateReply(S);
-  const afterMine = mate ? 0 : forcedMaterial(S);
-  unmakeMove(S);
-  if (mate) return { loss: MATE, punish: mate, mate: true };
-  const mySign = S.turn === 'w' ? 1 : -1;
-  let bestAlt = -Infinity;
-  for (const alt of legalMoves(S)) {
-    makeMove(S, alt);
-    const v = forcedMaterial(S) * mySign;
-    unmakeMove(S);
-    if (v > bestAlt) bestAlt = v;
-  }
-  const loss = bestAlt - afterMine * mySign;
-  if (loss >= 250) {
-    makeMove(S, m);
+  const loss = mate ? MATE : now - forcedMaterial(S) * mySign;
+  let punish = mate, take = null;
+  if (!mate && loss >= 150) {
     const reply = rootScores(S, 2);
-    unmakeMove(S);
-    const punish = reply.length ? reply[0].m : null;
-    return { loss, punish };
+    punish = reply.length ? reply[0].m : null;
+    take = punish && isCapture(S, punish) ? punish : null;
+    if (!take) {
+      const w = winnableCaptures(S);
+      if (w.length) take = w.reduce((a, b) => b.gain > a.gain ? b : a).move;
+    }
   }
-  return null;
+  unmakeMove(S);
+  if (mate) return { loss, punish, take: null, mate: true };
+  return loss >= 150 ? { loss, punish, take } : null;
 }
 
 /* A reply that mates at once, or null. Only a reply that gives check can
@@ -1489,8 +1487,8 @@ function capturedSq(S, m) { return m.flags === 'e' ? m.to + (S.turn === 'w' ? -1
 function isPattern(info) { return info.fork.length >= 2 || !!info.pin || !!info.skewer || info.discovered.length > 0; }
 
 /* What one move m of White meant, from the position before it: at most one
-   moment, the first kind that applies, or null. A loss is in centipawns; 250
-   is a minor piece minus a little, so a pawn lost in a trade never counts. */
+   moment, the first kind that applies, or null. A loss is in centipawns;
+   blunderCheck counts one from 150, so the exchange counts and one pawn never. */
 function moveMoment(S, m) {
   const base = { moveNo: S.full, ply: S.hist.length, move: moveKey(m) };
   const bc = blunderCheck(S, m);

@@ -102,6 +102,32 @@
     check('2.d4 geeft geen alarm', E.blunderCheck(S, zet(S, 'd2d4')) === null);
   });
 
+  /* D40: het verlies telt tegen het materiaal dat nu op het bord staat, vanaf
+     anderhalf punt; een kans die het kind laat liggen, is geen gevaar. */
+  regel('[5.4] het alarm meet tegen het bord nu en vanaf 1,5 punt: een gemiste kans is geen gevaar', function (check) {
+    const S = E.parseFEN('rnbqkb1r/pppp1ppp/8/4n3/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 0 3');
+    check('a2-a3 laat het vrije paard op e5 staan maar verliest niets: geen alarm', E.blunderCheck(S, zet(S, 'a2a3')) === null);
+    const T = speel(E.newGame(), ['e2e4', 'e7e5', 'g1f3', 'b8c6']);
+    const r = E.blunderCheck(T, zet(T, 'f3e5'));
+    check('3.Pxe5 geeft een paard voor een pion: alarm, verlies 220', !!r && r.loss === 220 && !r.mate);
+    check('met Pc6xe5 als de zet van Turbo die het verlies begint', !!r && !!r.take && E.moveKey(r.take) === 'c6e5');
+    const U = E.parseFEN('6k1/2p5/3b4/8/8/8/5PPP/3R2K1 w - - 0 1');
+    const k = E.blunderCheck(U, zet(U, 'd1d6'));
+    check('Txd6 geeft een toren voor een loper (170): alarm', !!k && k.loss === 170);
+    check('met c7xd6 als de zet van Turbo die het verlies begint', !!k && !!k.take && E.moveKey(k.take) === 'c7d6');
+    /* de lijn van de coach: na 4.f3?? is Dh4+ Turbo's beste zet, maar die slaat niets */
+    const W = speel(E.newGame(), ['g1h3', 'e7e6', 'e2e3', 'b8a6', 'f1c4', 'd7d5']);
+    const f = E.blunderCheck(W, zet(W, 'f2f3'));
+    check('4.f3 laat de loper op c4 staan: alarm, verlies 330', !!f && f.loss === 330);
+    check('Turbo\'s beste zet is Dh4+ (' + (f && f.punish ? E.moveKey(f.punish) : '-') + ')', !!f && !!f.punish && E.moveKey(f.punish) === 'd8h4');
+    check('de zet die het verlies begint slaat: d5xc4 (' + (f && f.take ? E.moveKey(f.take) : '-') + ')', !!f && !!f.take && E.moveKey(f.take) === 'd5c4');
+    const V = speel(E.newGame(), ['e2e4', 'd7d5']);
+    check('2.a3 laat alleen een pion hangen (100): geen alarm', E.blunderCheck(V, zet(V, 'a2a3')) === null);
+    const fen = E.toFEN(T);
+    E.blunderCheck(T, zet(T, 'f3e5'));
+    check('de stand blijft onaangeroerd', E.toFEN(T) === fen);
+  });
+
   /* ---------- 5.3: veilig of valstrik, gecontroleerd bij het kiezen ---------- */
 
   regel('[5.3] Veilig of valstrik: een "veilige" zet die een stuk verliest, wordt bij het kiezen afgekeurd', function (check) {

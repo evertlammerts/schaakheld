@@ -278,7 +278,8 @@ ok('coach: dame te vroeg = 0 sterren met uitleg', coachEval(session.S, opM('d1h5
 /* valstrik: na 1.e4 e5 2.Pf3 Pc6 is Pxe5 een stuk weggeven */
 var bS = parseFEN('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3');
 var bEv = coachEval(bS, legalMoves(bS).find(function (m) { return moveKey(m) === 'f3e5'; }));
-ok('coach: Pxe5 kost een stuk, 0 sterren', bEv.stars === 0 && bEv.msg.indexOf('Er was een sterkere zet') >= 0);
+ok('coach: Pxe5 geeft een paard voor een pion, 0 sterren', bEv.stars === 0 &&
+  bEv.msg === 'Pas op: na deze zet wint Turbo 2 punten. Turbo speelt dan <b>Paard c6 → e5, slaat paard</b>.');
 ok('coach: rokade = 3 sterren', (function () {
   var rS = parseFEN('r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 4');
   var ev = coachEval(rS, legalMoves(rS).find(function (m) { return m.flags === 'K'; }));
