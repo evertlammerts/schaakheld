@@ -2213,4 +2213,133 @@ async function orakelTwee6() {
     check('de uitdaging is van de kaart', !/daagt je uit/.test(tekstVan(fien, 'verder')) && !vriendenpotjeMet(fien, fid));
     check('zonder bericht', !fien.open() && !/ingetrokken/.test(fien.scherm()));
   });
+
+  /* ================= wat bewaard blijft tot de vriend het weet, en het teken (de lijst van de recensent) ================= */
+
+  await regel('[6.6] een remise na veertien dagen die Mees al bekeek, blijft bewaard tot Fien hem kent: na een herstart staat hij weer in zijn bus, en Fien ziet hem', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await aanbodVanMees(mees, fien);
+    stopApparaat(mees);
+    schuifKlok(14 * DAG + UUR);
+    mees = await opent(mees);
+    await tijd(40000);
+    check('testopzet: het is remise op de kaart van Mees', /Je potje met Fien is remise/.test(tekstVan(mees, 'verder')));
+    mees.tik('verderKaart');
+    await wacht();
+    tikTekst(mees, 'Naar huis');
+    await tijd(20000);
+    stopApparaat(mees);
+    __herstartServer();
+    mees = await opent(mees);
+    await tijd(20000);
+    check('de remise staat weer in de bus van Mees', (await busZegt(mees, fid, true) || {}).uitslag === 'remise');
+    stopApparaat(mees);
+    fien = await opent(fien);
+    check('Fien ziet de remise', /Je potje met Mees is remise/.test(tekstVan(fien, 'verder')));
+  });
+
+  await regel('[6.2] Fien zag het einde en daagt Mees meteen uit: voor Mees telt die uitdaging als "Fien weet het", het oude potje is weg en de uitdaging staat op zijn kaart', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 4, mees);
+    stopApparaat(fien);
+    await geefOp(mees);
+    await tijd(10000);
+    tikTekst(mees, 'Naar huis');
+    await wacht();
+    const id = (await busZegt(mees, fid, true) || {}).gameId;
+    stopApparaat(mees);
+    schuifKlok(DAG);
+    fien = await opent(fien);
+    fien.tik('verderKaart');
+    await wacht();
+    tikTekst(fien, 'Naar huis');
+    await wacht();
+    /* de uitdaging van Fien schrijft over haar teken heen */
+    await daagUit(fien, fid, 'Mees');
+    check('testopzet: de bus van Fien toont haar uitdaging', (await busZegt(fien, fid, true) || {}).state === 'uitdaging');
+    stopApparaat(fien);
+    mees = await opent(mees);
+    await tijd(20000);
+    const r = opgeslagen(mees, 'schaakheld-samen'), heeftOud = !!r && !!r.games && id in r.games;
+    check('het oude potje is weg bij Mees', !heeftOud);
+    check('de uitdaging van Fien staat op zijn kaart', /Fien daagt je uit/.test(tekstVan(mees, 'verder')));
+  });
+
+  await regel('[6.7] een einde dat Fien leerde maar nog niet bekeek, blijft op haar kaart, ook als ze de bus van Mees nog een paar keer leest', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 4, mees);
+    stopApparaat(fien);
+    await geefOp(mees);
+    await tijd(10000);
+    stopApparaat(mees);
+    schuifKlok(DAG);
+    fien = await opent(fien);
+    await tijd(60000);
+    check('het einde staat nog op de kaart van Fien', /Mees gaf op\. Jij wint dit potje!/.test(tekstVan(fien, 'verder')));
+    fien = await opent(fien);
+    check('ook als ze de app opnieuw opent', /Mees gaf op\. Jij wint dit potje!/.test(tekstVan(fien, 'verder')));
+  });
+
+  await regel('[6.2] een einde dat Fien leerde maar niet bekeek: haar teken gaat één keer de bus in, wordt niet vernieuwd, en na een herstart zet ze het terug zodra Mees zijn einde terugzet', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 4, mees);
+    stopApparaat(fien);
+    await geefOp(mees);
+    await tijd(10000);
+    tikTekst(mees, 'Naar huis');
+    await wacht();
+    stopApparaat(mees);
+    schuifKlok(DAG);
+    const busF = await potjesbus(fien, fid, true), log = potjesLog();
+    try {
+      fien = await opent(fien);
+      await tijd(60000);
+      stopApparaat(fien);
+      schuifKlok(8 * DAG);
+      fien = await opent(fien);
+      await tijd(20000);
+    } finally { log.stop(); }
+    check('testopzet: het teken staat in de bus van Fien', !!(await busZegt(fien, fid, true) || {}).uitslag);
+    check('één keer geschreven, ook na acht dagen niet opnieuw', log.log.filter(function (w) { return w.bus === busF; }).length === 1);
+    __herstartServer();
+    mees = await opent(mees);
+    await tijd(60000);
+    check('na de herstart zette Fien het teken terug', !!(await busZegt(fien, fid, true) || {}).uitslag);
+    mees.tik('tabVrienden');
+    check('en Mees is vrij', /Uitnodigen/.test(vriendRijTekst(mees, fid)) && !/Weer uitnodigen kan/.test(vriendRijTekst(mees, fid)));
+  });
+
+  await regel('[6.9] een einde dat Fien nog moet leren, blijft bewaard als Mees intussen met Daan speelt, en Fien ziet het bij het openen', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    const fidF = await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 4, mees);
+    stopApparaat(fien);
+    await geefOp(mees);
+    await tijd(10000);
+    tikTekst(mees, 'Naar huis');
+    await wacht();
+    await samenSpelen(mees, daan);
+    await speel(mees, daan, 'e2e4');
+    await speel(mees, daan, 'e7e5');
+    mees.tik('backBtn');
+    await tijd(20000);
+    const r = opgeslagen(mees, 'schaakheld-samen'), einde = !!r && !!r.games && Object.keys(r.games).some(function (k) {
+      return r.games[k].fid === fidF && !!r.games[k].result; });
+    check('het einde met Fien staat nog bewaard', einde);
+    stopApparaat(mees);
+    __herstartServer();
+    mees = await opent(mees);
+    stopApparaat(mees);
+    schuifKlok(DAG);
+    fien = await opent(fien);
+    check('Fien ziet dat Mees opgaf', /Mees gaf op\. Jij wint dit potje!/.test(tekstVan(fien, 'verder')));
+  });
 }
