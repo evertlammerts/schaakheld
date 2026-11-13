@@ -2,7 +2,7 @@
    internet is), cache als vangnet (vliegtuigstand). VERSION wordt door
    build.sh gevuld met een hash van index.html, dus elke release krijgt
    vanzelf een nieuwe cache; een vergeten versie-bump kan niet. */
-const VERSION = 'schaakheld-78a9c2ed26df';
+const VERSION = 'schaakheld-63ddd270dc5a';
 const ASSETS = ['./', './index.html', './manifest.webmanifest',
   './icon-180.png', './icon-192.png', './icon-512.png', './icon-512-mask.png'];
 

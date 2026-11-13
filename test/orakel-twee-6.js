@@ -627,7 +627,7 @@ async function orakelTwee6() {
       /telt voor niemand mee/.test(zegt(a2)) && /telt voor niemand mee/.test(zegt(b2)));
   });
 
-  await nogNiet('[6.6] een remise-aanbod gaat mee met de eigen zet, en kan maar één keer per eigen zet', async function (check) {
+  await regel('[6.6] een remise-aanbod gaat mee met de eigen zet, en kan maar één keer per eigen zet', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await vriendenpotje(mees, fien);
@@ -656,7 +656,7 @@ async function orakelTwee6() {
     check('Fien ziet het aanbod', /Mees biedt remise aan/.test(tekstVan(fien, 'verder')));
   });
 
-  await nogNiet('[6.6] als allebei kijken: het aanbod staat in de strook, Remise aannemen onder het bord en geen Nee; een zet wijst het af', async function (check) {
+  await regel('[6.6] als allebei kijken: het aanbod staat in de strook, Remise aannemen onder het bord en geen Nee; een zet wijst het af', async function (check) {
     const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     await vriendenpotje(mees, fien);
     await potjeTot(mees, fien, 2, mees);
@@ -784,7 +784,7 @@ async function orakelTwee6() {
     } finally { __server.klok = klok; }
   });
 
-  await nogNiet('[6.6] een zet van Fien die de server een seconde voor de remise van Mees kreeg, wint op beide apparaten', async function (check) {
+  await regel('[6.6] een zet van Fien die de server een seconde voor de remise van Mees kreeg, wint op beide apparaten', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await aanbodVanMees(mees, fien);

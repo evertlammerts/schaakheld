@@ -257,21 +257,18 @@ async function alles() {
   const revZet = await speel(evert, oscar, 'd2d4');
   ok('revanche: en de eerste zet komt aan', !!revZet && evert.fen() === oscar.fen());
 
-  /* ---------- 9. remise aanbieden, afwijzen en aannemen ---------- */
+  /* ---------- 9. remise aanbieden tussen vrienden: met de eigen zet, een zet wijst af, en aannemen ---------- */
   const bieder = evert.get('BD.mode') === 'move' ? evert : oscar;
   const krijger = bieder === evert ? oscar : evert;
   bieder.ev('offerDraw()');
-  await tik();
-  ok('remise: de ander krijgt de vraag, onder het bord', /biedt remise aan/.test(tekstVan(krijger, 'bubble')) && kanTikken(krijger, 'Remise aannemen') && !krijger.open());
-  tikTekst(krijger, 'Nee, doorspelen');
-  await tik();
-  ok('remise: nee = doorspelen, allebei nog in het potje',
-    evert.get('session.over') === false && oscar.get('session.over') === false && !krijger.open());
+  await speel(evert, oscar, 'd7d5');
+  ok('remise: het aanbod gaat mee met de zet; de ander krijgt de vraag onder het bord, zonder Nee',
+    /biedt remise aan/.test(tekstVan(krijger, 'bubble')) && kanTikken(krijger, 'Remise aannemen') && !kanTikken(krijger, 'Nee') && !krijger.open());
+  await speel(evert, oscar, 'c2c4');
+  ok('remise: een zet wijst het af, allebei nog in het potje',
+    evert.get('session.over') === false && oscar.get('session.over') === false && !kanTikken(krijger, 'Remise aannemen'));
+  await speel(evert, oscar, 'e7e6');
   bieder.ev('offerDraw()');
-  await tik();
-  ok('remise: te snel opnieuw vragen mag niet, en de vrager hoort waarom',
-    !krijger.open() && !kanTikken(krijger, 'Remise aannemen') && bieder.el('bubble').innerHTML.indexOf('net al remise') >= 0);
-  bieder.ev('session.drawAsked = null; offerDraw()');
   await tik();
   tikTekst(krijger, 'Remise aannemen');
   await tik();

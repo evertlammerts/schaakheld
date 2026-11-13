@@ -1010,7 +1010,10 @@ function geldigeUitslag(u) {
 function geldigAanbod(o) {
   if (!o || typeof o !== 'object' || (o.by !== 'w' && o.by !== 'b') || !Number.isInteger(o.ply) || o.ply < 0) return null;
   if (o.answer != null && o.answer !== 'nee') return null;
-  return { by: o.by, ply: o.ply, answer: o.answer || null };
+  const uit = { by: o.by, ply: o.ply, answer: o.answer || null };
+  /* wanneer het aanbod gedaan werd: daaruit volgt de dag die het kind leest */
+  if (isFinite(+o.t) && +o.t > 0) uit.t = +o.t;
+  return uit;
 }
 function uitslagUit(st, ply) {
   const by = st.reason === 'opgave' ? other(st.result) : st.reason === 'mat' ? st.result :
@@ -3593,10 +3596,14 @@ function kiesOefening(P, st, now) {
 function samenItem(s) {
   const naam = s.peerName || 'je maatje', n = (s.moves || []).length, ikWit = s.myColor !== 'b', beurt = (n % 2 === 0) === ikWit;
   const actie = { go: 'samen', gameId: s.gameId };
+  /* tussen vrienden staat een aanbod veertien dagen: de kaart zegt tot welke dag het kind kan antwoorden */
   if (s.bod) return { rule: 'R1', title: naam + ' biedt remise aan', button: 'Antwoord', vriend: true, volgorde: 1,
-    text: 'Remise is gelijkspel: niemand wint, niemand verliest.', ook: naam + ' biedt remise aan', action: actie };
-  return { rule: 'R1', title: 'Verder: je potje met ' + naam, button: 'Speel verder', vriend: true, naam, wat: s.nietBewaard ? null : 'potje',
-    volgorde: beurt ? 1 : 5, text: s.zonderNet ? 'Er is nu geen verbinding. Probeer het straks nog eens.' :
+    text: !s.vriend ? 'Remise is gelijkspel: niemand wint, niemand verliest.' : s.bodT && antwoordDagVoorbij(s.bodT) ?
+      'Antwoorden kan nu nog.' : 'Antwoorden kan tot en met ' + antwoordDag(s.bodT || Date.now()) + '.',
+    ook: naam + ' biedt remise aan', action: actie };
+  return { rule: 'R1', title: 'Verder: je potje met ' + naam, button: 'Speel verder', vriend: true, naam,
+    wat: s.nietBewaard || s.eigenBod ? null : 'potje', volgorde: beurt ? 1 : 5,
+    text: s.zonderNet ? 'Er is nu geen verbinding. Probeer het straks nog eens.' : s.eigenBod ? 'Je bood remise aan. ' + naam + ' is aan zet.' :
       zinDoetMee(s.mijnUitdaging, n, s.myColor, naam) || (!beurt ? naam + ' is aan zet.' :
         s.vriend && n ? naam + ' heeft gezet. Jij bent aan zet.' : 'Jij bent aan zet.'),
     ook: 'je potje met ' + naam, action: actie };
@@ -3702,6 +3709,7 @@ function vriendItems(alle) {
     const S = hier ? MP.S : b.S, naam = (hier ? MP.peerName : b.r.peerName) || 'je maatje', kleur = hier ? MP.myColor : b.r.myColor;
     const uitslag = hier ? MP.result : b.r.result, gezien = hier ? MP.shown : b.r.shown === true;
     const bod = hier ? remiseVraagOpen() : !!b.r.offer && b.r.offer.by !== kleur && !b.r.offer.answer && b.r.offer.ply === S.hist.length;
+    const aanbod = hier ? MP.offer : b.r.offer;
     if (b.r.state === 'uitdaging') uit.push(b.r.mijnUitdaging ?
       { rule: 'R1', title: 'Je uitdaging aan ' + naam, button: 'Bekijk', volgorde: 6, text: 'Nog geen antwoord van ' + naam + '.',
         ook: 'je uitdaging aan ' + naam + ', nog geen antwoord', action: { go: 'vrienden' } } :
@@ -3711,6 +3719,7 @@ function vriendItems(alle) {
     else if (uitslag && !gezien) uit.push({ rule: 'R1', title: 'Je potje met ' + naam + ' is klaar', button: 'Bekijk', volgorde: 0,
       text: 'Kijk hoe het afliep.', ook: 'je potje met ' + naam, action: hier ? { go: 'samen', gameId: b.r.gameId } : { go: 'oud', gameId: b.r.gameId } });
     else if (!uitslag) uit.push(samenItem({ peerName: naam, moves: S.hist.map(u => moveKey(u.m)), myColor: kleur, bod, vriend,
+      bodT: bod ? (hier ? MP.offer : b.r.offer).t : null, eigenBod: vriend && !!aanbod && aanbod.by === kleur && !aanbod.answer && aanbod.ply === S.hist.length,
       gameId: b.r.gameId, mijnUitdaging: !!b.r.mijnUitdaging, zonderNet: (hier && !!MP.room && !MP.open && MP.pogingen > 0) || (vriend && potjesNetFout),
       nietBewaard: hier && !!MP.nietBewaard }));
   }
@@ -4912,7 +4921,20 @@ function turboAcceptsDraw(S) {
   if (S.hist.length < MIN_PLIES_TELT) return false;
   return Math.abs(evalWhite(S)) <= 120;
 }
+/* Remise aanbieden aan een vriend kan alleen als de vriend aan zet is: met de eigen zet, of erna. Eén aanbod per
+   eigen zet; er is geen nee, een zet van de vriend is het antwoord. */
+function bodAanVriend() {
+  if (MP.S.turn === MP.myColor) { MP.bodMetZet = true; say('Doe nu je zet: daarmee bied je ' + mpNaam() + ' remise aan.'); return; }
+  if (!(aanbodOpen() && MP.offer.by === MP.myColor)) {
+    MP.offer = { by: MP.myColor, ply: MP.S.hist.length, answer: null, t: Date.now() };
+    bewaarSamen();
+    mpSend({ t: 'remise?', gameNo: MP.gameNo, ply: MP.S.hist.length });
+    updateTrays();
+  }
+  say(zinEigenBod());
+}
 function offerDraw() {
+  if (session && session.kind === 'game' && session.online && !session.over && samenInBeeld() && vriendZonderKamer()) { bodAanVriend(); return; }
   const wacht = sluitVoorspelvraag();
   if (!session || session.kind !== 'game' || session.over || (BD.mode !== 'move' && !wacht)) return;
   const S = session.S;
@@ -4957,21 +4979,23 @@ function mpOnRemiseVraag(m) {
   const n = MP.S.hist.length;
   if (m.ply != null && +m.ply !== n) return;
   if (remiseVraagOpen()) return;
-  MP.offer = { by: other(MP.myColor), ply: n, answer: null };
+  MP.offer = { by: other(MP.myColor), ply: n, answer: null, t: Date.now() };
   bewaarSamen();
   if (samenInBeeld() && !session.over) toonRemiseVraag(); else thuisVerversen();
 }
 /* De vraag over een remise-aanbod staat in de strook en het antwoord onder het bord: het kind ziet de stand
    terwijl het kiest. Het aanbod geldt in de stand waarin het gedaan is; na een zet is de vraag weg. */
 function toonRemiseVraag() {
-  say(mpNaam() + ' biedt remise aan. Gelijkspel: niemand wint, niemand verliest. Vind je dat goed?');
+  say(vriendZonderKamer() ? mpNaam() + ' biedt remise aan. Tik onder het bord op Remise aannemen, of doe je zet om door te spelen.' :
+    mpNaam() + ' biedt remise aan. Gelijkspel: niemand wint, niemand verliest. Vind je dat goed?');
   remiseRij();
 }
+/* tussen vrienden is er geen nee: een zet is het antwoord */
 function remiseRij() {
   if (!samenInBeeld() || session.over) return;
   if (!remiseVraagOpen()) { if (actionBtns.rmJa) setActions([]); return; }
-  setActions([{ label: '½ Remise aannemen', cls: 'plain', fn: remiseJa, id: 'rmJa' },
-    { label: 'Nee, doorspelen', cls: 'stil', fn: remiseNee, id: 'rmNee' }]);
+  setActions([{ label: '½ Remise aannemen', cls: 'plain', fn: remiseJa, id: 'rmJa' }].concat(vriendZonderKamer() ? [] :
+    [{ label: 'Nee, doorspelen', cls: 'stil', fn: remiseNee, id: 'rmNee' }]));
 }
 function remiseJa() {
   if (!remiseVraagOpen() || !samenInBeeld() || session.over) { remiseRij(); return; }
@@ -5297,12 +5321,16 @@ function commitKid(m) {
   const co = session.online ? null : patternCallout(S, m);
   playMove(m, () => {
     if (!session || session.kind !== 'game') return;
+    /* een remise-aanbod dat het kind op zijn eigen beurt deed, gaat mee met deze zet */
+    const bodMee = !!(session.online && MP && MP.bodMetZet);
+    if (bodMee) { MP.bodMetZet = false; MP.offer = { by: MP.myColor, ply: S.hist.length, answer: null, t: Date.now() }; }
     updateTrays();
     if (session.online) {
       mpSend({ t: 'zet', from: m.from, to: m.to, promo: m.promo || null,
         n: S.hist.length, gameNo: MP ? MP.gameNo : 0 });
       session.samenBewaard = bewaarSamen();
       toonBewaard(session.samenBewaard);
+      if (bodMee) mpSend({ t: 'remise?', gameNo: MP.gameNo, ply: S.hist.length });
       if (MP && MP.room && !MP.open) MP.zetZonderNet = true;
     }
     const st = gameStatus(S);
@@ -5312,7 +5340,7 @@ function commitKid(m) {
       BD.mode = 'off';
       remiseRij();
       /* zonder verbinding geen belofte dat de ander de zet al ziet */
-      say(!session.samenBewaard ? SAMEN_NIET_BEWAARD :
+      say(!session.samenBewaard ? SAMEN_NIET_BEWAARD : bodMee ? zinEigenBod() :
         MP && MP.zetZonderNet ? 'Je zet is bewaard. Er is nu geen verbinding, dus ' + mpNaam() + ' ziet hem nog niet.' :
         MP && !MP.peerOn && vriendZonderKamer() ? zinWeg() : 'Nu ' + mpNaam() + '… 💭');
       return;
@@ -5495,7 +5523,21 @@ function updateTrays() {
     if (p) mat += (PTS[p.toLowerCase()] || 0) * (isWhitePiece(p) === mijnWit ? 1 : -1);
   }
   session.verschil = mat;
-  $('verschil').textContent = mat > 0 ? '♟ Jij +' + mat : mat < 0 ? '♟ ' + tegenNaam() + ' +' + (-mat) : '';
+  /* zolang het eigen remise-aanbod aan een vriend staat, zegt de balk dat in plaats van het materiaal */
+  $('verschil').textContent = eigenBodStaat() ? '½ aangeboden' :
+    mat > 0 ? '♟ Jij +' + mat : mat < 0 ? '♟ ' + tegenNaam() + ' +' + (-mat) : '';
+}
+function eigenBodStaat() { return samenInBeeld() && vriendZonderKamer() && aanbodOpen() && MP.offer.by === MP.myColor && !MP.offer.answer; }
+/* Een remise-aanbod aan een vriend staat veertien dagen. Het kind leest de laatste hele dag waarop de vriend nog
+   antwoordt, nooit een klok; die dag komt van de klok van het apparaat, de termijn zelf meet de server. */
+const WEEKDAGEN = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
+const MAANDNAMEN = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+function datumVan(t) { const d = new Date(t); return d.getDate() + ' ' + MAANDNAMEN[d.getMonth()]; }
+function antwoordDag(t) { const d = new Date(t); d.setDate(d.getDate() + 13); return WEEKDAGEN[d.getDay()] + ' ' + datumVan(d.getTime()); }
+function antwoordDagVoorbij(t) { const d = new Date(t); d.setDate(d.getDate() + 14); d.setHours(0, 0, 0, 0); return Date.now() >= d.getTime(); }
+function zinEigenBod() {
+  const naam = mpNaam();
+  return 'Je biedt ' + naam + ' remise aan. Doet ' + naam + ' tot en met ' + antwoordDag(MP.offer.t || Date.now()) + ' geen zet, dan is het remise.';
 }
 function tegenNaam() { return session && session.online ? mpNaam() : 'Turbo'; }
 function punten(n) { return n + (n === 1 ? ' punt' : ' punten'); }

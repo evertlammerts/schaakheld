@@ -134,7 +134,7 @@ async function orakelFlow6() {
     check('geen einde en geen teller veranderd', !a.get('session.over') && !/gestopt|telt voor niemand/.test(a.scherm()) && tellers(a) === voor);
   });
 
-  await nogNiet('[6.6] wie remise aanbiedt, leest de laatste dag om te antwoorden, en de balk houdt het aanbod vast, ook na herladen', async function (check) {
+  await regel('[6.6] wie remise aanbiedt, leest de laatste dag om te antwoorden, en de balk houdt het aanbod vast, ook na herladen', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let a = await kind(opslagMetVrienden([MET_FIEN_MEES_AAN_ZET]));
     a.tik('verderKaart');
@@ -158,7 +158,7 @@ async function orakelFlow6() {
     check('een dag later staat het aanbod er nog', /½ aangeboden/.test(tekstVan(a, 'verschil')));
   });
 
-  await nogNiet('[6.6] een aanbod van de vriend: geen regel onder de kaart, de strook zegt hoe je antwoordt, Remise aannemen onder het bord, geen Nee; je zet wijst het af', async function (check) {
+  await regel('[6.6] een aanbod van de vriend: geen regel onder de kaart, de strook zegt hoe je antwoordt, Remise aannemen onder het bord, geen Nee; je zet wijst het af', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const a = await kind(opslagMetVrienden([{ fid: 'vriendfien1', naam: 'Fien', zetten: ['d2d4', 'd7d5'], aanbod: true }]));
     const v = tekstVan(a, 'verder');
