@@ -383,6 +383,9 @@ async function orakelBlok(naam, blok, gebouwd) {
     fouten.push('uitzondering: ' + (e && e.message ? e.message : e));
   } finally {
     ORAKEL.apps.splice(voor).forEach(stopApparaat);
+    /* Een kamer waar na de regel niemand meer in zit, gaat met haar apparaten weg. Een regel zet de klok vaak in de
+       toekomst, en dan wijkt geen kamer meer voor een nieuwe: na vierenzestig is de nep-server vol. */
+    if (typeof __server !== 'undefined') for (const id in __server.wsrooms) if (!__kamerBezet(__server.wsrooms[id])) delete __server.wsrooms[id];
     echteDatum();
     Math.random = __echteRandom;
   }

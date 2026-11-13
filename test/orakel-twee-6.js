@@ -3602,4 +3602,126 @@ async function orakelTwee6() {
     const v = await opgevenVraag(a);
     check('revanche, en niets over wachten', /Jullie kunnen daarna wel revanche spelen\./.test(v) && !/stopt nooit vanzelf/.test(v));
   });
+
+  /* ================= een begin zonder antwoord staat nog niet op de staat ================= */
+
+  const KLAAR_ZIN = 'Je zet staat klaar. Het potje begint als Fien meedoet.', NIET_BEGONNEN = 'Het potje is niet begonnen: Fien deed nog niet mee.';
+  const bewaardBalk = function (x) { return zichtbaar(x, 'bewaard') && /✔ bewaard/.test(tekstVan(x, 'bewaard')); };
+
+  await regel('[6.5] AF2 Fien antwoordde nooit op het aanbod en Mees zette: de strook zegt dat de zet klaarstaat tot Fien meedoet, en de balk zegt niet bewaard', async function (check) {
+    const { mees } = await zonderAntwoord();
+    check('testopzet: Mees zette, en het begin heeft geen antwoord', mees.get('session.S.hist.length') === 1 && mees.get('!!MP.startBericht'));
+    check('de strook na zijn zet', zegt(mees).indexOf(KLAAR_ZIN) >= 0 && !/bewaard|zodra Fien het potje opent/.test(zegt(mees)));
+    check('geen ✔ bewaard', !bewaardBalk(mees));
+    await tijd(30000);
+    check('ook na een halve minuut', zegt(mees).indexOf(KLAAR_ZIN) >= 0 && !bewaardBalk(mees));
+  });
+
+  await regel('[6.5] AF2 Fien antwoordde nooit en Mees zette: gaat Mees naar huis, dan hoort hij één keer dat het potje niet begon', async function (check) {
+    const { mees } = await zonderAntwoord();
+    const melding = meldingen(mees);
+    mees.tik('backBtn');
+    await tijd(5000);
+    check('één keer het bericht', melding() === NIET_BEGONNEN);
+  });
+
+  await regel('[6.5] AF2 Fien antwoordde nooit en Mees zette: hangt er een lezing als Mees naar huis gaat, dan hoort hij het bericht toch één keer', async function (check) {
+    const { mees, fid } = await zonderAntwoord();
+    const melding = meldingen(mees);
+    let laat = null;
+    mees.netwerk.haak = function (url, o, f) {
+      if (!/\/v1\/bus\/check$/.test(url)) return f(url, o);
+      mees.netwerk.haak = null;
+      return new Promise(function (k) { laat = function () { k(f(url, o)); }; });
+    };
+    mees.ev('leesPaar(' + JSON.stringify(fid) + ')');
+    await wacht();
+    check('testopzet: een lezing hangt', !!laat);
+    mees.tik('backBtn');
+    await wacht();
+    if (laat) laat();
+    await tijd(5000);
+    check('één keer het bericht', melding() === NIET_BEGONNEN);
+    check('en niets wacht meer', mees.get('paarVan(' + JSON.stringify(fid) + ').rij.length') === 0);
+  });
+
+  await regel('[6.5] AF2 Fien antwoordde nooit en Mees ging naar huis zonder te zetten: niets ging verloren, dus geen bericht', async function (check) {
+    zetDatum('2026-11-16T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    await wordenVrienden(mees, fien);
+    await nodigUit(mees);
+    await fien.ev('friendPoll()');
+    await wacht();
+    fien.tik('invJa');
+    await wacht();
+    stopApparaat(fien);
+    await metVasteWillekeur(0, async function () { mees.tik('mpGo'); await wacht(); });
+    const melding = meldingen(mees);
+    mees.tik('backBtn');
+    await tijd(5000);
+    check('thuis, en geen bericht', opThuis(mees) && melding() === '');
+  });
+
+  await regel('[6.5] AF2 Fien antwoordde nooit en Mees zette: opent Mees de app opnieuw, dan hoort hij na de vensters één keer dat het potje niet begon', async function (check) {
+    let { mees } = await zonderAntwoord();
+    mees = herlaad(mees);
+    const melding = meldingen(mees);
+    await tijd(20000);
+    for (let i = 0; i < 4 && mees.open(); i++) { mees.ev('closeModal()'); await wacht(); }
+    await tijd(5000);
+    check('één keer het bericht', melding() === NIET_BEGONNEN);
+    mees = herlaad(mees);
+    const nogEens = meldingen(mees);
+    await tijd(20000);
+    for (let i = 0; i < 4 && mees.open(); i++) { mees.ev('closeModal()'); await wacht(); }
+    check('en bij de volgende keer openen niet meer', nogEens() === '');
+  });
+
+  await regel('[6.5] AF2 Fien antwoordde nooit en Mees zette: is de kamer weg, dan is het venster van de kamer het ene bericht', async function (check) {
+    const { mees } = await zonderAntwoord();
+    const melding = meldingen(mees), kamer = mees.get('MP.room');
+    geenNetwerk(mees);
+    await wacht(3000);
+    delete __server.wsrooms[kamer];
+    weerNetwerk(mees);
+    await tijd(30000);
+    check('het venster van de kamer', /Het potje met Fien is gestopt/.test(mees.scherm()));
+    check('en geen tweede bericht', melding() === '');
+  });
+
+  await regel('[6.5] AF2 zolang Fien het aanbod niet volgde, belooft de vraag bij opgeven niet dat het potje nooit vanzelf stopt', async function (check) {
+    const { mees } = await zonderAntwoord();
+    check('testopzet: Mees kan opgeven, en het begin heeft geen antwoord', opSpeelscherm(mees) && mees.get('!!MP.startBericht'));
+    const v = await opgevenVraag(mees);
+    check('de vraag staat er, zonder de belofte', /Opgeven\?/.test(v) && !/stopt nooit vanzelf/.test(v));
+  });
+
+  await regel('[6.5] AF2 het antwoord van Fien komt pas na de eerste zet van Mees: dan komt ✔ bewaard erbij', async function (check) {
+    zetDatum('2026-11-16T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    await wordenVrienden(mees, fien);
+    await nodigUit(mees);
+    await fien.ev('friendPoll()');
+    await wacht();
+    fien.tik('invJa');
+    await wacht();
+    fien.ev('globalThis.__stil = true; var __ga = mpSend; mpSend = function (m) { if (globalThis.__stil && m && (m.t === "volgt" || m.t === "kamer")) return; return __ga(m); }');
+    await metVasteWillekeur(0, async function () { mees.tik('mpGo'); await wacht(); });
+    zet(mees, RUSTIG[0]);
+    await wacht();
+    check('testopzet: Mees zette, nog geen antwoord, geen ✔ bewaard', mees.get('session.S.hist.length') === 1 && mees.get('!!MP.startBericht') && !bewaardBalk(mees));
+    fien.ev('globalThis.__stil = false');
+    await tijd(5000);
+    check('het antwoord kwam: ✔ bewaard', !mees.get('!!MP.startBericht') && bewaardBalk(mees));
+  });
+
+  await regel('[6.5] AF2 Fien volgt het aanbod meteen: na de zet van Mees ✔ bewaard en de gewone strook', async function (check) {
+    const { mees, fien, fid } = await liveVriendenpotje(false);
+    zet(mees, RUSTIG[0]);
+    await wacht(3000);
+    check('testopzet: het potje staat in de staat', !!(await busZegt(mees, fid)) && !mees.get('!!MP.startBericht'));
+    check('✔ bewaard', bewaardBalk(mees));
+    check('de gewone strook', /Nu Fien/.test(zegt(mees)) && zegt(mees).indexOf('staat klaar') < 0);
+    check('en Fien ziet de zet', fien.get('session.S.hist.length') === 1);
+  });
 }

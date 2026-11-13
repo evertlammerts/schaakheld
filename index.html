@@ -4228,15 +4228,20 @@ function mpOnStart(m) {
 function mpAntwoordStart(m) {
   if (typeof m.paar === 'string') mpSend({ t: MP.paar ? 'volgt' : 'kamer', id: MP.gameId });
 }
+function balkOpStaat() { if (potjeOpStaat()) toonBewaard(true); else $('bewaard').classList.add('hidden'); }
 function startGevolgd(fid, id) {
   MP.startBericht = null;
+  if (samenInBeeld() && !session.over && MP.S.hist.length) balkOpStaat();
   inPaarSlotMetScherm(fid, async () => {
     const p = paarVan(fid), a = p.rij.find(x => x.soort === 'start' && x.id === id);
     if (a && a.wachtOpGast) { delete a.wachtOpGast; bewaarPaar(fid, p); }
     await werkRijAf(fid);
   });
 }
-function startOnbeantwoord() { return !!MP && MP.host && !!MP.paar && !!MP.startBericht && MP.startBericht.id === MP.gameId; }
+/* Een potje met een vriend staat op de staat zodra de gast het begin volgt: dan schrijft het apparaat het begin, ook als
+   het kind naar huis gaat. Tot dan is er niets bewaard, en valt het begin weg als de verbinding stopt. */
+function potjeOpStaat() { return opStaat() && !(MP.host && !!MP.startBericht && MP.startBericht.id === MP.gameId); }
+function startOnbeantwoord() { return opStaat() && !potjeOpStaat(); }
 /* De gastheer laat een aanbod zonder antwoord vallen: de gast hoort het, en wat voor dit potje wachtte, vervalt. */
 function startVervalt() {
   const fid = MP.paar, id = MP.gameId;
@@ -5369,6 +5374,12 @@ async function werkRijAf(fid) {
     if (a.soort === 'start' && a.wachtOpGast) {
       if (MP && MP.paar === fid && MP.gameId === a.id) { wachtOm[fid] = 'potje'; return; }
       if (a.nr) afloopVan[a.nr] = { afloop: 'vervallen', waarom: 'het potje staat niet meer op het bord', actie: a };
+      /* een begin uit een eerdere keer openen met een zet erachter: het kind hoort één keer dat dat potje nooit begon; in
+         deze keer zei naar huis gaan het al */
+      if (a.run !== DEZE_RUN && p.rij.some(x => x.soort === 'zet' && x.id === a.id)) {
+        const naam = f.naam;
+        naVensters(() => showToast(nietBegonnenBijVriend(naam)));
+      }
       p.rij.shift();
       bewaarPaar(fid, p);
       continue;
@@ -5440,6 +5451,7 @@ const VERDER_GESPEELD = 'Je speelde al verder op je andere apparaat, dus het pot
 const ANDERS_GEWORDEN = 'Intussen veranderde er iets. Kijk hoe het nu staat.';
 const eerderOpgegeven = naam => escHtml(naam) + ' gaf net eerder op dan jij, dus jouw opgeven telt niet.';
 const nietBegonnen = naam => 'Het potje was bij ' + escHtml(naam) + ' nog niet begonnen. Doe je zet nog eens.';
+const nietBegonnenBijVriend = naam => 'Het potje is niet begonnen: ' + naam + ' deed nog niet mee.';
 /* een handeling die het kind in deze run deed; wat al wachtte toen de app openging, vervalt zonder woord */
 const DEZE_RUN = b64url(randBytes(6));
 /* Na elke verandering van wat het kind van een paar ziet: het scherm volgt (de kaart, het open bord, een antwoord op
@@ -5702,6 +5714,10 @@ function zinZonderNet() { return 'Je zet is bewaard op ' + ditApparaat() + '. He
    gebeurt, op de eigen beurt en daarna */
 function zinWeg() {
   const naam = mpNaam(), straks = naam + ' ziet hem zodra ' + naam + ' het potje opent.';
+  if (!potjeOpStaat()) {
+    return MP.S.turn === MP.myColor ? 'Jij bent aan zet! 💭' : MP.S.hist.length ? 'Je zet staat klaar. Het potje begint als ' + naam + ' meedoet.' :
+      naam + ' is aan zet… ⏳';
+  }
   if (MP.S.turn === MP.myColor) return 'Doe gerust je zet. ' + straks;
   return MP.S.hist.length ? 'Je zet is bewaard. ' + straks : naam + ' is aan zet… ⏳';
 }
@@ -8778,7 +8794,7 @@ function resignAsk() {
   showModal('<div class="m-emoji">🏳️</div><h2>Opgeven?</h2>' +
     '<p>Dan heeft ' + naam + ' dit potje gewonnen.' +
     (!session.online ? '<br>Vechten tot het eind is vaak slimmer: Turbo maakt ook fouten!' :
-      opStaat() ? '<br>Je mag ook gewoon wachten: dit potje stopt nooit vanzelf.' : '<br>Jullie kunnen daarna wel revanche spelen.') + '</p>' +
+      potjeOpStaat() ? '<br>Je mag ook gewoon wachten: dit potje stopt nooit vanzelf.' : '<br>Jullie kunnen daarna wel revanche spelen.') + '</p>' +
     '<div class="m-btns"><button class="btn sun" id="rsNee">↩️ Nee, doorspelen</button>' +
     '<button class="btn plain" id="rsJa">🏳️ Ja, ik geef op</button></div>', () => {
       $('rsNee').addEventListener('click', closeModal);
@@ -9212,7 +9228,7 @@ function commitKid(m) {
       /* de zet staat meteen bewaard in de rij van het paar; hij gaat naar de staat zodra dat kan */
       vriendHandeling({ soort: 'zet', ply: S.hist.length - 1, zet: moveKey(m), bod: bodMee });
       session.samenBewaard = true;
-      toonBewaard(true);
+      balkOpStaat();
     } else if (session.online) {
       mpSend({ t: 'zet', from: m.from, to: m.to, promo: m.promo || null,
         n: S.hist.length, gameNo: MP ? MP.gameNo : 0 });
@@ -10238,7 +10254,13 @@ $('backBtn').addEventListener('click', () => {
   /* een vriendenpotje blijft staan en de verbinding ook: de ander merkt niets */
   if (session && session.online && !session.over) {
     /* een aanbod van de staat zonder antwoord is nog geen potje: naar huis laat het vallen */
-    if (startOnbeantwoord()) { mpStop(true); goHome('spelen'); return; }
+    if (startOnbeantwoord()) {
+      const naam = mpNaam(), gezet = MP.S.hist.some((u, i) => (i % 2 === 0) === (MP.myColor === 'w'));
+      mpStop(true);
+      goHome('spelen');
+      if (gezet) showToast(nietBegonnenBijVriend(naam));
+      return;
+    }
     const gelukt = bewaarSamen();
     goHome('spelen', gelukt ? null : () => showToast(SAMEN_NIET_BEWAARD, false, 6000));
     return;
