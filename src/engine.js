@@ -285,15 +285,28 @@ function material(S) {
 }
 
 function evalWhite(S) {
-  let s = 0;
+  let s = 0, wMat = 0, bMat = 0;
   for (let sq = 0; sq < 128; sq++) {
     if (sq & 0x88) continue;
     const p = S.board[sq];
     if (!p) continue;
     const t = p.toLowerCase();
     const rank = sq >> 4, file = sq & 15;
-    if (isWhitePiece(p)) s += VAL[t] + PST[t][(7 - rank) * 8 + file];
-    else s -= VAL[t] + PST[t][rank * 8 + file];
+    if (isWhitePiece(p)) { s += VAL[t] + PST[t][(7 - rank) * 8 + file]; if (t !== 'k') wMat += VAL[t]; }
+    else { s -= VAL[t] + PST[t][rank * 8 + file]; if (t !== 'k') bMat += VAL[t]; }
+  }
+  /* Against a bare king, material alone shows no progress: without a push of
+     the lone king to the edge and the kings together, the search shuffles
+     until the fifty-move rule. */
+  if ((bMat === 0 && wMat >= 400) || (wMat === 0 && bMat >= 400)) {
+    const strong = wMat > 0 ? 'w' : 'b', lone = S.kings[other(strong)], own = S.kings[strong];
+    if (lone >= 0 && own >= 0) {
+      const lf = lone & 15, lr = lone >> 4;
+      const fromCentre = Math.max(3 - lf, lf - 4) + Math.max(3 - lr, lr - 4);
+      const between = Math.abs(lf - (own & 15)) + Math.abs(lr - (own >> 4));
+      const bonus = 30 * fromCentre + 12 * (14 - between);
+      s += strong === 'w' ? bonus : -bonus;
+    }
   }
   return s;
 }
@@ -311,10 +324,16 @@ function orderMoves(S, moves) {
   return moves.map(m => ({ m, k: mvvLva(S, m) })).sort((a, b) => b.k - a.k).map(x => x.m);
 }
 
+/* Every position any search looks at, counted, so a test can bound the work
+   of a generator by what it does and not by how busy the machine is. */
+/* NODE_GRENS: boven dit aantal geven search en quiesce zonder tick meteen terug; wie hem zet, gooit de uitkomst weg */
+let NODES = 0, NODE_GRENS = Infinity;
+function nodesSearched() { return NODES; }
+
 /* tick: optional deadline probe from the timed search, so a capture storm at a
    leaf cannot run past the budget unnoticed */
 function quiesce(S, alpha, beta, depth, evalFn, tick) {
-  if (tick && tick()) return alpha;
+  if (tick) { if (tick()) return alpha; } else if (++NODES > NODE_GRENS) return alpha;
   const stand = evalFn(S);
   if (stand >= beta) return beta;
   if (stand > alpha) alpha = stand;
@@ -332,6 +351,7 @@ function quiesce(S, alpha, beta, depth, evalFn, tick) {
 
 function search(S, depth, alpha, beta, ply) {
   if (depth === 0) return quiesce(S, alpha, beta, 6, evalSTM);
+  if (++NODES > NODE_GRENS) return 0;
   const moves = orderMoves(S, legalMoves(S));
   if (moves.length === 0) return inCheck(S) ? -MATE + ply : 0;
   if (S.half >= 100) return 0;
@@ -365,6 +385,25 @@ function rootScores(S, depth) {
 /* Resolve forced capture sequences, material-only. White-perspective result. */
 function forcedMaterial(S) {
   const v = quiesce(S, -Infinity, Infinity, 8, evalMatSTM);
+  return S.turn === 'w' ? v : -v;
+}
+/* The children's table (pion 1, paard 3, loper 3, toren 5, dame 9) in the engine's
+   hundreds: a sum of pieces a child reads is never a rounded engine value, so two
+   bishops for a rook is 1 point and not the 1.6 of 330 + 330 - 500. */
+const TABEL = { p: 100, n: 300, b: 300, r: 500, q: 900, k: 20000 };
+function pointsOf(S) {
+  let s = 0;
+  for (let sq = 0; sq < 128; sq++) {
+    if (sq & 0x88) continue;
+    const p = S.board[sq];
+    if (!p || p === 'K' || p === 'k') continue;
+    s += isWhitePiece(p) ? TABEL[p.toLowerCase()] : -TABEL[p.toLowerCase()];
+  }
+  return s;
+}
+/* forcedMaterial counted by the children's table */
+function forcedPoints(S) {
+  const v = quiesce(S, -Infinity, Infinity, 8, x => x.turn === 'w' ? pointsOf(x) : -pointsOf(x));
   return S.turn === 'w' ? v : -v;
 }
 
@@ -457,20 +496,57 @@ function hashOf(S) {
 }
 const TT = new Map();
 const TT_MAX = 150000;
+function clearTT() { TT.clear(); }
 
-/* Iterative deepening alpha-beta with a time budget: transposition table,
-   killer and history ordering, check extension, quiescence at the leaves.
-   Returns the best move of the deepest fully searched iteration. */
-function think(S, budgetMs, maxDepth) {
+/* The positions of the game before the current one that can still come back:
+   only those after the last capture or pawn move, since those cannot be undone. */
+function earlierPositions(S, keyOf) {
+  const out = [], back = [];
+  const n = Math.min(S.half, S.hist.length);
+  for (let i = 0; i < n; i++) {
+    back.push(S.hist[S.hist.length - 1].m);
+    unmakeMove(S);
+    out.push(keyOf(S));
+  }
+  for (let i = back.length - 1; i >= 0; i--) makeMove(S, back[i]);
+  return out;
+}
+/* Board, side to move, castling and en passant, as the rules of chess count
+   them: the en passant square only when a pawn can really capture there, so
+   the position right after a double step equals the same board later. */
+function positionKey(S) {
+  const f = toFEN(S).split(' ');
+  if (f[3] !== '-' && !legalMoves(S).some(m => m.flags === 'e')) f[3] = '-';
+  return f.slice(0, 4).join(' ');
+}
+/* How often the current position stood on the board before in this game;
+   2 means this is the third time, a draw by repetition. */
+function repetitions(S) {
+  const now = positionKey(S);
+  return earlierPositions(S, positionKey).filter(k => k === now).length;
+}
+
+/* Iterative deepening alpha-beta with a time budget, and optionally a node
+   budget (opts.nodes), which makes the result the same on every device:
+   transposition table, killer and history ordering, check extension,
+   quiescence at the leaves. A position from earlier in the game, or earlier
+   on the line being searched, scores as a draw, so Turbo does not repeat
+   when he is ahead. Returns the best move of the deepest fully searched
+   iteration. */
+function think(S, budgetMs, maxDepth, opts) {
   const t0 = Date.now(), deadline = t0 + (budgetMs || 1000);
   maxDepth = maxDepth || 8;
-  let nodes = 0, aborted = false;
+  const maxNodes = opts && opts.nodes ? opts.nodes : Infinity;
+  let nodes = 0, aborted = false, finish = false;
   const killers = [], hist = new Map();
   if (TT.size > TT_MAX) TT.clear();
   const tick = () => {
-    if ((++nodes & 255) === 0 && Date.now() > deadline) aborted = true;
+    if (aborted) return true;
+    NODES++;
+    if ((++nodes & 255) === 0 && !finish && (nodes >= maxNodes || Date.now() > deadline)) aborted = true;
     return aborted;
   };
+  const earlier = new Set(earlierPositions(S, hashOf)), path = new Set();
   /* mate scores are stored relative to the node, not the root, so a
      transposition reached at another ply reads back the right distance */
   const toTT = (s, ply) => s > MATE - 1000 ? s + ply : (s < -MATE + 1000 ? s - ply : s);
@@ -489,11 +565,17 @@ function think(S, budgetMs, maxDepth) {
   };
   function ab(depth, alpha, beta, ply) {
     if (tick()) return 0;
+    let key = -1, low = 0;
+    /* a position can only come back after at least four reversible plies */
+    if (S.half >= 4) {
+      key = hashOf(S); low = hashLow;
+      if (earlier.has(key) || path.has(key)) return 0;
+    }
     const chk = inCheck(S);
     if (chk) depth++;
     if (depth <= 0) return quiesce(S, alpha, beta, 6, evalSTM, tick);
     if (S.half >= 100) return 0;
-    const key = hashOf(S), low = hashLow;
+    if (key < 0) { key = hashOf(S); low = hashLow; }
     const e = TT.get(key);
     let ttMove = null;
     if (e && e.v === low) {
@@ -509,11 +591,12 @@ function think(S, budgetMs, maxDepth) {
     if (!moves.length) return chk ? -MATE + ply : 0;
     const alpha0 = alpha;
     let best = -Infinity, bestM = null;
+    path.add(key);
     for (const m of order(moves, ttMove, ply)) {
       makeMove(S, m);
       const sc = -ab(depth - 1, -beta, -alpha, ply + 1);
       unmakeMove(S);
-      if (aborted) return 0;
+      if (aborted) { path.delete(key); return 0; }
       if (sc > best) { best = sc; bestM = m; }
       if (sc > alpha) {
         alpha = sc;
@@ -527,37 +610,55 @@ function think(S, budgetMs, maxDepth) {
         }
       }
     }
+    path.delete(key);
     TT.set(key, { d: depth, s: toTT(best, ply), f: best <= alpha0 ? 2 : (best >= beta ? 1 : 0), m: bestM, v: low });
     return best;
   }
-  const rootMoves = legalMoves(S);
+  /* opts.root limits the moves searched at the root: the best of a few moves,
+     or of all moves but a few, with the same search as the whole position */
+  const rootMoves = opts && opts.root ? opts.root : legalMoves(S);
   if (!rootMoves.length) return { m: null, score: 0, depth: 0, nodes: 0 };
+  path.add(hashOf(S));
   let bestMove = null, bestScore = 0, done = 0;
-  for (let d = 1; d <= maxDepth; d++) {
-    if (Math.abs(bestScore) >= MATE - 100) break;
+  const iteration = d => {
     let alpha = -Infinity, rootBest = null, rootScore = -Infinity;
     for (const m of order(rootMoves, bestMove, 0)) {
       makeMove(S, m);
       const sc = -ab(d - 1, -Infinity, -alpha, 1);
       unmakeMove(S);
-      if (aborted) break;
+      if (aborted) return false;
       if (sc > rootScore) { rootScore = sc; rootBest = m; }
       if (sc > alpha) alpha = sc;
     }
-    if (aborted) break;
     bestMove = rootBest; bestScore = rootScore; done = d;
-    if (Math.abs(rootScore) >= MATE - 100) break;
-    if (Date.now() - t0 > budgetMs / 2) break;
+    return true;
+  };
+  for (let d = 1; d <= maxDepth; d++) {
+    if (Math.abs(bestScore) >= MATE - 100) break;
+    if (!iteration(d)) break;
+    if (Math.abs(bestScore) >= MATE - 100) break;
+    if (Date.now() - t0 > budgetMs / 2 || nodes >= maxNodes / 2) break;
   }
-  if (!bestMove) bestMove = rootScores(S, 1)[0].m;
+  /* a budget too small for one iteration still gets a searched and counted
+     move: depth 1 is finished whatever the budget */
+  if (!done) { aborted = false; finish = true; iteration(1); }
   return { m: bestMove, score: bestScore, depth: done, nodes };
 }
 
 /* --- AI opponent --- */
 
+/* Super Turbo's search counts nodes, not time, so he is equally strong on a
+   slow phone and on a laptop and plays the same move in the same position.
+   About 2 s on the slowest phone; the time cap is only a safety net. */
+const SUPER_NODES = 100000, SUPER_CAP_MS = 4000;
+/* Turbo's two-ply choice cannot drive a bare king to the edge, so against one
+   he searches a little deeper and mates instead of drawing by fifty moves. */
+const TURBO_BARE_NODES = 12000;
+function bareKing(S, color) { return piecesOf(S, color).length === 1; }
+
 /* Level 1 (Baby): mostly random. Level 2 (Turbo): book, then depth 2 with a
-   margin, so it stays beatable. Level 3 (Super Turbo): book, then the timed
-   search. budgetMs only matters for level 3 (tests pass a small one). */
+   margin, so it stays beatable. Level 3 (Super Turbo): book, then the search
+   with its node budget. budgetMs only caps level 3 (tests pass a small one). */
 function pickMove(S, level, rng, budgetMs) {
   rng = rng || Math.random;
   const legal = legalMoves(S);
@@ -572,7 +673,8 @@ function pickMove(S, level, rng, budgetMs) {
     const bm = bookMove(S, rng);
     if (bm) return bm;
   }
-  if (level === 3) return think(S, budgetMs || 1200, 8).m;
+  if (level === 3) return think(S, budgetMs || SUPER_CAP_MS, 8, { nodes: SUPER_NODES }).m;
+  if (level === 2 && bareKing(S, other(S.turn))) return think(S, budgetMs || SUPER_CAP_MS, 8, { nodes: TURBO_BARE_NODES }).m;
   const depth = level === 1 ? 1 : 2;
   const margin = level === 1 ? 250 : 80;
   const scored = rootScores(S, depth);
@@ -580,27 +682,78 @@ function pickMove(S, level, rng, budgetMs) {
   return top[Math.floor(rng() * top.length)].m;
 }
 
-/* Blunder guard: does move m lose >=250cp of material by force, while a clearly
-   better option exists? Returns null or {loss, punish} (punish = opponent's reply). */
-function blunderCheck(S, m) {
-  makeMove(S, m);
-  const afterMine = forcedMaterial(S);
+/* The loss of the mover's move x by the alarm's measure: MATE when the
+   opponent then mates in one, otherwise the material on the board now minus
+   the forced material after it. A move that mates loses nothing at all, and a
+   move that ends the game in a draw is never counted as better. */
+function lossAfter(S, x, now, sign) {
+  makeMove(S, x);
+  const st = gameStatus(S);
+  const l = st.over ? (st.reason === 'mat' ? -Infinity : Infinity) : mateReply(S) ? MATE : now - forcedMaterial(S) * sign;
   unmakeMove(S);
-  const mySign = S.turn === 'w' ? 1 : -1;
-  let bestAlt = -Infinity;
-  for (const alt of legalMoves(S)) {
-    makeMove(S, alt);
-    const v = forcedMaterial(S) * mySign;
-    unmakeMove(S);
-    if (v > bestAlt) bestAlt = v;
+  return l;
+}
+/* Blunder guard: does move m allow mate in one, or lose 150cp or more by force
+   against the material on the board now, while another legal move loses at
+   least a pawn less? A better move that was not played is no danger, so it is
+   never the baseline; and when every move loses as much, there is nothing to
+   warn about. Returns null or {loss, punish, take, points, anyway}: punish is
+   the opponent's best reply (with mate: true when it mates), take the capture
+   that starts the loss, points the loss by the children's table, anyway
+   whether every move loses at least a pawn. */
+/* Het alarm komt voordat de zet op het bord staat: met een grens aan posities (ALARM_NODES, ongeveer een seconde op
+   het traagste apparaat) wacht het kind nooit lang, en is de grens op, dan is er voor die zet geen alarm. */
+const ALARM_NODES = 40000;
+function blunderCheck(S, m, grens) {
+  if (!grens) return blunderCheckZonderGrens(S, m);
+  const vorige = NODE_GRENS;
+  NODE_GRENS = Math.min(vorige, NODES + grens);
+  try {
+    const r = blunderCheckZonderGrens(S, m);
+    return NODES > NODE_GRENS ? null : r;
+  } finally { NODE_GRENS = vorige; }
+}
+function blunderCheckZonderGrens(S, m) {
+  const sign = S.turn === 'w' ? 1 : -1, now = material(S) * sign, pointsNow = pointsOf(S) * sign;
+  makeMove(S, m);
+  const over = gameStatus(S).over, mate = over ? null : mateReply(S);
+  const loss = over ? 0 : mate ? MATE : now - forcedMaterial(S) * sign;
+  unmakeMove(S);
+  if (loss < 150) return null;
+  /* stop at the first move that is a pawn better and loses less than a pawn */
+  let better = false, least = Infinity;
+  for (const x of legalMoves(S)) {
+    if (moveKey(x) === moveKey(m)) continue;
+    const l = lossAfter(S, x, now, sign);
+    if (l < least) least = l;
+    if (l <= loss - 100) { better = true; if (least < 100) break; }
   }
-  const loss = bestAlt - afterMine * mySign;
-  if (loss >= 250) {
+  if (!better) return null;
+  if (mate) return { loss, punish: mate, take: null, mate: true, points: 0, anyway: least >= 100 };
+  makeMove(S, m);
+  const reply = rootScores(S, 2), punish = reply.length ? reply[0].m : null;
+  const take = lossStart(S, punish), points = pointsNow - forcedPoints(S) * sign;
+  unmakeMove(S);
+  return { loss, punish, take, points, anyway: least >= 100 };
+}
+
+/* The capture that starts a loss in S, for the side to move: its best move
+   when that captures, otherwise its capture that wins the most, or null. */
+function lossStart(S, best) {
+  if (best && isCapture(S, best)) return best;
+  const w = winnableCaptures(S);
+  return w.length ? w.reduce((a, b) => b.gain > a.gain ? b : a).move : null;
+}
+
+/* A reply that mates at once, or null. Only a reply that gives check can
+   mate, so most replies skip the costly full move generation that
+   matingMoves(S, 1) does for each of them. */
+function mateReply(S) {
+  for (const m of legalMoves(S)) {
     makeMove(S, m);
-    const reply = rootScores(S, 2);
+    const mate = inCheck(S) && legalMoves(S).length === 0;
     unmakeMove(S);
-    const punish = reply.length ? reply[0].m : null;
-    return { loss, punish };
+    if (mate) return m;
   }
   return null;
 }
@@ -711,34 +864,45 @@ function findAttacker(S, t, by) {
 
 /* Static exchange on square t: net material the side to move can win by capturing
    there (capturing with the cheapest attacker first; 0 when declining is better). */
-function seeSquare(S, t) {
+function seeSquare(S, t, vals) {
+  vals = vals || VAL;
   const p = S.board[t];
   if (!p) return 0;
   const caps = legalMoves(S).filter(m => m.to === t && S.board[m.to]);
   if (!caps.length) return 0;
   caps.sort((a, b) => VAL[S.board[a.from].toLowerCase()] - VAL[S.board[b.from].toLowerCase()]);
-  const victim = VAL[p.toLowerCase()];
+  const victim = vals[p.toLowerCase()];
   makeMove(S, caps[0]);
-  const net = victim - seeSquare(S, t);
+  const net = victim - seeSquare(S, t, vals);
   unmakeMove(S);
   return Math.max(0, net);
 }
 
 /* Enemy pieces the side to move can win material on, judged per square with the
    exchange value. Returns details: {sq, victim (cp), gain (cp won), move}. */
+/* Het veld van het stuk dat zet m slaat: bij en passant staat de pion naast het veld waar de slag landt. */
+function slagVeld(S, m) { return m.flags === 'e' ? m.to + (S.turn === 'w' ? -16 : 16) : m.to; }
 function winnableCaptures(S) {
   const out = [];
-  const caps = legalMoves(S).filter(m => S.board[m.to] && m.flags !== 'e');
   const byTarget = new Map();
-  for (const m of caps) {
-    if (!byTarget.has(m.to)) byTarget.set(m.to, []);
-    byTarget.get(m.to).push(m);
+  for (const m of legalMoves(S)) {
+    const t = slagVeld(S, m);
+    if (!S.board[t]) continue;
+    if (!byTarget.has(t)) byTarget.set(t, []);
+    byTarget.get(t).push(m);
   }
   for (const [sq, moves] of byTarget) {
     const victim = VAL[S.board[sq].toLowerCase()];
-    const gain = seeSquare(S, sq);
     moves.sort((a, b) => VAL[S.board[a.from].toLowerCase()] - VAL[S.board[b.from].toLowerCase()]);
-    if (gain >= Math.min(victim, 90)) out.push({ sq, victim, gain, move: moves[0] });
+    let gain = seeSquare(S, sq), move = moves.find(m => m.flags !== 'e');
+    /* seeSquare kent alleen slagen die op het veld landen; en passant landt ernaast, en wint wat er daar niet terugkomt */
+    for (const m of moves.filter(x => x.flags === 'e')) {
+      makeMove(S, m);
+      const ep = victim - seeSquare(S, m.to);
+      unmakeMove(S);
+      if (!move || ep > gain) { gain = Math.max(gain, ep); move = m; }
+    }
+    if (gain >= Math.min(victim, 90)) out.push({ sq, victim, gain, move });
   }
   return out;
 }
@@ -789,10 +953,149 @@ function genScanTask(type, rng) {
   return null;
 }
 
-/* Safe-or-trap: a quiet white move that either holds (loss<=60) or drops >=250 by force. */
+/* The checks when a task is picked look deeper than forcedMaterial, which
+   sees captures only: a quiet fork or a mate threat counts too. */
+const CHECK_NODES = 25000;
+/* White's move m in S played out: Black's best reply and White's best reply
+   at the budget, then the captures resolved. white is White's score after m
+   (the value V of the chess coach's measures), material what White has won
+   or lost along that line (L; a fork or a pin shows here, positional points
+   do not), reply Black's reply, mateNext whether Black mates at once. */
+function lineAfter(S, m, nodes) {
+  const m0 = material(S), p0 = pointsOf(S), back = [m];
+  makeMove(S, m);
+  let st = gameStatus(S);
+  const out = { white: st.over ? (st.reason === 'mat' ? MATE : 0) : 0, reply: null, material: 0, mateNext: false };
+  if (!st.over) {
+    out.mateNext = !!mateReply(S);
+    const r = think(S, 60000, 8, { nodes });
+    out.white = -r.score;
+    out.reply = r.m;
+    makeMove(S, r.m); back.push(r.m);
+    st = gameStatus(S);
+    if (!st.over) { const w = think(S, 60000, 8, { nodes }).m; makeMove(S, w); back.push(w); }
+  }
+  const over = gameStatus(S).over;
+  out.material = (over ? material(S) : forcedMaterial(S)) - m0;
+  out.punten = (over ? pointsOf(S) : forcedPoints(S)) - p0;
+  for (let i = back.length; i > 0; i--) unmakeMove(S);
+  return out;
+}
+/* Veilig of valstrik. A "veilig" move loses no
+   pawn along its line, allows no mate in one, and is at most 2 points below
+   the best move; a "valstrik" loses 2.5 points or more along its line, is
+   at least 2.5 points below the best move, and is punished by a capture,
+   Black's first move of that line. A move on which the line and the score
+   disagree is neither: a piece that is lost after every move is no trap set
+   by this one. A move that allows mate in one while the best move does not is
+   a "valstrik" too, punished by the mate (task.mate). Returns the task or null. */
+function checkSafeTask(task, nodes) {
+  nodes = nodes || CHECK_NODES;
+  clearTT();
+  const S = task.S;
+  const best = think(S, 60000, 8, { nodes }).score;
+  const line = lineAfter(S, task.move, nodes);
+  if (!task.trap) return line.material >= -90 && !line.mateNext && best - line.white <= 200 ? task : null;
+  if (line.mateNext) {
+    if (best - line.white < 250) return null;
+    makeMove(S, task.move);
+    const mat = mateReply(S);
+    unmakeMove(S);
+    return Object.assign({}, task, { punish: mat, mate: true });
+  }
+  if (line.material > -250 || best - line.white < 250 || !line.reply || !isCaptureAfter(S, task.move, line.reply)) return null;
+  return Object.assign({}, task, { punish: line.reply, mate: false });
+}
+/* Red je stuk: exactly one threat; the piece can be saved,
+   best play losing at most a pawn against the position as it stands; every
+   answer within half a pawn of the best and losing no pawn along its line;
+   every other move at least 1.5 points below the lowest answer, so a move
+   about as good is never called wrong; one to four answers. */
+function checkPieceTask(task, nodes) {
+  nodes = nodes || CHECK_NODES;
+  clearTT();
+  const S = task.S;
+  if (task.answers.length < 1 || task.answers.length > 4) return null;
+  if (threatDetails(S).filter(t => t.gain >= 90).length !== 1) return null;
+  const v0 = think(S, 60000, 8, { nodes }).score;
+  if (v0 < evalWhite(S) - 100) return null;
+  let lowest = Infinity;
+  for (const a of task.answers) {
+    const line = lineAfter(S, a.m, nodes);
+    if (line.white < v0 - 50 || line.material < -90) return null;
+    lowest = Math.min(lowest, line.white);
+  }
+  const keys = task.answers.map(a => moveKey(a.m));
+  const others = legalMoves(S).filter(m => keys.indexOf(moveKey(m)) < 0);
+  if (others.length && think(S, 60000, 8, { nodes, root: others }).score > lowest - 150) return null;
+  return task;
+}
+
+/* How move m saves White's hanging piece on hangSq, for the explanation of
+   Red je stuk; first match wins. "Safe" means Black wins nothing by capturing
+   on that square (the exchange, not only "a white piece defends it": a
+   defended queen that a pawn attacks is still lost). Points are 1, 3, 5, 9. */
+function saveKind(S, m, hangSq) {
+  const moved = m.from === hangSq;
+  const took = isCapture(S, m) ? (S.board[capturedSq(S, m)] || 'p').toLowerCase() : null;
+  const tookOne = took ? { took: NAME_NL[took], a: POINTS[took] } : {};
+  const hangVal = VAL[S.board[hangSq].toLowerCase()];
+  const takerOfHang = took && pieceAttacksSq(S, m.to, hangSq);
+  const sliders = piecesOf(S, 'b').filter(a => 'brq'.includes(S.board[a].toLowerCase()) && pieceAttacksSq(S, a, hangSq));
+  makeMove(S, m);
+  const at = moved ? m.to : hangSq;
+  const check = inCheck(S), attackedNow = attacked(S, at, 'b');
+  /* in check Black may not capture for one move, so seeSquare reads 0 for a
+     piece that is not safe at all: in check only an unattacked piece is safe */
+  const back = attackedNow ? seeSquare(S, at) : 0, safe = !attackedNow || (!check && back === 0);
+  const blocked = !moved && sliders.some(a => S.board[a] && !pieceAttacksSq(S, a, hangSq) && between(a, hangSq, m.to));
+  const threatens = piecesOf(S, 'b').some(t => S.board[t] !== 'k' && pieceAttacksSq(S, m.to, t) && VAL[S.board[t].toLowerCase()] >= hangVal);
+  unmakeMove(S);
+  const backPts = Math.round(back / 100) >= 9 ? 9 : Math.round(back / 100);
+  const out = (kind, extra) => Object.assign({ kind, sq: alg(at) }, tookOne, extra || {});
+  if (takerOfHang && safe) return out('aanvaller');
+  if (moved && took && safe) return out('slaat');
+  if (moved && !attackedNow) return out('weg');
+  if (check && attackedNow) return out('schaak');
+  if (moved) {
+    if (safe) return out('weg-gedekt');
+    if (took && VAL[took] >= back) return out('ruil', { b: backPts });
+  } else if (safe) return out(blocked ? 'ertussen' : 'gedekt');
+  else if (took && VAL[took] >= back) return out('ruil', { b: backPts });
+  if (!took && threatens) return out('tegenaanval');
+  return out('anders');
+}
+/* Is square c strictly on the straight line between a and b? */
+function between(a, b, c) {
+  const df = (b & 15) - (a & 15), dr = (b >> 4) - (a >> 4);
+  const n = Math.max(Math.abs(df), Math.abs(dr));
+  if (n < 2 || (df !== 0 && dr !== 0 && Math.abs(df) !== Math.abs(dr))) return false;
+  const step = Math.sign(dr) * 16 + Math.sign(df);
+  for (let i = 1, s = a + step; i < n; i++, s += step) if (s === c) return true;
+  return false;
+}
+
+/* Safe-or-trap: a quiet white move that either holds (loss<=60) or drops >=250
+   by force, confirmed by checkSafeTask. After three candidates that the check
+   rejects it gives up, so the child never waits long. A trap's punishment is
+   a capture, so the explanation can say what is taken. */
+/* About four seconds under the 6x slowdown; when it is spent
+   the generator gives nothing and the app gives another kind of task. */
+const SAFE_NODES = 160000;
 function genSafeTask(wantTrap, rng) {
   rng = rng || Math.random;
-  for (let tries = 0; tries < 90; tries++) {
+  let rejected = 0;
+  const n0 = NODES;
+  /* a check is three searches of CHECK_NODES plus its captures: start one only while it still fits */
+  const ruimte = () => NODES - n0 <= SAFE_NODES - 3 * CHECK_NODES - 5000;
+  const confirm = t => {
+    const c = checkSafeTask(t);
+    if (c && (!t.trap || c.mate || isCaptureAfter(t.S, t.move, c.punish))) return c;
+    rejected++;
+    return null;
+  };
+  for (let tries = 0; tries < 90 && rejected < 3; tries++) {
+    if (!ruimte()) return null;
     const S = randomPosition({ noise: 150, minPlies: 8, maxPlies: 22 }, rng);
     if (inCheck(S)) continue;
     const base = forcedMaterial(S);
@@ -805,16 +1108,26 @@ function genSafeTask(wantTrap, rng) {
       makeMove(S, m);
       const after = forcedMaterial(S);
       const loss = base - after;
-      if (wantTrap && loss >= 250) {
-        const reply = rootScores(S, 2);
+      const mat = wantTrap ? mateReply(S) : null;
+      if (wantTrap && (loss >= 250 || mat)) {
+        const reply = mat ? [] : rootScores(S, 2);
         unmakeMove(S);
-        const punish = reply.length ? reply[0].m : null;
-        if (punish && isCaptureAfter(S, m, punish))
-          return { S, move: m, trap: true, punish, loss };
+        const punish = mat || (reply.length ? reply[0].m : null);
+        if (punish && (mat || isCaptureAfter(S, m, punish))) {
+          if (!ruimte()) return null;
+          const c = confirm({ S, move: m, trap: true, punish, loss });
+          if (c) return c;
+          break;
+        }
         continue;
       }
       unmakeMove(S);
-      if (!wantTrap && loss <= 60 && loss >= -60) return { S, move: m, trap: false, loss };
+      if (!wantTrap && loss <= 60 && loss >= -60) {
+        if (!ruimte()) return null;
+        const c = confirm({ S, move: m, trap: false, loss });
+        if (c) return c;
+        break;
+      }
     }
   }
   return null;
@@ -914,10 +1227,12 @@ function raysPinSkewer(S, sq) {
 }
 
 /* Attacks by friendly sliders that got unveiled because fromSq was vacated.
-   Call on the position AFTER the move. */
-function discoveredFrom(S, fromSq, by) {
+   Call on the position AFTER the move. The piece that moved (now on movedTo)
+   unveils nothing: sliding along its own line it attacks what it attacked. */
+function discoveredFrom(S, fromSq, by, movedTo) {
   const out = [];
   for (const sq of piecesOf(S, by)) {
+    if (sq === movedTo) continue;
     const pt = S.board[sq].toLowerCase();
     if (!'brq'.includes(pt)) continue;
     for (const d of SLIDER_DIRS[pt]) {
@@ -945,7 +1260,7 @@ function patternsAfterMove(S, m) {
     safe: seeSquare(S, m.to) <= 0,
     fork: forkTargets(S, m.to),
     pin: null, skewer: null,
-    discovered: discoveredFrom(S, m.from, other(S.turn)).filter(x => x.isKing || x.val >= 300),
+    discovered: discoveredFrom(S, m.from, other(S.turn), m.to).filter(x => x.isKing || x.val >= 300),
     mate: false
   };
   const ps = raysPinSkewer(S, m.to);
@@ -1201,27 +1516,264 @@ function genKingTask(rng, attempts) {
 
 /* A white piece hangs (SEE loss) and white can save it: move it, defend it, or
    counter-attack. Every move after which black no longer wins material by force
-   counts, as long as it does not hang something else. */
+   counts, as long as it does not hang something else, and checkPieceTask
+   confirms that no accepted save is clearly worse than the best one. */
 function genPieceTask(rng) {
   rng = rng || Math.random;
-  for (let tries = 0; tries < 120; tries++) {
-    const S = randomPosition({ noise: 260, minPlies: 8, maxPlies: 24, maxImbalance: 600 }, rng);
-    if (inCheck(S)) continue;
-    const th = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250);
-    if (th.length !== 1) continue;
-    const base = forcedMaterial(S);
-    const saves = [], moves = legalMoves(S);
-    for (const m of moves) {
-      makeMove(S, m);
-      const st = gameStatus(S);
-      const after = st.over ? base : forcedMaterial(S);
-      unmakeMove(S);
-      if (after - base >= -60) saves.push({ m, info: null });
-    }
-    if (!saves.length || saves.length > 4) continue;
-    return { S, type: 'stuk', hang: th[0], answers: saves };
+  let rejected = 0;
+  for (let tries = 0; tries < 120 && rejected < 3; tries++) {
+    const task = pieceTaskFrom(randomPosition({ noise: 260, minPlies: 8, maxPlies: 24, maxImbalance: 600 }, rng));
+    if (!task) continue;
+    if (checkPieceTask(task)) return task;
+    rejected++;
   }
   return null;
+}
+/* The Red je stuk task in position S, before the check: one white piece
+   hangs, and one to four moves keep the material. Null otherwise. The stock
+   (STUK_POOL) is made from this too. */
+function pieceTaskFrom(S) {
+  if (S.turn !== 'w' || inCheck(S)) return null;
+  /* one threat only, a pawn included: with two the child cannot save both */
+  const threats = threatDetails(S).filter(t => t.gain >= 90), th = threats.filter(t => t.victim >= 300 && t.gain >= 250);
+  if (threats.length !== 1 || th.length !== 1) return null;
+  const base = forcedMaterial(S);
+  const saves = [];
+  for (const m of legalMoves(S)) {
+    makeMove(S, m);
+    const st = gameStatus(S);
+    const after = st.over ? base : forcedMaterial(S);
+    unmakeMove(S);
+    if (after - base >= -60) saves.push({ m, info: null });
+  }
+  if (!saves.length || saves.length > 4) return null;
+  return { S, type: 'stuk', hang: th[0], answers: saves };
+}
+
+/* --- the key moment of a game against Turbo (the child plays White) --- */
+
+const POINTS = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+function capturedSq(S, m) { return m.flags === 'e' ? m.to + (S.turn === 'w' ? -16 : 16) : m.to; }
+function isPattern(info) { return info.fork.length >= 2 || !!info.pin || !!info.skewer || info.discovered.length > 0; }
+
+/* What one move m of White meant, from the position before it: at most one
+   moment, the first kind that applies, or null. A loss is in centipawns and
+   comes from blunderCheck: from 150, so the exchange counts and one pawn
+   never, and only when another move loses at least a pawn less. verlies is the
+   same loss by the children's table, for the text. */
+function moveMoment(S, m) {
+  const base = { moveNo: S.full, ply: S.hist.length, move: moveKey(m) };
+  const bc = blunderCheck(S, m);
+  if (bc && bc.mate) return Object.assign(base, { kind: 'mat', loss: MATE, punish: moveKey(bc.punish) });
+  /* Turbo takes back on the square the child just captured on: the lesson is
+     the defended piece that was taken, not a piece left hanging. */
+  if (bc && bc.punish && isCapture(S, m) && bc.punish.to === m.to)
+    return Object.assign(base, { kind: 'ruil', loss: bc.loss, verlies: bc.points, sq: alg(m.to), punish: moveKey(bc.punish) });
+  if (bc && bc.punish) {
+    makeMove(S, m);
+    const cap = isCapture(S, bc.punish), t = capturedSq(S, bc.punish), victim = cap ? (S.board[t] || 'p') : null;
+    const exchange = cap && S.board[t] ? seeSquare(S, t) : 0;
+    const undefended = cap && findAttacker(S, t, 'w') < 0;
+    const info = patternsAfterMove(S, bc.punish), by = NAME_NL[S.board[bc.punish.from].toLowerCase()];
+    unmakeMove(S);
+    const taken = victim ? { sq: alg(t), piece: NAME_NL[victim.toLowerCase()], points: POINTS[victim.toLowerCase()] } : {};
+    const loss = { loss: bc.loss, verlies: bc.points, punish: moveKey(bc.punish) };
+    /* a capture that wins on its own square is the lesson, whatever shape the
+       capturing piece makes afterwards; a trick only when the gain lies elsewhere */
+    if (undefended) {
+      /* taken where it went itself: no guard of that square went away */
+      const d = t === m.to ? -1 : findAttacker(S, t, 'w');
+      return Object.assign(base, { kind: 'hang', self: t === m.to, defender: d >= 0 ? NAME_NL[S.board[d].toLowerCase()] : null,
+        moved: d >= 0 && d === m.from }, loss, taken);
+    }
+    if (cap && exchange >= bc.loss - 50) return Object.assign(base, { kind: 'slag', by }, loss, taken);
+    if (isPattern(info)) return Object.assign(base, { kind: 'truc' }, loss, taken);
+  }
+  if (isCapture(S, m)) {
+    const victim = (S.board[capturedSq(S, m)] || 'p').toLowerCase();
+    makeMove(S, m);
+    const back = seeSquare(S, m.to), backPoints = seeSquare(S, m.to, TABEL);
+    unmakeMove(S);
+    const net = VAL[victim] - back;
+    if (net >= 250) return Object.assign(base, { kind: 'goed', gain: net, winst: TABEL[victim] - backPoints, sq: alg(m.to),
+      piece: back === 0 ? NAME_NL[victim] : null });
+  }
+  makeMove(S, m);
+  const mated = inCheck(S) && legalMoves(S).length === 0;
+  unmakeMove(S);
+  if (mated) return null;
+  const mate = mateReply(S);
+  if (mate) return Object.assign(base, { kind: 'gemist', loss: 1000, mateWith: moveKey(mate) });
+  /* a capture that would have cost more elsewhere (a queen that had to flee)
+     was rightly left: it counts only when taking left White 2.5 points better */
+  const resultOf = x => { makeMove(S, x); const v = forcedMaterial(S); unmakeMove(S); return v; };
+  const afterM = resultOf(m);
+  const wins = winnableCaptures(S).filter(x => x.gain >= 300 && resultOf(x.move) - afterM >= 250);
+  if (wins.length && !wins.some(x => isCapture(S, m) && capturedSq(S, m) === x.sq)) {
+    const w = wins.reduce((a, b) => b.gain > a.gain ? b : a);
+    return Object.assign(base, { kind: 'gemist', loss: w.gain, winst: seeSquare(S, w.sq, TABEL), sq: alg(w.sq),
+      piece: NAME_NL[S.board[w.sq].toLowerCase()], points: POINTS[S.board[w.sq].toLowerCase()], with: moveKey(w.move) });
+  }
+  const info = patternsAfterMove(S, m);
+  if (info.safe && isPattern(info)) return Object.assign(base, { kind: 'goed', pattern: true, gain: 0 });
+  return null;
+}
+/* White's material when the game had `ply` half-moves. */
+function materialAt(S, ply) {
+  const back = [];
+  while (S.hist.length > ply) { back.push(S.hist[S.hist.length - 1].m); unmakeMove(S); }
+  const v = material(S);
+  for (let i = back.length - 1; i >= 0; i--) makeMove(S, back[i]);
+  return v;
+}
+/* Did Turbo use a moment of loss: his next move was the punishment, or a
+   capture on the square of the piece that could be taken. A chance the child
+   missed (gemist) happened whatever Turbo did. */
+function momentUsed(k, S) {
+  if (k.kind === 'gemist' || k.kind === 'goed') return true;
+  const u = S && S.hist[k.ply + 1];
+  if (!u) return false;
+  /* een truc speelt hij met de zet van de truc; slaat hij met iets anders, dan liet hij de truc liggen */
+  if (k.kind === 'truc') return moveKey(u.m) === k.punish;
+  return moveKey(u.m) === k.punish || (!!u.cap && !!k.sq && alg(u.m.to) === k.sq);
+}
+/* The one moment for the end card: what Turbo really did goes before what he
+   could have done. First the largest loss he used (a mate he gave is the
+   largest), then a mate he let pass, then the largest loss he let pass, then
+   the best good move; on a tie the earliest, since the first big mistake
+   usually decided the game. A capture that Turbo used knows whether the child
+   took back on that square with its next move. A pattern move counts as good only when it worked: after
+   the child's next move White is at least 2 points better than before it,
+   because the detector also sees forks that win nothing. */
+function chooseMoment(moments, S) {
+  const ms = moments.filter(Boolean).map(x => {
+    if (!x.pattern) return Object.assign({}, x, { used: momentUsed(x, S) });
+    if (!S || S.hist.length < x.ply + 3) return null;
+    const gain = materialAt(S, x.ply + 3) - materialAt(S, x.ply);
+    return gain >= 200 ? Object.assign({}, x, { gain, used: true }) : null;
+  }).filter(Boolean);
+  const grootste = xs => xs.reduce((a, b) => (b.kind === 'mat' ? Infinity : b.loss) > (a.kind === 'mat' ? Infinity : a.loss) ? b : a);
+  const lost = ms.filter(x => x.kind !== 'goed'), usedLost = lost.filter(x => x.used);
+  const pick = usedLost.length ? grootste(usedLost) : lost.find(x => x.kind === 'mat') || (lost.length ? grootste(lost) : null);
+  if (pick) {
+    if (pick.kind !== 'slag' || !pick.used) return pick;
+    const u = S && S.hist[pick.ply + 2];
+    return Object.assign({}, pick, { terug: !!u && !!u.cap && alg(u.m.to) === pick.sq });
+  }
+  const good = ms.filter(x => x.kind === 'goed');
+  return good.length ? good.reduce((a, b) => b.gain > a.gain ? b : a) : null;
+}
+/* The key moment of the game so far, from its first move; perMove gives the
+   moment of one move of White (the app passes the ones it worked out while
+   Turbo thought, with the names for the end card). */
+function keyMoment(S, perMove) {
+  perMove = perMove || moveMoment;
+  const moves = S.hist.map(u => u.m);
+  for (let i = 0; i < moves.length; i++) unmakeMove(S);
+  const moments = [];
+  for (const m of moves) {
+    if (S.turn === 'w') moments.push(perMove(S, m));
+    makeMove(S, m);
+  }
+  return chooseMoment(moments, S);
+}
+
+/* --- the verified stock of tricks (src/trucs.js, made by tools/make-trucs.js) --- */
+
+/* A type serves only with this many verified puzzles: fewer, and a child who
+   plays daily recognises the positions within a week. */
+const TRUC_MIN = 15;
+/* "<board> <side>": eight rows of eight squares and one king of each colour,
+   so parseFEN never meets a board it cannot read */
+function boardOk(s) {
+  const m = /^([1-8pnbrqkPNBRQK]+(\/[1-8pnbrqkPNBRQK]+){7}) [wb]$/.exec(s);
+  if (!m) return false;
+  const rows = m[1].split('/');
+  if (!rows.every(r => r.replace(/[1-8]/g, d => '.'.repeat(+d)).length === 8)) return false;
+  return (m[1].match(/K/g) || []).length === 1 && (m[1].match(/k/g) || []).length === 1;
+}
+/* "<board> <side>|<type>|<answer>[,<answer>]" as a task, or null; a Red je
+   stuk task (STUK_POOL) gets its hanging piece too. */
+function trucTask(line) {
+  const parts = String(line).split('|');
+  if (!(parts.length === 3 || (parts.length === 4 && parts[1] === 'stuk')) || !boardOk(parts[0])) return null;
+  const S = parseFEN(parts[0] + ' - - 0 1');
+  const legal = legalMoves(S);
+  const answers = parts[2].split(',').map(k => legal.find(m => moveKey(m) === k));
+  if (!answers.length || answers.some(m => !m)) return null;
+  const task = { S, type: parts[1], answers: answers.map(m => ({ m, info: null })) };
+  if (task.type === 'stuk') {
+    task.hang = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250)[0];
+    if (!task.hang) return null;
+    /* "<zet>:<punten>:<antwoord>": een zet die het stuk ook redt en niets verliest, hoeveel punten het antwoord meer
+       oplevert (de tabel van de kinderen), en welk antwoord dat is */
+    task.ook = [];
+    for (const o of parts[3] ? parts[3].split(',') : []) {
+      const [k, n, a] = o.split(':'), m = legal.find(x => moveKey(x) === k), ans = legal.find(x => moveKey(x) === a);
+      if (!m || !ans || !/^\d+$/.test(n)) return null;
+      task.ook.push({ m, n: +n, ans });
+    }
+  }
+  return task;
+}
+/* De zetten van een Red je stuk-opdracht die het stuk ook echt redden (geen "anders", geen ruil), geen mat in een
+   toelaten en geen pion kosten: goed, met per zet hoeveel het beste antwoord meer oplevert. De voorraad maakt dit
+   vooraf, dus diep: een lijn van zes halve zetten en een zoektocht van twee keer `nodes` posities, want een ondiepe
+   lijn stopt midden in een ruil. Een redding is goed als een van beide maten zegt dat ze geen pion kost; wat niet
+   goed is, kost dan volgens beide een pion of meer. */
+function ookGoed(task, nodes) {
+  const S = task.S, uit = [], nu = evalWhite(S);
+  const diep = m => {
+    clearTT();
+    const l = lijnDiep(S, m, nodes, 6);
+    makeMove(S, m);
+    clearTT();
+    const zoek = -think(S, 600000, 30, { nodes: 2 * nodes }).score - nu;
+    unmakeMove(S);
+    return { lijn: l.material, zoek, punten: l.punten };
+  };
+  const beste = task.answers.map(a => ({ a: a.m, d: diep(a.m) })).reduce((x, y) => y.d.punten > x.d.punten ? y : x);
+  for (const m of legalMoves(S)) {
+    if (task.answers.some(a => moveKey(a.m) === moveKey(m))) continue;
+    const k = saveKind(S, m, task.hang.sq).kind;
+    if (k === 'anders' || k === 'ruil') continue;
+    makeMove(S, m);
+    const mat = !gameStatus(S).over && !!mateReply(S);
+    unmakeMove(S);
+    if (mat) continue;
+    const d = diep(m);
+    if (!ookMag(k, d.lijn, d.zoek)) continue;
+    uit.push({ m, n: Math.max(0, beste.d.punten - d.punten), ans: beste.a });
+  }
+  return uit;
+}
+/* Een redding is ook goed als een van de twee diepe maten zegt dat ze geen pion kost; na een tegenaanval of schaak
+   staat het stuk nog aangevallen, en dan moeten beide het zeggen. */
+function ookMag(kind, lijn, zoek) {
+  return (kind === 'tegenaanval' || kind === 'schaak' ? Math.min(lijn, zoek) : Math.max(lijn, zoek)) >= -90;
+}
+/* Een lijn van `halve` halve zetten na m, elk de beste zet van een zoektocht van `nodes` posities, met de slagen aan
+   het eind uitgerekend: wat wit dan meer of minder heeft dan nu, in materiaal en in de punten van de tabel. Mat in de
+   lijn telt als alles. */
+function lijnDiep(S, m, nodes, halve) {
+  const m0 = material(S), p0 = pointsOf(S), gezet = [m];
+  makeMove(S, m);
+  for (let i = 0; i < halve && !gameStatus(S).over; i++) {
+    const z = think(S, 600000, 30, { nodes }).m;
+    if (!z) break;
+    makeMove(S, z);
+    gezet.push(z);
+  }
+  const st = gameStatus(S), mat = st.over && st.reason === 'mat' ? (st.result === 'w' ? MATE : -MATE) : null;
+  const uit = { material: mat != null ? mat : forcedMaterial(S) - m0, punten: mat != null ? mat : (st.over ? pointsOf(S) : forcedPoints(S)) - p0 };
+  for (let i = gezet.length; i > 0; i--) unmakeMove(S);
+  return uit;
+}
+/* The trick types the stock can serve. */
+function trucTypes(pool) {
+  const count = {};
+  for (const line of pool || []) { const t = String(line).split('|')[1]; count[t] = (count[t] || 0) + 1; }
+  return Object.keys(count).filter(t => count[t] >= TRUC_MIN);
 }
 
 /* --- Dutch names --- */
@@ -1237,7 +1789,7 @@ function moveNameNL(S, m) {
   let s = NAME_NL[t].charAt(0).toUpperCase() + NAME_NL[t].slice(1) + ' ' + alg(m.from) + ' → ' + alg(m.to);
   const capPiece = m.flags === 'e' ? 'p' : (S.board[m.to] ? S.board[m.to].toLowerCase() : null);
   if (capPiece) s += ', slaat ' + NAME_NL[capPiece];
-  if (m.promo) s += ', promotie!';
+  if (m.promo) s += ', promotie';
   return s;
 }
 
@@ -1249,6 +1801,8 @@ if (typeof module !== 'undefined') {
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
-    winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
-    genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think };
+    winnableCaptures, slagVeld, nullMoved, ookGoed, ookMag, lijnDiep, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
+    genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
+    repetitions, positionKey, pointsOf, forcedPoints, TABEL, lossStart, ALARM_NODES, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
+    POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };
 }

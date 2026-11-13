@@ -27,7 +27,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.7', '4.5', '4.8', '4.12']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '5.5', '5.11']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -78,6 +78,16 @@ const HELPERS = `
   const startPotje = async () => { await klik('#spelTurbo', '.mode-card[data-mode="game"]'); await page.waitForTimeout(200);
     await klik('[data-lvl="1"]'); await page.waitForTimeout(500); };
   const startOefening = async (k) => { await klik('#oefen-' + k, '.mode-card[data-mode="' + k + '"]'); await page.waitForTimeout(1200); };
+  /* Turbo vraagt pas bij een zet die ertoe doet, vanaf zijn vijfde zet: in dit
+     bewaarde potje speelt wit 5.Pxe5, en Turbo's d6xe5 krijgt de voorspelvraag; het blunderalarm
+     staat uit, anders houdt dat 5.Pxe5 eerst tegen */
+  const potjeVoorVraag = async (W, H) => {
+    const zonderAlarm = JSON.parse(DOC);
+    zonderAlarm.lww.guard = { v: false, t: 1 };
+    await vers(W, H, { schaakheld1: JSON.stringify(zonderAlarm), 'schaakheld-potje': JSON.stringify({ v: 1, level: 2, moves: ['e2e4', 'e7e5', 'g1f3', 'g8f6', 'f1c4', 'f8c5', 'd2d3', 'd7d6'],
+      tips: 3, drawAsked: null, started: Date.now() - 600000, updated: Date.now() - 60000 }) });
+    await klik('#verderKaart'); await page.waitForTimeout(500);
+  };
   const pagina = () => page.evaluate(() => ({ sh: document.documentElement.scrollHeight, sw: document.documentElement.scrollWidth,
     H: innerHeight, W: innerWidth }));
   const laatsteOnder = () => page.evaluate(() => { const o = document.getElementById('onder'); if (!o) return null;
@@ -127,15 +137,13 @@ for (const [W, H] of KLEIN) {
   GEVALLEN.push({ regels: ['[2.2] ' + W + 'x' + H + ': het bord blijft staan bij de voorspelvraag, een lange tip en een antwoord'],
     code: `
       const n = '[2.2] ${W}x${H}: het bord blijft staan bij de voorspelvraag, een lange tip en een antwoord';
-      await vers(${W}, ${H});
-      await page.evaluate(() => { Math.random = () => 0.1; });
-      await startPotje();
+      await potjeVoorVraag(${W}, ${H});
       let voor = await rect('#board');
       await klikTekst(/Speurbril/);
       await page.waitForTimeout(300);
       check(n, 'na een lange tip', gelijk(voor, await rect('#board')));
-      await zet('e2e4');
-      await page.waitForTimeout(400);
+      await zet('f3e5');
+      await page.waitForTimeout(1000);
       check(n, 'testopzet: de voorspelvraag staat er', await page.evaluate(() => /Welk stuk zet Turbo|Wat is Turbo van plan|Denk vooruit/.test(document.body.innerText)));
       check(n, 'bij de voorspelvraag', gelijk(voor, await rect('#board')));
       await klik('#backBtn');
@@ -185,7 +193,7 @@ for (const [W, H] of KLEIN) {
         session.phase = 'marking'; BD.marks.clear(); BD.mode = 'mark'; renderBoard(); });
       await klikTekst(/Klaar/);
       await page.waitForTimeout(500);
-      const reden = await rect('#taskBox .e-body > :first-child'), onder = await rect('#onder');
+      const reden = await rect('#taskBox .e-body p, #taskBox .e-body li'), onder = await rect('#onder');
       check(n, 'de eerste reden staat helemaal in beeld', !!reden && !!onder && binnen(reden, ${W}, ${H}) &&
         reden.top >= onder.top - 0.5 && reden.bottom <= onder.bottom + 0.5);`
   });
@@ -333,6 +341,178 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
           .map(e => e.textContent.trim().slice(0, 30)));
         check(n, 'geen tekst afgeknipt' + (geknipt.length ? ': ' + geknipt.join(' | ') : ''), geknipt.length === 0);
       }` });
+}
+
+/* de hint is op elk veld te zien (de twee kleuren van een gekozen veld) en klopt hoogstens drie keer;
+   een uitleg die verder gaat dan het vak, vervaagt aan de voet */
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n6 = '[2.6] ' + W + 'x' + H + ': de hint is een tweekleurig teken op een licht veld, ook op een donker veld, en klopt hoogstens drie keer';
+  const n4 = '[2.4] ' + W + 'x' + H + ': een uitleg die verder gaat dan het vak onder het bord, vervaagt aan de voet';
+  GEVALLEN.push({ regels: [n6, n4], code: `
+      const n6 = ${JSON.stringify(n6)}, n4 = ${JSON.stringify(n4)};
+      const kleuren = new Set();
+      for (const [fen, ans] of [['1k1r1b1r/1pp1ppp1/p1n4p/3pq1n1/8/P1NBP3/1PPPQPPP/R1B1R1K1 w - - 0 1', 'f2f4'], ['6k1/8/8/8/8/3N4/8/6K1 w - - 0 1', 'd3e5']]) {
+        await vers(${W}, ${H});
+        await startOefening('trucs');
+        await page.evaluate(([fen, ans]) => { const S = parseFEN(fen);
+          session.S = S; session.task = { S, type: 'vork', answers: [{ m: legalMoves(S).find(x => moveKey(x) === ans), info: null }], hintUsed: false };
+          session.phase = 'puzzle'; session.tries = 0; BD.mode = 'puzzle'; renderBoard();
+          setActions([{ label: '💡 Hint', cls: 'plain small hint', fn: trucHint, id: 'hint' }]); }, [fen, ans]);
+        await klikTekst(/Hint/);
+        await page.waitForTimeout(300);
+        const h = await page.evaluate(() => { const c = document.querySelector('#board .cell.hero-pc'); if (!c) return null; const s = getComputedStyle(c);
+          return { veld: c.classList.contains('dark') ? 'donker' : 'licht', bg: s.backgroundColor, schaduw: s.boxShadow, keer: s.animationIterationCount }; });
+        check(n6, 'testopzet: een veld met de hint', !!h);
+        if (h) kleuren.add(h.veld);
+        if (h) check(n6, h.veld + ' veld: zacht geel, inkt en wit, drie keer (' + JSON.stringify(h) + ')',
+          h.bg === 'rgb(255, 237, 184)' && h.schaduw.indexOf('rgb(23, 69, 111)') >= 0 && h.schaduw.indexOf('rgb(255, 255, 255)') >= 0 && h.keer === '3');
+      }
+      check(n6, 'testopzet: een licht en een donker veld', kleuren.size === 2);
+      await vers(${W}, ${H});
+      await startOefening('scan');
+      await page.evaluate(() => { const S = parseFEN('6k1/8/8/p7/8/8/8/R2N2K1 w - - 0 1'), extra = sqFromAlg('a1');
+        session.S = S; session.task = { S, type: 'mobility', targets: legalMoves(S).filter(m => m.from === extra).map(m => m.to), extra, details: null };
+        session.phase = 'marking'; BD.marks.clear(); BD.glow.clear(); BD.glow.add(extra); BD.mode = 'mark'; renderBoard(); });
+      for (const v of ['b2', 'f1', 'a7', 'd1', 'h8']) await veld(v);
+      await klikTekst(/Klaar/);
+      await page.waitForTimeout(1200);
+      const u = await page.evaluate(() => { const e = document.querySelector('#taskBox .e-body'); if (!e) return null; const s = getComputedStyle(e);
+        const eerste = e.querySelector('li, p');
+        return { meer: e.scrollHeight > e.clientHeight + 1, masker: s.webkitMaskImage || s.maskImage || 'none', onder: s.paddingBottom,
+          eersteOnder: eerste ? eerste.getBoundingClientRect().bottom : null, bodyOnder: e.getBoundingClientRect().bottom }; });
+      check(n4, 'testopzet: een uitleg die verder gaat dan het vak', !!u && u.meer);
+      if (u) check(n4, 'de voet vervaagt over 12 px, met 12 px ruimte eronder (' + u.masker + '; ' + u.onder + ')',
+        u.masker !== 'none' && /gradient/.test(u.masker) && /100% - 12px/.test(u.masker) && u.onder === '12px');
+      if (u) check(n4, 'de eerste reden blijft helemaal helder: hij eindigt boven de vervaging (' + u.eersteOnder + ' tegen ' + (u.bodyOnder - 12) + ')',
+        u.eersteOnder != null && u.eersteOnder <= u.bodyOnder - 12 + 0.5);` });
+}
+
+/* een reden over een stuk is een punt in de lijst, ook met twee zinnen; de eerste zin
+   past helemaal onder het bord, de tweede mag scrollen. De langste: een veld waar het paard niet heen kan, en een stuk dat niet gratis is. */
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n = '[5.5] ' + W + 'x' + H + ': de eerste zin van een reden over een stuk past onder het bord, ook als er een tweede zin volgt';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const gevallen = [
+        ['een veld waar het paard niet heen kan', '6k1/8/8/8/3N4/8/8/6K1 w - - 0 1', 'mobility', 'd4', ['b3', 'b5', 'c2', 'c6', 'e2', 'e6', 'f3', 'f5', 'd6']],
+        ['een stuk dat niet gratis is', '6k1/8/4p3/3n4/8/2N5/8/6K1 w - - 0 1', 'free', null, ['d5']]
+      ];
+      for (const [naam, fen, type, stuk, tikken] of gevallen) {
+        await vers(${W}, ${H});
+        await startOefening('scan');
+        await page.evaluate(([fen, type, stuk]) => {
+          const S = parseFEN(fen), extra = stuk ? sqFromAlg(stuk) : null, details = type === 'free' ? freePiecesEx(S) : null;
+          const targets = type === 'mobility' ? legalMoves(S).filter(m => m.from === extra).map(m => m.to) : details.map(x => x.sq);
+          session.S = S; session.task = { S, type, targets, extra, details };
+          session.phase = 'marking'; BD.marks.clear(); BD.glow.clear(); if (extra != null) BD.glow.add(extra); BD.mode = 'mark'; renderBoard();
+        }, [fen, type, stuk]);
+        for (const v of tikken) await veld(v);
+        await klikTekst(/Klaar/);
+        await page.waitForTimeout(1200);
+        const r = await page.evaluate(() => {
+          const li = document.querySelector('#taskBox .e-body p, #taskBox .e-body li'), e = li && li.querySelector('.zin1'), o = document.getElementById('onder');
+          if (!e || !o) return null;
+          const a = e.getBoundingClientRect(), b = o.getBoundingClientRect();
+          return { tekst: e.textContent, heel: li.textContent, top: a.top, bottom: a.bottom, left: a.left, right: a.right, w: a.width, h: a.height, onderTop: b.top, onderBottom: b.bottom };
+        });
+        check(n, naam + ': een reden met twee zinnen voorop (' + (r && r.heel) + ')', !!r && r.heel.length > r.tekst.length);
+        if (r) check(n, naam + ': de eerste zin helemaal in beeld (' + r.tekst + ')', binnen(r, ${W}, ${H}) && r.top >= r.onderTop - 0.5 && r.bottom <= r.onderBottom + 0.5);
+      }` });
+}
+
+/* de langste eerste reden na een antwoord van de Trucendoos, Red je stuk en Veilig of valstrik past helemaal onder het bord */
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n = '[5.5] ' + W + 'x' + H + ': de langste eerste reden van de Trucendoos, Red je stuk en Veilig of valstrik staat helemaal in beeld';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const zet1 = async (k) => { await veld(k.slice(0, 2)); await veld(k.slice(2, 4)); };
+      const eersteReden = async () => page.evaluate(() => {
+        const e = document.querySelector('#taskBox .e-body p, #taskBox .e-body li'), o = document.getElementById('onder');
+        if (!e || !o) return null;
+        const r = e.getBoundingClientRect(), ro = o.getBoundingClientRect();
+        return { tekst: e.textContent, top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height,
+          over: e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1, onderTop: ro.top, onderBottom: ro.bottom };
+      });
+      const opdracht = (fen, type, ans, metHang) => page.evaluate(([fen, type, ans, metHang]) => {
+        const S = parseFEN(fen), answers = ans.map(k => ({ m: legalMoves(S).find(x => moveKey(x) === k), info: null }));
+        session.S = S;
+        session.task = { S, type, answers, hintUsed: false };
+        if (metHang) session.task.hang = threatDetails(S).filter(t => t.victim >= 300 && t.gain >= 250)[0];
+        session.phase = 'puzzle'; session.tries = 0; BD.mode = 'puzzle'; renderBoard();
+      }, [fen, type, ans, metHang]);
+      const gevallen = [
+        ['trucs', 'penning', '1r2kb1r/pp1qppp1/7p/n1pP4/2BN2n1/7P/PPPPQPP1/1RB1R1K1 w - - 0 1', 'c4b5', false],
+        ['koning', 'stuk', '4k3/8/4b3/2n5/2B5/8/8/6K1 w - - 0 1', 'c4e6', true]
+      ];
+      for (const [soort, type, fen, k, metHang] of gevallen) {
+        await vers(${W}, ${H});
+        await startOefening(soort);
+        await opdracht(fen, type, [k], metHang);
+        await zet1(k);
+        await page.waitForTimeout(3500);
+        const r = await eersteReden();
+        check(n, soort + ': een eerste reden (' + (r && r.tekst) + ')', !!r);
+        if (r) check(n, soort + ': helemaal in beeld en niet afgeknipt', binnen(r, ${W}, ${H}) && !r.over && r.top >= r.onderTop - 0.5 && r.bottom <= r.onderBottom + 0.5);
+      }
+      /* Veilig of valstrik: een zet die mat toelaat, de langste eerste reden van die oefening */
+      await vers(${W}, ${H});
+      await startOefening('best3');
+      await page.evaluate(async () => {
+        const S = parseFEN('6k1/2b2ppp/3q4/8/8/5N2/PPP2PPP/3Q1RK1 w - - 0 1'), m = legalMoves(S).find(x => moveKey(x) === 'f3e1');
+        makeMove(S, m); const mat = mateReply(S); unmakeMove(S);
+        genSafeTask = () => ({ S, move: m, trap: true, punish: mat, mate: true, loss: 100 });
+        setTask(null); setOptions(null); BD.arrows = [];
+        buildSafe();
+        await new Promise(r => setTimeout(r, 500));
+      });
+      await klikTekst(/Veilig/);
+      await page.waitForTimeout(3500);
+      const v = await eersteReden();
+      check(n, 'veilig of valstrik: een eerste reden (' + (v && v.tekst) + ')', !!v);
+      if (v) check(n, 'veilig of valstrik: helemaal in beeld en niet afgeknipt', binnen(v, ${W}, ${H}) && !v.over && v.top >= v.onderTop - 0.5 && v.bottom <= v.onderBottom + 0.5);` });
+}
+
+/* ook de langste eerste reden van Speurogen en van De Beste Zet (met de langste zetnaam) past helemaal onder het bord */
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n = '[5.5] ' + W + 'x' + H + ': de langste eerste reden van Speurogen en De Beste Zet staat helemaal in beeld';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const eersteReden = async () => page.evaluate(() => {
+        const e = document.querySelector('#taskBox .e-body p, #taskBox .e-body li'), o = document.getElementById('onder');
+        if (!e || !o) return null;
+        const r = e.getBoundingClientRect(), ro = o.getBoundingClientRect();
+        return { tekst: e.textContent, top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height,
+          over: e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1, onderTop: ro.top, onderBottom: ro.bottom };
+      });
+      const past = (soort, r) => {
+        check(n, soort + ': een eerste reden (' + (r && r.tekst) + ')', !!r);
+        if (r) check(n, soort + ': helemaal in beeld en niet afgeknipt', binnen(r, ${W}, ${H}) && !r.over && r.top >= r.onderTop - 0.5 && r.bottom <= r.onderBottom + 0.5);
+      };
+      await vers(${W}, ${H});
+      await startOefening('scan');
+      await page.evaluate(() => {
+        const S = parseFEN('6k1/8/8/5n2/3R4/2P5/8/6K1 w - - 0 1'), details = threatDetails(S);
+        session.S = S; session.task = { S, type: 'threat', targets: details.map(x => x.sq), extra: null, details };
+        session.phase = 'marking'; BD.marks.clear(); BD.glow.clear(); BD.mode = 'mark'; renderBoard();
+      });
+      await veld('d4'); await veld('f5');
+      await klikTekst(/Klaar/);
+      await page.waitForTimeout(1200);
+      past('speurogen', await eersteReden());
+      await vers(${W}, ${H});
+      await startOefening('best3');
+      await page.evaluate(async () => {
+        const S = parseFEN('r6k/1P6/8/8/8/8/8/6K1 w - - 0 1');
+        const opts = ['g1f2', 'b7a8q', 'g1h2'].map(k => ({ m: legalMoves(S).find(x => moveKey(x) === k), deep: 0 }));
+        genBest3 = () => ({ S, options: opts, best: opts[1] });
+        setTask(null); setOptions(null); BD.arrows = [];
+        buildBest3();
+        await new Promise(r => setTimeout(r, 500));
+      });
+      await page.locator('.opt[data-i="1"]').click();
+      await klikTekst(/Deze kies ik/);
+      await page.waitForTimeout(3500);
+      past('de beste zet', await eersteReden());` });
 }
 
 /* visual.md G1: een lange naam in de groet breekt af in plaats van "…", en de rij blijft 40 tot 41 hoog */
@@ -538,6 +718,9 @@ for (const [W, H] of KLEIN) {
         const v = await page.evaluate(() => { const b = [...document.querySelectorAll('#onder button')].find(x => /Volgende/.test(x.textContent));
           if (!b) return null; const r = b.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }; });
         check(n, 'testopzet: Volgende staat er', !!v);
+        /* de valstrik-vraag heeft een zoekbudget en geeft soms niets, dan komt een keuze uit drie: een vaste reeks toevalsgetallen */
+        if (soorten[i] === 'best3') await page.evaluate(() => { let s = 24; Math.random = () => { s = (s + 0x6D2B79F5) >>> 0;
+          let t = Math.imul(s ^ (s >>> 15), s | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; });
         await klikTekst(/Volgende/);
         await page.waitForTimeout(1800);
         const raak = await page.evaluate(v => [...document.querySelectorAll('#onder button')].filter(b => b.getClientRects().length)
@@ -597,11 +780,12 @@ for (const [W, H] of KLEIN) {
         const ans = ['c6b6'].map(k => ({ m: legalMoves(S).find(x => moveKey(x) === k), info: null }));
         session.S = S; session.task = { S, type: 'mat2', answers: ans, hintUsed: false }; session.phase = 'puzzle'; session.tries = 0;
         BD.mode = 'puzzle'; renderBoard(); });
+      /* na elke foute zet speelt Turbo eerst zijn antwoord, na de tweede volgt het voorspelen */
       for (const k of ['h1h2', 'h1h3']) {
         await page.evaluate(k => { const m = legalMoves(session.S).find(x => moveKey(x) === k); onCell(m.from); onCell(m.to); }, k);
-        await page.waitForTimeout(3500);
+        await page.waitForTimeout(7000);
       }
-      const reden = await rect('#taskBox .e-body > :first-child'), onder = await rect('#onder');
+      const reden = await rect('#taskBox .e-body p, #taskBox .e-body li'), onder = await rect('#onder');
       check(n, 'testopzet: de uitleg staat er', !!reden);
       check(n, 'de eerste reden helemaal in beeld', !!reden && !!onder && binnen(reden, ${W}, ${H}) && reden.bottom <= onder.bottom + 0.5);`
   });
@@ -637,6 +821,101 @@ for (const [W, H] of KLEIN) {
         if (naam === 'winst') check(n, 'winst: met een trofee', !!k && /Winnaar|Eerste potje/.test(k.t));
       }`
   });
+}
+
+/* een uitleg die langer is dan zijn vak, toont onderaan een pijltje, ook als de rand precies tussen twee redenen valt;
+   het gaat weg als het kind tot het eind scrolt, en het komt niet als alles past */
+const REDENEN_VIER = ['De beste was B: Paard b1 → c3.',
+  'A: Paard f3 → e5, slaat pion. Turbo speelt dan Paard c6 → e5, slaat paard, en niemand kan terugpakken: je bent 2 punten kwijt.',
+  'B: Paard b1 → c3. Veilig: daarna kan Turbo niets winnen.', 'C: Pion a2 → a3. Niet fout, maar de beste zet doet meer.'];
+for (const [W, H] of [[768, 1024], [375, 553]]) {
+  const n = '[2.4] ' + W + 'x' + H + ': een uitleg die langer is dan zijn vak, toont een pijltje tot het kind tot het eind scrolt';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const meer = () => page.evaluate(() => document.getElementById('onder').classList.contains('meer'));
+      await vers(${W}, ${H});
+      await startOefening('best3');
+      await page.evaluate(r => { awardRound(0, 'Zo zit het', r); }, ${JSON.stringify(REDENEN_VIER)});
+      await page.waitForTimeout(300);
+      const u = await page.evaluate(() => { const e = document.querySelector('#onder .e-body'), o = document.getElementById('onder');
+        const na = getComputedStyle(o, '::after');
+        return e ? { meer: e.scrollHeight > e.clientHeight + 2, pijl: na.content !== 'none' && na.content !== 'normal', pijlOnder: parseFloat(na.bottom) } : null; });
+      check(n, 'testopzet: de uitleg gaat verder dan het vak', !!u && u.meer);
+      check(n, 'het pijltje staat er', await meer() && !!u && u.pijl);
+      await page.evaluate(() => { const e = document.querySelector('#onder .e-body'); e.scrollTop = e.scrollHeight; });
+      await page.waitForTimeout(200);
+      check(n, 'tot het eind gescrold: geen pijltje', !(await meer()));
+      await page.evaluate(() => { awardRound(0, 'Zo zit het', ['Een korte reden.']); });
+      await page.waitForTimeout(300);
+      check(n, 'past alles, dan geen pijltje', !(await meer()));` });
+}
+
+/* de lof en Turbo's zin passen samen in de drie regels van de strook tot de grens van 100 tekens: het langste paar dat
+   mag, op het smalste scherm */
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[5.11] ' + W + 'x' + H + ': het langste paar van lof en zin dat de app samen toont, past in de strook';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      await startPotje();
+      const r = await page.evaluate(() => {
+        const paren = ['Het was mijn paard. Kijk uit, een PENNING! 📌 De loper kan niet meer weg! Wat doe je hiertegen? 🐢',
+          'Goed voorspeld! Ik pak je toren op d4 (5 punten). Pak je terug, dan krijg je maar 3 punten.'];
+        const t = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble'), uit = [];
+        for (const p of paren) { say(p); uit.push({ p, lang: Array.from(p).length, past: t.scrollHeight <= t.clientHeight + 1 && b.getBoundingClientRect().bottom <= t.getBoundingClientRect().bottom + 0.5 }); }
+        return uit;
+      });
+      for (const x of r) {
+        check(n, 'testopzet: hoogstens 100 tekens (' + x.lang + ')', x.lang <= 100);
+        check(n, 'past heel in de strook: ' + x.p, x.past);
+      }` });
+}
+
+/* het moment met de langste tekst, en dat met de langste regel voor de volgende keer */
+const VOLSTE_MOMENTEN = [['het langste moment', { kind: 'hang', moveNo: 23, stuk: 'loper', naar: 'f4', defender: 'loper', piece: 'paard', sq: 'e5', points: 3, used: true }],
+  ['de langste regel voor de volgende keer', { kind: 'hang', moveNo: 23, piece: 'paard', sq: 'e5', points: 3, used: true }]];
+/* de volste eindkaart van een potje tegen Turbo past op een klein bord: een winst op een niveau
+   waar Turbo moe is, drie nieuwe trofeeën, een nieuw level en het langste moment met de regel eronder; de zin
+   dat Turbo moe is staat in de strook, heel, en het bord blijft staan */
+for (const [W, H] of [[375, 553], [360, 640], [375, 647]]) {
+  const n = '[2.5] ' + W + 'x' + H + ': de volste eindkaart tegen Turbo past: titel, moment, trofeeën en beide knoppen in beeld, Turbo\'s moe-zin heel in de strook';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      for (const [wat, moment] of ${JSON.stringify(VOLSTE_MOMENTEN)}) {
+      await vers(${W}, ${H});
+      await startPotje();
+      const voor = await rect('#board');
+      await page.evaluate(moment => { const S = session.S;
+        for (let i = 0; i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
+        ensureDay(); P.day.winsByLvl[session.level] = 2;
+        const lang = LEVELS.reduce((a, b, i) => b.n.length > LEVELS[a].n.length ? i : a, 1);
+        /* het level met de langste naam als vierde ding op de kaart (een level met een poort haalt de proef niet echt) */
+        P.lastLevel = levelIdx(P.xp + 15); bewaarVoorKaart({ e: LEVELS[lang].g, n: 'Level ' + LEVELS[lang].n });
+        /* precies drie nieuwe trofeeën en een level: alle andere staan al getoond */
+        BADGES.forEach(b => { P.badges[b.id] = true; if (!P.shownBadges.includes(b.id)) P.shownBadges.push(b.id); });
+        BADGES.slice(0, 3).forEach(b => bewaarVoorKaart(b));
+        sleutelMoment = () => moment;
+        endGame({ over: true, result: 'w', reason: 'mat' }); }, moment);
+      await page.waitForTimeout(1600);
+      const k = await page.evaluate(() => { const e = document.getElementById('eindkaart'); if (!e || !e.getClientRects().length) return null;
+        const r = x => { const b = x.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, w: b.width, h: b.height }; };
+        const st = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble');
+        return { sh: e.scrollHeight, ch: e.clientHeight, kaart: r(e), titel: r(e.querySelector('h2')), knoppen: [...e.querySelectorAll('.ek-btns .btn')].map(r),
+          trofeeen: e.querySelectorAll('.ek-badge').length, volgende: !!e.querySelector('.ek-volgende'), tekst: e.innerText,
+          eigenBlok: (() => { const v = e.querySelector('.ek-volgende'), t = v && v.previousElementSibling; return !!v && !!t && getComputedStyle(v).display === 'block' &&
+            v.getBoundingClientRect().top >= t.getBoundingClientRect().bottom - 0.5; })(),
+          strook: b.textContent, strookPast: st.scrollHeight <= st.clientHeight + 1 && b.getBoundingClientRect().bottom <= st.getBoundingClientRect().bottom + 0.5 }; });
+      check(n, wat + ', testopzet: de eindkaart met vier dingen erop en het moment met zijn regel', !!k && k.trofeeen === 4 && k.volgende);
+      if (!k) continue;
+      const binnenKaart = x => x.top >= k.kaart.top - 0.5 && x.bottom <= k.kaart.bottom + 0.5;
+      check(n, wat + ': niets scrolt in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
+      check(n, wat + ': de regel voor de volgende keer staat in een eigen blok onder het moment', k.eigenBlok);
+      check(n, wat + ': de titel in beeld', binnen(k.titel, ${W}, ${H}) && binnenKaart(k.titel));
+      check(n, wat + ': beide knoppen in de kaart, in beeld en minstens 44 hoog', k.knoppen.length === 2 && k.knoppen.every(x => binnen(x, ${W}, ${H}) && binnenKaart(x) && x.h >= 44));
+      check(n, wat + ': de moe-zin staat niet op de kaart', k.tekst.indexOf('Ik ben moe') < 0);
+      check(n, wat + ': de moe-zin staat heel in de strook (' + k.strook + ')', /^Ik ben moe van al dat verliezen/.test(k.strook) && k.strookPast);
+      check(n, wat + ': het bord bleef staan', gelijk(voor, await rect('#board')));
+      }` });
 }
 
 /* het speelscherm van een oefening is precies zo hoog als het venster, en het vak onder het bord past precies om
@@ -803,10 +1082,8 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
   const n = '[2.2] ' + W + 'x' + H + ': een tik op een eigen stuk bij de voorspelvraag: de zin past in de strook naast Speel maar';
   GEVALLEN.push({ regels: [n], code: `
       const n = ${JSON.stringify(n)};
-      await vers(${W}, ${H});
-      await page.evaluate(() => { Math.random = () => 0.1; });
-      await startPotje();
-      await zet('e2e4');
+      await potjeVoorVraag(${W}, ${H});
+      await zet('f3e5');
       await page.waitForTimeout(1500);
       check(n, 'testopzet: de voorspelvraag staat er', await page.evaluate(() => BD.mode === 'predict'));
       await veld('e4');

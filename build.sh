@@ -23,7 +23,7 @@ n=$(grep -n '</style>' src/head.html | head -1 | cut -d: -f1)
   head -n "$n" src/head.html
   printf '</head>\n<body>\n'
   tail -n +"$((n + 1))" src/head.html
-  cat src/engine.js src/koning.js src/words.js src/qr.js src/jsqr.js src/tail.html
+  cat src/engine.js src/koning.js src/trucs.js src/words.js src/qr.js src/jsqr.js src/tail.html
   printf '</body>\n</html>\n'
 } > "$OUT/index.html"
 HASH=$(shasum "$OUT/index.html" | cut -c1-12)

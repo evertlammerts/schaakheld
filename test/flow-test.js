@@ -73,9 +73,9 @@ BD.marks.add(sqFromAlg('g4'));   /* wrong: knight nobody can capture */
 scanCheck();
 /* [2.4] de redenen staan onder het bord */
 var explHtml = __els.bubble.innerHTML + __els.taskBox.innerHTML;
-ok('expl: missed c6 explained as trade', explHtml.indexOf('goede ruil') >= 0);
+ok('expl: missed c6 explained as trade', explHtml.indexOf('Winst voor jou') >= 0);
 ok('expl: mentions capturing pawn d5', explHtml.indexOf('pion op d5') >= 0);
-ok('expl: wrong g4 explained (not capturable)', explHtml.indexOf('geen enkel wit stuk') >= 0);
+ok('expl: wrong g4 explained (not capturable)', explHtml.indexOf('Geen enkel wit stuk') >= 0);
 ok('expl: points math 3 vs 1', explHtml.indexOf('3 punten') >= 0 && explHtml.indexOf('1 punt') >= 0);
 
 /* attacked-type explanations */
@@ -122,12 +122,14 @@ session.task = { S: m2S2, type: 'mat2', answers: [{ m: legalMoves(m2S2).find(fun
 session.phase = 'puzzle'; session.tries = 0; BD.mode = 'puzzle';
 m2Earned = session.earned;
 puzzleAttempt(legalMoves(m2S2).find(function (m) { return alg(m.to) === 'h7'; }));
+/* Turbo's antwoord op een foute poging staat eerst op het bord */
+drainTimers();
 ok('mat2: eerste misser = nog een poging', session.phase === 'puzzle' && session.tries === 1);
 puzzleAttempt(legalMoves(m2S2).find(function (m) { return alg(m.to) === 'h7'; }));
 drainTimers();
 ok('mat2: tweede misser = voorgespeeld tot mat, 0 sterren', session.phase === 'review' &&
   session.earned === m2Earned && gameStatus(session.S).reason === 'mat' &&
-  __els.taskBox.innerHTML.indexOf('dan kan Turbo de mat niet meer tegenhouden') >= 0);
+  __els.taskBox.innerHTML.indexOf('Daarna kon Turbo de mat niet meer tegenhouden') >= 0);
 
 /* ---------- koning ontsnapt ---------- */
 startDrill('koning');
@@ -194,9 +196,10 @@ puzzleAttempt(pRa2);
 drainTimers();
 ok('stuk: weggezet = 3 sterren met uitleg', session.phase === 'review' && session.earned - kEarned === 3 &&
   __els.taskBox.innerHTML.indexOf('Weggezet') >= 0);
-ok('stuk: dekken wordt herkend', stukHow(parseFEN('6k1/8/8/8/8/2b5/8/R4RK1 w - - 0 1'),
-  legalMoves(parseFEN('6k1/8/8/8/8/2b5/8/R4RK1 w - - 0 1')).find(function (m) { return alg(m.from) === 'f1' && alg(m.to) === 'b1'; }),
-  { sq: sqFromAlg('a1') }).indexOf('Gedekt') >= 0);
+/* gedekt alleen als slaan Turbo niets oplevert (de schaakcoach): Lxa1 Txa1 wint hem 2 punten, d3 dekt het paard wel echt */
+ok('stuk: dekken wordt herkend', (stukHow(parseFEN('4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1'),
+  legalMoves(parseFEN('4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1')).find(function (m) { return alg(m.from) === 'd2' && alg(m.to) === 'd3'; }),
+  { sq: sqFromAlg('e4') }) || '').indexOf('Gedekt') >= 0);
 
 /* ---------- openingsschool ---------- */
 var pS0 = newGame();
@@ -283,7 +286,8 @@ ok('coach: dame te vroeg = 0 sterren met uitleg', coachEval(session.S, opM('d1h5
 /* valstrik: na 1.e4 e5 2.Pf3 Pc6 is Pxe5 een stuk weggeven */
 var bS = parseFEN('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3');
 var bEv = coachEval(bS, legalMoves(bS).find(function (m) { return moveKey(m) === 'f3e5'; }));
-ok('coach: Pxe5 kost een stuk, 0 sterren', bEv.stars === 0 && bEv.msg.indexOf('Er was een sterkere zet') >= 0);
+ok('coach: Pxe5 geeft een paard voor een pion, 0 sterren', bEv.stars === 0 &&
+  bEv.msg === 'Pas op: na deze zet wint Turbo 2 punten. Turbo speelt dan <b>Paard c6 → e5, slaat paard</b>.');
 ok('coach: rokade = 3 sterren', (function () {
   var rS = parseFEN('r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 2 4');
   var ev = coachEval(rS, legalMoves(rS).find(function (m) { return m.flags === 'K'; }));
@@ -325,6 +329,15 @@ ok('dreiging: gedekte pion is geen winst voor Turbo', threatDetails(thS2).length
 ok('dreiging: in schaak geen dreigingsopdracht', threatDetails(parseFEN('6k1/8/8/8/8/2b5/8/R3K3 w - - 0 1')).length === 0);
 
 /* ---------- De Beste Zet: even rondes zijn de valstrik-vraag ---------- */
+/* een vaste reeks toevalsgetallen: de valstrik-vraag heeft een zoekbudget en
+   geeft soms niets, dan komt een keuze uit drie (fix list item 27) */
+var best3Random = Math.random, best3Zaad = 27;
+Math.random = function () {
+  best3Zaad = (best3Zaad + 0x6D2B79F5) >>> 0;
+  var x = Math.imul(best3Zaad ^ (best3Zaad >>> 15), best3Zaad | 1);
+  x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+  return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+};
 startDrill('best3');
 drainTimers();
 ok('best3 r1: kiezen uit drie', session.round === 1 && !!(session.task && session.task.options));
@@ -346,6 +359,7 @@ safeAnswer(!session.task.trap);
 drainTimers();
 ok('safe: wrong scores 0', session.earned === earnedBefore);
 ok('safe: review phase after wrong', session.phase === 'review');
+Math.random = best3Random;
 
 /* ---------- best3 drill ---------- */
 wisRondje('best3'); /* [1.6] het rondje hierboven is bewaard; deze test wil een vers rondje */
@@ -365,7 +379,7 @@ best3Confirm();
 drainTimers();
 ok('best3: correct on 2nd try = 1 star', session.earned === 1 && session.phase === 'review');
 ok('best3: explanation shown on correct', /Goud|Ja, die is het/.test(__els.taskBox.innerHTML) &&
-  __els.taskBox.innerHTML.indexOf('🥇') >= 0);
+  __els.taskBox.innerHTML.indexOf('De beste was') >= 0);
 /* wrong-wrong -> auto reveal (ronde 2 is de valstrik-vraag, die eerst beantwoorden) */
 nextRound();
 drainTimers();
@@ -379,7 +393,7 @@ earnedBefore = session.earned;
 pickOption(w1); best3Confirm(); drainTimers();
 pickOption(w2); best3Confirm(); drainTimers();
 ok('best3: auto-reveal after 2 wrong', session.phase === 'review' && session.earned === earnedBefore);
-ok('best3: explanation shown on reveal', __els.taskBox.innerHTML.indexOf('🥇') >= 0);
+ok('best3: explanation shown on reveal', __els.taskBox.innerHTML.indexOf('De beste was') >= 0);
 /* deterministic explanation content: Qb4?? hangs the queen, Qb2+ is safe with check */
 var eS = parseFEN('7k/8/8/8/7r/8/8/KQ6 w - - 0 1');
 var eMoves = legalMoves(eS);
@@ -388,9 +402,8 @@ var eGood = eMoves.find(function (m) { return m.from === 1 && m.to === 17; });
 var eTask = { S: eS, options: [{ m: eBad, score: 0 }, { m: eGood, score: 0 }], best: null };
 eTask.best = eTask.options[1];
 var eLines = best3Explanations(eTask);
-ok('best3 expl: hanging queen costs 9 points', eLines[0].indexOf('kost je') >= 0 &&
-  eLines[0].indexOf('9 punten') >= 0);
-ok('best3 expl: best line marked gold', eLines[1].indexOf('🥇') === 0);
+ok('best3 expl: hanging queen costs 9 points', eLines[1].indexOf('9 punten kwijt') >= 0);
+ok('best3 expl: best line marked gold', eLines[0] === 'De beste was B: <b>Dame b1 → b2</b>.');
 ok('best3 expl: board untouched', eS.hist.length === 0 && toFEN(eS) === '7k/8/8/8/7r/8/8/KQ6 w - - 0 1');
 
 /* ---------- trucendrills ---------- */
@@ -422,6 +435,7 @@ session.tries = 0;
 BD.mode = 'puzzle';
 earnedB = session.earned;
 puzzleAttempt(badM);
+drainTimers();
 ok('trucs: fout telt poging, bord intact', session.tries === 1 && fS2.hist.length === 0);
 puzzleAttempt(badM);
 drainTimers();
@@ -2586,6 +2600,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
 
   await orakelZelftest();
   await orakelFlow();
+  await orakelFlow5();
   print('\norakel: ' + ORAKEL.nogNiet + ' nog niet gebouwd, ' + ORAKEL.gebouwd + ' gebouwd');
   print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');
 })().catch(function (e) { print('ASYNC EXCEPTION: ' + e + '\n' + (e && e.stack)); print('\nFLOW SUITE ABORTED'); });
