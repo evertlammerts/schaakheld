@@ -581,6 +581,18 @@ async function orakelFlow() {
     check('geen plaatje in de kaart', !/😴|🐢|🚀/.test(t));
   });
 
+  /* steekproef: een uitleg onder het bord hoort bij zijn eigen opdracht */
+  await regel('[2.1] de uitleg onder het bord van een oefening staat niet onder het bord van een potje erna', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'trucs');
+    await wacht();
+    check('testopzet: de oefening heeft een uitleg onder het bord', zichtbaar(a, 'hulpZin') && tekstVan(a, 'hulpZin').length > 0);
+    a.tik('backBtn');
+    await wacht();
+    await startPotje(a, 1);
+    check('in het potje tegen Turbo geen uitleg van de oefening', !zichtbaar(a, 'hulpZin'));
+  });
+
   await regel('[1.3] Revanche na afloop begint meteen een nieuw potje, zonder vraag', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
     a.tik('verderKaart');

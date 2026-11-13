@@ -626,6 +626,7 @@ async function orakelTwee() {
     const fien2 = herlaad(fien);
     await wacht(30000);
     check('na herladen geen kaart meer voor Daan, en niet nog eens geteld', !/Daan/.test(tekstVan(fien2, 'verder')) && telt(fien2) === plusEen(voor, true));
+    check('en het potje met Sem staat er nog', /je potje met Sem/.test(tekstVan(fien2, 'verder')));
   });
 
   await regel('[4.1] een einde dat de ander nog niet hoorde, en dan een nieuw potje: de oude lijn gaat dicht, en de ander krijgt het gewone einde', async function (check) {
@@ -735,6 +736,202 @@ async function orakelTwee() {
     await wacht(10 * 60000);
     check('ook na tien minuten eerlijk', /is er nu niet/.test(zegt(b)) && !/komen straks|vanzelf goed/.test(zegt(b)));
     check('en het potje staat er nog', !!samenPotje(b));
+  });
+
+  /* steekproef: wat de strook en het bord zeggen als de ander weg is, of na het einde wegging */
+  await regel('[4.3] is de ander weg, dan zegt de strook dat ook na een eigen zet, en niet dat de ander nu zet', async function (check) {
+    const { wit, zwart } = await tweeZetten();
+    stopApparaat(zwart);
+    await wacht(3000);
+    check('testopzet: de strook zegt dat Daan er nu niet is', /er nu niet/.test(tekstVan(wit, 'bubble')));
+    zet(wit, 'g1f3');
+    await wacht();
+    check('na de eigen zet nog steeds dat de ander er nu niet is', /er nu niet/.test(tekstVan(wit, 'bubble')) && !/^\s*Nu /.test(tekstVan(wit, 'bubble')));
+  });
+
+  await regel('[4.3] wie het potje weer opent terwijl de ander weg is, leest dat de ander er nu niet is', async function (check) {
+    const { wit, zwart } = await tweeZetten();
+    stopApparaat(zwart);
+    await wacht(3000);
+    zet(wit, 'g1f3');
+    await wacht();
+    wit.tik('backBtn');
+    await wacht();
+    wit.tik('verderKaart');
+    await wacht();
+    check('de strook zegt dat de ander er nu niet is', /er nu niet/.test(tekstVan(wit, 'bubble')) && !/is aan zet/.test(tekstVan(wit, 'bubble')));
+  });
+
+  await regel('[2.3] gaat de ander na het einde naar huis, dan blijft het bord achter de eindkaart vanaf de eigen kant', async function (check) {
+    const { wit, zwart } = await tweeZetten();
+    await geefOp(wit);
+    await wacht();
+    check('testopzet: zwart ziet het bord vanaf zwart', eindziet(zwart, 'WINT') && /^\s*h/.test(tekstVan(zwart, 'coordsF')));
+    tikTekst(wit, 'Naar huis');
+    await wacht(30000);
+    check('na het vertrek van de ander nog steeds vanaf zwart', eindziet(zwart, 'WINT') && /^\s*h/.test(tekstVan(zwart, 'coordsF')));
+  });
+
+  await regel('[2.1] de uitleg onder het bord van een oefening staat niet onder het bord van een vriendenpotje erna', async function (check) {
+    const a = maakApparaat('Lotte'), b = maakApparaat('Fien');
+    await startOefening(a, 'trucs');
+    await wacht();
+    check('testopzet: de oefening heeft een uitleg onder het bord', zichtbaar(a, 'hulpZin'));
+    a.tik('backBtn');
+    await wacht();
+    await samenSpelen(a, b);
+    check('in het vriendenpotje geen uitleg van de oefening', opSpeelscherm(a) && !zichtbaar(a, 'hulpZin'));
+  });
+
+  await nogNiet('[3.5] na koppelen weet ook het oude apparaat dat alles op twee apparaten staat, ook als het nieuwe nog niets verdiende', async function (check) {
+    const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    const vier = (mees.modal().match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
+    check('testopzet: vier woorden', vier.length === 4);
+    mees.tik('linkDone');
+    ipad.ev('linkEntryFlow()');
+    typ(ipad, 'wordInp', vier);
+    ipad.tik('linkGo');
+    await wacht();
+    ipad.tik('linkYes');
+    await wacht(30000);
+    const mees2 = herlaad(mees);
+    await wacht(30000);
+    mees2.tik('tabIk');
+    check('het oude apparaat zegt het ook', /andere apparaat/.test(tekstVan(mees2, 'ikBewaard')) && !/Koppel het/.test(tekstVan(mees2, 'ikBewaard')));
+  });
+
+  /* na het einde wacht er alleen iets op de ander zolang de ander er is */
+  async function eindeTussenTwee() {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    await speel(fien, daan, 'e7e5');
+    await geefOp(daan);
+    await wacht();
+    return { fien, daan };
+  }
+  const wachtKnoppen = function (x) { return kanTikken(x, 'Revanche') || kanTikken(x, 'Vrienden worden'); };
+
+  await regel('[4.1] het venster "Jullie zijn nu vrienden!" na Naar huis van de ander: geen Revanche, en de regel zegt het', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    tikTekst(fien, 'Vrienden worden');
+    tikTekst(daan, 'Vrienden worden');
+    await wacht();
+    check('testopzet: allebei het venster met Revanche', /Jullie zijn nu vrienden/.test(fien.scherm()) && kanTikken(fien, 'Revanche'));
+    daan.tik('vrEind');
+    await wacht(30000);
+    check('geen Revanche meer in het venster', /Jullie zijn nu vrienden/.test(fien.scherm()) && !kanTikken(fien, 'Revanche') && kanTikken(fien, 'Naar huis'));
+    check('het venster en de strook zeggen het', /Daan ging naar huis\. Nodig Daan later weer uit bij Vrienden\./.test(fien.scherm()) &&
+      /Daan ging naar huis\. Nodig Daan later weer uit bij Vrienden\./.test(tekstVan(fien, 'bubble')));
+    check('nergens wachten op wie weg is', !/Wachten op/.test(fien.scherm()));
+  });
+
+  await regel('[4.1] de app van de ander gaat dicht na het einde: geen knop die op de ander wacht, en de strook zegt het', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    check('testopzet: de knoppen staan er', kanTikken(fien, 'Revanche') && kanTikken(fien, 'Vrienden worden'));
+    stopApparaat(daan);
+    await wacht(3000);
+    check('geen Revanche en geen Vrienden worden', !wachtKnoppen(fien) && kanTikken(fien, 'Naar huis'));
+    check('de strook', /Daan ging naar huis\. Leuk dat jullie samen speelden!/.test(tekstVan(fien, 'bubble')));
+  });
+
+  await regel('[4.1] valt de lijn van de ander na het einde even weg, dan zijn de knoppen weg en daarna weer terug, en een vraag komt aan', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    geenNetwerk(daan);
+    await wacht(3000);
+    check('in het gat: geen knop die op de ander wacht', !wachtKnoppen(fien));
+    fien.ev('vriendVragen()');
+    await wacht(100);
+    check('in het gat is er niets gevraagd', fien.get('$("ekWacht").textContent') === '' && fien.get('!!(MP && MP.ecdh)') === false);
+    await wacht(7000);
+    weerNetwerk(daan);
+    await wacht(30000);
+    check('de ander is terug: de knoppen ook', kanTikken(fien, 'Revanche') && kanTikken(fien, 'Vrienden worden'));
+    tikTekst(fien, 'Vrienden worden');
+    await wacht();
+    check('Gevraagd staat er pas nu, en de vraag komt aan', /Gevraagd\. Nu wachten op Daan\./.test(tekstVan(fien, 'eindkaart')) &&
+      /wil vrienden worden/.test(zegt(daan)));
+  });
+
+  await regel('[4.1] een vriendschapsvraag van de ander gaat van de kaart als de ander naar huis gaat', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    tikTekst(daan, 'Vrienden worden');
+    await wacht();
+    check('testopzet: de vraag staat op de kaart van Fien', /wil vrienden worden/.test(tekstVan(fien, 'eindkaart')));
+    tikTekst(daan, 'Naar huis');
+    await wacht(30000);
+    check('de vraag is weg', !/wil vrienden worden/.test(tekstVan(fien, 'eindkaart')) && !wachtKnoppen(fien));
+  });
+
+  /* een venster voor een nieuw potje dat geen potje wordt: het vervangen potje komt terug, op elke manier */
+  async function eindeVoorDaan(metSem) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan'), sem = maakApparaat('Sem');
+    if (metSem) {
+      await wordenVrienden(fien, sem);
+      fien.ev('if (MP) mpStop(true); goHome()');
+      sem.ev('if (MP) mpStop(true); goHome()');
+      await wacht();
+    }
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    await speel(fien, daan, 'e7e5');
+    stopApparaat(daan);
+    await wacht(3000);
+    await geefOp(fien);
+    tikTekst(fien, 'Naar huis');
+    await wacht();
+    return { fien, daan, sem };
+  }
+  async function daanZietKlaar(check, fien, daan) {
+    check('Fien is weer verbonden met het potje met Daan', fien.get('!!(MP && MP.S && MP.result && MP.peerName === "Daan")'));
+    const daan2 = herlaad(daan);
+    await wacht(30000);
+    check('Daan leest dat het potje klaar is', /Je potje met Fien is klaar/.test(tekstVan(daan2, 'verder')));
+  }
+  const manieren = [
+    ['Stop met wachten', true, async function (fien, sem) { await nodigUit(fien); tikTekst(fien, 'Stop met wachten'); await wacht(); }],
+    ['Nu niet van de ander', true, async function (fien, sem) {
+      await nodigUit(fien); await sem.ev('friendPoll()'); await wacht(); tikTekst(sem, 'Nu niet');
+      await zagOoit(function () { return /Sem kan nu even niet/.test(zegt(fien)); }, 30000); }],
+    ['de tien minuten', true, async function (fien, sem) { await nodigUit(fien); await wacht(10 * 60000 + 30000); }],
+    ['ja op een uitnodiging van wie dan weg is', true, async function (fien, sem) {
+      await nodigUit(sem); await fien.ev('friendPoll()'); await wacht(); stopApparaat(sem); fien.tik('invJa'); await wacht(40000); }],
+    ['Stoppen in Verbinden', true, async function (fien, sem) {
+      await nodigUit(sem); await fien.ev('friendPoll()'); await wacht(); stopApparaat(sem); fien.tik('invJa'); await wacht(2000);
+      tikTekst(fien, 'Stoppen'); await wacht(); }],
+    ['Stoppen van de ander op Verbonden', false, async function (fien, sem) {
+      await fien.ev('mpHostQR()'); await wacht(); scanQR(fien, sem); await wacht(); sem.tik('mpJa'); await wacht();
+      tikTekst(sem, 'Stoppen'); await wacht(5000); }]
+  ];
+  for (const m of manieren) {
+    await regel('[4.1] een venster voor een nieuw potje eindigt zonder potje (' + m[0] + '): het vervangen potje komt terug, en de ander hoort het einde', async function (check) {
+      const { fien, daan, sem } = await eindeVoorDaan(m[1]);
+      await m[2](fien, sem);
+      await daanZietKlaar(check, fien, daan);
+    });
+  }
+
+  await regel('[4.1] een potje dat niet te lezen is, blijft naast een lopend potje staan tot het kind kiest', async function (check) {
+    const fien = maakApparaat('Fien'), sem = maakApparaat('Sem');
+    await samenSpelen(fien, sem);
+    await speel(fien, sem, 'e2e4');
+    const d = opgeslagen(fien, SAMEN);
+    d.games.mnopqrstuvwx = { gameId: 'mnopqrstuvwx', fid: null, room: 'kamer2abc', seat: 'stoel2abc', host: true, myColor: 'w', gameNo: 1,
+      moves: ['e2e4', 'e2e4'], peerName: 'Lotte', result: null, offer: null, shown: false, updated: 1 };
+    fien.opslag.setItem(SAMEN, JSON.stringify(d));
+    await wacht(10000);
+    await speel(fien, sem, 'e7e5');
+    const d2 = opgeslagen(fien, SAMEN);
+    check('na tien tellen en een zet staan ze er allebei', !!d2 && !!d2.games.mnopqrstuvwx && Object.keys(d2.games).length === 2);
+    fien.tik('backBtn');
+    await wacht();
+    check('de kaart zegt het', /kan ik niet meer openen/.test(tekstVan(fien, 'verder')));
+    tikTekst(fien, 'Weghalen');
+    await wacht();
+    const d3 = opgeslagen(fien, SAMEN);
+    check('Weghalen haalt alleen dat potje weg', !!d3 && !d3.games.mnopqrstuvwx && Object.keys(d3.games).length === 1);
   });
 
   await regel('[4.4] is de kamer weg, dan zien beiden hetzelfde einde en telt het voor niemand', async function (check) {
@@ -1050,7 +1247,8 @@ async function orakelTwee() {
     await wacht();
     fien2.tik('tabVrienden');
     await wacht();
-    check('de rij van Daan biedt Speel verder, geen Uitnodigen', kanTikken(fien2, 'Speel verder') && !kanTikken(fien2, 'Uitnodigen'));
+    check('de rij van Daan toont het potje, geen Uitnodigen', kanTikken(fien2, fien2.get('MP.S.turn === MP.myColor') ? 'Speel verder' : 'Bekijk') &&
+      !kanTikken(fien2, 'Uitnodigen'));
     fien2.ev('inviteFriend(' + JSON.stringify(fid) + ')');
     await wacht(100);
     check('Daan nog eens uitnodigen zegt dat het potje nog loopt', toastTekst(fien2) === 'Je potje met Daan loopt nog. Speel dat eerst uit.');
