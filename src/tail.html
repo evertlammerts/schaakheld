@@ -2074,6 +2074,11 @@ async function potjesbusGelezen(fid, O, F, aO, aF, blobO) {
       R.moves = eigen.keys.slice();
     }
     const u = eigen.result;
+    /* het eigen remise-aanbod, gedaan op een ander apparaat van dit kind: het hoort bij de stand, en de server meet
+       sinds wanneer; zonder het aanbod schreef dit apparaat een andere inhoud en begon de termijn opnieuw */
+    if (eigen.offer && eigen.offer.by === R.myColor && eigen.offer.ply === R.moves.length && !(R.offer && R.offer.by === R.myColor && R.offer.ply === R.moves.length)) {
+      R.offer = { by: eigen.offer.by, ply: eigen.offer.ply, answer: null, t: nu - (+aO || 0) * 1000 };
+    }
     /* wat een ander apparaat van dit kind al deed: het potje begon, de uitdaging ging terug, Nu niet, een einde */
     if (eigen.state === 'potje' && R.mijnUitdaging) R.state = 'potje';
     if (u && u.kind === 'teruggetrokken') {

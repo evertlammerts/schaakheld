@@ -123,6 +123,56 @@ async function orakelFlow6() {
     check('een profiel van 65537 bytes krijgt 413', status === 413);
   });
 
+  /* een opslag met vrienden en precies deze bewaarde potjes en uitdagingen */
+  const opslagMetPotjes = function (vrienden, records) {
+    const o = opslagMetVrienden(vrienden), games = {};
+    records.forEach(function (r) {
+      games[r.gameId] = Object.assign({ room: null, seat: null, host: true, myColor: 'w', gameNo: 1, moves: [], result: null, offer: null,
+        shown: false, state: 'potje', updated: Date.now() - UUR }, r);
+    });
+    o.setItem('schaakheld-samen', JSON.stringify({ v: 1, games }));
+    return o;
+  };
+
+  await regel('[6.9] twee vriendenpotjes waarin het kind aan zet is en een uitdaging om te beantwoorden: de laatste zet eerst, dan de andere, dan de uitdaging', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const nu = Date.now();
+    const a = await kind(opslagMetPotjes([{ fid: 'vriendfien1', naam: 'Fien' }, { fid: 'vriendsem01', naam: 'Sem' }, { fid: 'vrienddaan1', naam: 'Daan' }], [
+      { gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien', moves: ['d2d4', 'd7d5'], beurtT: nu - 3 * UUR },
+      { gameId: 'potjevansem01', fid: 'vriendsem01', peerName: 'Sem', moves: ['c2c4', 'e7e5'], beurtT: nu - UUR },
+      { gameId: 'uitdvandaan01', fid: 'vrienddaan1', peerName: 'Daan', state: 'uitdaging', host: false, beurtT: nu - 10 * 60000 }]));
+    check('de kaart: het potje met de laatste zet', /je potje met Sem/i.test(tekstVan(a, 'verderKaart')) && /Sem heeft gezet\. Jij bent aan zet\./.test(tekstVan(a, 'verderKaart')));
+    tikTekst(a, 'Ook nog');
+    await wacht();
+    const blad = a.scherm(), plek = ['Je potje met Sem', 'Je potje met Fien', 'Daan daagt je uit'].map(function (t) { return blad.indexOf(t); });
+    check('het blad: Sem, dan Fien, dan de uitdaging van Daan', plek.every(function (p) { return p >= 0; }) && plek[0] < plek[1] && plek[1] < plek[2]);
+  });
+
+  await regel('[6.8] dagen zijn kalenderdagen: twee uur geleden over middernacht is gisteren, een half uur geleden is vandaag, en zes dagen en een uur over zeven middernachten is een week', async function (check) {
+    const potjeOm = function (beurt) {
+      return opslagMetPotjes([{ fid: 'vriendfien1', naam: 'Fien' }],
+        [{ gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien', moves: ['d2d4', 'd7d5', 'c2c4'], beurtT: new __EchteDate(beurt).getTime() }]);
+    };
+    for (const [beurt, nu, zin] of [['2026-11-13T23:00:00', '2026-11-14T01:00:00', 'Fien is aan zet · gisteren'],
+      ['2026-11-14T00:30:00', '2026-11-14T01:00:00', 'Fien is aan zet · vandaag']]) {
+      zetDatum(nu);
+      const a = await kind(potjeOm(beurt));
+      a.tik('tabVrienden');
+      check(zin, vriendRijTekst(a, 'vriendfien1').indexOf(zin) >= 0);
+    }
+    zetDatum('2026-11-14T00:30:00');
+    const b = await kind(potjeOm('2026-11-07T23:30:00'));
+    check('na zeven middernachten heet het potje stil, ook al is het nog geen 7 keer 24 uur', /Fien heeft al een week niet gezet\./.test(tekstVan(b, 'verder')));
+  });
+
+  await regel('[6.1] de zetten in de bus houden elke promotie: dame, toren, loper en paard', async function (check) {
+    const a = await kind(opslagMetVrienden([]));
+    const lijst = ['a2a4', 'b7b5', 'a4b5', 'a7a6', 'b5a6', 'c8b7', 'a6b7', 'b8c6', 'b7a8q'];
+    check('een echt potje met een promotie leest terug', JSON.stringify(a.get('potjeZetten(zettenNaarBus(' + JSON.stringify(lijst) + '))')) === JSON.stringify(lijst));
+    const vier = ['b7b8q', 'b7b8r', 'b7b8b', 'b7b8n'];
+    check('alle vier de stukken', JSON.stringify(a.get('potjeZetten(zettenNaarBus(' + JSON.stringify(vier) + '))')) === JSON.stringify(vier));
+  });
+
   /* ================= vriendenpotjes die dagen doorlopen ================= */
 
   await regel('[6.9] twee potjes tegen Turbo, een rondje en twee vriendenpotjes: de kaart, één telregel en het blad in de vaste volgorde', async function (check) {
