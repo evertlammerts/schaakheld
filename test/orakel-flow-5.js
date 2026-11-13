@@ -1200,18 +1200,17 @@ async function orakelFlow5() {
       ['De beste was A: Toren d1 → d8, slaat paard.', 'A: Toren d1 → d8, slaat paard. Die levert je 3 punten op, met schaak.']],
     ['een stuk verliezen, en de rustige beste', 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3', ['f3e5', 'b1c3', 'a2a3'], 1,
       ['De beste was B: Paard b1 → c3.', 'A: Paard f3 → e5, slaat pion. Turbo speelt dan Paard c6 → e5, slaat paard, en niemand kan terugpakken: je bent 2 punten kwijt.',
-        'B: Paard b1 → c3. Veilig: daarna kan Turbo niets winnen.']],
+        'B: Paard b1 → c3. Dit is de sterkste van de drie.']],
     ['een aangevallen stuk redden', '6k1/8/8/3p4/4N3/8/P6P/6K1 w - - 0 1', ['h2h3', 'e4c3', 'a2a3'], 1,
       ['De beste was B: Paard e4 → c3.', 'A: Pion h2 → h3. Turbo speelt dan Pion d5 → e4, slaat paard, en niemand kan terugpakken: je bent 3 punten kwijt.',
         'B: Paard e4 → c3. Die redt je paard: die stond aangevallen.']],
     ['schaak als beste, een vork later, en een rustige zet', '6k1/8/6n1/8/8/8/6K1/3Q4 w - - 0 1', ['d1d8', 'd1e2', 'g2h3'], 0,
       ['De beste was A: Dame d1 → d8.', 'A: Dame d1 → d8. Veilig, en schaak: Turbo moet eerst zijn koning redden.',
         'B: Dame d1 → e2. Een paar zetten later kost deze je toch iets.', 'C: Koning g2 → h3. Niet fout, maar de beste zet doet meer.']],
-    /* "kost je toch iets" volgt de lijn: Turbo's beste antwoord, het beste van wit, de slagen
-       uitgerekend; vanaf anderhalf punt, zoals het alarm. Pf3-e1 kost langs de lijn 6,3 punten,
-       Le2-a6 maar een pion. */
-    ['een zet die later een stuk kost', 'r3kb1r/ppp2ppp/2n1qn2/3pPbB1/8/2N1QN2/PPP1PPPP/2KR1B1R w kq - 0 1', ['f3e1', 'e5f6', 'h2h3'], 1,
-      ['De beste was B: Pion e5 → f6, slaat paard.', 'A: Paard f3 → e1. Een paar zetten later kost deze je toch iets.']],
+    /* "kost je toch iets" alleen als de lijn en de zoektocht het allebei zeggen: Pf3-e1 kost langs de korte lijn
+       6,3 punten, maar de zoektocht ziet geen verlies (de lijn stopt midden in een ruil); Le2-a6 kost maar een pion */
+    ['een zet waarvan alleen de korte lijn een verlies ziet', 'r3kb1r/ppp2ppp/2n1qn2/3pPbB1/8/2N1QN2/PPP1PPPP/2KR1B1R w kq - 0 1', ['f3e1', 'e5f6', 'h2h3'], 1,
+      ['De beste was B: Pion e5 → f6, slaat paard.', 'A: Paard f3 → e1. Niet fout, maar de beste zet doet meer.']],
     ['een zet die later maar een pion kost', 'r2qk2r/ppp2ppp/2n2n2/3ppb2/3P4/b3P2N/PPP1BPPP/R1BQK2R w KQkq - 0 1', ['e2a6', 'b2a3', 'g2g3'], 1,
       ['De beste was B: Pion b2 → a3, slaat loper.', 'A: Loper e2 → a6. Niet fout, maar de beste zet doet meer.']],
     ['de beste is een vork', 'r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1', ['b5c7', 'e1d2', 'b5d4'], 0,
@@ -1231,6 +1230,16 @@ async function orakelFlow5() {
     /* punten uit de tabel van de kinderen: twee lopers voor een toren is 1 punt, niet de 1,6 van de engine afgerond */
     ['twee lopers voor een toren', '3r2k1/3r1ppp/8/8/8/8/2B2PPP/5BK1 w - - 0 1', ['f1d3', 'g2g3', 'h2h3'], 1,
       ['De beste was B: Pion g2 → g3.', 'A: Loper f1 → d3. Turbo speelt dan Toren d7 → d3, slaat loper: na het slaan en terugslaan ben je 1 punt kwijt.']],
+    /* de beste keuze: veilig als beide maten geen verlies zien, "kost iets" als beide een verlies zien, en anders
+       niets over veilig */
+    ['de beste kost langs lijn en zoektocht 2 punten, de andere twee meer', 'rnbqkb1r/ppp2ppp/3p4/1N2p1n1/2B5/4PQ2/PPPP1PPP/R1B1K1NR w - - 0 1', ['f3d5', 'a2a3', 'h2h3'], 0,
+      ['De beste was A: Dame f3 → d5.', 'A: Dame f3 → d5. Ook deze kost iets, maar de andere twee kosten meer.']],
+    ['de beste kost langs lijn en zoektocht iets, de andere twee evenveel', 'r1bqkb1r/ppp1nppp/3p4/3Pp3/3NP3/2NQ4/PPP2PPP/R1B1KB1R w - - 0 1', ['d3b5', 'a2a3', 'h2h3'], 0,
+      ['De beste was A: Dame d3 → b5.', 'A: Dame d3 → b5. Ook deze kost iets, maar het is de beste van de drie.']],
+    ['de beste, waar lijn en zoektocht allebei geen verlies zien', 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', ['e2e4', 'a2a3', 'h2h4'], 0,
+      ['De beste was A: Pion e2 → e4.', 'A: Pion e2 → e4. Veilig: daarna kan Turbo niets winnen.']],
+    ['de beste, waar alleen de korte lijn een verlies ziet', 'r1bqkbr1/ppppnpp1/2n1p2p/8/2N1P3/3B1N2/PPPP1PPP/R1BQ1RK1 w - - 0 1', ['f3e5', 'd1e2', 'a2a3'], 0,
+      ['De beste was A: Paard f3 → e5.', 'A: Paard f3 → e5. Dit is de sterkste van de drie.']],
     ['een zet die later anderhalf punt kost', 'r2qk2r/p1p2ppp/2N1pn2/3p4/1pbP1b2/1Q2P3/PPP2PPP/RN3RK1 w kq - 0 13', ['c2c3', 'b3c4', 'a2a3'], 1,
       ['De beste was B: Dame b3 → c4, slaat loper.', 'C: Pion a2 → a3. Een paar zetten later kost deze je toch iets.']],
     ['de beste is een aftrekschaak', '4k3/p7/8/8/4N3/8/8/4R1K1 w - - 0 1', ['e4c3', 'g1f2', 'e1e2'], 0,
@@ -1308,12 +1317,11 @@ async function orakelFlow5() {
     const a = nieuwKind();
     await startOefening(a, 'best3');
     a.ev('buildBest3()');
-    const anderen = 'session.task.options.filter(function (o) { return o !== session.task.best; })';
-    check('meteen na het maken: nog geen lijn', a.get(anderen + '.every(function (o) { return o.lijn === undefined; })'));
+    check('meteen na het maken: nog geen lijn', a.get('session.task.options.every(function (o) { return o.lijn === undefined; })'));
     await wacht();
-    check('even later: de lijn van elke andere keuze', a.get(anderen + '.every(function (o) { return o.lijn !== undefined; })'));
+    check('even later: elke lijn', a.get('session.task.options.every(function (o) { return o.lijn !== undefined; })'));
     a.ev('buildBest3(); session.keuzeOpen = true; pickOption(session.task.options.indexOf(session.task.best)); best3Confirm()');
-    check('bij een antwoord meteen: de lijn van elke andere keuze', a.get(anderen + '.every(function (o) { return o.lijn !== undefined; })'));
+    check('bij een antwoord meteen: elke lijn', a.get('session.task.options.every(function (o) { return o.lijn !== undefined; })'));
     await wacht(3000);
     check('en drie redenen', redenen5(a).length === 3);
   });

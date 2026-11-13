@@ -3409,23 +3409,27 @@ function buildBest3() {
   later(() => { session.keuzeOpen = true; }, 350);
   /* de lijnen zijn pas na het antwoord nodig: de app rekent ze een voor een terwijl het kind naar het bord kijkt,
      zodat een tik ertussen past; komt het antwoord eerder, dan rekent best3Explanations de rest */
-  task.options.filter(o => o !== task.best).forEach((o, i) => later(() => lijnVerlies(task.S, o), 400 + 300 * i));
+  task.options.forEach((o, i) => later(() => lijnVerlies(task.S, o), 400 + 300 * i));
   return true;
 }
 
-/* Wat een keuze langs haar lijn kost (Turbo's beste antwoord, dan het beste van wit, de slagen
-   uitgerekend), alleen voor een keuze die meteen niets wint of verliest en geen mat toelaat. Twee
-   zoektochten van CHECK_NODES posities, dus bij het bouwen van de opdracht en maar een keer. */
+/* Wat een keuze langs haar lijn kost, op twee maten: het materiaal langs de lijn (Turbo's beste antwoord, dan het beste
+   van wit, de slagen uitgerekend) en de zoektocht na de zet tegen de stand nu. De lijn stopt soms midden in een ruil
+   die wit daarna terugwint, dus verloren is alleen wat beide zeggen. Alleen voor een keuze die meteen niets wint of
+   verliest en geen mat toelaat; twee zoektochten van CHECK_NODES posities, dus een keer per keuze. */
 function lijnVerlies(S, o) {
   if (o.lijn !== undefined) return o.lijn;
-  const nu = material(S);
+  const nu = material(S), stand = evalWhite(S);
   makeMove(S, o.m);
   const rustig = !gameStatus(S).over && !mateReply(S) && Math.abs(forcedMaterial(S) - nu) < 90;
   unmakeMove(S);
   if (rustig) clearTT();
-  o.lijn = rustig ? lineAfter(S, o.m, CHECK_NODES).material : null;
+  const l = rustig ? lineAfter(S, o.m, CHECK_NODES) : null;
+  o.lijn = l ? { lijn: l.material, zoek: l.white - stand } : null;
   return o.lijn;
 }
+const lijnKwijt = l => !!l && Math.max(l.lijn, l.zoek) <= -150;
+const lijnVeilig = l => !l || (l.lijn >= -90 && l.zoek >= -90);
 /* Eerst welke de beste was (niet als het kind hem koos: dan zegt zijn eigen regel het), dan per keuze waarom.
    Verlies telt tegen het bord nu, nooit tegen de beste keuze: een keuze die alleen niets wint, kost niets. */
 const TRUC_NAAM = { vork: 'vork', penning: 'penning', spies: 'spies', aftrek: 'aftrekaanval' };
@@ -3455,7 +3459,7 @@ function best3Explanations(task, gekozen) {
       }
     }
     unmakeMove(S);
-    const laterKwijt = !isBest && lijnVerlies(S, o) !== null && o.lijn <= -150;
+    const lijn = lijnVerlies(S, o), laterKwijt = lijnKwijt(lijn);
     let why;
     if (st.over && st.result === 'w') why = 'Schaakmat, meteen gewonnen.';
     else if (mat) why = 'Daarna kan Turbo je mat zetten.';
@@ -3463,18 +3467,35 @@ function best3Explanations(task, gekozen) {
     else if (delta <= -90) why = !pakt ? 'Na het slaan en terugslaan ben je ' + ptsNL(-winst) + ' kwijt.' : terug ?
       'Turbo speelt dan <b>' + pakt + '</b>: na het slaan en terugslaan ben je ' + ptsNL(-winst) + ' kwijt.' :
       'Turbo speelt dan <b>' + pakt + '</b>, en niemand kan terugpakken: je bent ' + ptsNL(-winst) + ' kwijt.';
+    else if (isBest && laterKwijt) why = 'Ook deze kost iets, maar ' +
+      (task.options.every(x => x === o || keuzeKost(S, x) < Math.max(lijn.lijn, lijn.zoek)) ? 'de andere twee kosten meer.' : 'het is de beste van de drie.');
+    /* zeggen de twee maten iets anders, dan zegt de uitleg niets over veilig */
+    else if (isBest && !lijnVeilig(lijn)) why = 'Dit is de sterkste van de drie.';
     else if (isBest && hangingBefore >= 90) why = 'Die redt je ' + stuk + ': die stond aangevallen.';
     else if (isBest && chk) why = 'Veilig, en schaak: Turbo moet eerst zijn koning redden.';
     else if (isBest) why = 'Veilig: daarna kan Turbo niets winnen.';
     else if (laterKwijt) why = 'Een paar zetten later kost deze je toch iets.';
     else why = 'Niet fout, maar de beste zet doet meer.';
     /* een truc noemen bij een zet die toch verliest, zou zeggen dat verliezen slim was */
-    if (co && TRUC_NAAM[co.key] && !mat && delta > -90)
+    if (co && TRUC_NAAM[co.key] && !mat && delta > -90 && !laterKwijt)
       why = 'Een ' + (co.key === 'aftrek' && co.info.discovered.some(x => x.isKing) ? 'aftrekschaak' : TRUC_NAAM[co.key]) + '! ' + why;
     lines.push('ABC'[i] + ': ' + zetB(name) + ' ' + why);
   });
   return lines;
 }
+/* wat een andere keuze kost, op dezelfde maat als de lijn van de beste: de slagen meteen als die een pion of meer
+   schelen, anders langs haar lijn; mat kost het meest */
+function keuzeKost(S, o) {
+  const nu = material(S);
+  makeMove(S, o.m);
+  const st = gameStatus(S), mat = !st.over && !!mateReply(S), d = st.over ? (st.result === 'w' ? MATE : 0) : forcedMaterial(S) - nu;
+  unmakeMove(S);
+  if (mat) return -MATE;
+  if (st.over || Math.abs(d) >= 90) return d;
+  const l = lijnVerlies(S, o);
+  return l ? Math.max(l.lijn, l.zoek) : 0;
+}
+
 function pickOption(i) {
   if (!session || session.phase !== 'choose' || !session.keuzeOpen) return;
   const b = document.querySelector('.opt[data-i="' + i + '"]');
