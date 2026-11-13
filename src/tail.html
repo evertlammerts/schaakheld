@@ -2763,6 +2763,18 @@ function eigenHandelingen(fid, rol) {
    server een potje toont dat dit apparaat als afgelopen kent; een afgelopen staat die allebei weten, houdt het bij een lege server als geheugen. Anders neemt
    het wat de server toont, ook met een lagere seq. Wat niet te openen is of van een nieuwere app, blijft staan:
    false, en er gaat niets heen. */
+/* Wat terug naar de server gaat, opent precies de staat die het apparaat houdt: de bewaarde tekst als hij die staat
+   opent, anders die staat opnieuw verzegeld. Opnieuw verzegelen mag: alles wat telt (de seq, de stempel van een aanbod,
+   de tijden) staat in de staat zelf, alleen de bytes en dus de versie zijn nieuw. */
+async function tekstVanStaat(f, p) {
+  const open = p.blob ? await blobNaarStaat(f.k, p.blob) : null;
+  if (open && !open.nieuwer && vasteVorm(open) === vasteVorm(p.staat)) return;
+  p.blob = await staatNaarBlob(f.k, p.staat);
+  p.versie = await versieVan(p.blob);
+}
+function vasteVorm(o) {
+  return JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce((x, n) => (x[n] = v[n], x), {}) : v);
+}
 async function verwerkPaar(fid, X) {
   const f = paarVriend(fid), rol = myRole(f);
   for (let ronde = 0; ronde < 6; ronde++) {
@@ -2785,6 +2797,7 @@ async function verwerkPaar(fid, X) {
       if (ouder && (staatTelt(sy) || kent)) terug = true;
     }
     if (terug) {
+      await tekstVanStaat(f, p);
       bewaarPaar(fid, p);
       const ant = await schrijfPaar(f, p.blob, vx);
       if (ant.code === 409) { X = ant.blob; continue; }

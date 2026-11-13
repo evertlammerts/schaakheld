@@ -4159,4 +4159,61 @@ async function orakelTwee6() {
     check('de verbeterde kaart noemt de XP', /\+30\s*XP/.test(ef));
     check('daarna staat het nergens meer', fien.get('JSON.stringify(paarVan(' + JSON.stringify(fid) + ').telKaart || {})') === '{}');
   });
+
+  /* ================= wat een apparaat terugschrijft, opent ook ================= */
+
+  /* een potje van zes halve zetten; Mees en Fien gaan naar huis */
+  const zesZetten = async function () {
+    const { mees, fien, fid } = await liveVriendenpotje(false);
+    await potjeTot(mees, fien, 6, mees);
+    for (const x of [mees, fien]) if (opSpeelscherm(x)) { x.tik('backBtn'); await wacht(); }
+    await tijd(20000);
+    return { mees, fien, fid, bus: await potjesbus(mees, fid) };
+  };
+  const beschadig = function (x, fid, f) {
+    x.ev('(function () { var o = JSON.parse(localStorage.getItem("schaakheld-paar")); o[' + JSON.stringify(fid) + '] = (' + f + ')(o[' + JSON.stringify(fid) + ']); localStorage.setItem("schaakheld-paar", JSON.stringify(o)); })()');
+  };
+
+  await regel('[6.1] een goede bewaarde staat met een beschadigde verzegelde tekst, en de server is de staat kwijt: wat Mees terugschrijft, openen allebei, met hetzelfde potje', async function (check) {
+    let { mees, fien, fid, bus } = await zesZetten();
+    const id = mees.get('MP ? MP.gameId : paarVan(' + JSON.stringify(fid) + ').staat.spel.id');
+    stopApparaat(mees);
+    stopApparaat(fien);
+    beschadig(mees, fid, 'function (p) { p.blob = p.blob.slice(0, 40) + p.blob.slice(40).split("").reverse().join(""); return p; }');
+    delete __server.potjes[bus];
+    mees = herlaad(mees);
+    await tijd(20000);
+    const opServer = function (x) { return busInhoud(x, fid, bus); };
+    const sm = await opServer(mees);
+    check('de server heeft weer een staat die Mees opent, met het potje van zes halve zetten', !!sm && !!sm.spel && sm.spel.id === id && sm.spel.zetten.length === 6);
+    fien = herlaad(fien);
+    await tijd(20000);
+    const ff = fien.get('Object.keys(P.friends)[0]');
+    const sf = await busInhoud(fien, ff, bus);
+    check('Fien opent hem ook, met hetzelfde potje', !!sf && !!sf.spel && sf.spel.id === id && sf.spel.zetten.length === 6);
+    check('en Fien heeft het potje op de kaart', /je potje met Mees/i.test(tekstVan(fien, 'verder')));
+  });
+
+  await regel('[6.1] een goede bewaarde staat met zijn goede verzegelde tekst, en de server is de staat kwijt: Mees schrijft precies die tekst terug', async function (check) {
+    let { mees, fien, fid, bus } = await zesZetten();
+    stopApparaat(mees);
+    stopApparaat(fien);
+    const tekst = mees.get('paarVan(' + JSON.stringify(fid) + ').blob');
+    delete __server.potjes[bus];
+    mees = herlaad(mees);
+    await tijd(20000);
+    check('op de server staat de bewaarde tekst, byte voor byte', !!__server.potjes[bus] && __server.potjes[bus].blob === tekst);
+  });
+
+  await regel('[6.1] een beschadigde bewaarde staat met een beschadigde verzegelde tekst, en de server is de staat kwijt: Mees schrijft niets terug', async function (check) {
+    let { mees, fien, fid, bus } = await zesZetten();
+    stopApparaat(mees);
+    stopApparaat(fien);
+    beschadig(mees, fid, 'function (p) { p.blob = p.blob.slice(0, 40) + p.blob.slice(40).split("").reverse().join(""); p.staat = { v: 2 }; return p; }');
+    delete __server.potjes[bus];
+    mees = herlaad(mees);
+    await tijd(20000);
+    check('de app van Mees opent', opThuis(mees));
+    check('op de server staat niets', !__server.potjes[bus]);
+  });
 }
