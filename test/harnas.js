@@ -359,42 +359,6 @@ async function zetEnWacht(app, key) {
   return gelukt;
 }
 
-/* Een rustig potje van n halve zetten zonder slaan en zonder schaak, waarin geen stelling een tweede keer staat: steeds de
-   eerste zet die naar een nieuwe stelling gaat, en loopt dat vast, dan een stap terug. Met pionnen doet elke kant om de
-   98 halve zetten een pionzet, zodat de vijftigzettenregel het niet beëindigt; zonder pionnen mag de laatste halve zet
-   het potje met die regel beëindigen. */
-function rustigePartij(n, metPionnen) {
-  const S = newGame(), uit = [], gezien = new Set([positionKey(S)]);
-  const opties = function () {
-    const i = uit.length % 98, pion = !!metPionnen && (i === 96 || i === 97), laatste = uit.length === n - 1;
-    return legalMoves(S).filter(function (m) {
-      if (isCapture(S, m) || (S.board[m.from].toLowerCase() === 'p') !== pion) return false;
-      makeMove(S, m);
-      const st = gameStatus(S), goed = !gezien.has(positionKey(S)) && !inCheck(S) && (!st.over || (laatste && !metPionnen && st.reason === '50'));
-      unmakeMove(S);
-      return goed;
-    });
-  };
-  const stapel = [opties()];
-  while (uit.length < n) {
-    const kandidaten = stapel[stapel.length - 1];
-    if (!kandidaten.length) {
-      stapel.pop();
-      if (!uit.length) throw new Error('testopzet: geen rustig potje van ' + n + ' halve zetten');
-      gezien.delete(positionKey(S));
-      unmakeMove(S);
-      uit.pop();
-      continue;
-    }
-    const m = kandidaten.shift();
-    makeMove(S, m);
-    gezien.add(positionKey(S));
-    uit.push(moveKey(m));
-    if (uit.length < n) stapel.push(opties());
-  }
-  return uit;
-}
-
 /* opgeven zoals een kind: de knop Opgeven (in de rij of achter ⋯), dan ja */
 async function geefOp(app) {
   if (!kanTikken(app, 'Opgeven')) { app.tik('meerBtn'); await wacht(); }
