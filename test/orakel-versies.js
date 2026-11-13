@@ -6,18 +6,18 @@
 
 async function orakelVersies() {
   const NU = 1800000000, DAG_S = 86400;
-  const leeg = { v: 2, seq: 7, spel: null, vorige: null };
+  const leeg = { v: 2, seq: 7, spel: null, vorige: [] };
   const spel = function (extra) {
     return Object.assign({ id: 'potjeeen0001', wit: 'a', door: 'a', fase: 'potje', zetten: [], bod: null, uitslag: null,
       weet: { a: null, b: null }, bekeken: { a: false, b: false }, t: NU - DAG_S }, extra);
   };
-  const met = function (s) { return { v: 2, seq: 7, spel: s, vorige: null }; };
+  const met = function (s) { return { v: 2, seq: 7, spel: s, vorige: [] }; };
   /* de soorten staat; bij elk wie aan zet is en welke zet er kan */
   const STATEN = {
     leeg: leeg,
     uitdagingVanA: met(spel({ fase: 'uitdaging' })),
-    neeOnbekend: met(spel({ fase: 'nee', weet: { a: null, b: 'merk-b' }, bekeken: { a: false, b: true } })),
-    neeBekend: met(spel({ fase: 'nee', weet: { a: 'merk-a', b: 'merk-b' }, bekeken: { a: false, b: true } })),
+    neeOnbekend: met(spel({ fase: 'nee', weet: { a: null, b: 'merk-b' } })),
+    neeBekend: met(spel({ fase: 'nee', weet: { a: 'merk-a', b: 'merk-b' } })),
     aAanZet: met(spel({})),
     bAanZet: met(spel({ zetten: ['e2e4'] })),
     bodZonderStempel: met(spel({ zetten: ['e2e4'], bod: { door: 'a', ply: 1, t: null } })),
@@ -32,7 +32,8 @@ async function orakelVersies() {
   /* de handelingen, op het potje en de halve zet van de staat */
   const handeling = function (soort, staat, rol, naam) {
     const s = staat.spel, id = s ? s.id : 'niets', ply = s ? s.zetten.length : 0, merk = 'nieuw-' + rol;
-    if (soort === 'uitdaging' || soort === 'start') return { soort: soort, id: 'potjetwee002', wit: 'b', merk: merk };
+    if (soort === 'uitdaging' || soort === 'start') return { soort: soort, id: 'potjetwee002', wit: 'b', op: s ? s.id : null, merk: merk };
+    if (soort === 'opgeven') return { soort: soort, id: id, eigen: s ? (s.wit === rol ? Math.ceil(ply / 2) : Math.floor(ply / 2)) : 0, merk: merk };
     if (soort === 'zet' || soort === 'zetMetBod') return { soort: 'zet', id: id, ply: ply, zet: ZET[naam] || 'e2e4', bod: soort === 'zetMetBod', merk: merk };
     return { soort: soort, id: id, ply: ply, merk: merk };
   };
@@ -47,16 +48,14 @@ async function orakelVersies() {
     ['uitdagingVanA', 'intrekken', 'a', function (u) { return u.spel === null; }],
     ['uitdagingVanA', 'weghalen', 'a', function (u) { return u.spel === null; }],
     ['uitdagingVanA', 'ja', 'b', function (u) { return u.spel.fase === 'potje' && u.spel.t === NU; }],
-    ['uitdagingVanA', 'nee', 'b', function (u) { return u.spel.fase === 'nee' && u.spel.weet.b === 'nieuw-b' && u.spel.weet.a === null && u.spel.bekeken.b === true; }],
+    ['uitdagingVanA', 'nee', 'b', function (u) { return u.spel.fase === 'nee' && u.spel.weet.b === 'nieuw-b' && u.spel.weet.a === null && u.spel.bekeken.b === false; }],
     ['uitdagingVanA', 'weghalen', 'b', function (u) { return u.spel.fase === 'nee' && u.spel.weet.b === 'nieuw-b'; }],
     ['neeOnbekend', 'neem', 'a', function (u) { return u.spel.weet.a === 'nieuw-a' && u.spel.weet.b === 'merk-b'; }],
     ['neeOnbekend', 'weghalen', 'a', function (u) { return u.spel.weet.a === 'nieuw-a'; }],
-    ['neeOnbekend', 'bekijk', 'a', function (u) { return u.spel.bekeken.a === true; }],
-    ['neeBekend', 'uitdaging', 'a', function (u) { return u.spel.fase === 'uitdaging' && u.vorige.id === 'potjeeen0001' && u.vorige.fase === 'nee'; }],
+    ['neeBekend', 'uitdaging', 'a', function (u) { return u.spel.fase === 'uitdaging' && u.vorige.length === 0; }],
     ['neeBekend', 'uitdaging', 'b', function (u) { return u.spel.door === 'b'; }],
     ['neeBekend', 'start', 'a', function (u) { return u.spel.fase === 'potje'; }],
     ['neeBekend', 'start', 'b', function (u) { return u.spel.fase === 'potje'; }],
-    ['neeBekend', 'bekijk', 'a', function (u) { return u.spel.bekeken.a === true; }],
     ['aAanZet', 'zet', 'a', function (u) { return u.spel.zetten.join() === 'e2e4' && u.spel.bod === null && u.spel.t === NU; }],
     ['aAanZet', 'zetMetBod', 'a', function (u) { return u.spel.zetten.length === 1 && u.spel.bod.door === 'a' && u.spel.bod.ply === 1 && u.spel.bod.t === null; }],
     ['aAanZet', 'opgeven', 'a', function (u) { return u.spel.fase === 'klaar' && u.spel.uitslag.soort === 'opgave' && u.spel.uitslag.door === 'a' && u.spel.weet.a === 'nieuw-a'; }],
@@ -98,10 +97,10 @@ async function orakelVersies() {
     ['klaarOnbekend', 'neem', 'b', function (u) { return u.spel.weet.b === 'nieuw-b' && u.spel.weet.a === 'merk-a' && u.spel.t === NU - DAG_S; }],
     ['klaarOnbekend', 'weghalen', 'b', function (u) { return u.spel.weet.b === 'nieuw-b'; }],
     ['klaarOnbekend', 'bekijk', 'b', function (u) { return u.spel.bekeken.b === true && u.spel.t === NU - DAG_S; }],
-    ['klaarBekend', 'uitdaging', 'a', function (u) { return u.spel.fase === 'uitdaging' && u.vorige.id === 'potjeeen0001' && u.vorige.uitslag.soort === 'opgave' &&
-      u.vorige.weet.a === 'merk-a' && u.vorige.bekeken.b === false && !('zetten' in u.vorige); }],
+    ['klaarBekend', 'uitdaging', 'a', function (u) { return u.spel.fase === 'uitdaging' && u.vorige.length === 1 && u.vorige[0].id === 'potjeeen0001' && u.vorige[0].uitslag.soort === 'opgave' &&
+      u.vorige[0].weet.a === 'merk-a' && u.vorige[0].bekeken.b === false && !('zetten' in u.vorige[0]); }],
     ['klaarBekend', 'uitdaging', 'b', function (u) { return u.spel.door === 'b'; }],
-    ['klaarBekend', 'start', 'a', function (u) { return u.spel.fase === 'potje' && u.vorige.id === 'potjeeen0001'; }],
+    ['klaarBekend', 'start', 'a', function (u) { return u.spel.fase === 'potje' && u.vorige[0].id === 'potjeeen0001'; }],
     ['klaarBekend', 'start', 'b', function (u) { return u.spel.fase === 'potje'; }],
     ['klaarBekend', 'bekijk', 'b', function (u) { return u.spel.bekeken.b === true; }]
   ];
@@ -128,7 +127,7 @@ async function orakelVersies() {
       if (['uitdaging', 'start', 'weghalen'].indexOf(soort) >= 0) continue;
       const h = handeling(soort, staat, rol, naam), ander = Object.assign({}, h, { id: 'eenanderpotj' });
       if (staatNa(staat, ander, rol, NU).past) fout.push(naam + ' ' + soort + ' ' + rol + ' op een ander potje');
-      if (['zet', 'zetMetBod', 'bod', 'aannemen', 'vanzelf', 'opgeven'].indexOf(soort) >= 0) {
+      if (['zet', 'zetMetBod', 'bod', 'aannemen', 'vanzelf'].indexOf(soort) >= 0) {
         const later = Object.assign({}, h, { ply: h.ply + 1 });
         if (staatNa(staat, later, rol, NU).past) fout.push(naam + ' ' + soort + ' ' + rol + ' op een andere halve zet');
       }
@@ -152,9 +151,10 @@ async function orakelVersies() {
     const opgegeven = met(spel({ fase: 'klaar', uitslag: { soort: 'opgave', door: 'a', ply: 0 }, weet: { a: 'nieuw-a', b: null } }));
     check('het eigen einde met het eigen merk', alGedaan(opgegeven, { soort: 'opgeven', id: 'potjeeen0001', ply: 0 }, 'a', 'nieuw-a'));
     check('een einde met een ander merk van dit kind is niet dit apparaat', !alGedaan(opgegeven, { soort: 'opgeven', id: 'potjeeen0001', ply: 0 }, 'a', 'ander-a'));
-    const verder = { v: 2, seq: 9, spel: spel({ id: 'potjetwee002', fase: 'uitdaging', door: 'b' }),
-      vorige: { id: 'potjeeen0001', fase: 'klaar', uitslag: { soort: 'opgave', door: 'a', ply: 0 }, weet: { a: 'nieuw-a', b: 'merk-b' }, bekeken: { a: true, b: false } } };
-    check('ook als er al iets nieuws staat: het merk in vorige', alGedaan(verder, { soort: 'opgeven', id: 'potjeeen0001', ply: 0 }, 'a', 'nieuw-a'));
+    const verder = { v: 2, seq: 9, spel: spel({ id: 'potjevier004', fase: 'uitdaging', door: 'b' }),
+      vorige: [{ id: 'potjedrie003', uitslag: { soort: 'opgave', door: 'b', ply: 0 }, weet: { a: 'merk-a', b: 'merk-b' }, bekeken: { a: true, b: true } },
+        { id: 'potjetwee002', weet: { a: 'merk-a', b: 'merk-b' } }, { id: 'potjeeen0001', weet: { a: 'nieuw-a', b: 'merk-b' } }] };
+    check('ook als er al drie potjes verder gespeeld is: het merk in de lijst vorige', alGedaan(verder, { soort: 'opgeven', id: 'potjeeen0001' }, 'a', 'nieuw-a'));
     check('een eigen uitdaging staat er', alGedaan(STATEN.uitdagingVanA, { soort: 'uitdaging', id: 'potjeeen0001' }, 'a', 'nieuw-a'));
     check('een intrekking is gedaan als de uitdaging weg is', alGedaan(leeg, { soort: 'intrekken', id: 'potjeeen0001' }, 'a', 'nieuw-a'));
     check('maar niet als de vriend hem aannam', !alGedaan(STATEN.aAanZet, { soort: 'intrekken', id: 'potjeeen0001' }, 'a', 'nieuw-a'));
@@ -174,9 +174,61 @@ async function orakelVersies() {
     check('met een andere sleutel niet te lezen', (await blobNaarStaat('eenanderesleutel-xxxxxxxxxxxxxxxxxx', blobs[1])) === null);
     const fout = await staatNaarBlob(k, met(spel({ zetten: ['e2e4', 'e2e4'] })));
     check('een zet die niet kan, is niet te lezen', (await blobNaarStaat(k, fout)) === null);
+    const vol = { v: 2, seq: 7, spel: spel({ zetten: ['e2e4'] }), vorige: [
+      { id: 'potjedrie003', uitslag: { soort: 'remise', door: 'a', ply: 10, vanzelf: true, bodT: NU }, weet: { a: 'abcdefghijklmnop', b: 'abcdefghijklmnop' }, bekeken: { a: true, b: true } },
+      { id: 'potjetwee002', weet: { a: 'abcdefghijklmnop', b: 'abcdefghijklmnop' } }, { id: 'potjeeen0001', weet: { a: 'abcdefghijklmnop', b: 'abcdefghijklmnop' } }] };
+    const volBlob = await staatNaarBlob(k, vol), volTerug = await blobNaarStaat(k, volBlob);
+    check('een volle lijst vorige komt terug, en de inhoud is even lang', volBlob.length === blobs[0].length && !!volTerug && volTerug.vorige.length === 3 &&
+      volTerug.vorige[0].uitslag.vanzelf === true && !('uitslag' in volTerug.vorige[1]));
+    /* het langste potje dat in de ene lengte past, met alles zo lang als het kan: een merk van 16 tekens, de remise na
+       veertien dagen, de lijst vol */
+    const M16 = 'abcdefghijklmnop', langst = function (n) {
+      const zetten = []; for (let i = 0; i < n; i++) zetten.push(i % 2 ? 'e7e5' : 'e2e4');
+      return Object.assign({}, vol, { seq: 999999999, spel: spel({ fase: 'klaar', zetten: zetten, t: NU, weet: { a: M16, b: M16 }, bekeken: { a: true, b: true },
+        uitslag: { soort: 'remise', door: 'a', ply: n, vanzelf: true, bodT: NU } }) });
+    };
+    check('521 halve zetten passen in de ene lengte, 522 niet', (await staatNaarBlob(k, langst(521))).length === blobs[0].length &&
+      (await staatNaarBlob(k, langst(522))).length > blobs[0].length);
     const nieuwer = b64url(await sealJSON(k, 'paar', vasteLengte({ v: 3, seq: 1 }, POTJE_LENGTE)));
     check('een nieuwere versie zegt dat ze nieuwer is', JSON.stringify(await blobNaarStaat(k, nieuwer)) === JSON.stringify({ nieuwer: true }));
     const v = await versieVan(blobs[0]);
     check('de versie is de hex van sha256 van de tekst', /^[0-9a-f]{64}$/.test(v) && v === (await sha256hex(blobs[0])) && v !== (await versieVan(blobs[1])));
+  });
+
+  await regel('[V1] een opgave rust op de eigen zetten: ze staat ook als de vriend intussen zette, en niet als het kind zelf zette of het potje al klaar is', async function (check) {
+    const vriendZette = met(spel({ zetten: ['e2e4', 'e7e5'] }));
+    check('a gaf op na één eigen zet; b zette intussen', staatNa(vriendZette, { soort: 'opgeven', id: 'potjeeen0001', eigen: 1, merk: 'nieuw-a' }, 'a', NU).past);
+    const zelfGezet = met(spel({ zetten: ['e2e4', 'e7e5', 'g1f3'] }));
+    check('a zette intussen zelf nog eens: de opgave past niet', !staatNa(zelfGezet, { soort: 'opgeven', id: 'potjeeen0001', eigen: 1, merk: 'nieuw-a' }, 'a', NU).past);
+    check('een potje dat al klaar is: past niet', !staatNa(STATEN.klaarOnbekend, { soort: 'opgeven', id: 'potjeeen0001', eigen: 1, merk: 'nieuw-a' }, 'a', NU).past);
+  });
+
+  await regel('[V1] een uitdaging of een begin noemt wat het vervangt; staat er iets anders, dan past het niet', async function (check) {
+    check('op een leeg paar met niets', staatNa(leeg, { soort: 'uitdaging', id: 'potjetwee002', wit: 'a', op: null, merk: 'nieuw-a' }, 'a', NU).past);
+    check('op een leeg paar met een oud potje: past niet', !staatNa(leeg, { soort: 'uitdaging', id: 'potjetwee002', wit: 'a', op: 'potjeeen0001', merk: 'nieuw-a' }, 'a', NU).past);
+    check('op het afgelopen potje dat er staat', staatNa(STATEN.klaarBekend, { soort: 'start', id: 'potjetwee002', wit: 'a', op: 'potjeeen0001', merk: 'nieuw-a' }, 'a', NU).past);
+    check('een begin waarvan het antwoord kwijt was, nadat er verder gespeeld is: past niet',
+      !staatNa(STATEN.klaarBekend, { soort: 'start', id: 'potjetwee002', wit: 'a', op: null, merk: 'nieuw-a' }, 'a', NU).past);
+  });
+
+  await regel('[V1] vorige houdt de laatste drie: het nieuwste met uitslag en bekeken, de twee daarvoor met alleen id en merken; bekijken kan het nieuwste', async function (check) {
+    let st = STATEN.klaarBekend;
+    for (const id of ['potjetwee002', 'potjedrie003', 'potjevier004']) {
+      st = staatNa(st, { soort: 'start', id: id, wit: 'a', op: st.spel.id, merk: 'nieuw-a' }, 'a', NU).staat;
+      st = staatNa(st, { soort: 'opgeven', id: id, eigen: 0, merk: 'nieuw-a' }, 'a', NU).staat;
+      st = staatNa(st, { soort: 'neem', id: id, merk: 'nieuw-b' }, 'b', NU).staat;
+    }
+    st = staatNa(st, { soort: 'uitdaging', id: 'potjevijf005', wit: 'a', op: 'potjevier004', merk: 'nieuw-a' }, 'a', NU).staat;
+    check('drie in de lijst, het nieuwste eerst', st.vorige.length === 3 && st.vorige.map(function (x) { return x.id; }).join() === 'potjevier004,potjedrie003,potjetwee002');
+    check('het nieuwste met uitslag en bekeken, de andere zonder', !!st.vorige[0].uitslag && !!st.vorige[0].bekeken && !('uitslag' in st.vorige[1]) && !('bekeken' in st.vorige[2]));
+    const b = staatNa(st, { soort: 'bekijk', id: 'potjevier004' }, 'b', NU);
+    check('b kan het nieuwste bekijken', b.past && b.staat.vorige[0].bekeken.b === true);
+    check('niet een ouder potje', !staatNa(st, { soort: 'bekijk', id: 'potjedrie003' }, 'b', NU).past);
+    check('het merk van wie opgaf, staat in een ouder potje nog te vinden', alGedaan(st, { soort: 'opgeven', id: 'potjetwee002' }, 'a', 'nieuw-a'));
+    let nn = staatNa(st, { soort: 'nee', id: 'potjevijf005', merk: 'nieuw-b' }, 'b', NU).staat;
+    nn = staatNa(nn, { soort: 'neem', id: 'potjevijf005', merk: 'nieuw-a' }, 'a', NU).staat;
+    nn = staatNa(nn, { soort: 'uitdaging', id: 'potjezes0006', wit: 'b', op: 'potjevijf005', merk: 'nieuw-a' }, 'a', NU).staat;
+    check('een Nu niet dat vervangen wordt, gaat niet in vorige: het laatste potje blijft voorop', nn.spel.id === 'potjezes0006' &&
+      nn.vorige.map(function (x) { return x.id; }).join() === 'potjevier004,potjedrie003,potjetwee002');
   });
 }
