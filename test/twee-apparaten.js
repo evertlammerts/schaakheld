@@ -526,6 +526,7 @@ async function alles() {
   }
 
   await orakelTwee();
+  await orakelTwee6();
   print('');
   print('orakel: ' + ORAKEL.nogNiet + ' nog niet gebouwd, ' + ORAKEL.gebouwd + ' gebouwd');
   print(fails === 0 ? 'ALL TWO-DEVICE TESTS PASSED' : (fails + ' TWO-DEVICE TESTS FAILED'));

@@ -248,6 +248,36 @@ function samenPotje(app) {
   return ids.length === 1 ? r.games[ids[0]] : null;
 }
 
+/* het lopende bewaarde vriendenpotje met deze vriend, ook als er meer vriendenpotjes bewaard staan */
+function vriendenpotjeMet(app, fid) {
+  const r = opgeslagen(app, 'schaakheld-samen');
+  const g = r && r.games && typeof r.games === 'object' ? Object.keys(r.games).map(function (k) { return r.games[k]; }) : [];
+  return g.filter(function (x) { return !!x && x.fid === fid && !x.result; })[0] || null;
+}
+
+/* de regels "Ook nog" onder de Verder-kaart, zoals een kind ze leest */
+function ookNogRegels(app) {
+  return app.el('verder').querySelectorAll('button').map(function (b) { return app.doc.__tekst(b).replace(/\s*›\s*$/, '').trim(); })
+    .filter(function (t) { return /^Ook nog/.test(t); });
+}
+
+/* de rij van een vriend op Vrienden */
+function vriendRij(app, fid) {
+  return app.el('friendList').querySelectorAll('[data-fid="' + fid + '"]')[0] || null;
+}
+function vriendRijTekst(app, fid) {
+  const r = vriendRij(app, fid);
+  return r ? app.doc.__tekst(r) : '';
+}
+
+/* een knop in de rij van een vriend aantikken op wat erop staat */
+function tikInRij(app, fid, tekst) {
+  if (!zichtbaar(app, 'view-vrienden')) app.tik('tabVrienden');
+  const r = vriendRij(app, fid);
+  const k = r ? r.querySelectorAll('button, [data-tik]').filter(function (b) { return knopTekst(app, b).indexOf(tekst) >= 0; })[0] : null;
+  return tikEl(app, k, '"' + tekst + '" bij ' + fid);
+}
+
 /* het bewaarde potje tegen Turbo op een niveau: schaakheld-potje is een kaart van potjes per niveau */
 function turboPotje(app, niveau) {
   const r = opgeslagen(app, 'schaakheld-potje');

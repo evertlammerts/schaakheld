@@ -854,6 +854,45 @@ GEVALLEN.push({ regels: ['[3.5] 390x844: Ik begint met het level, dan bewaard, t
       for (const s of ids) { const r = await rect(s); check(n, s + ' staat er', !!r); tops.push(r ? r.top : NaN); }
       check(n, 'in deze volgorde', tops.every((t, i) => i === 0 || t > tops[i - 1]));` });
 
+/* plan.md 6.9: Spelen met vier dingen bezig, het eerste een remise-aanbod van een vriend met een lange naam, en Spelen
+   met een regel "Ook nog" die twee regels neemt: de kaart, één regel eronder, de weekregel en beide spelknoppen
+   staan boven de tabbalk. De vriendenpotjes staan bewaard zoals nu, met een kamer die er niet meer is. */
+const POTJES_DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'Mees', t: 1 } }, max: { best: 0, goal: {} }, loc: {},
+  friends: {
+    vriendmaxi01: { k: 'sleutelsleutelsleutelsleutelsleutelM', naam: 'Maximiliaantje', t: 1, since: 1792000000000, host: true, weg: false },
+    vriendsem001: { k: 'sleutelsleutelsleutelsleutelsleutelS', naam: 'Sem', t: 1, since: 1792100000000, host: true, weg: false } } });
+const bewaardVriendenpotje = (fid, naam, i, zetten, aanbod) => ({ gameId: 'potjevan' + fid, fid, room: 'kamervantoen' + i + 'xx',
+  seat: 'stoelvantoen' + i + 'xx', host: true, myColor: 'w', gameNo: 1, moves: zetten, peerName: naam, result: null,
+  offer: aanbod ? { by: 'b', ply: zetten.length, answer: null } : null, shown: false, updated: 1794700000000 });
+const MAXI_BIEDT = bewaardVriendenpotje('vriendmaxi01', 'Maximiliaantje', 0, ['d2d4', 'd7d5'], true);
+const VIER_BEZIG = { schaakheld1: POTJES_DOC,
+  'schaakheld-samen': JSON.stringify({ v: 1, games: { potjevanvriendmaxi01: MAXI_BIEDT,
+    potjevanvriendsem001: bewaardVriendenpotje('vriendsem001', 'Sem', 1, ['c2c4'], false) } }),
+  'schaakheld-potje': JSON.stringify({ v: 2, games: { 1: { level: 1, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null, started: 1, updated: 1, patXP: 0 } } }),
+  'schaakheld-rondjes': JSON.stringify({ scan: { round: 2, earned: 6 } }) };
+const OOK_LANG = { schaakheld1: POTJES_DOC, 'schaakheld-samen': JSON.stringify({ v: 1, games: { potjevanvriendmaxi01: MAXI_BIEDT } }),
+  'schaakheld-rondjes': JSON.stringify({ trucs: { round: 2, earned: 6 } }) };
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[6.9] ' + W + 'x' + H + ': met vier dingen bezig en met een regel Ook nog van twee regels staan de kaart (een remise-aanbod), één regel, de weekregel en beide spelknoppen boven de tabbalk';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      for (const [soort, extra] of [['vier dingen bezig', ${JSON.stringify(VIER_BEZIG)}], ['Ook nog in twee regels', ${JSON.stringify(OOK_LANG)}]]) {
+        await vers(${W}, ${H}, extra);
+        await page.waitForTimeout(2500);
+        const tab = await rect('.tabbar');
+        for (const s of ['#verder', '#weekStrip', '#spelTurbo', '#spelVriend']) {
+          const r = await rect(s);
+          check(n, soort + ': ' + s + ' boven de tabbalk', !!r && !!tab && r.top >= 0 && r.bottom <= tab.top + 0.5);
+        }
+        const v = await page.evaluate(() => { const e = document.getElementById('verder'); return {
+          tekst: e ? e.textContent : '', ook: e ? [...e.querySelectorAll('button')].filter(b => /^\\s*Ook nog/.test(b.textContent))
+            .map(b => b.getBoundingClientRect().height) : [] }; });
+        check(n, soort + ': de kaart is het remise-aanbod van Maximiliaantje', /Maximiliaantje biedt remise aan/.test(v.tekst));
+        check(n, soort + ': precies één regel Ook nog', v.ook.length === 1);
+        if (soort === 'Ook nog in twee regels') check(n, 'testopzet: de regel Ook nog neemt twee regels', v.ook.length === 1 && v.ook[0] > 46);
+      }` });
+}
+
 function draai(geval) {
   const code = 'async page => {' + HELPERS + '\ntry {' + geval.code + '\n} catch (e) { for (const r of ' +
     JSON.stringify(geval.regels) + ') check(r, "uitzondering: " + (e && e.message ? e.message.split("\\n")[0] : e), false); }\n' +

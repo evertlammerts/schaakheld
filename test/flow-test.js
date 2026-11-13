@@ -1098,6 +1098,45 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
 /* ---------- woorden, QR en koppelen: end-to-end op de fake server ---------- */
 (async function () {
   closeModal(); /* het naamvenster uit de reset-flow */
+
+  /* ---------- compat: de getelde vriendenpotjes (set.potjes) ----------
+     Een profiel van de release van nu kent de set niet. Elk vriendenpotje telt per kind
+     één keer, ook met gekoppelde apparaten; de set groeit alleen en voegt samen als vereniging. */
+  var releaseDoc = function () {
+    var d = { v: 2, epoch: 0,
+      cnt: { xp: { r1: 520 }, stars: { r1: 40 }, wins: { r1: 3 }, 'c.gamesPlayed': { r1: 9 }, 'c.winsOnline': { r1: 2 } },
+      set: { badges: { winst: true, potje: true } },
+      lww: { name: { v: 'Oscar', t: 1 }, theme: { v: 'oceaan', t: 1 } }, max: { best: 6, goal: {} }, log: {},
+      friends: { vriendevert1: { k: 'geheimvanoscarenevert-' + 'x'.repeat(20), naam: 'Evert', t: 5, weg: false, host: true, since: 1792324800351 } },
+      loc: { streak: 0, lastLevel: 2, weekSeen: curWeek() } };
+    d.cnt['wk.' + curWeek() + '.online'] = { r1: 1 };
+    return d;
+  };
+  await nogNiet('[6.7] compat: een profiel van de release van nu laadt zonder verlies en krijgt een lege set getelde vriendenpotjes', function (check) {
+    var d = normDoc(releaseDoc()), v = viewFromDoc(d);
+    check('punten, tellers, trofeeën, de week en de vriend blijven', v.xp === 520 && v.stars === 40 && v.wins === 3 && v.c.gamesPlayed === 9 &&
+      v.c.winsOnline === 2 && wkGet(curWeek(), 'online', v) === 1 && v.badges.winst === true && v.badges.potje === true &&
+      v.name === 'Oscar' && v.theme === 'oceaan' && v.friends.vriendevert1.naam === 'Evert');
+    check('een lege set getelde vriendenpotjes', !!d.set.potjes && typeof d.set.potjes === 'object' && Object.keys(d.set.potjes).length === 0);
+  });
+  await nogNiet('[6.7] compat: samenvoegen met een profiel zonder de set houdt de getelde vriendenpotjes, in beide richtingen, en verliest niets', function (check) {
+    var oud = normDoc(releaseDoc()), raw = releaseDoc();
+    raw.set.potjes = { abcdefghijkl: true };
+    raw.cnt.xp.t2 = 30;
+    var nieuw = normDoc(raw), ab = mergeDoc(nieuw, oud), ba = mergeDoc(oud, nieuw);
+    check('de set blijft, in beide richtingen', !!ab.set.potjes && ab.set.potjes.abcdefghijkl === true && !!ba.set.potjes && ba.set.potjes.abcdefghijkl === true);
+    check('en verder niets kwijt', viewFromDoc(ab).xp === 550 && viewFromDoc(ba).xp === 550 && viewFromDoc(ab).c.winsOnline === 2 && viewFromDoc(ba).c.winsOnline === 2);
+  });
+  await nogNiet('[6.7] compat: de set houdt alleen echte potje-ids, en komt mee door koppelen, bewaren en laden', async function (check) {
+    var raw = releaseDoc();
+    raw.set.potjes = { abcdefghijkl: true, '<b>x</b>': true, kort: true, nietwaar1234: 'ja' };
+    check('alleen het echte id', !!normDoc(raw).set.potjes && JSON.stringify(Object.keys(normDoc(raw).set.potjes)) === '["abcdefghijkl"]');
+    var a = maakApparaat('Oscar');
+    a.ev('applyRemoteDoc(' + JSON.stringify(raw) + ')');
+    check('na koppelen staat het id in het profiel', a.get('!!DOC.set.potjes && DOC.set.potjes.abcdefghijkl === true'));
+    var b = herlaad(a);
+    check('ook na bewaren en laden', b.get('!!DOC.set.potjes && DOC.set.potjes.abcdefghijkl === true'));
+  });
   ok('woorden: 1024 uniek geladen', WOORDEN.length === 1024 && new Set(WOORDEN).size === 1024);
   var qm = QR.qrMatrix('test');
   ok('qr: matrix met zoek- en timingpatronen', qm.length === 21 && qm[0][0] === 1 &&
@@ -2463,6 +2502,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
 
   await orakelZelftest();
   await orakelFlow();
+  await orakelFlow6();
   print('\norakel: ' + ORAKEL.nogNiet + ' nog niet gebouwd, ' + ORAKEL.gebouwd + ' gebouwd');
   print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');
 })().catch(function (e) { print('ASYNC EXCEPTION: ' + e + '\n' + (e && e.stack)); print('\nFLOW SUITE ABORTED'); });
