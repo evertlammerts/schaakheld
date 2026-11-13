@@ -2641,20 +2641,24 @@ function telEinde(u, rol, fid) {
   if ((u.soort === 'mat' && u.door === rol) || (u.soort === 'opgave' && u.door !== rol)) bump('c.winsOnline', 1);
   return xp;
 }
-/* Wat dit apparaat telde, per potje: het staat bij het paar tot de eindkaart van dat potje het zei, ook over een
-   herlading, en ook als het pas telt na de opening van de kaart. */
-function telRegelVan(fid, id) { const t = paarVan(fid).telKaart[id]; return t ? eindTelRegel(t.xp, t.doelGehaald, true) : ''; }
-function telKaartGezegd(fid, id) {
+/* Wat dit apparaat telde, per potje en met het einde dat telde: het staat bij het paar tot een eindkaart van dat einde
+   het zei, ook over een herlading, en ook als het pas telt na de opening van de kaart. Een kaart van een ander einde
+   (een tik die niet telde) zegt het niet en laat het staan. */
+function telVoorKaart(fid, id, einde) { const t = paarVan(fid).telKaart[id]; return t && t.uitslag && zelfdeEinde(einde, t.uitslag) ? t : null; }
+function telRegelVan(fid, id, einde) { const t = telVoorKaart(fid, id, einde); return t ? eindTelRegel(t.xp, t.doelGehaald, true) : ''; }
+function telKaartGezegd(fid, id, einde) {
+  if (!telVoorKaart(fid, id, einde)) return;
   const p = paarVan(fid);
-  if (!(id in p.telKaart)) return;
   delete p.telKaart[id];
   bewaarPaar(fid, p);
 }
 function eindkaartTelling(fid, id) {
   const el = $('ekTel');
   if (!el || !session || !session.over || (session.oud ? session.oud.gameId : MP && MP.gameId) !== id) return;
-  el.innerHTML = telRegelVan(fid, id);
-  telKaartGezegd(fid, id);
+  const regel = telRegelVan(fid, id, session.eindeOpKaart);
+  if (!regel) return;
+  el.innerHTML = regel;
+  telKaartGezegd(fid, id, session.eindeOpKaart);
 }
 /* met een weggehaalde vriend gaat ook de lijst van wat dit apparaat met hem telde */
 function vergeetGeteld(fid) {
@@ -2679,7 +2683,7 @@ function telPaar(fid, rol) {
     const u = g.uitslag || p.telBij[g.id] || null;
     DOC.loc.geteld = Object.assign({}, DOC.loc.geteld, { [fid]: getelde(fid).concat([g.id]).slice(-GETELD_PER_VRIEND) });
     const doelVoor = goalDoneWeek(curWeek()), xp = u ? telEinde(u, rol, fid) : 0;
-    p.telKaart = Object.assign({}, p.telKaart, { [g.id]: { xp, doelGehaald: !doelVoor && goalDoneWeek(curWeek()) } });
+    p.telKaart = Object.assign({}, p.telKaart, { [g.id]: { xp, doelGehaald: !doelVoor && goalDoneWeek(curWeek()), uitslag: u ? { soort: u.soort, door: u.door } : null } });
     const oud = Object.keys(p.telKaart);
     if (oud.length > VORIGE_MAX + 1) delete p.telKaart[oud[0]];
     nu.push(g.id);
@@ -7868,10 +7872,12 @@ function endGame(st, stil) {
     if (opDeStaat) {
       /* het kind ziet het einde: dat schrijft het in de staat, zodat zijn andere apparaten de kaart niet meer tonen */
       const rol = myRole(P.friends[eindPaar]), winnaar = st.result === 'd' ? null : st.result === session.myColor ? rol : andereRol(rol);
-      pasToe(eindPaar, { soort: 'bekijk', id: oudId, einde: { soort: st.reason, winnaar } });
-      const tel = paarVan(eindPaar).telKaart[oudId];
-      endGameOnline(st, drawTxt, false, tel ? tel.xp : 0, telRegelVan(eindPaar, oudId));
-      telKaartGezegd(eindPaar, oudId);
+      const einde = { soort: st.reason, winnaar };
+      pasToe(eindPaar, { soort: 'bekijk', id: oudId, einde });
+      session.eindeOpKaart = einde;
+      const tel = telVoorKaart(eindPaar, oudId, einde);
+      endGameOnline(st, drawTxt, false, tel ? tel.xp : 0, telRegelVan(eindPaar, oudId, einde));
+      telKaartGezegd(eindPaar, oudId, einde);
       return;
     }
     const doelVoor = goalDoneWeek(curWeek());

@@ -4144,4 +4144,19 @@ async function orakelTwee6() {
     check('allebei', melding() === 'een | twee');
   });
 
+
+  await regel('[6.6] AF7 allebei geven op en Mees is eerst: de kaart die de tik van Fien liet zien, neemt niet wat het echte einde verdiende; haar verbeterde kaart noemt de XP, en daarna staat het nergens meer', async function (check) {
+    const { mees, fien, fid } = await liveVriendenpotje(false);
+    for (let i = 0; i < 22; i++) await zetUit(RUSTIG, mees, fien);
+    const h = volgendeSchrijf(fien, 'houd');
+    await geefOp(fien);
+    check('testopzet: Fien zag meteen haar eigen opgave', /Mees wint dit potje/.test(tekstVan(fien, 'eindkaart')));
+    await geefOp(mees);
+    h.laat();
+    await tijd(20000);
+    const ef = tekstVan(fien, 'eindkaart');
+    check('testopzet: de verbeterde kaart staat er', /Jij wint dit potje!/.test(ef) && ef.indexOf('Mees gaf net eerder op dan jij') >= 0);
+    check('de verbeterde kaart noemt de XP', /\+30\s*XP/.test(ef));
+    check('daarna staat het nergens meer', fien.get('JSON.stringify(paarVan(' + JSON.stringify(fid) + ').telKaart || {})') === '{}');
+  });
 }
