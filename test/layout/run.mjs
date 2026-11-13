@@ -343,6 +343,45 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
       }` });
 }
 
+/* plan.md 2.6: de hint is op elk veld te zien (de twee kleuren van een gekozen veld) en klopt hoogstens drie keer;
+   plan.md 2.4: een uitleg die verder gaat dan het vak, vervaagt aan de voet */
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n6 = '[2.6] ' + W + 'x' + H + ': de hint is een tweekleurig teken op een licht veld, ook op een donker veld, en klopt hoogstens drie keer';
+  const n4 = '[2.4] ' + W + 'x' + H + ': een uitleg die verder gaat dan het vak onder het bord, vervaagt aan de voet';
+  GEVALLEN.push({ regels: [n6, n4], code: `
+      const n6 = ${JSON.stringify(n6)}, n4 = ${JSON.stringify(n4)};
+      const kleuren = new Set();
+      for (const [fen, ans] of [['1k1r1b1r/1pp1ppp1/p1n4p/3pq1n1/8/P1NBP3/1PPPQPPP/R1B1R1K1 w - - 0 1', 'f2f4'], ['6k1/8/8/8/8/3N4/8/6K1 w - - 0 1', 'd3e5']]) {
+        await vers(${W}, ${H});
+        await startOefening('trucs');
+        await page.evaluate(([fen, ans]) => { const S = parseFEN(fen);
+          session.S = S; session.task = { S, type: 'vork', answers: [{ m: legalMoves(S).find(x => moveKey(x) === ans), info: null }], hintUsed: false };
+          session.phase = 'puzzle'; session.tries = 0; BD.mode = 'puzzle'; renderBoard();
+          setActions([{ label: '💡 Hint', cls: 'plain small hint', fn: trucHint, id: 'hint' }]); }, [fen, ans]);
+        await klikTekst(/Hint/);
+        await page.waitForTimeout(300);
+        const h = await page.evaluate(() => { const c = document.querySelector('#board .cell.hero-pc'); if (!c) return null; const s = getComputedStyle(c);
+          return { veld: c.classList.contains('dark') ? 'donker' : 'licht', bg: s.backgroundColor, schaduw: s.boxShadow, keer: s.animationIterationCount }; });
+        check(n6, 'testopzet: een veld met de hint', !!h);
+        if (h) kleuren.add(h.veld);
+        if (h) check(n6, h.veld + ' veld: zacht geel, inkt en wit, drie keer (' + JSON.stringify(h) + ')',
+          h.bg === 'rgb(255, 237, 184)' && h.schaduw.indexOf('rgb(23, 69, 111)') >= 0 && h.schaduw.indexOf('rgb(255, 255, 255)') >= 0 && h.keer === '3');
+      }
+      check(n6, 'testopzet: een licht en een donker veld', kleuren.size === 2);
+      await vers(${W}, ${H});
+      await startOefening('scan');
+      await page.evaluate(() => { const S = parseFEN('6k1/8/8/p7/8/8/8/R2N2K1 w - - 0 1'), extra = sqFromAlg('a1');
+        session.S = S; session.task = { S, type: 'mobility', targets: legalMoves(S).filter(m => m.from === extra).map(m => m.to), extra, details: null };
+        session.phase = 'marking'; BD.marks.clear(); BD.glow.clear(); BD.glow.add(extra); BD.mode = 'mark'; renderBoard(); });
+      for (const v of ['b2', 'f1', 'a7', 'd1', 'h8']) await veld(v);
+      await klikTekst(/Klaar/);
+      await page.waitForTimeout(1200);
+      const u = await page.evaluate(() => { const e = document.querySelector('#taskBox .e-body'); if (!e) return null; const s = getComputedStyle(e);
+        return { meer: e.scrollHeight > e.clientHeight + 1, masker: s.webkitMaskImage || s.maskImage || 'none' }; });
+      check(n4, 'testopzet: een uitleg die verder gaat dan het vak', !!u && u.meer);
+      if (u) check(n4, 'de voet vervaagt (' + u.masker + ')', u.masker !== 'none' && /gradient/.test(u.masker));` });
+}
+
 /* plan.md 5.5: een reden over een stuk is een punt in de lijst, ook met twee zinnen; de eerste zin
    past helemaal onder het bord, de tweede mag scrollen. De langste: SG13 voor het paard en SG20. */
 for (const [W, H] of [[375, 553], [360, 640]]) {
