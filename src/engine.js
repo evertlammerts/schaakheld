@@ -1716,12 +1716,22 @@ function trucTask(line) {
   }
   return task;
 }
-/* De zetten van een Red je stuk-opdracht die het stuk ook echt redden (geen "anders", geen ruil), langs hun lijn
-   niets verliezen (lijn en zoektocht zeggen geen verlies) en geen mat in een toelaten: die zijn ook goed. Met per zet hoeveel het beste antwoord meer oplevert. */
+/* De zetten van een Red je stuk-opdracht die het stuk ook echt redden (geen "anders", geen ruil), geen mat in een
+   toelaten en niet verliezen: goed, met per zet hoeveel het beste antwoord meer oplevert. De voorraad maakt dit
+   vooraf, dus diep: een lijn van zes halve zetten en een zoektocht van twee keer `nodes` posities. Een ondiepe lijn
+   stopt midden in een ruil en een ondiepe zoektocht ziet een verlies niet; verloren is wat beide diepe maten zeggen. */
 function ookGoed(task, nodes) {
   const S = task.S, uit = [], nu = evalWhite(S);
-  const lijnen = task.answers.map(a => { clearTT(); return { a: a.m, l: lineAfter(S, a.m, nodes) }; });
-  const beste = lijnen.reduce((x, y) => y.l.punten > x.l.punten ? y : x);
+  const diep = m => {
+    clearTT();
+    const l = lijnDiep(S, m, nodes, 6);
+    makeMove(S, m);
+    clearTT();
+    const zoek = -think(S, 600000, 30, { nodes: 2 * nodes }).score - nu;
+    unmakeMove(S);
+    return { verlies: Math.max(l.material, zoek), punten: l.punten };
+  };
+  const beste = task.answers.map(a => ({ a: a.m, d: diep(a.m) })).reduce((x, y) => y.d.punten > x.d.punten ? y : x);
   for (const m of legalMoves(S)) {
     if (task.answers.some(a => moveKey(a.m) === moveKey(m))) continue;
     const k = saveKind(S, m, task.hang.sq).kind;
@@ -1730,12 +1740,27 @@ function ookGoed(task, nodes) {
     const mat = !gameStatus(S).over && !!mateReply(S);
     unmakeMove(S);
     if (mat) continue;
-    clearTT();
-    const l = lineAfter(S, m, nodes);
-    /* verloren is alleen wat lijn en zoektocht allebei zeggen: de lijn stopt soms midden in een ruil */
-    if (Math.max(l.material, l.white - nu) <= -150) continue;
-    uit.push({ m, n: Math.max(0, beste.l.punten - l.punten), ans: beste.a });
+    const d = diep(m);
+    if (d.verlies <= -150) continue;
+    uit.push({ m, n: Math.max(0, beste.d.punten - d.punten), ans: beste.a });
   }
+  return uit;
+}
+/* Een lijn van `halve` halve zetten na m, elk de beste zet van een zoektocht van `nodes` posities, met de slagen aan
+   het eind uitgerekend: wat wit dan meer of minder heeft dan nu, in materiaal en in de punten van de tabel. Mat in de
+   lijn telt als alles. */
+function lijnDiep(S, m, nodes, halve) {
+  const m0 = material(S), p0 = pointsOf(S), gezet = [m];
+  makeMove(S, m);
+  for (let i = 0; i < halve && !gameStatus(S).over; i++) {
+    const z = think(S, 600000, 30, { nodes }).m;
+    if (!z) break;
+    makeMove(S, z);
+    gezet.push(z);
+  }
+  const st = gameStatus(S), mat = st.over && st.reason === 'mat' ? (st.result === 'w' ? MATE : -MATE) : null;
+  const uit = { material: mat != null ? mat : forcedMaterial(S) - m0, punten: mat != null ? mat : (st.over ? pointsOf(S) : forcedPoints(S)) - p0 };
+  for (let i = gezet.length; i > 0; i--) unmakeMove(S);
   return uit;
 }
 /* The trick types the stock can serve. */
@@ -1770,7 +1795,7 @@ if (typeof module !== 'undefined') {
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
-    winnableCaptures, slagVeld, nullMoved, ookGoed, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
+    winnableCaptures, slagVeld, nullMoved, ookGoed, lijnDiep, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
     repetitions, positionKey, pointsOf, forcedPoints, TABEL, lossStart, ALARM_NODES, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
     POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };

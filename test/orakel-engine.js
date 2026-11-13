@@ -182,6 +182,24 @@
     check('de lijn telt ook in punten van de tabel (' + l.punten + ')', typeof l.punten === 'number' && l.punten % 100 === 0);
   });
 
+  /* de schaakcoach, met een zoektocht van 600.000 posities en een lijn van zes halve zetten: deze tien reddingen
+     verliezen later 2,25 tot 6 punten, dus ze zijn niet ook goed */
+  regel('[5.5] Red je stuk: tien reddingen die later toch verliezen, staan niet bij de zetten die ook goed zijn', function (check) {
+    if (!check('er is een voorraad STUK_POOL', typeof STUK_POOL !== 'undefined' && STUK_POOL.length > 0)) return;
+    for (const [bord, k] of [['1r1qkb1r/1pp2pp1/p1np3p/3np3/3Pb3/3QBN2/PPPKPPPP/2R2B1R w', 'd3a3'], ['r2qkb1r/ppp2ppp/3p1n2/4p3/3nPB2/2N4b/PPP2PPP/R2QKBR1 w', 'f1b5'],
+      ['r2qkb1r/ppp1nppp/2np4/4N3/2b2BP1/3PP3/PPP2P1P/R2QKB1R w', 'd1f3'], ['r1b1kb1r/ppp1npp1/2n3qp/4p3/2N1P3/2QPp2N/PPP1BPPP/R4RK1 w', 'g2g4'],
+      ['r1b1kb1r/ppp2ppp/2nqp3/3p4/3Pn3/2Q1BN2/PPP1PPPP/2KR1BNR w', 'c3a3'], ['r2qkb1r/pppb1ppp/n2pp3/8/3PN3/4nN2/PPP1PPPP/R2QKB1R w', 'd1d3'],
+      ['2k1r2r/1ppb1ppp/p2bp1qn/1B1pn1B1/3P4/2N2N2/PPP2PPP/R2Q1K1R w', 'b5e2'], ['2k1r2r/1ppb1ppp/p2bp1qn/1B1pn1B1/3P4/2N2N2/PPP2PPP/R2Q1K1R w', 'b5a4'],
+      ['r1b2rk1/pppnqppp/4p3/3p4/1b1PnN2/1BN1P3/PPPQ1PPP/R1B1K2R w', 'd2d1'], ['r1bqkb1r/ppp2ppp/2np4/1N2p3/3P4/4n2N/PPP1PPPP/R2QKB1R w', 'd1d3']]) {
+      const r = STUK_POOL.find(function (x) { return x.indexOf(bord + '|') === 0; });
+      if (!check(bord + ': staat in de voorraad', !!r)) continue;
+      const t = E.trucTask(r);
+      check(bord + ' ' + k + ': niet ook goed', !!t && !t.ook.some(function (o) { return E.moveKey(o.m) === k; }));
+    }
+    const S = E.parseFEN('6k1/8/8/3n4/8/8/8/3R2K1 w - - 0 1'), voor = E.toFEN(S), l = E.lijnDiep(S, zet(S, 'd1d5'), 5000, 6);
+    check('een lange lijn: Txd5 wint een paard (' + JSON.stringify(l) + ')', l.punten === 300 && l.material === 320 && E.toFEN(S) === voor);
+  });
+
   /* het alarm komt voor de zet op het bord staat: met een grens aan posities wacht het kind nooit lang; is de grens op,
      dan geen alarm voor die zet */
   regel('[5.4] het alarm kijkt naar hoogstens ALARM_NODES posities, en is de grens op, dan is er geen alarm', function (check) {
