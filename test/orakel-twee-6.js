@@ -3749,4 +3749,131 @@ async function orakelTwee6() {
     check('de eindkaart: Fien wint, met de zin waarom haar opgeven niet telde', /Jij wint dit potje!/.test(ef) && ef.indexOf('Mees gaf net eerder op dan jij, dus jouw opgeven telt niet.') >= 0);
     check('haar tellers: een gespeeld potje en een winst', tellers(fien) === nogEen(voorF, true));
   });
+
+  /* ================= een remise-aanbod dat op de eigen zet wacht ================= */
+
+  const BOD_ZIN = 'Doe nu je zet: daarmee bied je Mees remise aan.';
+  const eerstLegaal = function (x) { return x.get('(function () { var l = legalMoves(session.S).filter(function (m) { return moveKey(m).length === 4 && !isCapture(session.S, m); }); return moveKey(l[0]); })()'); };
+  const bodInStaat = async function (x, fid) { const s = (await busInhoud(x, fid, await potjesbus(x, fid))).spel; return s && s.bod ? s.bod.door : null; };
+  const fienAanZetMetBod = async function () {
+    const { mees, fien, fid } = await liveVriendenpotje(false);
+    await potjeTot(mees, fien, 21, fien);
+    await biedRemise(fien);
+    return { mees, fien, fid, rolFien: fien.get('myRole(P.friends[' + JSON.stringify(fid) + '])') };
+  };
+
+  await regel('[6.4] AF5 Fien biedt op haar eigen beurt remise aan en zet: het aanbod gaat met de zet mee', async function (check) {
+    const { fien, fid, rolFien } = await fienAanZetMetBod();
+    check('de strook', zegt(fien).indexOf(BOD_ZIN) >= 0);
+    zet(fien, eerstLegaal(fien));
+    await tijd(3000);
+    check('het aanbod staat in de staat, van Fien', (await bodInStaat(fien, fid)) === rolFien);
+  });
+
+  await regel('[6.4] AF5 Fien biedt op haar eigen beurt remise aan, doet de app dicht en opent het potje later: de strook zegt het weer, en de zet draagt het aanbod', async function (check) {
+    let { mees, fien, fid, rolFien } = await fienAanZetMetBod();
+    stopApparaat(fien);
+    await tijd(3600000);
+    fien = await opent(fien);
+    fien.tik('verderKaart');
+    await wacht(3000);
+    check('de strook zegt het weer', opSpeelscherm(fien) && zegt(fien).indexOf(BOD_ZIN) >= 0);
+    zet(fien, eerstLegaal(fien));
+    await tijd(3000);
+    check('het aanbod staat in de staat, van Fien', (await bodInStaat(mees, fid)) === rolFien);
+  });
+
+  await regel('[6.4] AF5 Fien biedt op haar telefoon remise aan, maar zet op haar tablet: op de telefoon is het aanbod weg', async function (check) {
+    let { mees, fien, fid } = await fienAanZetMetBod();
+    fien.tik('backBtn');
+    await wacht();
+    let tab = await tweedeApparaat(fien);
+    await tijd(20000);
+    for (let i = 0; i < 4 && tab.open(); i++) { tab.ev('closeModal()'); await wacht(); }
+    tab.tik('verderKaart');
+    await wacht(3000);
+    check('testopzet: de tablet is aan zet zonder aanbod', magZetten(tab) && zegt(tab).indexOf(BOD_ZIN) < 0);
+    zet(tab, eerstLegaal(tab));
+    await tijd(5000);
+    check('testopzet: de zet van de tablet staat, zonder aanbod', (await bodInStaat(mees, fid)) === null);
+    await tijd(20000);
+    if (!opSpeelscherm(mees)) { mees.tik('verderKaart'); await wacht(2000); }
+    check('testopzet: Mees ziet de zet van de tablet en is aan zet', magZetten(mees));
+    zet(mees, eerstLegaal(mees));
+    await tijd(20000);
+    fien.tik('verderKaart');
+    await wacht(3000);
+    check('testopzet: de telefoon is weer aan zet', magZetten(fien));
+    check('geen zin over het aanbod', zegt(fien).indexOf(BOD_ZIN) < 0);
+    zet(fien, eerstLegaal(fien));
+    await tijd(3000);
+    check('en de zet draagt geen aanbod', (await bodInStaat(mees, fid)) === null);
+  });
+
+  /* ================= elk veld van het geheugen van een potje heeft een plek ================= */
+
+  /* wat het geheugen van een potje met opzet niet bewaart, en waarom */
+  const IN_GEHEUGEN = {
+    ws: 'de lijn naar de kamer', open: 'de lijn naar de kamer', weg: 'de lijn naar de kamer', pogingen: 'de lijn naar de kamer',
+    backoff: 'de lijn naar de kamer', reTimer: 'een timer', wachtTimer: 'een timer', stabielTimer: 'een timer', startTimer: 'een timer',
+    peerOn: 'of de ander nu in de kamer is', peerWeg: 'of de ander nu in de kamer is', zetZonderNet: 'een zet zonder lijn, de kamer vraagt de stand opnieuw',
+    beantwoord: 'welke stand de kamer al beantwoordde', nietBewaard: 'of het laatste bewaren lukte',
+    over: 'volgt bij het hervatten uit de uitslag', bekend: 'volgt bij het hervatten uit de uitslag',
+    revMine: 'revanche geldt alleen in deze kamer', revTheirs: 'revanche geldt alleen in deze kamer',
+    anderKent: 'de groet van de ander, die komt bij elke verbinding opnieuw', anderStaten: 'de groet van de ander', hun: 'de groet van de ander',
+    hunBewijzen: 'de groet van de ander', hunGroet: 'de groet van de ander', bewezen: 'de groet van de ander', bewezenFid: 'de groet van de ander',
+    bewijzenP: 'de eigen bewijzen, opnieuw uit de vrienden', neeGezegd: 'vrienden worden per verblijf in de kamer',
+    vr: 'vrienden worden per verblijf in de kamer; alleen het nummer van het verblijf gaat mee', vrMaakt: 'vrienden worden per verblijf in de kamer',
+    vrSleutel: 'vrienden worden per verblijf in de kamer',
+    startBericht: 'een begin zonder antwoord valt weg met de verbinding',
+    eindKop: 'een zin over een tik in deze run', eindRegel: 'een zin over een tik in deze run', zetVervallen: 'een zin over een tik in deze run',
+    allebeiOp: 'een zin over een tik in deze run', zinNet: 'een zin over een tik in deze run', lijnWasWeg: 'een zin over de lijn in deze run'
+  };
+  const plekVan = function (app) {
+    return JSON.parse(app.get('(function () { var bewaard = {}; Object.keys(SAMEN_VELDEN).forEach(function (k) { bewaard[SAMEN_VELDEN[k].mp] = true; });' +
+      ' return JSON.stringify(Object.keys(MP).map(function (k) { return [k, bewaard[k] ? "bewaard" : k === "paar" ? "paar" : null]; })); })()'));
+  };
+  const zonderPlek = function (lijst) { return lijst.filter(function (kv) { return !kv[1] && !(kv[0] in IN_GEHEUGEN); }).map(function (kv) { return kv[0]; }); };
+
+  await regel('[4.1] AD2 een potje in de kamer door al zijn gebeurtenissen: elk veld van het geheugen wordt bewaard of staat met reden in de lijst van wat met opzet in het geheugen blijft', async function (check) {
+    const a = maakApparaat('Lotte'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    await speel(a, b, 'e2e4');
+    await speel(a, b, 'e7e5');
+    const wit = aanZet(a, b), zwart = wit === a ? b : a;
+    await biedRemise(zwart);
+    await wacht();
+    if (wit.open()) { tikTekst(wit, 'Nee, doorspelen'); await wacht(); }
+    const velden = plekVan(a).concat(plekVan(b));
+    await geefOp(wit);
+    await wacht(3000);
+    tikTekst(a, 'Vrienden worden');
+    tikTekst(b, 'Vrienden worden');
+    await wacht(3000);
+    const na = plekVan(a).concat(plekVan(b)), alles = velden.concat(na);
+    check('testopzet: het potje liep, met een aanbod, en eindigde', velden.length > 20 && a.get('!!MP.result'));
+    check('elk veld heeft een plek' + (zonderPlek(alles).length ? ': zonder plek ' + zonderPlek(alles).join(', ') : ''), zonderPlek(alles).length === 0);
+  });
+
+  await regel('[4.1] AD2 een potje op de staat door al zijn gebeurtenissen: elk veld van het geheugen wordt bewaard, komt uit het paar, of staat met reden in de lijst van wat met opzet in het geheugen blijft', async function (check) {
+    const { mees, fien } = await liveVriendenpotje(false);
+    await potjeTot(mees, fien, 21, fien);
+    await biedRemise(fien);
+    zet(fien, eerstLegaal(fien));
+    await wacht(3000);
+    zet(mees, eerstLegaal(mees));
+    await wacht(3000);
+    zet(fien, eerstLegaal(fien));
+    await wacht();
+    await biedRemise(fien);
+    await wacht(3000);
+    const velden = plekVan(mees).concat(plekVan(fien));
+    await geefOp(mees);
+    await wacht(3000);
+    const alles = velden.concat(plekVan(mees), plekVan(fien));
+    check('testopzet: een potje op de staat, met aanbiedingen, dat eindigde', mees.get('!!MP.paar') && mees.get('!!MP.result'));
+    check('het paar staat er', alles.some(function (kv) { return kv[0] === 'paar' && kv[1] === 'paar'; }));
+    check('elk veld heeft een plek' + (zonderPlek(alles).length ? ': zonder plek ' + zonderPlek(alles).join(', ') : ''), zonderPlek(alles).length === 0);
+    check('het aanbod op de eigen zet zit niet in het geheugen', !alles.some(function (kv) { return kv[0] === 'bodMetZet'; }));
+  });
 }
