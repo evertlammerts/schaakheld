@@ -673,8 +673,6 @@
   .eindkaart.klein .ek-badge { flex-direction: row; gap: 6px; width: auto; }
   .eindkaart.klein .ek-be { font-size: 28px; }
   .eindkaart .ek-btns { display: flex; flex-direction: column; gap: 8px; width: min(100%, 280px); }
-  /* wat je de volgende keer nakijkt: een zachte regel onder het moment */
-  .eindkaart .ek-moment p.ek-volgende { display: block; margin-top: 2px; font-size: var(--fs-cap); line-height: 1.25; color: var(--text-quiet); }
   /* op een klein bord: de twee knoppen naast elkaar, het moment als een alinea, kleinere trofeeën */
   .eindkaart.klein .ek-btns.twee { flex-direction: row; width: 100%; }
   .eindkaart.klein .ek-btns.twee .btn { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 0 8px; white-space: nowrap; }
@@ -684,6 +682,9 @@
   .eindkaart.klein .ek-trofee { gap: 2px 12px; }
   .eindkaart.klein .ek-be { font-size: 24px; }
   .eindkaart.klein small { display: block; font-size: var(--fs-cap); line-height: 1.25; }
+  /* wat je de volgende keer nakijkt: een zachte regel in een eigen blok onder het moment; na de regels van een
+     klein bord, want die maken elke alinea van het moment even sterk inline */
+  .eindkaart .ek-moment p.ek-volgende { display: block; margin-top: 2px; font-size: var(--fs-cap); line-height: 1.25; color: var(--text-quiet); }
   .play-bottom {
     grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
     padding: 0 var(--g) 8px;

@@ -850,11 +850,14 @@ for (const [W, H] of [[375, 553], [360, 640], [375, 647]]) {
         const st = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble');
         return { sh: e.scrollHeight, ch: e.clientHeight, kaart: r(e), titel: r(e.querySelector('h2')), knoppen: [...e.querySelectorAll('.ek-btns .btn')].map(r),
           trofeeen: e.querySelectorAll('.ek-badge').length, volgende: !!e.querySelector('.ek-volgende'), tekst: e.innerText,
+          eigenBlok: (() => { const v = e.querySelector('.ek-volgende'), t = v && v.previousElementSibling; return !!v && !!t && getComputedStyle(v).display === 'block' &&
+            v.getBoundingClientRect().top >= t.getBoundingClientRect().bottom - 0.5; })(),
           strook: b.textContent, strookPast: st.scrollHeight <= st.clientHeight + 1 && b.getBoundingClientRect().bottom <= st.getBoundingClientRect().bottom + 0.5 }; });
       check(n, 'testopzet: de eindkaart met vier dingen erop en het moment met zijn regel', !!k && k.trofeeen === 4 && k.volgende);
       if (!k) return;
       const binnenKaart = x => x.top >= k.kaart.top - 0.5 && x.bottom <= k.kaart.bottom + 0.5;
       check(n, 'niets scrolt in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
+      check(n, 'de regel voor de volgende keer staat in een eigen blok onder het moment', k.eigenBlok);
       check(n, 'de titel in beeld', binnen(k.titel, ${W}, ${H}) && binnenKaart(k.titel));
       check(n, 'beide knoppen in de kaart, in beeld en minstens 44 hoog', k.knoppen.length === 2 && k.knoppen.every(x => binnen(x, ${W}, ${H}) && binnenKaart(x) && x.h >= 44));
       check(n, 'de moe-zin staat niet op de kaart', k.tekst.indexOf('Ik ben moe') < 0);
