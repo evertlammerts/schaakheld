@@ -3265,4 +3265,83 @@ async function orakelTwee6() {
     check('binnen vijf tellen staan het potje en de eerste zet van Mees in de staat', !!z && z.state === 'potje' && z.zetten === 1);
     check('en Fien ziet de zet', fien.get('session.S.hist.length') === 1);
   });
+
+  /* ================= een aanbod van de staat waar nooit een antwoord op kwam, is geen potje ================= */
+
+  /* Fien zegt ja op de uitnodiging en is weg voordat Mees op Spelen! tikt: haar antwoord op het aanbod komt nooit */
+  const zonderAntwoord = async function () {
+    zetDatum('2026-11-16T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await wordenVrienden(mees, fien);
+    await nodigUit(mees);
+    await fien.ev('friendPoll()');
+    await wacht();
+    fien.tik('invJa');
+    await wacht();
+    stopApparaat(fien);
+    await metVasteWillekeur(0, async function () { mees.tik('mpGo'); await wacht(); });
+    zet(mees, RUSTIG[0]);
+    await wacht();
+    return { mees, fien, fid };
+  };
+
+  await regel('[6.5] AA8 de gast antwoordde nooit op het aanbod en Mees opent de app opnieuw: het begin en zijn zet vervallen, en een uitdaging voor later gaat wel naar de staat', async function (check) {
+    let { mees, fien, fid } = await zonderAntwoord();
+    check('testopzet: er wacht een begin zonder antwoord', mees.get('paarVan(' + JSON.stringify(fid) + ').rij.some(function (a) { return a.soort === "start"; })') &&
+      !(await busZegt(mees, fid)));
+    mees = herlaad(mees);
+    await tijd(20000);
+    if (mees.open()) mees.ev('closeModal()');
+    await daagUit(mees, fid, 'Fien');
+    await tijd(20000);
+    check('de uitdaging staat in de staat', ((await busZegt(mees, fid)) || {}).state === 'uitdaging');
+    check('er wacht niets meer bij Mees', mees.get('paarVan(' + JSON.stringify(fid) + ').rij.length') === 0);
+  });
+
+  await regel('[6.5] AA8 de gast antwoordde nooit op het aanbod en Mees gaat naar huis: geen potje op de kaart, Uitnodigen in de rij, en niets wacht of staat in de staat', async function (check) {
+    const { mees, fien, fid } = await zonderAntwoord();
+    mees.tik('backBtn');
+    await tijd(5000);
+    check('geen potje met Fien op de kaart', !/je potje met Fien/i.test(tekstVan(mees, 'verder')) && !vriendenpotjeMet(mees, fid));
+    mees.tik('tabVrienden');
+    check('de rij biedt Uitnodigen', /Uitnodigen/.test(vriendRijTekst(mees, fid)) && !/aan zet/.test(vriendRijTekst(mees, fid)));
+    check('niets wacht en niets staat in de staat', mees.get('paarVan(' + JSON.stringify(fid) + ').rij.length') === 0 && !(await busZegt(mees, fid)));
+  });
+
+  await regel('[6.5] AA8 de gast antwoordde nooit op het aanbod en de kamer is weg: Mees hoort dat het potje stopte, en niets wacht of staat in de staat', async function (check) {
+    const { mees, fid } = await zonderAntwoord();
+    const kamer = mees.get('MP.room');
+    geenNetwerk(mees);
+    await wacht(3000);
+    delete __server.wsrooms[kamer];
+    weerNetwerk(mees);
+    await tijd(30000);
+    check('Mees hoort dat het potje met Fien stopte', /Het potje met Fien is gestopt/.test(mees.scherm()));
+    if (mees.open()) mees.ev('closeModal()');
+    await wacht();
+    check('geen potje met Fien op de kaart', !/je potje met Fien/i.test(tekstVan(mees, 'verder')) && !vriendenpotjeMet(mees, fid));
+    check('niets wacht en niets staat in de staat', mees.get('paarVan(' + JSON.stringify(fid) + ').rij.length') === 0 && !(await busZegt(mees, fid)));
+  });
+
+  await regel('[6.5] AA8 de antwoorden van de gast raken kwijt en Mees gaat naar huis: Fien gaat ook van het bord, en geen van beiden heeft een potje', async function (check) {
+    zetDatum('2026-11-16T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await wordenVrienden(mees, fien);
+    await nodigUit(mees);
+    await fien.ev('friendPoll()');
+    await wacht();
+    fien.tik('invJa');
+    await wacht();
+    fien.ev('var __ga = mpSend; mpSend = function (m) { if (m && (m.t === "volgt" || m.t === "kamer")) return; return __ga(m); }');
+    await metVasteWillekeur(200, async function () { mees.tik('mpGo'); await wacht(); });
+    zet(fien, RUSTIG[0]);
+    await wacht();
+    check('testopzet: beide borden open, Fien volgt maar Mees hoorde het niet', opSpeelscherm(mees) && opSpeelscherm(fien) && fien.get('!!MP.paar') && !(await busZegt(mees, fid)));
+    check('testopzet: de zet van Fien wacht op het begin', fien.get('paarVan(' + JSON.stringify(fid) + ').rij.length') === 1 && fien.get('session.S.hist.length') === 1);
+    mees.tik('backBtn');
+    await tijd(5000);
+    check('Fien is ook van het bord', !opSpeelscherm(fien) && !fien.get('!!MP'));
+    check('geen van beiden heeft een potje', !vriendenpotjeMet(mees, fid) && !vriendenpotjeMet(fien, fid) && !(await busZegt(mees, fid)) &&
+      fien.get('paarVan(' + JSON.stringify(fid) + ').rij.length') === 0);
+  });
 }

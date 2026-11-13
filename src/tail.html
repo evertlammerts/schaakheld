@@ -1317,7 +1317,8 @@ function mpConnect() {
     if (MP.weg) return;
     /* de server zegt dat de kamer niet (meer) bestaat; geen netwerk geeft geen reden */
     if (ev && ev.code === 1008 && ev.reason === 'onbekend' && MP.S) {
-      if (samenLoopt()) { if (vriendZonderKamer()) kamerWegVriend(); else mpKamerWeg(); return; }
+      /* een aanbod van de staat zonder antwoord is nog geen potje van het paar: het stopt met de kamer */
+      if (samenLoopt()) { if (vriendZonderKamer() && !startOnbeantwoord()) kamerWegVriend(); else mpKamerWeg(); return; }
       /* een afgelopen potje: de kamer mag weg; een einde dat dit kind nog niet zag, blijft bewaard; tussen vrienden
          staat het einde in de staat van het paar */
       const gezien = !MP.result || MP.shown, id = MP.gameId, vriend = opStaat();
@@ -1347,6 +1348,8 @@ function mpSend(obj) {
 
 function mpStop(stil) {
   if (!MP) return;
+  /* een aanbod van de staat waar de gast nooit op antwoordde, is geen potje: het vervalt met deze verbinding */
+  if (startOnbeantwoord()) startVervalt();
   MP.weg = true;
   if (MP.reTimer) clearTimeout(MP.reTimer); /* geen herverbind-timer die na een nieuw potje afgaat */
   if (MP.wachtTimer) clearTimeout(MP.wachtTimer);
@@ -1480,6 +1483,9 @@ function mpMsg(m) {
       break;
     case 'kamer':
       if (MP.host && MP.paar && m.id === MP.gameId) startNietGevolgd(MP.paar, m.id);
+      break;
+    case 'startWeg':
+      startWeg(m.id);
       break;
     case 'kijk':
       /* bij een potje op de staat van het paar zegt de kamer alleen: kijk nu */
@@ -1621,6 +1627,26 @@ function startGevolgd(fid, id) {
     if (a && a.wachtOpGast) { delete a.wachtOpGast; bewaarPaar(fid, p); }
     await werkRijAf(fid);
   });
+}
+function startOnbeantwoord() { return !!MP && MP.host && !!MP.paar && !!MP.startBericht && MP.startBericht.id === MP.gameId; }
+/* De gastheer laat een aanbod zonder antwoord vallen: de gast hoort het, en wat voor dit potje wachtte, vervalt. */
+function startVervalt() {
+  const fid = MP.paar, id = MP.gameId;
+  mpSend({ t: 'startWeg', id });
+  MP.startBericht = null;
+  MP.paar = null;
+  inPaarSlotMetScherm(fid, async () => {
+    const p = paarVan(fid);
+    p.rij = p.rij.filter(a => a.id !== id);
+    bewaarPaar(fid, p);
+  });
+}
+/* de gastheer liet het aanbod vallen voordat het in de staat stond: voor de gast is het ook geen potje */
+function startWeg(id) {
+  if (MP.host || !MP.paar || id !== MP.gameId) return;
+  const inBeeld = samenInBeeld();
+  mpStop(true);
+  if (inBeeld) { goHome(); showToast(ANDERS_GEWORDEN); }
 }
 /* de gast volgt niet: wat voor dit potje op de staat wachtte, vervalt, en de zetten gaan voortaan door de kamer */
 function startNietGevolgd(fid, id) {
@@ -7566,6 +7592,8 @@ $('friendList').addEventListener('click', e => {
 $('backBtn').addEventListener('click', () => {
   /* een vriendenpotje blijft staan en de verbinding ook: de ander merkt niets */
   if (session && session.online && !session.over) {
+    /* een aanbod van de staat zonder antwoord is nog geen potje: naar huis laat het vallen */
+    if (startOnbeantwoord()) { mpStop(true); goHome('spelen'); return; }
     const gelukt = bewaarSamen();
     goHome('spelen', gelukt ? null : () => showToast(SAMEN_NIET_BEWAARD, false, 6000));
     return;
