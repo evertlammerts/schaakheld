@@ -219,13 +219,48 @@
     check('alleen de loper: gekozen, maar niet gebruikt', !!alleenGemist && alleenGemist.moveNo === 2 && alleenGemist.used === false);
   });
 
-  regel('[5.8] sleutelmoment: de volgorde, mat eerst, dan het grootste verlies, een verlies voor een goede zet, de grootste winst', function (check) {
+  regel('[5.8] sleutelmoment: van wat Turbo liet liggen eerst een mat, dan het grootste verlies; een verlies voor een goede zet; de grootste winst', function (check) {
     const S = speel(E.newGame(), ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'f8c5', 'b1c3', 'g8f6']);
     const kies = function (ms) { const k = E.chooseMoment(ms.map(function (x, i) { return Object.assign({ ply: 2 * i, moveNo: i + 1, sq: 'h8', punish: 'h8h8' }, x); }), S); return k && k.moveNo; };
     check('mat gaat voor een groot verlies', kies([{ kind: 'hang', loss: 900 }, { kind: 'mat', loss: E.MATE }]) === 2);
     check('het grootste verlies', kies([{ kind: 'hang', loss: 300 }, { kind: 'hang', loss: 500 }]) === 2);
     check('een verlies gaat voor een goede zet', kies([{ kind: 'goed', gain: 900 }, { kind: 'hang', loss: 300 }]) === 2);
     check('van twee goede zetten de grootste winst', kies([{ kind: 'goed', gain: 300 }, { kind: 'goed', gain: 500 }]) === 2);
+  });
+
+  /* wat Turbo echt deed gaat voor wat hij had kunnen doen: eerst een verlies dat hij gebruikte (het grootste), dan een mat
+     die hij liet liggen, dan een verlies dat hij liet liggen, dan een goede zet */
+  regel('[5.8] sleutelmoment: de volgorde: een gebruikt verlies, een gemiste mat, een gemist verlies, een goede zet', function (check) {
+    /* na elke zet van wit speelt zwart de zet in ANTWOORD; een moment is gebruikt als zijn straf die zet is */
+    const S = speel(E.newGame(), ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'f8c5', 'b1c3', 'g8f6']);
+    const ANTWOORD = ['e7e5', 'b8c6', 'f8c5', 'g8f6'];
+    const kies = function (ms) {
+      const k = E.chooseMoment(ms.map(function (x, i) { return Object.assign({ ply: 2 * i, moveNo: i + 1, sq: 'h8', punish: x.gebruikt ? ANTWOORD[i] : 'h8h8' }, x); }), S);
+      return k && k.moveNo;
+    };
+    check('een gebruikt verlies gaat voor een gemiste mat', kies([{ kind: 'mat', loss: E.MATE }, { kind: 'hang', loss: 300, gebruikt: true }]) === 2);
+    check('een gemiste mat gaat voor een groter gemist verlies', kies([{ kind: 'hang', loss: 900 }, { kind: 'mat', loss: E.MATE }]) === 2);
+    check('een gemist verlies gaat voor een goede zet', kies([{ kind: 'goed', gain: 900 }, { kind: 'hang', loss: 300 }]) === 2);
+    check('van de gebruikte verliezen het grootste, ook als een gemist verlies groter is',
+      kies([{ kind: 'hang', loss: 300, gebruikt: true }, { kind: 'hang', loss: 900 }, { kind: 'hang', loss: 500, gebruikt: true }]) === 3);
+    check('een mat die Turbo gaf, gaat voor elk ander gebruikt verlies', kies([{ kind: 'hang', loss: 900, gebruikt: true }, { kind: 'mat', loss: E.MATE, gebruikt: true }]) === 2);
+  });
+
+  /* een truc telt als gebruikt alleen als Turbo de zet van de truc speelde; slaat hij met een ander stuk, dan liet hij hem liggen */
+  regel('[5.8] sleutelmoment: een truc is alleen gebruikt als Turbo de zet van de truc speelde', function (check) {
+    const S = speel(E.newGame(), ['e2e4', 'd7d5', 'e4d5', 'd8d5']);
+    const k = E.chooseMoment([{ kind: 'truc', truc: 'vork', loss: 300, ply: 2, moveNo: 2, sq: 'd5', punish: 'g8f6' }], S);
+    check('Dxd5 slaat op het veld, maar is niet de truc: niet gebruikt (' + JSON.stringify(k) + ')', !!k && k.used === false);
+    const j = E.chooseMoment([{ kind: 'truc', truc: 'vork', loss: 300, ply: 2, moveNo: 2, sq: 'd5', punish: 'd8d5' }], S);
+    check('Dxd5 als de zet van de truc: gebruikt', !!j && j.used === true);
+  });
+
+  /* "na het terugslaan" alleen als het kind terugsloeg */
+  regel('[5.8] sleutelmoment: bij een slag weet het moment of het kind terugsloeg', function (check) {
+    const ja = E.keyMoment(speel(E.parseFEN('6k1/8/b7/8/8/8/2P5/3Q2K1 w - - 0 1'), ['d1d3', 'a6d3', 'c2d3']));
+    check('Dd3, Lxd3, cxd3: teruggeslagen (' + JSON.stringify(ja) + ')', !!ja && ja.kind === 'slag' && ja.used === true && ja.terug === true);
+    const nee = E.keyMoment(speel(E.parseFEN('6k1/8/b7/8/8/8/2P5/3Q2K1 w - - 0 1'), ['d1d3', 'a6d3', 'g1f2']));
+    check('Dd3, Lxd3, Kf2: niet teruggeslagen (' + JSON.stringify(nee) + ')', !!nee && nee.kind === 'slag' && nee.used === true && nee.terug === false);
   });
 
   regel('[5.8] sleutelmoment: in een potje dat het kind won met mat is de matzet geen gemiste mat', function (check) {

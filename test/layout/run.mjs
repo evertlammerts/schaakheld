@@ -823,6 +823,9 @@ for (const [W, H] of KLEIN) {
   });
 }
 
+/* het moment met de langste tekst, en dat met de langste regel voor de volgende keer */
+const VOLSTE_MOMENTEN = [['het langste moment', { kind: 'hang', moveNo: 23, stuk: 'loper', naar: 'f4', defender: 'loper', piece: 'paard', sq: 'e5', points: 3, used: true }],
+  ['de langste regel voor de volgende keer', { kind: 'hang', moveNo: 23, piece: 'paard', sq: 'e5', points: 3, used: true }]];
 /* de volste eindkaart van een potje tegen Turbo past op een klein bord: een winst op een niveau
    waar Turbo moe is, drie nieuwe trofeeën, een nieuw level en het langste moment met de regel eronder; de zin
    dat Turbo moe is staat in de strook, heel, en het bord blijft staan */
@@ -830,10 +833,11 @@ for (const [W, H] of [[375, 553], [360, 640], [375, 647]]) {
   const n = '[2.5] ' + W + 'x' + H + ': de volste eindkaart tegen Turbo past: titel, moment, trofeeën en beide knoppen in beeld, Turbo\'s moe-zin heel in de strook';
   GEVALLEN.push({ regels: [n], code: `
       const n = ${JSON.stringify(n)};
+      for (const [wat, moment] of ${JSON.stringify(VOLSTE_MOMENTEN)}) {
       await vers(${W}, ${H});
       await startPotje();
       const voor = await rect('#board');
-      await page.evaluate(() => { const S = session.S;
+      await page.evaluate(moment => { const S = session.S;
         for (let i = 0; i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
         ensureDay(); P.day.winsByLvl[session.level] = 2;
         const lang = LEVELS.reduce((a, b, i) => b.n.length > LEVELS[a].n.length ? i : a, 1);
@@ -842,8 +846,8 @@ for (const [W, H] of [[375, 553], [360, 640], [375, 647]]) {
         /* precies drie nieuwe trofeeën en een level: alle andere staan al getoond */
         BADGES.forEach(b => { P.badges[b.id] = true; if (!P.shownBadges.includes(b.id)) P.shownBadges.push(b.id); });
         BADGES.slice(0, 3).forEach(b => bewaarVoorKaart(b));
-        sleutelMoment = () => ({ kind: 'hang', moveNo: 23, stuk: 'loper', naar: 'f4', defender: 'loper', piece: 'paard', sq: 'e5', points: 3, used: true });
-        endGame({ over: true, result: 'w', reason: 'mat' }); });
+        sleutelMoment = () => moment;
+        endGame({ over: true, result: 'w', reason: 'mat' }); }, moment);
       await page.waitForTimeout(1600);
       const k = await page.evaluate(() => { const e = document.getElementById('eindkaart'); if (!e || !e.getClientRects().length) return null;
         const r = x => { const b = x.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, w: b.width, h: b.height }; };
@@ -853,16 +857,17 @@ for (const [W, H] of [[375, 553], [360, 640], [375, 647]]) {
           eigenBlok: (() => { const v = e.querySelector('.ek-volgende'), t = v && v.previousElementSibling; return !!v && !!t && getComputedStyle(v).display === 'block' &&
             v.getBoundingClientRect().top >= t.getBoundingClientRect().bottom - 0.5; })(),
           strook: b.textContent, strookPast: st.scrollHeight <= st.clientHeight + 1 && b.getBoundingClientRect().bottom <= st.getBoundingClientRect().bottom + 0.5 }; });
-      check(n, 'testopzet: de eindkaart met vier dingen erop en het moment met zijn regel', !!k && k.trofeeen === 4 && k.volgende);
-      if (!k) return;
+      check(n, wat + ', testopzet: de eindkaart met vier dingen erop en het moment met zijn regel', !!k && k.trofeeen === 4 && k.volgende);
+      if (!k) continue;
       const binnenKaart = x => x.top >= k.kaart.top - 0.5 && x.bottom <= k.kaart.bottom + 0.5;
-      check(n, 'niets scrolt in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
-      check(n, 'de regel voor de volgende keer staat in een eigen blok onder het moment', k.eigenBlok);
-      check(n, 'de titel in beeld', binnen(k.titel, ${W}, ${H}) && binnenKaart(k.titel));
-      check(n, 'beide knoppen in de kaart, in beeld en minstens 44 hoog', k.knoppen.length === 2 && k.knoppen.every(x => binnen(x, ${W}, ${H}) && binnenKaart(x) && x.h >= 44));
-      check(n, 'de moe-zin staat niet op de kaart', k.tekst.indexOf('Ik ben moe') < 0);
-      check(n, 'de moe-zin staat heel in de strook (' + k.strook + ')', /^Ik ben moe van al dat verliezen/.test(k.strook) && k.strookPast);
-      check(n, 'het bord bleef staan', gelijk(voor, await rect('#board')));` });
+      check(n, wat + ': niets scrolt in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
+      check(n, wat + ': de regel voor de volgende keer staat in een eigen blok onder het moment', k.eigenBlok);
+      check(n, wat + ': de titel in beeld', binnen(k.titel, ${W}, ${H}) && binnenKaart(k.titel));
+      check(n, wat + ': beide knoppen in de kaart, in beeld en minstens 44 hoog', k.knoppen.length === 2 && k.knoppen.every(x => binnen(x, ${W}, ${H}) && binnenKaart(x) && x.h >= 44));
+      check(n, wat + ': de moe-zin staat niet op de kaart', k.tekst.indexOf('Ik ben moe') < 0);
+      check(n, wat + ': de moe-zin staat heel in de strook (' + k.strook + ')', /^Ik ben moe van al dat verliezen/.test(k.strook) && k.strookPast);
+      check(n, wat + ': het bord bleef staan', gelijk(voor, await rect('#board')));
+      }` });
 }
 
 /* het speelscherm van een oefening is precies zo hoog als het venster, en het vak onder het bord past precies om

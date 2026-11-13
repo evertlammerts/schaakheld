@@ -1399,6 +1399,33 @@ async function orakelFlow5() {
     check('de zin (' + onder5(a) + ')', onder5(a) === 'Dan pakt Turbo je dame op f8. Zoek een veilig veld.');
   });
 
+  /* een slag die Turbo gebruikte: "na het terugslaan" alleen als het kind terugsloeg */
+  await regel('[5.8] de eindkaart, een slag: "Na het terugslaan was je ... kwijt." als het kind terugsloeg, anders "Ook met terugslaan was je ... kwijt."', async function (check) {
+    const a = nieuwKind();
+    for (const [terug, zin] of [[true, 'Zet 1: je dame op d3 kon ik slaan met mijn loper. Na het terugslaan was je 6 punten kwijt.'],
+      [false, 'Zet 1: je dame op d3 kon ik slaan met mijn loper. Ook met terugslaan was je 6 punten kwijt.']]) {
+      const t = a.get('momentTekst({ kind: "slag", moveNo: 1, piece: "dame", sq: "d3", by: "loper", verlies: 600, loss: 600, used: true, terug: ' + terug + ' }).tekst');
+      check((terug ? 'teruggeslagen' : 'niet teruggeslagen') + ' (' + t + ')', t === zin);
+    }
+  });
+  /* een stuk dat al onbeschermd stond, krijgt zijn eigen regel voor de volgende keer */
+  await regel('[5.8] de eindkaart, een stuk dat al onbeschermd stond: "Volgende keer: kijk voor elke zet welke stukken van jou aangevallen worden."', async function (check) {
+    const a = nieuwKind();
+    const v = a.get('momentTekst({ kind: "hang", moveNo: 5, piece: "paard", sq: "e5", points: 3, used: true }).volgende');
+    check('de regel (' + v + ')', v === 'Volgende keer: kijk voor elke zet welke stukken van jou aangevallen worden.');
+    const z = a.get('momentTekst({ kind: "hang", self: true, moveNo: 5, piece: "paard", sq: "g5", points: 3, used: true }).volgende');
+    check('een stuk dat er zelf heen ging houdt zijn regel (' + z + ')', z === 'Volgende keer: kijk of je stuk daar gedekt is.');
+  });
+  /* Turbo pakt met een pion die promoveert: wie terugpakt, pakt de dame die er dan staat */
+  await regel('[5.8] Turbo pakt met een promotie: "Pak je terug, dan pak ik nog eens.", niet "maar 1 punt"', async function (check) {
+    const a = nieuwKind();
+    await startPotje(a, 2);
+    const v = vraagOpen5(a, '2r3k1/8/8/8/8/8/1p5K/2RQ4 b - - 0 30', 'b2c1q');
+    tikVeld(a, v.koning);
+    await wacht(2000);
+    check('de strook (' + strook5(a) + ')', strook5(a) === 'Ik pak je toren op c1 (5 punten). Pak je terug, dan pak ik nog eens.');
+  });
+
   /* ---------- 5.5: Trucendoos, mat in twee (T9 tot T11) ---------- */
 
   const MAT2_5 = 'k7/8/2K5/8/8/8/8/7R w - - 0 1';
@@ -1933,8 +1960,8 @@ async function orakelFlow5() {
       'Zet 1: je loper ging naar c1. Toen dekte niemand je paard op e5 meer, en ik pakte het (3 punten).', 'Volgende keer: kijk wat je stuk nog dekte, voor je het wegzet.'],
     ['een truc die Turbo liet liggen', 'start', ['g1h3', 'e7e6', 'e2e3', 'b8a6', 'f1c4', 'd7d5'], 'f2f3', false,
       'Zet 4: na je zet kon ik een vork zetten. Ik zag het niet.', 'Volgende keer: kijk wat ik na je zet kan aanvallen.'],
-    ['een gedekt stuk dat een goedkoper stuk slaat, gebruikt', '6k1/8/b7/8/8/8/2P5/3Q2K1 w - - 0 1', [], 'd1d3', true,
-      'Zet 1: je dame op d3 kon ik slaan met mijn loper. Na het terugslaan was je 6 punten kwijt.', 'Volgende keer: tel eerst wie er terug kan slaan.'],
+    ['een gedekt stuk dat een goedkoper stuk slaat, gebruikt en teruggeslagen', '6k1/8/b7/8/8/8/2P5/3Q2K1 w - - 0 1', [], 'd1d3', true,
+      'Zet 1: je dame op d3 kon ik slaan met mijn loper. Na het terugslaan was je 6 punten kwijt.', 'Volgende keer: tel eerst wie er terug kan slaan.', { terug: true }],
     ['hetzelfde, niet gebruikt', '6k1/8/b7/8/8/8/2P5/3Q2K1 w - - 0 1', [], 'd1d3', false,
       'Zet 1: je dame op d3 kon ik slaan met mijn loper. Dat had je 6 punten gekost.', 'Volgende keer: tel eerst wie er terug kan slaan.'],
     ['een verloren ruil die Turbo liet liggen: het paard, niet de pion', '6k1/8/4p3/3n4/8/8/8/3R2K1 w - - 0 1', [], 'd1d5', false,
@@ -1950,7 +1977,7 @@ async function orakelFlow5() {
       const u = a.get('(function () { var S = ' + (g[1] === 'start' ? 'newGame()' : 'parseFEN(' + JSON.stringify(g[1]) + ')') + ';' +
         JSON.stringify(g[2]) + '.forEach(function (k) { makeMove(S, legalMoves(S).find(function (m) { return moveKey(m) === k; })); });' +
         ' var k = momentVan(S, legalMoves(S).find(function (m) { return moveKey(m) === ' + JSON.stringify(g[3]) + '; }));' +
-        ' if (!k) return null; k.used = ' + g[4] + '; var t = momentTekst(k); return t.tekst + "|" + t.volgende; })()');
+        ' if (!k) return null; k.used = ' + g[4] + '; Object.assign(k, ' + JSON.stringify(g[7] || {}) + '); var t = momentTekst(k); return t.tekst + "|" + t.volgende; })()');
       check('de zin en de regel (' + u + ')', u === g[5] + '|' + g[6]);
     });
   }

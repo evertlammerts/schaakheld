@@ -1618,12 +1618,16 @@ function momentUsed(k, S) {
   if (k.kind === 'gemist' || k.kind === 'goed') return true;
   const u = S && S.hist[k.ply + 1];
   if (!u) return false;
+  /* een truc speelt hij met de zet van de truc; slaat hij met iets anders, dan liet hij de truc liggen */
+  if (k.kind === 'truc') return moveKey(u.m) === k.punish;
   return moveKey(u.m) === k.punish || (!!u.cap && !!k.sq && alg(u.m.to) === k.sq);
 }
-/* The one moment for the end card: a mate first, otherwise the largest loss
-   that Turbo used, otherwise the largest one he let pass, otherwise the best
-   good move; on a tie the earliest, since the first big mistake usually
-   decided the game. A pattern move counts as good only when it worked: after
+/* The one moment for the end card: what Turbo really did goes before what he
+   could have done. First the largest loss he used (a mate he gave is the
+   largest), then a mate he let pass, then the largest loss he let pass, then
+   the best good move; on a tie the earliest, since the first big mistake
+   usually decided the game. A capture that Turbo used knows whether the child
+   took back on that square with its next move. A pattern move counts as good only when it worked: after
    the child's next move White is at least 2 points better than before it,
    because the detector also sees forks that win nothing. */
 function chooseMoment(moments, S) {
@@ -1633,11 +1637,14 @@ function chooseMoment(moments, S) {
     const gain = materialAt(S, x.ply + 3) - materialAt(S, x.ply);
     return gain >= 200 ? Object.assign({}, x, { gain, used: true }) : null;
   }).filter(Boolean);
-  const mate = ms.find(x => x.kind === 'mat' && x.used) || ms.find(x => x.kind === 'mat');
-  if (mate) return mate;
+  const grootste = xs => xs.reduce((a, b) => (b.kind === 'mat' ? Infinity : b.loss) > (a.kind === 'mat' ? Infinity : a.loss) ? b : a);
   const lost = ms.filter(x => x.kind !== 'goed'), usedLost = lost.filter(x => x.used);
-  const pool = usedLost.length ? usedLost : lost;
-  if (pool.length) return pool.reduce((a, b) => b.loss > a.loss ? b : a);
+  const pick = usedLost.length ? grootste(usedLost) : lost.find(x => x.kind === 'mat') || (lost.length ? grootste(lost) : null);
+  if (pick) {
+    if (pick.kind !== 'slag' || !pick.used) return pick;
+    const u = S && S.hist[pick.ply + 2];
+    return Object.assign({}, pick, { terug: !!u && !!u.cap && alg(u.m.to) === pick.sq });
+  }
   const good = ms.filter(x => x.kind === 'goed');
   return good.length ? good.reduce((a, b) => b.gain > a.gain ? b : a) : null;
 }

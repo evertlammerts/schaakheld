@@ -2628,12 +2628,16 @@ function momentUsed(k, S) {
   if (k.kind === 'gemist' || k.kind === 'goed') return true;
   const u = S && S.hist[k.ply + 1];
   if (!u) return false;
+  /* een truc speelt hij met de zet van de truc; slaat hij met iets anders, dan liet hij de truc liggen */
+  if (k.kind === 'truc') return moveKey(u.m) === k.punish;
   return moveKey(u.m) === k.punish || (!!u.cap && !!k.sq && alg(u.m.to) === k.sq);
 }
-/* The one moment for the end card: a mate first, otherwise the largest loss
-   that Turbo used, otherwise the largest one he let pass, otherwise the best
-   good move; on a tie the earliest, since the first big mistake usually
-   decided the game. A pattern move counts as good only when it worked: after
+/* The one moment for the end card: what Turbo really did goes before what he
+   could have done. First the largest loss he used (a mate he gave is the
+   largest), then a mate he let pass, then the largest loss he let pass, then
+   the best good move; on a tie the earliest, since the first big mistake
+   usually decided the game. A capture that Turbo used knows whether the child
+   took back on that square with its next move. A pattern move counts as good only when it worked: after
    the child's next move White is at least 2 points better than before it,
    because the detector also sees forks that win nothing. */
 function chooseMoment(moments, S) {
@@ -2643,11 +2647,14 @@ function chooseMoment(moments, S) {
     const gain = materialAt(S, x.ply + 3) - materialAt(S, x.ply);
     return gain >= 200 ? Object.assign({}, x, { gain, used: true }) : null;
   }).filter(Boolean);
-  const mate = ms.find(x => x.kind === 'mat' && x.used) || ms.find(x => x.kind === 'mat');
-  if (mate) return mate;
+  const grootste = xs => xs.reduce((a, b) => (b.kind === 'mat' ? Infinity : b.loss) > (a.kind === 'mat' ? Infinity : a.loss) ? b : a);
   const lost = ms.filter(x => x.kind !== 'goed'), usedLost = lost.filter(x => x.used);
-  const pool = usedLost.length ? usedLost : lost;
-  if (pool.length) return pool.reduce((a, b) => b.loss > a.loss ? b : a);
+  const pick = usedLost.length ? grootste(usedLost) : lost.find(x => x.kind === 'mat') || (lost.length ? grootste(lost) : null);
+  if (pick) {
+    if (pick.kind !== 'slag' || !pick.used) return pick;
+    const u = S && S.hist[pick.ply + 2];
+    return Object.assign({}, pick, { terug: !!u && !!u.cap && alg(u.m.to) === pick.sq });
+  }
   const good = ms.filter(x => x.kind === 'goed');
   return good.length ? good.reduce((a, b) => b.gain > a.gain ? b : a) : null;
 }
@@ -7718,7 +7725,8 @@ function resolvePredict(sq) {
    voor Super Turbo en een kind dat al sterk is alleen dat er iets dreigt. */
 function turboZin(S, m) {
   if (isCapture(S, m)) {
-    const t = m.flags === 'e' ? m.to + 16 : m.to, x = S.board[t].toLowerCase(), y = S.board[m.from].toLowerCase();
+    /* wie terugpakt, pakt het stuk dat er na de zet staat: na een promotie de nieuwe dame */
+    const t = m.flags === 'e' ? m.to + 16 : m.to, x = S.board[t].toLowerCase(), y = m.promo || S.board[m.from].toLowerCase();
     makeMove(S, m);
     const terug = legalMoves(S).some(z => z.to === m.to && S.board[z.to]), back = terug ? seeSquare(S, m.to) : 0;
     unmakeMove(S);
@@ -8027,12 +8035,13 @@ function momentTekst(k) {
         volgende: 'Volgende keer: kijk of je stuk daar gedekt is.' };
       if (k.defender) return { kop, tekst: zet + 'je ' + k.stuk + ' ging naar ' + k.naar + '. Toen dekte niemand je ' + k.piece + ' op ' + k.sq + ' meer' + pakte(),
         volgende: 'Volgende keer: kijk wat je stuk nog dekte, voor je het wegzet.' };
-      return { kop, tekst: zet + 'je ' + k.piece + ' op ' + k.sq + ' stond onbeschermd' + pakte(), volgende: 'Volgende keer: kijk of je stuk daar gedekt is.' };
+      return { kop, tekst: zet + 'je ' + k.piece + ' op ' + k.sq + ' stond onbeschermd' + pakte(), volgende: 'Volgende keer: kijk voor elke zet welke stukken van jou aangevallen worden.' };
     case 'truc': return { kop, tekst: zet + 'na je zet kon ik een ' + k.truc + ' zetten.' + (!k.used ? ' Ik zag het niet.' :
       k.doelen && k.doelen.length >= 2 ? ' Mijn ' + k.stukTurbo + ' viel je ' + k.doelen[0] + ' en je ' + k.doelen[1] + ' tegelijk aan.' : ''),
       volgende: 'Volgende keer: kijk wat ik na je zet kan aanvallen.' };
     case 'slag': return { kop, tekst: zet + 'je ' + k.piece + ' op ' + k.sq + ' kon ik slaan met mijn ' + k.by + '.' +
-      (k.used ? ' Na het terugslaan was je ' + verlies + ' kwijt.' : ' Dat had je ' + verlies + ' gekost.'), volgende: 'Volgende keer: tel eerst wie er terug kan slaan.' };
+      (!k.used ? ' Dat had je ' + verlies + ' gekost.' : k.terug ? ' Na het terugslaan was je ' + verlies + ' kwijt.' : ' Ook met terugslaan was je ' + verlies + ' kwijt.'),
+      volgende: 'Volgende keer: tel eerst wie er terug kan slaan.' };
     case 'mat': return { kop, tekst: zet + 'na je zet kon ik mat zetten, met ' + k.strafNaam + '.', volgende: 'Volgende keer: kijk eerst of ik schaak kan geven.' };
     case 'ruil': return { kop, tekst: zet + 'je sloeg ' + hetNaam(k.geslagen || 'pion') + ' op ' + k.sq + ', maar die was gedekt.' +
       (k.used ? ' Na het terugslaan was je ' + verlies + ' kwijt.' : ' Ik had kunnen terugslaan.'), volgende: 'Volgende keer: tel eerst wie er terug kan slaan.' };
