@@ -4163,6 +4163,17 @@ async function mpStuurStart() {
   mp.startBericht = { t: 'start', jij: mp.myColor === 'w' ? 'b' : 'w', n: mp.gameNo, id: mp.gameId, paar: bewijs };
   mpSend(mp.startBericht);
   mpBeginGame();
+  if (mp.paar) startHerhalen(mp);
+}
+/* Een aanbod van de staat waar nog geen antwoord op kwam (het antwoord raakte kwijt), gaat elke drie tellen opnieuw:
+   tot dan wachten de eerste zetten van allebei. */
+function startHerhalen(mp) {
+  clearTimeout(mp.startTimer);
+  mp.startTimer = setTimeout(() => {
+    if (MP !== mp || !mp.startBericht || mp.startBericht.id !== mp.gameId || !samenLoopt()) return;
+    mpSend(mp.startBericht);
+    startHerhalen(mp);
+  }, 3000);
 }
 
 function mpOnStart(m) {
@@ -5296,8 +5307,15 @@ async function werkRijAf(fid) {
     }
     const p = paarVan(fid), nu = klokNu(fid);
     const a = p.rij[0], basis = p.staat || { v: 2, seq: p.hoogste, spel: null, vorige: [] };
-    /* een potje dat in de kamer begint, komt pas in de staat als de gast zegt dat hij volgt */
-    if (a.soort === 'start' && a.wachtOpGast) { wachtOm[fid] = 'potje'; return; }
+    /* een potje dat in de kamer begint, komt pas in de staat als de gast zegt dat hij volgt; staat dat potje niet meer
+       op het bord, dan vervalt het begin */
+    if (a.soort === 'start' && a.wachtOpGast) {
+      if (MP && MP.paar === fid && MP.gameId === a.id) { wachtOm[fid] = 'potje'; return; }
+      if (a.nr) afloopVan[a.nr] = { afloop: 'vervallen', waarom: 'het potje staat niet meer op het bord', actie: a };
+      p.rij.shift();
+      bewaarPaar(fid, p);
+      continue;
+    }
     const gedaan = alGedaan(basis, a, rol, p.merk), r = gedaan ? null : staatNa(basis, Object.assign({}, a, { merk: p.merk }), rol, nu);
     if (!gedaan && !r.past && a.nr && gelezenVoor !== a.nr && a.id && !(basis.spel && basis.spel.id === a.id) && !basis.vorige.some(v => v.id === a.id)) {
       gelezenVoor = a.nr;
@@ -5306,7 +5324,7 @@ async function werkRijAf(fid) {
     }
     /* een handeling in het potje dat in de kamer loopt en dat de gastheer nog niet schreef, wacht daarop: zijn kijk
        na het schrijven leest het hier */
-    if (!gedaan && !r.past && a.id && MP && MP.paar === fid && MP.gameId === a.id && !(basis.spel && basis.spel.id === a.id) &&
+    if (!gedaan && !r.past && a.soort !== 'start' && a.id && MP && MP.paar === fid && MP.gameId === a.id && !(basis.spel && basis.spel.id === a.id) &&
       !basis.vorige.some(v => v.id === a.id)) { wachtOm[fid] = 'potje'; return; }
     /* een potje dat in de kamer begint, wacht tot de vriend het vorige einde kent: dat schrijft zijn apparaat zo */
     if (!gedaan && !r.past && a.totVrij && r.vriendWeetNiet) { wachtOm[fid] = 'potje'; return; }
@@ -5379,7 +5397,8 @@ function paarVeranderd(fid, voor, uitkomsten) {
     MP.zinNet = false;
     if (samenInBeeld() && !session.over) zegBeurt();
   }
-  if (JSON.stringify(voor) === JSON.stringify(na)) return;
+  /* het potje op het bord kwam nooit in de staat, en daar staat nu iets anders: dat is het potje van dit paar */
+  if (JSON.stringify(voor) === JSON.stringify(na)) { if (anderPotjeStaat(fid, na)) vriendPotjeVerder(fid, null, null, { geweigerd: MP.gameId }); return; }
   const rol = myRole(f), ev = {}, vsp = voor && voor.spel, nsp = na.spel;
   /* Een tik van het kind in deze run die toch niet telde: het scherm volgt de staat, en een regel zegt wat er
      gebeurde. Een zet na het einde, of een zet die een ander apparaat van dit kind al deed, kent zijn eigen weg. */
@@ -5412,8 +5431,7 @@ function paarVeranderd(fid, voor, uitkomsten) {
   if (MP && MP.paar === fid && MP.gameId) {
     const g = MP.gameId, rec = recNa.find(x => x.gameId === g);
     const bekeken = nsp && nsp.id === g ? !!nsp.bekeken[rol] : na.vorige.some(v => v.id === g && v.bekeken && v.bekeken[rol]);
-    const ander = !!nsp && nsp.id !== g && (nsp.fase === 'potje' || nsp.fase === 'uitdaging') && !na.vorige.some(v => v.id === g);
-    if (!rec && ander && samenInBeeld() && !session.over) ev.geweigerd = g;
+    if (!rec && anderPotjeStaat(fid, na)) ev.geweigerd = g;
     else if (!rec && !(samenInBeeld() && session.over)) { if (bekeken) ev.stil = g; else ev.weg = g; }
     else if (rec && rec.result && rec.vriendWeet) ev.klaar = g;
   }
@@ -5429,6 +5447,11 @@ function anderEinde(staat, a, rol) {
   const g = staat.spel && staat.spel.id === a.id ? staat.spel : staat.vorige.find(v => v.id === a.id), u = g && g.uitslag;
   if (!u) return false;
   return a.soort === 'opgeven' ? !(u.soort === 'opgave' && u.door === rol) : !(u.soort === 'remise' && !u.vanzelf);
+}
+function anderPotjeStaat(fid, na) {
+  if (!(MP && MP.paar === fid && MP.gameId && samenInBeeld() && !session.over)) return false;
+  const g = MP.gameId, nsp = na.spel;
+  return !!nsp && nsp.id !== g && (nsp.fase === 'potje' || nsp.fase === 'uitdaging') && !na.vorige.some(v => v.id === g);
 }
 function inPaarSlotMetScherm(fid, fn) {
   return inPaarSlot(fid, async () => {
