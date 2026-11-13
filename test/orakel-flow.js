@@ -522,6 +522,26 @@ async function orakelFlow() {
     check('niveau 3 opent het oude potje', a.get('session.level') === 3 && zettenVan(a) === JSON.stringify(['e2e4', 'e7e5']));
   });
 
+  await regel('[1.3] opgeven via ⋯ voor twintig halve zetten verandert geen teller; daarna telt het als een gespeeld potje', async function (check) {
+    const tellers = '[P.c.gamesPlayed, wkGet(curWeek(), "potjes2")]';
+    const a = nieuwKind({ opslag: opslagMetPotje(2, TWINTIG.slice(0, 6)) });
+    await wacht();
+    a.tik('verderKaart');
+    await wacht();
+    const aVoor = JSON.stringify(a.get(tellers));
+    await geefOp(a);
+    check('testopzet: opgegeven', a.get('!!(session && session.over)'));
+    check('voor twintig halve zetten: geen teller', JSON.stringify(a.get(tellers)) === aVoor);
+    const c = nieuwKind({ opslag: opslagMetPotje(2, TWINTIG) });
+    await wacht();
+    c.tik('verderKaart');
+    await wacht();
+    const cVoor = c.get(tellers);
+    await geefOp(c);
+    const na = c.get(tellers);
+    check('na twintig halve zetten: een gespeeld potje, ook in de week', na[0] === cVoor[0] + 1 && na[1] === cVoor[1] + 1);
+  });
+
   await regel('[1.3] Revanche na afloop begint meteen een nieuw potje, zonder vraag', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
     a.tik('verderKaart');

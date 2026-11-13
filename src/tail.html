@@ -605,7 +605,7 @@ async function linkShareFlow() {
   const tot = Date.now() + LINK_MS;
   showModal('<div class="m-emoji">🔑</div><h2>Nieuw apparaat koppelen</h2>' +
     (serverOk
-      ? '<p id="linkUitleg">Tik op het nieuwe apparaat op Ik heb al een profiel. Typ daar deze vier woorden, of scan de code.</p>' +
+      ? '<p id="linkUitleg">Tik op het nieuwe apparaat op Ik heb al een profiel. Typ daar deze vier woorden, of scan de code met de 📷-knop daar.</p>' +
         '<div class="w-chips vier code-woorden" id="linkWoorden">' + w.map((x, i) => '<span class="w-chip"><b>' + (i + 1) + '</b> ' + x + '</span>').join('') + '</div>' +
         '<p id="linkTijd"></p>'
       : '<p><small>Geen verbinding met de server: alleen de QR-route werkt nu.</small></p>') +
@@ -1685,7 +1685,7 @@ async function mpHostQR() {
   mpStart(resp.room, resp.seat, true);
   const url = location.origin + location.pathname + '#' + PLAY_PREFIX + resp.room + '.' + resp.guest;
   showModal('<div class="m-emoji">🤝</div><h2>Samen spelen</h2>' + samenKapotZin() +
-    '<p>Laat je maatje deze QR scannen met de camera:</p>' +
+    '<p>Laat je maatje deze code scannen in SchaakHeld: bij Vrienden, met 📷 Ik scan de code.</p>' +
     '<div style="width:190px;max-width:60vw;margin:8px auto">' + QR.qrSvg(url) + '</div>' +
     '<p>Wachten op je maatje… ⏳</p>' +
     '<div class="m-btns"><button class="btn plain" id="mpNee">Stoppen</button></div>', () => {
@@ -3147,11 +3147,15 @@ function kiesOefening(P, st, now) {
 }
 function nextStep(P, ctx) {
   const bezig = [];
+  /* het lopende vriendenpotje: een remise-aanbod dat wacht staat zonder regel onder de kaart; een potje dat
+     niet bewaard kon worden, belooft niet dat het blijft staan */
   if (ctx.samen) {
-    const n = (ctx.samen.moves || []).length, ikWit = ctx.samen.myColor !== 'b';
-    bezig.push({ rule: 'R1', title: 'Verder: je potje met ' + ctx.samen.peerName, button: 'Speel verder',
-      text: (n % 2 === 0) === ikWit ? 'Jij bent aan zet.' : ctx.samen.peerName + ' is aan zet.',
-      ook: 'je potje met ' + ctx.samen.peerName, action: { go: 'samen' } });
+    const s = ctx.samen, naam = s.peerName || 'je maatje', n = (s.moves || []).length, ikWit = s.myColor !== 'b';
+    bezig.push(s.bod ? { rule: 'R1', title: naam + ' biedt remise aan', button: 'Antwoord', vriend: true,
+      text: 'Remise is gelijkspel: niemand wint, niemand verliest.', ook: naam + ' biedt remise aan', action: { go: 'samen' } } :
+      { rule: 'R1', title: 'Verder: je potje met ' + naam, button: 'Speel verder', vriend: true, wat: s.nietBewaard ? null : 'potje',
+        text: s.zonderNet ? 'Er is nu geen verbinding. Probeer het straks nog eens.' : (n % 2 === 0) === ikWit ? 'Jij bent aan zet.' : naam + ' is aan zet.',
+        ook: 'je potje met ' + naam, action: { go: 'samen' } });
   }
   if (ctx.uitnodiging) bezig.push({ rule: 'R1i', title: ctx.uitnodiging.naam + ' wil spelen', button: 'Ja, spelen!',
     text: 'De uitnodiging is nog ' + ctx.uitnodiging.minuten + ' minuten geldig.', ook: ctx.uitnodiging.naam + ' wil spelen', action: { go: 'uitnodiging' } });
@@ -3222,10 +3226,12 @@ function doeActie(a) {
   else showHomeTab('vrienden');
 }
 
-/* De vriendenpotjes op de kaart: gestopt (de kamer is weg), klaar (het einde kwam terwijl het kind weg was) of
-   bezig. Het potje van de verbinding telt ook als het niet bewaard kon worden. */
+/* De vriendenpotjes op de kaart: gestopt (de kamer is weg) of klaar (het einde kwam terwijl het kind weg was) als
+   eigen rij, en het lopende potje als stand voor nextStep. Het potje van de verbinding telt ook als het niet
+   bewaard kon worden. */
 function vriendItems(alle) {
   const uit = [];
+  let samen = null;
   if (samenWeg) uit.push({ rule: 'R1', title: 'Je potje met ' + samenWeg.naam + ' is gestopt', button: 'Bekijk',
     text: 'De verbinding viel weg. Dit potje telt voor niemand mee.', ook: 'je potje met ' + samenWeg.naam, action: { go: 'gestopt' } });
   const lijst = alle.slice();
@@ -3239,25 +3245,21 @@ function vriendItems(alle) {
     /* een afgelopen potje dat dit kind al zag, wacht alleen nog tot de ander het weet: geen kaart */
     if (uitslag && !gezien) uit.push({ rule: 'R1', title: 'Je potje met ' + naam + ' is klaar', button: 'Bekijk',
       text: 'Kijk hoe het afliep.', ook: 'je potje met ' + naam, action: hier ? { go: 'samen' } : { go: 'oud', gameId: b.r.gameId } });
-    /* een remise-aanbod dat wacht: de kaart zegt het, zonder regel eronder */
-    else if (!uitslag && bod) uit.push({ rule: 'R1', title: naam + ' biedt remise aan', button: 'Antwoord', vriend: true,
-      text: 'Remise is gelijkspel: niemand wint, niemand verliest.', ook: naam + ' biedt remise aan', action: { go: 'samen' } });
-    else if (!uitslag) uit.push({ rule: 'R1', title: 'Verder: je potje met ' + naam, button: 'Speel verder', vriend: true,
-      /* een potje dat niet bewaard kon worden, belooft niet dat het blijft staan */
-      wat: hier && MP.nietBewaard ? null : 'potje',
-      text: hier && !MP.open && MP.pogingen > 0 ? 'Er is nu geen verbinding. Probeer het straks nog eens.' : S.turn === kleur ? 'Jij bent aan zet.' : naam + ' is aan zet.',
-      ook: 'je potje met ' + naam, action: { go: 'samen' } });
+    /* het lopende potje gaat door nextStep, met wat de kaart erover moet zeggen */
+    else if (!uitslag && !samen) samen = { peerName: naam, moves: S.hist.map(u => moveKey(u.m)), myColor: kleur, bod,
+      zonderNet: hier && !MP.open && MP.pogingen > 0, nietBewaard: hier && !!MP.nietBewaard };
   }
-  return uit;
+  return { items: uit, samen };
 }
 
 /* De Verder-kaart: wat er bezig is, het vriendenpotje en dan het bewaarde potje eerst; anders het voorstel */
 function renderVerder() {
   const el = $('verder');
   const b = leesPotje(), rj = leesRondjes(), alle = leesSamenAlles();
+  const v = vriendItems(alle);
   const r = nextStep(P, { now: Date.now(), potje: b && !b.kapot ? b.r : null, rondjes: Object.keys(rj).length ? rj : null,
-    samen: null, uitnodiging: uitnodigingOpKaart(), moment: null });
-  const bezig = vriendItems(alle).concat(r.bezig);
+    samen: v.samen, uitnodiging: uitnodigingOpKaart(), moment: null });
+  const bezig = v.items.concat(r.bezig);
   const kapotKey = alle.kapot ? SAMEN_KEY : potjeKapot() ? POTJE_KEY : null;
   const eerste = kapotKey || !bezig.length ? r : bezig[0];
   const ook = kapotKey ? bezig : bezig.slice(1);

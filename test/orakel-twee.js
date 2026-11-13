@@ -947,9 +947,9 @@ async function orakelTwee() {
     check('de kaart toont het potje tegen Turbo', /Verder: je potje tegen/.test(tekstVan(daan, 'verder')) && !/Fien wil spelen/.test(tekstVan(daan, 'verder')));
   });
 
-  await nogNiet('[4.5] vastgelopen in ronde 0: wie herlaadt en opnieuw uitnodigt, bereikt de ander die nog in het oude potje zit', async function (check) {
+  await regel('[4.5] vastgelopen in ronde 0 bestaat niet meer: wie herlaadt, zit zonder nieuwe uitnodiging weer in hetzelfde potje, en dezelfde vriend nog eens uitnodigen zegt dat het potje nog loopt', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
-    await wordenVrienden(fien, daan);
+    const fid = await wordenVrienden(fien, daan);
     await nodigUit(fien);
     await daan.ev('friendPoll()');
     await wacht();
@@ -962,13 +962,19 @@ async function orakelTwee() {
     const naE4 = daan.fen();
     check('testopzet: e2e4 staat op beide borden', fien.fen() === naE4 && naE4 !== toFEN(newGame()));
     const fien2 = herlaad(fien);
-    await wacht();
-    await nodigUit(fien2);
-    await daan.ev('friendPoll()');
     await wacht(30000);
-    check('weer samen, zonder dat Daan eerst weg moest', fien2.get('!!(session && session.online)') &&
-      daan.get('!!(session && session.online)'));
-    check('in hetzelfde potje: de stand na e2e4, op beide borden', fien2.fen() === naE4 && daan.fen() === naE4);
+    fien2.tik('verderKaart');
+    await wacht();
+    check('weer samen in hetzelfde potje, zonder nieuwe uitnodiging en zonder dat Daan eerst weg moest', fien2.get('!!(session && session.online)') &&
+      daan.get('!!(session && session.online)') && fien2.fen() === naE4 && daan.fen() === naE4);
+    fien2.tik('backBtn');
+    await wacht();
+    fien2.tik('tabVrienden');
+    await wacht();
+    check('de rij van Daan biedt Speel verder, geen Uitnodigen', kanTikken(fien2, 'Speel verder') && !kanTikken(fien2, 'Uitnodigen'));
+    fien2.ev('inviteFriend(' + JSON.stringify(fid) + ')');
+    await wacht(100);
+    check('Daan nog eens uitnodigen zegt dat het potje nog loopt', toastTekst(fien2) === 'Je potje met Daan loopt nog. Speel dat eerst uit.');
   });
 
   await regel('[4.6] "Nu niet" op een uitnodiging bereikt wie uitnodigde', async function (check) {
