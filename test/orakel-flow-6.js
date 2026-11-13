@@ -267,6 +267,92 @@ async function orakelFlow6() {
     check('de uitweg', /Klaar met wachten\? Tik in het potje op de drie puntjes en bied remise aan\./.test(v) && !/blijft staan|stopt nooit/.test(v));
   });
 
+  /* ================= een beschadigd bewaard paar houdt de app niet tegen ================= */
+
+  /* het kind opent de app met een paar dat in de opslag beschadigd is; wat de app bij het openen doet, mag niet stoppen */
+  const opentMetPaar = async function (vervang, metGoedeStaat) {
+    const o = opslagMetVrienden(metGoedeStaat ? [MET_FIEN_MEES_AAN_ZET] : [{ fid: 'vriendfien1', naam: 'Fien' }]);
+    await verzegelParen(o);
+    const paren = JSON.parse(o.getItem('schaakheld-paar') || '{}');
+    const nieuw = vervang(paren.vriendfien1 || {});
+    if (typeof nieuw === 'string') o.setItem('schaakheld-paar', nieuw);
+    else o.setItem('schaakheld-paar', JSON.stringify(Object.assign(paren, { vriendfien1: nieuw })));
+    let a = null, fout = '';
+    try { a = nieuwKind({ opslag: o }); thuisVenstersWeg(a); await wacht(20000); } catch (e) { fout = String(e && e.message || e); }
+    return { a, fout };
+  };
+  const opentGewoon = function (check, r) {
+    check('de app opent' + (r.fout ? ' (' + r.fout + ')' : ''), !!r.a && !r.fout);
+    check('thuis staat er', !!r.a && opThuis(r.a));
+    const kaart = r.a ? tekstVan(r.a, 'verder') : '';
+    if (r.a) r.a.tik('tabVrienden');
+    check('de rij van Fien staat er', !!r.a && /Fien/.test(vriendRijTekst(r.a, 'vriendfien1')));
+    if (r.a) r.a.tik('tabSpelen');
+    return kaart;
+  };
+
+  await regel('[6.1] een bewaard paar met een staat zonder velden: de app opent, thuis staat er, en de rij van de vriend ook', async function (check) {
+    const r = await opentMetPaar(function () { return { merk: 'abcdefghijklmnop', staat: { v: 2 } }; });
+    opentGewoon(check, r);
+  });
+
+  await regel('[6.1] een bewaard paar met een staat zonder velden maar met zijn verzegelde tekst: het potje komt terug uit die tekst', async function (check) {
+    const r = await opentMetPaar(function (p) { return Object.assign({}, p, { staat: { v: 2 } }); }, true);
+    opentGewoon(check, r);
+    check('het potje met Fien staat weer op de kaart', !!r.a && /je potje met Fien/i.test(tekstVan(r.a, 'verder')));
+  });
+
+  await regel('[6.1] een bewaard paar met een beschadigde staat en een beschadigde tekst: de app opent, en het paar telt als nog niet gelezen', async function (check) {
+    const r = await opentMetPaar(function (p) { return Object.assign({}, p, { staat: { v: 2, seq: 3, spel: { id: 'potjevanvrien', fase: 'potje', zetten: 5 }, vorige: [] }, blob: 'kapot' }); }, true);
+    opentGewoon(check, r);
+    check('niets van het kapotte potje op de kaart', !!r.a && !/je potje met Fien/i.test(tekstVan(r.a, 'verder')));
+  });
+
+  await regel('[6.1] een bewaard paar met een staat van een nieuwere app: de app opent, en gebruikt die staat niet', async function (check) {
+    const r = await opentMetPaar(function (p) { return Object.assign({}, p, { staat: { v: 3, seq: 9, iets: { nieuws: true } } }); }, true);
+    opentGewoon(check, r);
+    check('niets van die staat op de kaart', !!r.a && !/je potje met Fien/i.test(tekstVan(r.a, 'verder')));
+  });
+
+  await regel('[6.1] een bewaard paar met een rij die geen lijst is en velden van de verkeerde vorm: de app opent, en die velden tellen als leeg', async function (check) {
+    const r = await opentMetPaar(function (p) {
+      return Object.assign({}, p, { rij: { soort: 'zet' }, telBij: { potjevanvrien: 'remise' }, potjes: { potjevanvrien: { zetten: 'e2e4' } },
+        telKaart: { potjevanvrien: { xp: 'veel' } }, hoogste: 'drie', verschil: 'x' });
+    }, true);
+    opentGewoon(check, r);
+    check('het potje met Fien staat er nog', !!r.a && /je potje met Fien/i.test(tekstVan(r.a, 'verder')));
+    check('de rij van wat wacht is leeg', !!r.a && r.a.get('paarVan("vriendfien1").rij.length') === 0);
+  });
+
+  await regel('[6.1] een bewaard paar waarvan de onthouden zetten van een afgelopen potje de verkeerde vorm hebben: de app opent, en de kaart toont het einde', async function (check) {
+    const r = await opentMetPaar(function (p) {
+      const staat = { v: 2, seq: 4, spel: null, vorige: [{ id: 'potjevanfien', weet: { a: null, b: 'merk-b----------' },
+        uitslag: { soort: 'opgave', door: 'b', ply: 2 }, bekeken: { a: false, b: true } }] };
+      return { merk: 'merkvandittoest1', hoogste: 4, rij: [], staat: staat, potjes: { potjevanfien: { wit: 'a', door: 'a', zetten: 'e2e4', t: 'gisteren' } },
+        telKaart: { potjevanfien: { xp: 'veel', doelGehaald: false, uitslag: { soort: 'opgave', door: 'b' } } } };
+    });
+    const kaart = opentGewoon(check, r);
+    check('de kaart toont het einde (' + kaart.replace(/\s+/g, ' ').slice(0, 80) + ')', /Fien gaf op/.test(kaart) && !/niet meer openen/.test(kaart));
+    r.a.tik('verderKaart');
+    await wacht();
+    const ek = tekstVan(r.a, 'eindkaart');
+    check('de eindkaart zonder een telregel van de verkeerde vorm (' + ek.replace(/\s+/g, ' ').slice(0, 80) + ')', /Fien gaf op/.test(ek) && !/veel|undefined|NaN/.test(ek));
+  });
+
+  await regel('[6.1] een gave bewaarde staat wordt meteen gebruikt zoals hij is, ook zonder zijn verzegelde tekst', async function (check) {
+    const o = opslagMetVrienden([MET_FIEN_MEES_AAN_ZET]);
+    const paren = JSON.parse(o.getItem('schaakheld-paar'));
+    delete paren.vriendfien1.blob;
+    o.setItem('schaakheld-paar', JSON.stringify(paren));
+    const a = nieuwKind({ opslag: o });
+    check('meteen bij het openen staat het potje in de staat van het paar', a.get('!!paarVan("vriendfien1").staat && paarVan("vriendfien1").staat.spel.zetten.length === 2'));
+  });
+
+  await regel('[6.1] het bewaarde item van de paren is geen JSON: de app opent, thuis staat er, en de rij van de vriend ook', async function (check) {
+    const r = await opentMetPaar(function () { return '{kapot'; });
+    opentGewoon(check, r);
+  });
+
   await regel('[6.1] de zetten in de bus houden elke promotie: dame, toren, loper en paard', async function (check) {
     const a = await kind(opslagMetVrienden([]));
     const lijst = ['a2a4', 'b7b5', 'a4b5', 'a7a6', 'b5a6', 'c8b7', 'a6b7', 'b8c6', 'b7a8q'];

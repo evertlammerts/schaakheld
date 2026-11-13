@@ -2491,6 +2491,9 @@ function versieVan(blob) { return sha256hex(blob); }
 async function blobNaarStaat(k, blob) {
   let o = null;
   try { o = await openJSON(k, 'paar', b64urlBytes(String(blob))); } catch (e) { return null; }
+  return staatVanTekst(o);
+}
+function staatVanTekst(o) {
   if (!o || typeof o !== 'object') return null;
   if (typeof o.v === 'number' && o.v > 2) return { nieuwer: true };
   if (o.v !== 2 || !Number.isInteger(o.seq) || o.seq < 0) return null;
@@ -2563,9 +2566,49 @@ function paren() {
   if (parenGelezen === null) {
     let o = null;
     try { o = JSON.parse(opslag(PAAR_KEY)); } catch (e) {}
-    parenGelezen = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+    parenGelezen = {};
+    if (o && typeof o === 'object' && !Array.isArray(o)) for (const fid in o) if (o[fid] && typeof o[fid] === 'object' && !Array.isArray(o[fid])) parenGelezen[fid] = schoonPaar(fid, o[fid]);
   }
   return parenGelezen;
+}
+/* Wat uit de opslag komt, gaat door dezelfde controle als wat van de server komt; een nieuwere versie of een beschadiging
+   houdt de app nooit tegen. Een staat die de controle niet haalt, wordt bij het openen opnieuw uit zijn verzegelde tekst
+   gehaald (herstelParen); een staat van een nieuwere app blijft een die deze app niet kan openen. Een veld van de
+   verkeerde vorm telt als leeg. Wat al geteld is, staat in het profiel, niet hier. */
+const STAAT_HERSTELLEN = new Set();
+/* een staat zoals dit apparaat hem bewaart heeft de zetten als lijst; de controle is die van de tekst */
+function bewaardeStaat(st) {
+  const sp = st && typeof st === 'object' ? st.spel : null, z = sp && typeof sp === 'object' ? sp.zetten : null;
+  const lijst = Array.isArray(z) && z.every(k => typeof k === 'string' && /^[a-h][1-8][a-h][1-8][qrbn]?$/.test(k));
+  return staatVanTekst(lijst ? Object.assign({}, st, { spel: Object.assign({}, sp, { zetten: zettenNaarBus(z) }) }) : st);
+}
+function schoonPaar(fid, p) {
+  if (p.staat != null) {
+    const st = bewaardeStaat(p.staat);
+    if (!st || st.nieuwer) { if (!st) STAAT_HERSTELLEN.add(fid); p.staat = null; } else p.staat = st;
+  }
+  const lijst = (x, goed) => { const uit = {}; if (x && typeof x === 'object' && !Array.isArray(x)) for (const k in x) if (goed(x[k])) uit[k] = x[k]; return uit; };
+  const rol = x => x === 'a' || x === 'b', uitslag = u => !!u && typeof u === 'object' && UITSLAG_SOORT.includes(u.soort) && rol(u.door);
+  p.telBij = lijst(p.telBij, u => uitslag(u) && Number.isInteger(u.ply));
+  p.potjes = lijst(p.potjes, g => !!g && rol(g.wit) && rol(g.door) && Array.isArray(g.zetten) && g.zetten.every(z => typeof z === 'string') &&
+    (g.t == null || Number.isFinite(g.t)));
+  p.telKaart = lijst(p.telKaart, t => !!t && Number.isInteger(t.xp) && t.xp >= 0 && typeof t.doelGehaald === 'boolean' && (t.uitslag === null || uitslag(t.uitslag)));
+  return p;
+}
+/* bij het openen, voor al het andere werk aan een paar: een beschadigde staat opnieuw uit zijn tekst, en lukt dat niet,
+   dan telt het paar als nog niet gelezen en vult de volgende lezing het */
+function herstelParen() {
+  paren();
+  for (const fid of STAAT_HERSTELLEN) {
+    inPaarSlot(fid, async () => {
+      const f = paarVriend(fid), p = paarVan(fid), st = f && p.blob ? await blobNaarStaat(f.k, p.blob) : null;
+      if (st && !st.nieuwer) p.staat = st;
+      else Object.assign(p, { blob: null, staat: null, versie: '', toont: null });
+      bewaarPaar(fid, p);
+      pollVerversen = true;
+    }).then(() => { if (pollVerversen) { pollVerversen = false; thuisVerversen(); } });
+  }
+  STAAT_HERSTELLEN.clear();
 }
 function paarVan(fid) {
   const p = paren()[fid] ? JSON.parse(JSON.stringify(paren()[fid])) : {};
@@ -8546,6 +8589,7 @@ function askName() {
 /* een profiel dat zijn level nooit bewaarde: het level van nu telt als gevierd */
 if (P.lastLevel == null) { P.lastLevel = levelIdx(P.xp); saveP(); }
 applyTheme();
+herstelParen();
 samenWeerOp();
 renderHome();
 showScreen('home');
