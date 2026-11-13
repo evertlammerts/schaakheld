@@ -124,18 +124,19 @@ async function orakelPaar() {
   await regel('[V5] [P6] Mees zet mat; Fien leest het einde en zet haar merk, haar tablet daarna niet; elk kind telt één keer', async function (check) {
     const w = await paarMeesFien();
     const tablet = await tweedeApparaat(w.fien);
-    const voorM = [eigenTeller(w.mees, 'c.gamesPlayed'), eigenTeller(w.mees, 'c.winsOnline')];
-    const voorF = eigenTeller(w.fien, 'c.gamesPlayed'), voorT = eigenTeller(tablet, 'c.gamesPlayed');
+    const voorM = [eigenTeller(w.mees, 'c.gamesPlayed'), eigenTeller(w.mees, 'c.winsOnline'), eigenTeller(w.mees, 'xp')];
+    const voorF = eigenTeller(w.fien, 'c.gamesPlayed'), voorFxp = eigenTeller(w.fien, 'xp'), voorT = eigenTeller(tablet, 'c.gamesPlayed');
     await potjeMeesWit(w, 'potjeeen0001');
     await zetten(w, 'potjeeen0001', MAT_WIT, 0, MAT_WIT.length);
     let s = await serverStaat(w.mees, w.fm);
     check('het potje is klaar, Mees weet het en heeft het bekeken', !!s && s.spel.fase === 'klaar' && s.spel.uitslag.soort === 'mat' &&
       s.spel.weet[w.rm] === bewaard(w.mees, w.fm).merk && s.spel.bekeken[w.rm] === true);
-    check('Mees telde het één keer, met de winst', eigenTeller(w.mees, 'c.gamesPlayed') === voorM[0] + 1 && eigenTeller(w.mees, 'c.winsOnline') === voorM[1] + 1);
+    check('Mees telde het één keer, met de winst en 30 XP', eigenTeller(w.mees, 'c.gamesPlayed') === voorM[0] + 1 && eigenTeller(w.mees, 'c.winsOnline') === voorM[1] + 1 &&
+      eigenTeller(w.mees, 'xp') === voorM[2] + 30);
     await leesP(w.fien, w.ff);
     s = await serverStaat(w.fien, w.ff);
     check('Fien zette haar merk bij het lezen', s.spel.weet[w.rf] === bewaard(w.fien, w.ff).merk && s.spel.bekeken[w.rf] === false);
-    check('Fien telde het één keer', eigenTeller(w.fien, 'c.gamesPlayed') === voorF + 1);
+    check('Fien telde het één keer, met 30 XP', eigenTeller(w.fien, 'c.gamesPlayed') === voorF + 1 && eigenTeller(w.fien, 'xp') === voorFxp + 30);
     const seq = s.seq;
     await leesP(tablet, w.ff);
     await leesP(w.fien, w.ff);

@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -367,6 +368,7 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 	rm := s.rooms[join.Room]
 	var mine, peer *seat
 	var old *websocket.Conn
+	var peerLive bool
 	if rm != nil {
 		if rm.seats[0].token == join.Seat {
 			mine, peer = rm.seats[0], rm.seats[1]
@@ -385,6 +387,8 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 		mine.conn = c
 		mine.live.Store(true)
 		mine.mu.Unlock()
+		// onder s.mu gelezen, waar ook de ander zijn stoel inneemt: wie als tweede binnenkomt, ziet de eerste
+		peerLive = peer.live.Load()
 	}
 	s.mu.Unlock()
 	if mine == nil {
@@ -404,8 +408,10 @@ func (s *server) handleRoomWS(w http.ResponseWriter, r *http.Request) {
 	}
 	// eerst het eigen welkom, dan pas de peer porren: anders kan een
 	// relay-bericht of het hallo-antwoord van de peer vóór het welkom
-	// binnenkomen, en juist het welkom triggert de hersync bij herverbinden
-	mine.write([]byte(`{"t":"welkom"}`))
+	// binnenkomen, en juist het welkom triggert de hersync bij herverbinden.
+	// Het welkom zegt of de ander er nu is: wie opnieuw verbindt, hoort anders
+	// nooit dat de ander intussen wegging.
+	mine.write([]byte(`{"t":"welkom","peer":` + strconv.FormatBool(peerLive) + `}`))
 	peer.write([]byte(`{"t":"peer","aan":true}`))
 
 	// keepalive: ping de peer periodiek zodat een half-open verbinding

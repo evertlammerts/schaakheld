@@ -626,6 +626,7 @@ async function orakelTwee() {
     const fien2 = herlaad(fien);
     await wacht(30000);
     check('na herladen geen kaart meer voor Daan, en niet nog eens geteld', !/Daan/.test(tekstVan(fien2, 'verder')) && telt(fien2) === plusEen(voor, true));
+    check('en het potje met Sem staat er nog', /je potje met Sem/.test(tekstVan(fien2, 'verder')));
   });
 
   await regel('[4.1] een einde dat de ander nog niet hoorde, en dan een nieuw potje: de oude lijn gaat dicht, en de ander krijgt het gewone einde', async function (check) {
@@ -735,6 +736,1080 @@ async function orakelTwee() {
     await wacht(10 * 60000);
     check('ook na tien minuten eerlijk', /is er nu niet/.test(zegt(b)) && !/komen straks|vanzelf goed/.test(zegt(b)));
     check('en het potje staat er nog', !!samenPotje(b));
+  });
+
+  /* steekproef: wat de strook en het bord zeggen als de ander weg is, of na het einde wegging */
+  await regel('[4.3] is de ander weg, dan zegt de strook dat ook na een eigen zet, en niet dat de ander nu zet', async function (check) {
+    const { wit, zwart } = await tweeZetten();
+    stopApparaat(zwart);
+    await wacht(3000);
+    check('testopzet: de strook zegt dat Daan er nu niet is', /er nu niet/.test(tekstVan(wit, 'bubble')));
+    zet(wit, 'g1f3');
+    await wacht();
+    check('na de eigen zet nog steeds dat de ander er nu niet is', /er nu niet/.test(tekstVan(wit, 'bubble')) && !/^\s*Nu /.test(tekstVan(wit, 'bubble')));
+  });
+
+  await regel('[4.3] wie het potje weer opent terwijl de ander weg is, leest dat de ander er nu niet is', async function (check) {
+    const { wit, zwart } = await tweeZetten();
+    stopApparaat(zwart);
+    await wacht(3000);
+    zet(wit, 'g1f3');
+    await wacht();
+    wit.tik('backBtn');
+    await wacht();
+    wit.tik('verderKaart');
+    await wacht();
+    check('de strook zegt dat de ander er nu niet is', /er nu niet/.test(tekstVan(wit, 'bubble')) && !/is aan zet/.test(tekstVan(wit, 'bubble')));
+  });
+
+  await regel('[2.3] gaat de ander na het einde naar huis, dan blijft het bord achter de eindkaart vanaf de eigen kant', async function (check) {
+    const { wit, zwart } = await tweeZetten();
+    await geefOp(wit);
+    await wacht();
+    check('testopzet: zwart ziet het bord vanaf zwart', eindziet(zwart, 'WINT') && /^\s*h/.test(tekstVan(zwart, 'coordsF')));
+    tikTekst(wit, 'Naar huis');
+    await wacht(30000);
+    check('na het vertrek van de ander nog steeds vanaf zwart', eindziet(zwart, 'WINT') && /^\s*h/.test(tekstVan(zwart, 'coordsF')));
+  });
+
+  await regel('[2.1] de uitleg onder het bord van een oefening staat niet onder het bord van een vriendenpotje erna', async function (check) {
+    const a = maakApparaat('Lotte'), b = maakApparaat('Fien');
+    await startOefening(a, 'trucs');
+    await wacht();
+    check('testopzet: de oefening heeft een uitleg onder het bord', zichtbaar(a, 'hulpZin'));
+    a.tik('backBtn');
+    await wacht();
+    await samenSpelen(a, b);
+    check('in het vriendenpotje geen uitleg van de oefening', opSpeelscherm(a) && !zichtbaar(a, 'hulpZin'));
+  });
+
+  await regel('[3.5] het apparaat dat de code liet zien, zegt dat het gelukt is zodra het nieuwe apparaat gekoppeld is', async function (check) {
+    const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    const vier = (mees.modal().match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
+    check('testopzet: vier woorden', vier.length === 4);
+    ipad.ev('linkEntryFlow()');
+    typ(ipad, 'wordInp', vier);
+    ipad.tik('linkGo');
+    await wacht();
+    ipad.tik('linkYes');
+    /* in kleine stapjes: het codevenster kijkt om de vijf tellen, en elke keer is een heen-en-weer met de server */
+    await zagOoit(function () { return /Gelukt/.test(tekstVan(mees, 'linkTijd')); }, 40000);
+    check('het codevenster zegt het', /Gelukt! Je level, sterren en trofeeën staan nu ook op je andere apparaat\./.test(tekstVan(mees, 'linkTijd')) &&
+      kanTikken(mees, 'Klaar') && !zichtbaar(mees, 'linkWoorden'));
+    mees.tik('linkDone');
+    mees.tik('tabIk');
+    ipad.ev('closeModal()');
+    ipad.tik('tabIk');
+    check('Ik zegt op beide apparaten dat ze gekoppeld zijn', [mees, ipad].every(function (x) {
+      return /✔ Gekoppeld: je level, sterren en trofeeën staan ook op je andere apparaat\./.test(tekstVan(x, 'ikBewaard'));
+    }));
+  });
+
+  await regel('[3.5] na koppelen weet ook het oude apparaat dat alles op twee apparaten staat, ook als het nieuwe nog niets verdiende', async function (check) {
+    const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    const vier = (mees.modal().match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
+    check('testopzet: vier woorden', vier.length === 4);
+    mees.tik('linkDone');
+    ipad.ev('linkEntryFlow()');
+    typ(ipad, 'wordInp', vier);
+    ipad.tik('linkGo');
+    await wacht();
+    ipad.tik('linkYes');
+    await wacht(30000);
+    const mees2 = herlaad(mees);
+    await wacht(30000);
+    mees2.tik('tabIk');
+    check('het oude apparaat zegt het ook', /andere apparaat/.test(tekstVan(mees2, 'ikBewaard')) && !/Koppel het/.test(tekstVan(mees2, 'ikBewaard')));
+  });
+
+  async function codeEnKoppel(mees, ipad, klaarMeteen) {
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    const vier = (mees.modal().match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
+    if (klaarMeteen) mees.tik('linkDone');
+    ipad.ev('linkEntryFlow()');
+    typ(ipad, 'wordInp', vier);
+    ipad.tik('linkGo');
+    await wacht();
+    ipad.tik('linkYes');
+    return vier.length === 4;
+  }
+  const gekoppeld = function (x) { return /✔ Gekoppeld/.test(tekstVan(x, 'ikBewaard')) && !/Koppel het/.test(tekstVan(x, 'ikBewaard')); };
+
+  await regel('[3.5] Klaar voordat het nieuwe apparaat koppelde: het oude apparaat ziet het toch, zonder herstart', async function (check) {
+    const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
+    check('testopzet: vier woorden', await codeEnKoppel(mees, ipad, true));
+    mees.tik('tabIk');
+    check('binnen een minuut zegt Ik op het oude apparaat dat ze gekoppeld zijn', await zagOoit(function () { return gekoppeld(mees); }, 60000));
+  });
+
+  await regel('[3.5] Ik kijkt zelf of een ander apparaat koppelde, ook als het oude apparaat in de tien minuten geen lijn had', async function (check) {
+    const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    const vier = (mees.modal().match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
+    mees.tik('linkDone');
+    geenNetwerk(mees);
+    ipad.ev('linkEntryFlow()');
+    typ(ipad, 'wordInp', vier);
+    ipad.tik('linkGo');
+    await wacht();
+    ipad.tik('linkYes');
+    /* de tien minuten van de code zijn om */
+    zetDatum(new Date(Date.now() + 11 * 60000).toISOString());
+    await zagOoit(function () { return false; }, 60000);
+    weerNetwerk(mees);
+    mees.tik('tabIk');
+    check('testopzet: Ik zegt eerst nog dat alles hier staat', /Koppel het/.test(tekstVan(mees, 'ikBewaard')));
+    check('even later: gekoppeld', await zagOoit(function () { return gekoppeld(mees); }, 5000));
+  });
+
+  await regel('[3.5] een nieuwe code zegt pas Gelukt als een apparaat met deze code koppelde, niet voor een apparaat dat er al was', async function (check) {
+    const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    const vier = (mees.modal().match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
+    mees.tik('linkDone');
+    /* het oude apparaat hoort er in de tien minuten niets van: de eerste code weet het dus niet */
+    geenNetwerk(mees);
+    ipad.ev('linkEntryFlow()');
+    typ(ipad, 'wordInp', vier);
+    ipad.tik('linkGo');
+    await wacht();
+    ipad.tik('linkYes');
+    zetDatum(new Date(Date.now() + 11 * 60000).toISOString());
+    await zagOoit(function () { return false; }, 60000);
+    weerNetwerk(mees);
+    await mees.ev('linkShareFlow()');
+    await zagOoit(function () { return false; }, 15000);
+    check('geen Gelukt, de woorden staan er nog', !/Gelukt/.test(tekstVan(mees, 'linkTijd')) && zichtbaar(mees, 'linkWoorden'));
+  });
+
+  await regel('[3.5] terwijl het codevenster open is, leest de app het profiel alleen; schrijven doet hij niet om de vijf tellen', async function (check) {
+    const mees = maakApparaat('Mees');
+    await mees.ev('linkShareFlow()');
+    await zagOoit(function () { return false; }, 10000);
+    const echt = fetch;
+    let geschreven = 0, gelezen = 0;
+    fetch = function (url, o) {
+      if (/\/v1\/profile\//.test(url)) { if (o && o.method === 'PUT') geschreven++; else gelezen++; }
+      return echt(url, o);
+    };
+    try { await zagOoit(function () { return false; }, 60000); } finally { fetch = echt; }
+    check('gelezen wel (' + gelezen + '), geschreven niet (' + geschreven + ')', gelezen >= 5 && geschreven === 0);
+  });
+
+  await regel('[3.5] twee apparaten die onder een oudere versie koppelden, het tweede verdiende niets: na de update weet het oude het', async function (check) {
+    const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
+    mees.ev('bump("xp", 140)');
+    await mees.ev('ensureAccount(); syncNow()');
+    await wacht(2000);
+    /* zo koppelde de vorige versie: het profiel overnemen, zonder een eigen regel in het profiel */
+    ipad.ev('ACC = ' + mees.get('JSON.stringify(ACC)') + '; saveAcc()');
+    const ipad2 = herlaad(ipad);
+    await wacht(30000);
+    await mees.ev('syncNow()');
+    await wacht(2000);
+    mees.tik('tabIk');
+    check('het oude apparaat zegt dat ze gekoppeld zijn', gekoppeld(mees));
+    check('en het tweede telt niets mee', ipad2.get('P.xp') === 140 && mees.get('P.xp') === 140);
+  });
+
+  await regel('[3.5] compat: een apparaat met eigen XP en sterren dat koppelt, houdt ze; beide apparaten hebben daarna de som', async function (check) {
+    const tablet = maakApparaat('Mees'), telefoon = maakApparaat('Mees');
+    tablet.ev('bump("xp", 200)');
+    telefoon.ev('bump("xp", 140); bump("stars", 3)');
+    await tablet.ev('ensureAccount(); syncNow()');
+    await wacht(2000);
+    telefoon.ev('finishLink(' + tablet.get('JSON.stringify(ACC)') + ', null)');
+    await wacht(20000);
+    await tablet.ev('syncNow()');
+    await wacht(2000);
+    await telefoon.ev('syncNow()');
+    await wacht(2000);
+    check('telefoon ' + telefoon.get('P.xp') + ' XP, tablet ' + tablet.get('P.xp') + ' XP: allebei 340, en 3 sterren',
+      telefoon.get('P.xp') === 340 && tablet.get('P.xp') === 340 && telefoon.get('P.stars') === 3 && tablet.get('P.stars') === 3);
+  });
+
+  /* na het einde wacht er alleen iets op de ander zolang de ander er is */
+  async function eindeTussenTwee() {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    await speel(fien, daan, 'e7e5');
+    await geefOp(daan);
+    await wacht();
+    return { fien, daan };
+  }
+  const wachtKnoppen = function (x) { return kanTikken(x, 'Revanche') || kanTikken(x, 'Vrienden worden'); };
+
+  await regel('[4.1] het venster "Jullie zijn nu vrienden!" na Naar huis van de ander: geen Revanche, en de regel zegt het', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    tikTekst(fien, 'Vrienden worden');
+    tikTekst(daan, 'Vrienden worden');
+    await wacht();
+    check('testopzet: allebei het venster met Revanche', /Jullie zijn nu vrienden/.test(fien.scherm()) && kanTikken(fien, 'Revanche'));
+    daan.tik('vrEind');
+    await wacht(30000);
+    check('geen Revanche meer in het venster', /Jullie zijn nu vrienden/.test(fien.scherm()) && !kanTikken(fien, 'Revanche') && kanTikken(fien, 'Naar huis'));
+    check('het venster en de strook zeggen het', /Daan ging naar huis\. Nodig Daan later weer uit bij Vrienden\./.test(fien.scherm()) &&
+      /Daan ging naar huis\. Nodig Daan later weer uit bij Vrienden\./.test(tekstVan(fien, 'bubble')));
+    check('nergens wachten op wie weg is', !/Wachten op/.test(fien.scherm()));
+  });
+
+  await regel('[4.1] de app van de ander gaat dicht na het einde: geen knop die op de ander wacht, en de strook zegt het', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    check('testopzet: de knoppen staan er', kanTikken(fien, 'Revanche') && kanTikken(fien, 'Vrienden worden'));
+    stopApparaat(daan);
+    await wacht(3000);
+    check('geen Revanche en geen Vrienden worden', !wachtKnoppen(fien) && kanTikken(fien, 'Naar huis'));
+    check('de strook', /Daan ging naar huis\. Leuk dat jullie samen speelden!/.test(tekstVan(fien, 'bubble')));
+  });
+
+  await regel('[4.1] valt de lijn van de ander na het einde even weg, dan zijn de knoppen weg en daarna weer terug, en een vraag komt aan', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    geenNetwerk(daan);
+    await wacht(3000);
+    check('in het gat: geen knop die op de ander wacht', !wachtKnoppen(fien));
+    fien.ev('vriendVragen()');
+    await wacht(100);
+    check('in het gat is er niets gevraagd', fien.get('$("ekWacht").textContent') === '' && fien.get('!!(MP && MP.ecdh)') === false);
+    await wacht(7000);
+    weerNetwerk(daan);
+    await wacht(30000);
+    check('de ander is terug: de knoppen ook', kanTikken(fien, 'Revanche') && kanTikken(fien, 'Vrienden worden'));
+    tikTekst(fien, 'Vrienden worden');
+    await wacht();
+    check('Gevraagd staat er pas nu, en de vraag komt aan', /Gevraagd\. Nu wachten op Daan\./.test(tekstVan(fien, 'eindkaart')) &&
+      /wil vrienden worden/.test(zegt(daan)));
+  });
+
+  await regel('[4.1] een vriendschapsvraag van de ander gaat van de kaart als de ander naar huis gaat', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    tikTekst(daan, 'Vrienden worden');
+    await wacht();
+    check('testopzet: de vraag staat op de kaart van Fien', /wil vrienden worden/.test(tekstVan(fien, 'eindkaart')));
+    tikTekst(daan, 'Naar huis');
+    await wacht(30000);
+    check('de vraag is weg', !/wil vrienden worden/.test(tekstVan(fien, 'eindkaart')) && !wachtKnoppen(fien));
+  });
+
+  /* een venster voor een nieuw potje dat geen potje wordt: het vervangen potje komt terug, op elke manier */
+  async function eindeVoorDaan(metSem) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan'), sem = maakApparaat('Sem');
+    if (metSem) {
+      await wordenVrienden(fien, sem);
+      fien.ev('if (MP) mpStop(true); goHome()');
+      sem.ev('if (MP) mpStop(true); goHome()');
+      await wacht();
+    }
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    await speel(fien, daan, 'e7e5');
+    stopApparaat(daan);
+    await wacht(3000);
+    await geefOp(fien);
+    tikTekst(fien, 'Naar huis');
+    await wacht();
+    return { fien, daan, sem };
+  }
+  async function daanZietKlaar(check, fien, daan) {
+    check('Fien is weer verbonden met het potje met Daan', fien.get('!!(MP && MP.S && MP.result && MP.peerName === "Daan")'));
+    const daan2 = herlaad(daan);
+    await wacht(30000);
+    check('Daan leest dat het potje klaar is', /Je potje met Fien is klaar/.test(tekstVan(daan2, 'verder')));
+  }
+  const manieren = [
+    ['Stop met wachten', true, async function (fien, sem) { await nodigUit(fien); tikTekst(fien, 'Stop met wachten'); await wacht(); }],
+    ['Nu niet van de ander', true, async function (fien, sem) {
+      await nodigUit(fien); await sem.ev('friendPoll()'); await wacht(); tikTekst(sem, 'Nu niet');
+      await zagOoit(function () { return /Sem kan nu even niet/.test(zegt(fien)); }, 30000); }],
+    ['de tien minuten', true, async function (fien, sem) { await nodigUit(fien); await wacht(10 * 60000 + 30000); }],
+    ['ja op een uitnodiging van wie dan weg is', true, async function (fien, sem) {
+      await nodigUit(sem); await fien.ev('friendPoll()'); await wacht(); stopApparaat(sem); fien.tik('invJa'); await wacht(40000); }],
+    ['Stoppen in Verbinden', true, async function (fien, sem) {
+      await nodigUit(sem); await fien.ev('friendPoll()'); await wacht(); stopApparaat(sem); fien.tik('invJa'); await wacht(2000);
+      tikTekst(fien, 'Stoppen'); await wacht(); }],
+    ['Stoppen van de ander op Verbonden', false, async function (fien, sem) {
+      await fien.ev('mpHostQR()'); await wacht(); scanQR(fien, sem); await wacht(); sem.tik('mpJa'); await wacht();
+      tikTekst(sem, 'Stoppen'); await wacht(5000); }]
+  ];
+  for (const m of manieren) {
+    await regel('[4.1] een venster voor een nieuw potje eindigt zonder potje (' + m[0] + '): het vervangen potje komt terug, en de ander hoort het einde', async function (check) {
+      const { fien, daan, sem } = await eindeVoorDaan(m[1]);
+      await m[2](fien, sem);
+      await daanZietKlaar(check, fien, daan);
+    });
+  }
+
+  /* vrienden worden: op beide apparaten of op geen van beide, ook als een lijn even wegvalt */
+  const vriendenVan = function (x) { return x.get('Object.keys(P.friends).filter(function (id) { return !P.friends[id].weg; }).length'); };
+  async function daanVraagt() {
+    const { fien, daan } = await eindeTussenTwee();
+    tikTekst(daan, 'Vrienden worden');
+    await wacht();
+    return { fien, daan };
+  }
+  const lijnWeg = [
+    ['de lijn van wie de vraag kreeg valt weg, voor het ja', false, 'fien'],
+    ['de lijn van wie vroeg valt weg, voor het ja', false, 'daan'],
+    ['de lijn van wie ja zei valt weg, net na het ja', true, 'fien'],
+    ['de lijn van wie vroeg valt weg, net na het ja', true, 'daan']
+  ];
+  for (const geval of lijnWeg) {
+    await regel('[2.5] vrienden worden en een lijn die even wegvalt (' + geval[0] + '): vrienden op beide apparaten of op geen van beide', async function (check) {
+      const { fien, daan } = await daanVraagt();
+      check('testopzet: Fien heeft de vraag', /wil vrienden worden/.test(tekstVan(fien, 'eindkaart')));
+      const weg = geval[2] === 'fien' ? fien : daan;
+      if (geval[1]) tikTekst(fien, 'Ja, vrienden');
+      geenNetwerk(weg);
+      await wacht(5000);
+      weerNetwerk(weg);
+      await wacht(30000);
+      if (!geval[1] && kanTikken(fien, 'Ja, vrienden')) { tikTekst(fien, 'Ja, vrienden'); await wacht(30000); }
+      const nF = vriendenVan(fien), nD = vriendenVan(daan);
+      check('allebei of geen van beide (' + nF + ' en ' + nD + ')', nF === nD);
+      for (const x of [fien, daan]) {
+        if (vriendenVan(x) === 0) check(x.naam + ': geen venster dat zegt dat het gelukt is', !/Jullie zijn nu vrienden/.test(x.scherm()));
+      }
+      check('niemand leest Gevraagd zonder dat er een vraag openstaat', !/Gevraagd/.test(tekstVan(daan, 'ekWacht')) || /wil vrienden worden/.test(tekstVan(fien, 'eindkaart')));
+      check('niemand ziet een vraag die de vrager niet meer heeft', !/wil vrienden worden/.test(tekstVan(fien, 'eindkaart')) || daan.get('!!(MP && MP.ecdh)'));
+      if (geval[1] && nF === 0) check('wie ja zei, leest dat het niet lukte', /Dat lukte niet/.test(tekstVan(fien, 'bubble')));
+    });
+  }
+
+  await regel('[2.5] een ja op een vraag die de vrager niet meer heeft, maakt op geen van beide apparaten een vriend, en wie ja zei leest dat het niet lukte', async function (check) {
+    const { fien, daan } = await daanVraagt();
+    daan.ev('MP.ecdh = null;');
+    tikTekst(fien, 'Ja, vrienden');
+    await wacht(5000);
+    check('geen vriend, aan geen van beide kanten', vriendenVan(fien) === 0 && vriendenVan(daan) === 0);
+    check('Fien leest dat het niet lukte, en niet dat het gelukt is', /Dat lukte niet/.test(tekstVan(fien, 'bubble')) && !/Jullie zijn nu vrienden/.test(fien.scherm()));
+    check('Daan ziet ook niet dat het gelukt is', !/Jullie zijn nu vrienden/.test(daan.scherm()));
+  });
+
+  /* één bericht tegelijk: zo valt een lijn weg precies tussen twee berichten in */
+  async function stapTot(vraag) {
+    for (let i = 0; i < 2000 && !vraag(); i++) { drainTot(1, __klok + 1000); for (let j = 0; j < 40; j++) await null; }
+    return !!vraag();
+  }
+  await regel('[2.5] een bevestiging die onderweg verloren gaat, komt opnieuw als de lijn terug is: dan zijn ze allebei vrienden', async function (check) {
+    const { fien, daan } = await daanVraagt();
+    tikTekst(fien, 'Ja, vrienden');
+    await stapTot(function () { return vriendenVan(daan) > 0; });
+    check('testopzet: Daan heeft Fien al, Fien heeft de bevestiging nog niet', vriendenVan(daan) === 1 && vriendenVan(fien) === 0);
+    geenNetwerk(fien);
+    const lukteNiet = function () { return /Dat lukte niet/.test(tekstVan(fien, 'bubble')); };
+    check('in het gat zegt niets dat het niet lukte, ook na tien tellen', !(await zagOoit(lukteNiet, 15000)));
+    check('in het gat: Fien is nog geen vriend en leest niet dat het gelukt is', vriendenVan(fien) === 0 && !/Jullie zijn nu vrienden/.test(fien.scherm()));
+    weerNetwerk(fien);
+    await wacht(30000);
+    check('terug: allebei vrienden, met hetzelfde geheim', vriendenVan(fien) === 1 && vriendenVan(daan) === 1 &&
+      fien.get('P.friends[Object.keys(P.friends)[0]].k') === daan.get('P.friends[Object.keys(P.friends)[0]].k'));
+    check('Fien leest dat het gelukt is', /Jullie zijn nu vrienden/.test(fien.scherm()));
+  });
+
+  await regel('[2.5] allebei tegelijk gevraagd en een lijn valt weg voor het antwoord aankomt: vrienden op beide apparaten of op geen van beide', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    tikTekst(fien, 'Vrienden worden');
+    tikTekst(daan, 'Vrienden worden');
+    const antwoordde = function (x) { return x.get('!!(MP && MP.vriendWacht)') || vriendenVan(x) > 0; };
+    await stapTot(function () { return antwoordde(fien) || antwoordde(daan); });
+    const groot = antwoordde(fien) ? daan : fien;
+    check('testopzet: één kant antwoordde', antwoordde(fien) !== antwoordde(daan));
+    geenNetwerk(groot);
+    await wacht(5000);
+    weerNetwerk(groot);
+    await wacht(30000);
+    check('allebei of geen van beide (' + vriendenVan(fien) + ' en ' + vriendenVan(daan) + ')', vriendenVan(fien) === vriendenVan(daan));
+  });
+
+  /* een telefoon die van netwerk wisselt: de oude lijn is dood, de app verbindt opnieuw en neemt zijn stoel over,
+     en de server ziet niemand vertrekken (room.go: een vervangen verbinding ruimt niets op) */
+  function wissel(x) {
+    x.ev('(function () { var w = MP.ws, h = w.onclose; w.onclose = null; w.onmessage = null; w.onerror = null; h({ code: 1006, reason: "", wasClean: false }); })()');
+  }
+  const hoofdKnoppen = function (x) { return knoppen(x).filter(function (k) { return k.classList && k.classList.contains('sun'); }).length; };
+  const vraagOpKaart = function (x) { return /wil vrienden worden/.test(tekstVan(x, 'eindkaart')) && kanTikken(x, 'Ja, vrienden'); };
+
+  await regel('[2.5] Daan vroeg om vrienden te worden en de lijn van Fien wisselt zonder dat de server het ziet: de vraag blijft aan beide kanten, en ja maakt ze allebei vrienden', async function (check) {
+    const { fien, daan } = await daanVraagt();
+    check('testopzet: Fien heeft de vraag', vraagOpKaart(fien));
+    wissel(fien);
+    await wacht(60000);
+    check('na een minuut: Fien heeft de vraag nog, Daan wacht erop', vraagOpKaart(fien) && /Gevraagd/.test(tekstVan(daan, 'ekWacht')));
+    check('één hoofdknop bij Fien', hoofdKnoppen(fien) === 1);
+    tikTekst(fien, 'Ja, vrienden');
+    await wacht(10000);
+    check('allebei vrienden', vriendenVan(fien) === 1 && vriendenVan(daan) === 1);
+  });
+
+  await regel('[2.5] Daan vroeg om vrienden te worden en zijn eigen lijn wisselt: de vraag blijft aan beide kanten, met één hoofdknop', async function (check) {
+    const { fien, daan } = await daanVraagt();
+    wissel(daan);
+    await wacht(60000);
+    check('Fien heeft de vraag, Daan wacht erop', vraagOpKaart(fien) && /Gevraagd/.test(tekstVan(daan, 'ekWacht')));
+    check('één hoofdknop bij Fien', hoofdKnoppen(fien) === 1);
+    tikTekst(fien, 'Ja, vrienden');
+    await wacht(10000);
+    check('allebei vrienden', vriendenVan(fien) === 1 && vriendenVan(daan) === 1);
+  });
+
+  await regel('[2.5] een ja of een nu niet terwijl de eigen lijn wisselt, komt toch aan', async function (check) {
+    for (const antwoord of ['Ja, vrienden', 'Nu niet']) {
+      const { fien, daan } = await daanVraagt();
+      wissel(fien);
+      tikTekst(fien, antwoord);
+      check(antwoord + ': de vraag komt niet terug op de kaart', !(await zagOoit(function () { return vraagOpKaart(fien); }, 60000)));
+      if (antwoord === 'Nu niet') {
+        check('Nu niet: Daan hoort het, en niemand is vriend', /wil nu even niet/.test(tekstVan(daan, 'bubble')) &&
+          !/Gevraagd/.test(tekstVan(daan, 'ekWacht')) && vriendenVan(fien) === 0 && vriendenVan(daan) === 0 && !vraagOpKaart(fien));
+      } else {
+        check('Ja: allebei vrienden', vriendenVan(fien) === 1 && vriendenVan(daan) === 1);
+      }
+    }
+  });
+
+  await regel('[2.5] een vraag die de vrager niet meer heeft, gaat bij de groet van de kaart', async function (check) {
+    const { fien, daan } = await daanVraagt();
+    check('testopzet: Fien heeft de vraag', vraagOpKaart(fien));
+    geenNetwerk(fien);
+    await wacht(3000);
+    check('testopzet: Daan zag Fien gaan en vraagt niets meer', !/Gevraagd/.test(tekstVan(daan, 'ekWacht')));
+    weerNetwerk(fien);
+    await wacht(30000);
+    check('terug: de vraag staat niet meer op de kaart van Fien, en er is één hoofdknop', !vraagOpKaart(fien) && hoofdKnoppen(fien) === 1);
+  });
+
+  await regel('[4.1] een revanche en een lijn die wisselt zonder dat de server het ziet: wie gevraagd was, weet het, en samen begint het nieuwe potje', async function (check) {
+    for (const wanneer of ['na de vraag', 'tijdens de vraag']) {
+      const { fien, daan } = await eindeTussenTwee();
+      const oud = fien.get('MP.gameId');
+      if (wanneer === 'na de vraag') { tikTekst(fien, 'Revanche'); await wacht(2000); wissel(daan); }
+      else { wissel(daan); tikTekst(fien, 'Revanche'); }
+      await wacht(60000);
+      check(wanneer + ': Fien wacht nog op Daan, Daan leest dat Fien revanche wil', /Wachten op Daan/.test(knopTeksten(fien).join(' ')) &&
+        /Fien wil revanche/.test(tekstVan(daan, 'bubble')));
+      tikTekst(daan, 'Revanche');
+      await wacht(5000);
+      const id = function (x) { return x.get('MP && session && session.online && !session.over ? MP.gameId : null'); };
+      check(wanneer + ': een nieuw potje op beide', !!id(fien) && id(fien) !== oud && id(daan) === id(fien));
+    }
+  });
+
+  await regel('[4.1] na het einde: is de eigen lijn terug en ging de ander in dat gat weg, dan zegt de strook dat, niet dat er geen verbinding is', async function (check) {
+    for (const hoe of ['Naar huis', 'de app dicht']) {
+      const { fien, daan } = await eindeTussenTwee();
+      geenNetwerk(fien);
+      await wacht(3000);
+      check(hoe + ': zonder lijn zegt de strook het', /De uitslag van jullie potje is al bewaard/.test(tekstVan(fien, 'bubble')));
+      if (hoe === 'Naar huis') tikTekst(daan, 'Naar huis'); else stopApparaat(daan);
+      await wacht(5000);
+      weerNetwerk(fien);
+      await wacht(30000);
+      check(hoe + ': de lijn is terug en de strook zegt dat Daan naar huis ging', !/geen verbinding/.test(tekstVan(fien, 'bubble')) &&
+        /Daan ging naar huis/.test(tekstVan(fien, 'bubble')) && !wachtKnoppen(fien) && kanTikken(fien, 'Naar huis'));
+    }
+  });
+
+  await regel('[4.3] in een potje: waren beide lijnen weg en is de ander eerst terug, dan zegt de strook niet dat de ander er niet is', async function (check) {
+    for (const zet of [false, true]) {
+      const { wit, zwart } = await tweeZetten();
+      const daan = zwart, fien = wit;
+      await speel(fien, daan, 'g1f3');
+      geenNetwerk(daan);
+      await wacht(3000);
+      check('testopzet: Fien leest dat Daan er niet is', /er nu niet/.test(tekstVan(fien, 'bubble')));
+      geenNetwerk(fien);
+      await wacht(3000);
+      weerNetwerk(daan);
+      await wacht(30000);
+      if (zet) await speel(fien, daan, 'b8c6');
+      weerNetwerk(fien);
+      await wacht(60000);
+      check((zet ? 'Daan zette: ' : 'Daan zette niet: ') + 'de strook zegt wie aan zet is', !/er nu niet/.test(tekstVan(fien, 'bubble')) &&
+        (zet ? /Jij bent aan zet/ : new RegExp(daan.naam + ' is aan zet')).test(tekstVan(fien, 'bubble')));
+    }
+  });
+
+  await regel('[2.5] wie ja zei en wacht terwijl de ander voorgoed naar huis gaat, leest dat vrienden worden nu niet lukt', async function (check) {
+    const { fien, daan } = await daanVraagt();
+    tikTekst(fien, 'Ja, vrienden');
+    await stapTot(function () { return fien.get('!!(MP && MP.vriendWacht)'); });
+    stopApparaat(daan);
+    await wacht(5000);
+    check('de regel', /Daan ging naar huis, dus vrienden worden lukt nu niet\. Na een volgend potje kan het weer\./.test(tekstVan(fien, 'bubble')));
+    check('niemand is vriend', vriendenVan(fien) === 0);
+  });
+
+  await regel('[2.5] een ja dat niet bevestigd wordt terwijl de ander er is, zegt na tien tellen dat het niet lukte', async function (check) {
+    const { fien, daan } = await daanVraagt();
+    daan.ev('mpOnVriend = function () {}');
+    tikTekst(fien, 'Ja, vrienden');
+    const lukteNiet = function () { return /Dat lukte niet/.test(tekstVan(fien, 'bubble')); };
+    check('negen tellen lang wacht Fien nog', !(await zagOoit(lukteNiet, 9000)));
+    check('daarna: Dat lukte niet, en geen vriend', (await zagOoit(lukteNiet, 2000)) && vriendenVan(fien) === 0);
+  });
+
+  /* de klok echt zoveel tellen verder, ook als er geen timer tussen zit */
+  async function tel(s) { await zagOoit(function () { return false; }, s * 1000); }
+  const geheimen = function (x) { return x.get('Object.keys(P.friends).filter(function (k) { return !P.friends[k].weg; }).map(function (k) { return P.friends[k].k; }).join()'); };
+
+  await regel('[2.5] een ja op een oude vraag terwijl de vrager opnieuw vroeg, maakt geen vrienden met twee geheimen', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    await geefOp(aanZet(a, b));
+    await tel(2);
+    tikTekst(b, 'Vrienden worden');
+    await tel(1);
+    geenNetwerk(a);
+    await tel(2);
+    weerNetwerk(a);
+    await tel(0.5);
+    wissel(b);
+    await tel(0.5);
+    wissel(a);
+    await tel(1);
+    check('testopzet: Daan kan opnieuw vragen en Fien heeft de oude vraag nog', kanTikken(b, 'Vrienden worden') && vraagOpKaart(a));
+    tikTekst(b, 'Vrienden worden');
+    await tel(1);
+    check('testopzet: Fien heeft nog Ja op haar kaart', kanTikken(a, 'Ja, vrienden'));
+    tikTekst(a, 'Ja, vrienden');
+    await tel(40);
+    const ga = geheimen(a), gb = geheimen(b);
+    check('vrienden op beide met hetzelfde geheim, of op geen van beide (' + !!ga + ', ' + !!gb + ', gelijk ' + (ga === gb) + ')', ga === gb);
+    if (!ga) check('leest Daan Gevraagd, dan heeft Fien zijn vraag', !/Gevraagd/.test(tekstVan(b, 'ekWacht')) || vraagOpKaart(a));
+  });
+
+  await regel('[2.5] een ja noemt de vraag waar het bij hoort, in het bericht en in de groet', async function (check) {
+    const { fien, daan } = await daanVraagt();
+    const vraag = daan.get('MP.ecdh.pub');
+    fien.ev('globalThis.__ja = null; var __zj = mpSend; mpSend = function (m) { if (m && m.t === "vriend" && m.pub) globalThis.__ja = m; return __zj(m); }');
+    daan.ev('mpOnVriend = function () {}');
+    tikTekst(fien, 'Ja, vrienden');
+    await wacht(2000);
+    check('het bericht', !!globalThis.__ja && globalThis.__ja.vraag === vraag);
+    check('de groet', fien.get('JSON.stringify(naEindeStaat().jaVraag)') === JSON.stringify(vraag));
+  });
+
+  await regel('[2.5] een ja van een app die zijn vraag niet noemt (de vorige versie), geldt voor de vraag die openstaat', async function (check) {
+    const { fien, daan } = await daanVraagt();
+    fien.ev('var __zend = mpSend; mpSend = function (m) { if (m && m.t === "vriend" && m.pub) m = { t: "vriend", pub: m.pub }; return __zend(m); }');
+    tikTekst(fien, 'Ja, vrienden');
+    await wacht(10000);
+    const ga = geheimen(fien), gb = geheimen(daan);
+    check('allebei vrienden, met hetzelfde geheim', !!ga && ga === gb);
+  });
+
+  /* de klok een timer per keer vooruit, tot het waar is */
+  async function totHetWaarIs(vraag, venster) {
+    const tot = __klok + venster;
+    while (!vraag() && __klok < tot) { const n = drainTot(1, Math.min(tot, __klok + 50)); if (!n) __klok = Math.min(tot, __klok + 50); for (let j = 0; j < 40; j++) await null; }
+    return !!vraag();
+  }
+  for (const traag of [100, 300, 600]) {
+    await regel('[2.5] een antwoord op een oud ja raakt een nieuw ja niet, ook op een lijn die ' + traag + ' ms nodig heeft', async function (check) {
+      const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+      try {
+        await samenSpelen(a, b);
+        await geefOp(aanZet(a, b));
+        await tel(2);
+        tikTekst(b, 'Vrienden worden');
+        await tel(1);
+        geenNetwerk(a);
+        await tel(2);
+        weerNetwerk(a);
+        await tel(0.5);
+        wissel(b);
+        await tel(0.5);
+        wissel(a);
+        await tel(1);
+        check('testopzet: Daan kan opnieuw vragen en Fien heeft de oude vraag', kanTikken(b, 'Vrienden worden') && kanTikken(a, 'Ja, vrienden'));
+        const oud = a.get('MP.hunVraag');
+        tikTekst(b, 'Vrienden worden');
+        await tel(1);
+        check('testopzet: de nieuwe vraag is nog niet bij Fien', kanTikken(a, 'Ja, vrienden') && a.get('MP.hunVraag') === oud);
+        /* alles wat Fien binnenkrijgt, is vanaf nu zo lang onderweg */
+        __server.vertraging = function (s) { return a.leven.sockets.indexOf(s) >= 0 ? traag : 0; };
+        tikTekst(a, 'Ja, vrienden');
+        const kwam = await totHetWaarIs(function () { const h = a.get('MP && MP.hunVraag ? MP.hunVraag : ""'); return !!h && h !== oud && kanTikken(a, 'Ja, vrienden'); }, 20000);
+        check('testopzet: de nieuwe vraag kwam op de kaart terwijl het oude ja nog wacht', kwam && a.get('!!(MP.vriendWacht || MP.vriendLaat)'));
+        tikTekst(a, 'Ja, vrienden');
+        for (let j = 0; j < 400; j++) await null;
+        await tel(40);
+        const ga = geheimen(a), gb = geheimen(b);
+        check('vrienden op beide met hetzelfde geheim, of op geen van beide (' + !!ga + ', ' + !!gb + ')', ga === gb);
+        check('geen Gevraagd zonder vraag aan de andere kant', !/Gevraagd/.test(tekstVan(a, 'ekWacht')) || vraagOpKaart(b));
+      } finally { __server.vertraging = null; }
+    });
+  }
+
+  await regel('[2.5] een ja dat op bevestiging wacht, blijft als de ander even weg is: wie vroeg kan de vriend al hebben', async function (check) {
+    const { fien, daan } = await daanVraagt();
+    tikTekst(fien, 'Ja, vrienden');
+    await stapTot(function () { return !!geheimen(daan); });
+    /* het ok van Daan gaat verloren, en daarna is Daan zelf even weg */
+    geenNetwerk(fien);
+    await tel(2);
+    weerNetwerk(fien);
+    await tel(1);
+    geenNetwerk(daan);
+    await tel(3);
+    weerNetwerk(daan);
+    await tel(40);
+    check('testopzet: Daan had Fien al als vriend', !!geheimen(daan));
+    check('allebei vrienden, met hetzelfde geheim', geheimen(fien) === geheimen(daan));
+  });
+
+  await regel('[2.5] een groet die komt terwijl het ja nog zijn sleutel maakt, laat dezelfde vraag niet opnieuw zien', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    try {
+      await samenSpelen(fien, daan);
+      await geefOp(aanZet(fien, daan));
+      await tel(2);
+      tikTekst(fien, 'Vrienden worden');
+      await tel(1);
+      __server.vertraging = function (s) { return daan.leven.sockets.indexOf(s) >= 0 ? 300 : 0; };
+      fien.ev('globalThis.__groetVanFien = false; var __zg = mpSend; mpSend = function (m) { if (m && m.t === "hallo") globalThis.__groetVanFien = true; return __zg(m); }');
+      wissel(daan);
+      await totHetWaarIs(function () { return globalThis.__groetVanFien && kanTikken(daan, 'Ja, vrienden'); }, 10000);
+      /* de groet van Fien is nu onderweg naar Daan; Daan tikt Ja */
+      tikTekst(daan, 'Ja, vrienden');
+      /* de groet landt voordat het apparaat klaar is met de sleutel (een trage telefoon): eerst de berichten, dan pas de beloften */
+      drainTot(400, __klok + 1000);
+      const weer = kanTikken(daan, 'Ja, vrienden');
+      if (weer) tikTekst(daan, 'Ja, vrienden');
+      await tel(40);
+      check('de vraag kwam niet terug op de kaart', !weer);
+      check('allebei vrienden, met hetzelfde geheim', !!geheimen(fien) && geheimen(fien) === geheimen(daan));
+    } finally { __server.vertraging = null; }
+  });
+
+  await regel('[2.5] komt de vraag van de ander binnen terwijl de eigen vraag nog zijn sleutel maakt, dan is vrienden worden ja zeggen', async function (check) {
+    for (let poging = 0; poging < 6; poging++) {
+      const { fien, daan } = await eindeTussenTwee();
+      tikTekst(fien, 'Vrienden worden');
+      await stapTot(function () { return fien.get('!!(MP && MP.ecdh)'); });
+      /* de vraag van Fien is onderweg; Daan tikt Vrienden worden */
+      tikTekst(daan, 'Vrienden worden');
+      await wacht();
+      await tel(40);
+      check('poging ' + (poging + 1) + ': allebei vrienden, met hetzelfde geheim', !!geheimen(fien) && geheimen(fien) === geheimen(daan));
+      ORAKEL.apps.splice(ORAKEL.apps.indexOf(fien)).forEach(stopApparaat);
+    }
+  });
+
+  await regel('[2.5] bij twee kruisende vragen noemt het ja van de kleinste sleutel de vraag van de ander', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    for (const x of [fien, daan]) x.ev('globalThis["__uit" + P.name] = []; var __zk = mpSend; mpSend = function (m) { globalThis["__uit" + P.name].push(m); return __zk(m); }');
+    tikTekst(fien, 'Vrienden worden');
+    tikTekst(daan, 'Vrienden worden');
+    await wacht(5000);
+    const vraagVan = function (n) { const v = globalThis['__uit' + n].filter(function (m) { return m.t === 'vriend?'; })[0]; return v && v.pub; };
+    const jaVan = function (n) { return globalThis['__uit' + n].filter(function (m) { return m.t === 'vriend' && m.pub; })[0]; };
+    const ja = jaVan('Fien') || jaVan('Daan'), wie = jaVan('Fien') ? 'Fien' : 'Daan', ander = wie === 'Fien' ? 'Daan' : 'Fien';
+    check('testopzet: één kant antwoordde', !!ja && !(jaVan('Fien') && jaVan('Daan')));
+    check('het ja noemt de vraag van de ander', !!ja && ja.vraag === vraagVan(ander));
+    check('en ze zijn vrienden met hetzelfde geheim', !!geheimen(fien) && geheimen(fien) === geheimen(daan));
+  });
+
+  await regel('[2.5] een ja op een vraag die de vrager niet meer heeft: wie ja zei hoort het meteen, en de vraag van nu blijft staan', async function (check) {
+    const { fien, daan } = await daanVraagt();
+    /* een ja dat een andere vraag noemt, zoals een ja dat te laat komt */
+    fien.ev('var __zv = mpSend; mpSend = function (m) { if (m && m.t === "vriend" && m.pub) m = Object.assign({}, m, { vraag: "A".repeat(87) }); return __zv(m); }');
+    tikTekst(fien, 'Ja, vrienden');
+    check('Fien leest binnen een paar tellen dat het niet lukte', await zagOoit(function () { return /Dat lukte niet/.test(tekstVan(fien, 'bubble')); }, 3000));
+    check('Daan vraagt nog steeds, en niemand is vriend', daan.get('!!(MP && MP.ecdh)') && /Gevraagd/.test(tekstVan(daan, 'ekWacht')) && !geheimen(fien) && !geheimen(daan));
+  });
+
+  await regel('[2.5] een vraag die opzij ging omdat de eigen vraag openstond, komt alsnog als het antwoord op de eigen vraag Nu niet is', async function (check) {
+    let gespeeld = false;
+    for (let poging = 0; poging < 12 && !gespeeld; poging++) {
+      const { fien, daan } = await eindeTussenTwee();
+      tikTekst(fien, 'Vrienden worden');
+      await tel(1);
+      const f = fien.get('MP.ecdh ? MP.ecdh.pub : ""');
+      wissel(fien);
+      tikTekst(daan, 'Nu niet');
+      tikTekst(daan, 'Vrienden worden');
+      await stapTot(function () { return daan.get('!!(MP && MP.ecdh)'); });
+      const d = daan.get('MP.ecdh ? MP.ecdh.pub : ""');
+      await tel(40);
+      /* alleen als de eigen vraag van Fien de grootste sleutel heeft, legt haar app de vraag van Daan opzij */
+      if (!f || !d || f < d) { ORAKEL.apps.splice(ORAKEL.apps.indexOf(fien)).forEach(stopApparaat); continue; }
+      gespeeld = true;
+      check('Daan leest Gevraagd en Fien heeft zijn vraag op de kaart', /Gevraagd/.test(tekstVan(daan, 'ekWacht')) && vraagOpKaart(fien));
+    }
+    check('testopzet: de vraag van Daan ging een keer opzij', gespeeld);
+  });
+
+  await regel('[3.5] na een koppelcode tekent het kijken het scherm alleen opnieuw als het iets nieuws las', async function (check) {
+    const mees = maakApparaat('Mees');
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    mees.tik('linkDone');
+    await tel(6);
+    mees.ev('globalThis.__opnieuw = 0; var __rh = renderHome; renderHome = function () { globalThis.__opnieuw++; return __rh.apply(this, arguments); }');
+    await tel(60);
+    check('een minuut kijken zonder iets nieuws: het scherm blijft zoals het is (' + globalThis.__opnieuw + ' keer opnieuw)', globalThis.__opnieuw === 0);
+  });
+
+  await regel('[3.5] na de tien minuten van een koppelcode kijkt het apparaat niet meer', async function (check) {
+    const mees = maakApparaat('Mees');
+    await mees.ev('linkShareFlow()');
+    await wacht();
+    mees.tik('linkDone');
+    zetDatum(new Date(Date.now() + 11 * 60000).toISOString());
+    await tel(10);
+    const echt = fetch;
+    let gelezen = 0;
+    fetch = function (url, o) { if (/\/v1\/profile\//.test(url)) gelezen++; return echt(url, o); };
+    try { await tel(60); } finally { fetch = echt; }
+    check('geen enkele keer gelezen (' + gelezen + ')', gelezen === 0);
+  });
+
+  await regel('[4.1] een revanche die de ander niet meer vraagt, telt bij een groet niet meer: dan begint er geen potje', async function (check) {
+    const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
+    /* Daan laat de code zien: hij begint een revanche zodra hij denkt dat Fien het ook wil */
+    await samenSpelen(daan, fien);
+    await speel(daan, fien, 'e2e4');
+    await speel(daan, fien, 'e7e5');
+    await geefOp(fien);
+    await wacht();
+    const oud = daan.get('MP.gameId');
+    tikTekst(fien, 'Revanche');
+    await wacht(2000);
+    check('testopzet: Daan leest dat Fien revanche wil', /Fien wil revanche/.test(tekstVan(daan, 'bubble')));
+    geenNetwerk(daan);
+    await tel(3);
+    check('testopzet: Fien vraagt niets meer, Daan ging weg', !fien.get('MP.revMine'));
+    weerNetwerk(daan);
+    await tel(30);
+    tikTekst(daan, 'Revanche');
+    await tel(5);
+    check('geen nieuw potje: Daan wacht op Fien, en Fien leest dat Daan revanche wil', daan.get('MP.gameId') === oud &&
+      fien.get('session.over') === true && /Daan wil revanche/.test(tekstVan(fien, 'bubble')));
+  });
+
+  await regel('[4.1] een server die nog niet bijgewerkt is (zijn welkom zegt niets over de ander): de app telt de ander niet als weg', async function (check) {
+    __server.welkomZonderAnder = true;
+    try {
+      const { fien, daan } = await eindeTussenTwee();
+      geenNetwerk(fien);
+      await tel(3);
+      weerNetwerk(fien);
+      await tel(30);
+      check('na het einde: geen zin dat Daan naar huis ging, en de knoppen weer', !/ging naar huis/.test(tekstVan(fien, 'bubble')) && kanTikken(fien, 'Revanche'));
+      /* ging de ander in het gat weg, dan weet de app dat niet; hij is dan ook niet bereikbaar tot hij groet */
+      const t = await eindeTussenTwee();
+      geenNetwerk(t.fien);
+      await tel(3);
+      stopApparaat(t.daan);
+      await tel(3);
+      weerNetwerk(t.fien);
+      await tel(30);
+      check('na het einde, de ander weg in het gat: geen knop die op hem wacht', !kanTikken(t.fien, 'Revanche') && !kanTikken(t.fien, 'Vrienden worden'));
+      const { wit, zwart } = await tweeZetten();
+      geenNetwerk(zwart);
+      await tel(3);
+      geenNetwerk(wit);
+      await tel(3);
+      weerNetwerk(zwart);
+      await tel(30);
+      weerNetwerk(wit);
+      await tel(60);
+      check('in een potje: de strook zegt niet dat de ander er niet is', !/er nu niet/.test(tekstVan(wit, 'bubble')));
+    } finally { __server.welkomZonderAnder = false; }
+  });
+
+  await regel('[4.1] valt de eigen lijn na het einde weg, dan zegt de strook dat; komt hij terug, dan de knoppen ook', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    geenNetwerk(fien);
+    await wacht(3000);
+    check('de strook zegt het, en er wacht niets op de ander', /Er is nu geen verbinding/.test(tekstVan(fien, 'bubble')) && !wachtKnoppen(fien));
+    weerNetwerk(fien);
+    await wacht(30000);
+    check('terug: de knoppen weer', kanTikken(fien, 'Revanche') && kanTikken(fien, 'Vrienden worden') && !/geen verbinding/.test(tekstVan(fien, 'bubble')));
+  });
+
+  await regel('[4.1] na een eigen nieuwe verbinding wacht er pas weer iets op de ander als die zich meldt', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    geenNetwerk(fien);
+    await wacht(3000);
+    stopApparaat(daan);
+    await wacht(3000);
+    weerNetwerk(fien);
+    await wacht(30000);
+    check('de ander ging weg terwijl de eigen lijn weg was: geen knop die op hem wacht', !wachtKnoppen(fien));
+  });
+
+  await regel('[4.1] wat gevraagd was en een knop die wachtte, gaan terug als de ander weggaat en terugkomt', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    tikTekst(fien, 'Revanche');
+    await wacht();
+    check('testopzet: Fien wacht op revanche', !kanTikken(fien, 'Revanche'));
+    geenNetwerk(daan);
+    await wacht(3000);
+    weerNetwerk(daan);
+    await wacht(30000);
+    check('terug: gewoon Revanche, niet meer wachten', kanTikken(fien, 'Revanche') && !/Wachten op/.test(knopTeksten(fien).join(' ')));
+    tikTekst(fien, 'Vrienden worden');
+    await wacht();
+    check('testopzet: gevraagd', /Gevraagd/.test(tekstVan(fien, 'ekWacht')));
+    fien.ev('naEindeTekenen()');
+    check('opnieuw tekenen laat Vrienden worden weg zolang de vraag openstaat', !kanTikken(fien, 'Vrienden worden'));
+    stopApparaat(daan);
+    await wacht(3000);
+    check('de ander ging weg: niets meer gevraagd', fien.get('!!(MP && MP.ecdh)') === false && tekstVan(fien, 'ekWacht') === '');
+    fire(fien.el('mpRev'), 'click', { target: fien.el('mpRev') });
+    check('een tik op de verborgen Revanche wacht nergens op', !/Wachten/.test(fien.get('document.getElementById("mpRev").textContent')));
+  });
+
+  await regel('[2.5] een vraag gaat niet weg als de ander wegging terwijl de sleutel gemaakt werd', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    fien.ev('globalThis.__vv = vriendVragen(); MP.peerOn = false;');
+    await wacht();
+    check('niets gevraagd, en de ander kreeg niets', fien.get('!!(MP && MP.ecdh)') === false && !/wil vrienden worden/.test(tekstVan(daan, 'eindkaart')));
+  });
+
+  await regel('[4.3] na een eigen nieuwe verbinding in een potje zegt de strook dat de ander er niet is, als die weg was', async function (check) {
+    const { wit, zwart } = await tweeZetten();
+    stopApparaat(zwart);
+    await wacht(3000);
+    geenNetwerk(wit);
+    await wacht(5000);
+    weerNetwerk(wit);
+    await wacht(30000);
+    check('de strook', /er nu niet/.test(tekstVan(wit, 'bubble')) && !/Jij bent aan zet/.test(tekstVan(wit, 'bubble')));
+  });
+
+  await regel('[4.1] de verbinding geeft het op terwijl het venster voor een nieuw potje open is: het vervangen potje komt terug', async function (check) {
+    const { fien, daan } = await eindeVoorDaan(false);
+    await fien.ev('mpHostQR()');
+    await wacht();
+    geenNetwerk(fien);
+    await wacht(5 * 60000);
+    check('testopzet: de verbinding is weg', /De verbinding is weg/.test(fien.scherm()));
+    weerNetwerk(fien);
+    await wacht(60000);
+    await daanZietKlaar(check, fien, daan);
+  });
+
+  await regel('[4.1] een potje dat niet te lezen is, blijft naast een lopend potje staan tot het kind kiest', async function (check) {
+    const fien = maakApparaat('Fien'), sem = maakApparaat('Sem');
+    await samenSpelen(fien, sem);
+    await speel(fien, sem, 'e2e4');
+    const d = opgeslagen(fien, SAMEN);
+    d.games.mnopqrstuvwx = { gameId: 'mnopqrstuvwx', fid: null, room: 'kamer2abc', seat: 'stoel2abc', host: true, myColor: 'w', gameNo: 1,
+      moves: ['e2e4', 'e2e4'], peerName: 'Lotte', result: null, offer: null, shown: false, updated: 1 };
+    fien.opslag.setItem(SAMEN, JSON.stringify(d));
+    await wacht(10000);
+    await speel(fien, sem, 'e7e5');
+    const d2 = opgeslagen(fien, SAMEN);
+    check('na tien tellen en een zet staan ze er allebei', !!d2 && !!d2.games.mnopqrstuvwx && Object.keys(d2.games).length === 2);
+    fien.tik('backBtn');
+    await wacht();
+    check('de kaart zegt het', /kan ik niet meer openen/.test(tekstVan(fien, 'verder')));
+    tikTekst(fien, 'Weghalen');
+    await wacht();
+    const d3 = opgeslagen(fien, SAMEN);
+    check('Weghalen haalt alleen dat potje weg', !!d3 && !d3.games.mnopqrstuvwx && Object.keys(d3.games).length === 1);
+  });
+
+  /* de eindkaart van een potje tussen kinderen zegt wat telde: de XP van het potje, en het weekdoel als dat meetelt */
+  async function potjeMetDoel(doelFien, doelDaan, kort) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    if (doelFien) a.ev('setPref("weekGoal", ' + JSON.stringify(doelFien) + ')');
+    if (doelDaan) b.ev('setPref("weekGoal", ' + JSON.stringify(doelDaan) + ')');
+    await samenSpelen(a, b);
+    for (const z of (kort ? ['e2e4', 'e7e5'] : ZETTEN22)) await speel(a, b, z);
+    await geefOp(aanZet(a, b));
+    await wacht();
+    return { a, b };
+  }
+  await regel('[4.1] de eindkaart van een potje tussen kinderen: het weekdoel met vrienden gehaald, of alleen de XP van het potje', async function (check) {
+    const { a, b } = await potjeMetDoel({ kind: 'vriend', n: 1 }, null, false);
+    check('Fien haalde haar weekdoel', tekstVan(a, 'eindkaart').indexOf('+30 XP. Je weekdoel is gehaald: +60 XP! 🎯') >= 0);
+    check('Daan heeft geen weekdoel met vrienden: alleen de XP van het potje', /\+30 XP/.test(tekstVan(b, 'eindkaart')) &&
+      !/weekdoel/.test(tekstVan(b, 'eindkaart')) && !/geen XP/.test(tekstVan(b, 'eindkaart')));
+  });
+
+  await regel('[4.1] de eindkaart van een potje tussen kinderen: telt mee voor het weekdoel, of telt niet want te kort', async function (check) {
+    const lang = await potjeMetDoel({ kind: 'vriend', n: 3 }, null, false);
+    check('telt mee, het doel is nog niet gehaald', tekstVan(lang.a, 'eindkaart').indexOf('+30 XP. Telt mee voor je weekdoel. 🎯') >= 0 && !/gehaald/.test(tekstVan(lang.a, 'eindkaart')));
+    const kort = await potjeMetDoel({ kind: 'vriend', n: 3 }, null, true);
+    check('te kort: aan beide kanten', [kort.a, kort.b].every(function (x) { return /Dit potje telt niet mee: het was korter dan tien zetten\./.test(tekstVan(x, 'eindkaart')); }));
+  });
+
+  /* een potje tussen kinderen dat telt, geeft XP; vanaf het vierde op een dag met hetzelfde kind de helft */
+  const SNEL_MAT = ['f2f3', 'e7e5', 'g2g4', 'd8h4'];
+  const xpVan = function (x) { return x.get('P.xp'); };
+  async function revanche(a, b) {
+    tikTekst(a, 'Revanche');
+    tikTekst(b, 'Revanche');
+    await wacht();
+  }
+  await regel('[4.1] een potje tussen kinderen dat telt, geeft beide kinderen 30 XP: winst en verlies, remise, en te kort niets', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    let xa = xpVan(a), xb = xpVan(b);
+    for (const z of SNEL_MAT) await speel(a, b, z);
+    await wacht();
+    check('mat: wie won en wie verloor, allebei 30', xpVan(a) === xa + 30 && xpVan(b) === xb + 30);
+    check('de kaart zegt het op de plek van de XP', [a, b].every(function (x) { return /\+30 XP/.test(tekstVan(x, 'eindkaart')) && !/geen XP/.test(tekstVan(x, 'eindkaart')); }));
+    await revanche(a, b);
+    xa = xpVan(a); xb = xpVan(b);
+    for (const z of ZETTEN22) await speel(a, b, z);
+    const wit = aanZet(a, b), zwart = wit === a ? b : a;
+    await biedRemise(wit);
+    await wacht(500);
+    tikTekst(zwart, 'Remise aannemen');
+    await wacht(2000);
+    check('remise na twintig halve zetten: allebei 30', eindziet(a, 'Gelijkspel') && xpVan(a) === xa + 30 && xpVan(b) === xb + 30);
+    await revanche(a, b);
+    xa = xpVan(a); xb = xpVan(b);
+    await speel(a, b, 'e2e4');
+    await speel(a, b, 'e7e5');
+    await geefOp(aanZet(a, b));
+    await wacht();
+    check('opgeven voor de twintigste halve zet: niets', xpVan(a) === xa && xpVan(b) === xb &&
+      /Dit potje telt niet mee: het was korter dan tien zetten\./.test(tekstVan(a, 'eindkaart')));
+  });
+
+  await regel('[4.1] vanaf het vierde potje op een dag met hetzelfde kind 15 XP, met de zin; een ander kind en de volgende dag weer 30', async function (check) {
+    zetDatum('2026-11-12T10:00:00');
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan'), c = maakApparaat('Lotte');
+    await samenSpelen(a, b);
+    const kregen = [], zin = /Jullie speelden vandaag al veel samen! Nu krijg je voor potjes met (Daan|Fien) nog 15 XP per potje\./;
+    let eerderNergens = true;
+    for (let i = 0; i < 4; i++) {
+      if (i) await revanche(a, b);
+      const xa = xpVan(a), xb = xpVan(b);
+      for (const z of SNEL_MAT) await speel(a, b, z);
+      await wacht();
+      kregen.push((xpVan(a) - xa) + '/' + (xpVan(b) - xb));
+      if (i < 3) eerderNergens = eerderNergens && [a, b].every(function (x) { return !zin.test(tekstVan(x, 'eindkaart')) && !zin.test(tekstVan(x, 'bubble')); });
+    }
+    check('drie keer 30, dan 15 (' + kregen.join(', ') + ')', kregen.join() === '30/30,30/30,30/30,15/15');
+    check('in de eerste drie potjes nergens de zin over 15 XP', eerderNergens);
+    check('bij het vierde: de zin in de strook, niet op de kaart, en +15 XP op de kaart', [a, b].every(function (x) {
+      return zin.test(tekstVan(x, 'bubble')) && !zin.test(tekstVan(x, 'eindkaart')) && /\+15 XP/.test(tekstVan(x, 'eindkaart'));
+    }));
+    a.ev('if (MP) mpStop(); goHome()');
+    await wacht();
+    await samenSpelen(a, c);
+    let xa = xpVan(a);
+    for (const z of SNEL_MAT) await speel(a, c, z);
+    await wacht();
+    check('met een ander kind: 30', xpVan(a) === xa + 30);
+    a.ev('if (MP) mpStop(); goHome()');
+    b.ev('if (MP) mpStop(); goHome()');
+    await wacht();
+    zetDatum('2026-11-13T10:00:00');
+    await samenSpelen(a, b);
+    xa = xpVan(a);
+    for (const z of SNEL_MAT) await speel(a, b, z);
+    await wacht();
+    check('de volgende dag met hetzelfde kind: weer 30', xpVan(a) === xa + 30);
+  });
+
+  await regel('[3.10] compat: een profiel van de vorige versie houdt zijn XP, krijgt er niets bij door te laden, en zijn dagteller werkt met potjes tussen kinderen', async function (check) {
+    const a0 = maakApparaat('Fien'), b = maakApparaat('Daan');
+    const vandaag = a0.get('todayStr()');
+    const oud = { v: 2, epoch: 0, cnt: { xp: { d1: 500, d2: 20 }, stars: { d1: 40 } }, set: { badges: { winst: true } },
+      lww: { name: { v: 'Fien', t: 1 } }, max: { best: 6 },
+      loc: { streak: 2, lastLevel: 1, day: { date: vandaag, wins: 1, stars: 5, done: {}, allDone: false, winsByLvl: { 1: 2, 2: 0, 3: 0 } } } };
+    a0.opslag.setItem('schaakheld1', JSON.stringify(oud));
+    const a = herlaad(a0);
+    await wacht();
+    check('na laden precies de XP van de vorige versie', a.get('P.xp') === 520);
+    await samenSpelen(a, b);
+    for (const z of SNEL_MAT) await speel(a, b, z);
+    await wacht();
+    check('het eerste potje met Daan geeft 30, en de dagteller van Turbo blijft', a.get('P.xp') === 550 && a.get('P.day.winsByLvl[1]') === 2);
+  });
+
+  const doelBijHetEinde = [
+    ['een weekdoel met vrienden', { kind: 'vriend', n: 1 }, 0, '+30 XP. Je weekdoel is gehaald: +60 XP! 🎯'],
+    ['een weekdoel van een andere soort, dat net vol is van het andere apparaat', { kind: 'opdr', n: 10 }, 10, '+30 XP. Je weekdoel is gehaald: +60 XP! 🎯']
+  ];
+  for (const geval of doelBijHetEinde) {
+    await regel('[4.1] ' + geval[0] + ', gehaald bij het einde van een potje tussen kinderen: de regel zegt het doel en zijn punten, en de kaart heeft geen tegel', async function (check) {
+      const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+      a.ev('setPref("weekGoal", ' + JSON.stringify(geval[1]) + ')');
+      if (geval[2]) a.ev('bump("wk." + curWeek() + ".opdr", ' + geval[2] + ')');
+      await samenSpelen(a, b);
+      for (const z of ZETTEN22) await speel(a, b, z);
+      const xp = a.get('P.xp');
+      check('testopzet: het doel was nog niet gehaald', !a.get('goalDoneWeek(curWeek())'));
+      await geefOp(aanZet(a, b));
+      await wacht();
+      const kaart = tekstVan(a, 'eindkaart');
+      check('de regel: ' + geval[3], kaart.indexOf(geval[3]) >= 0);
+      check('geen regel die zegt dat er geen XP is', !/geen XP/.test(kaart));
+      check('geen tegel Weekdoel gehaald op de kaart', !/Weekdoel gehaald/.test(a.get('document.getElementById("eindkaart").innerHTML')));
+      check('de punten één keer: 30 voor het potje en 60 voor het doel', a.get('P.xp') === xp + 90);
+    });
+  }
+
+  await regel('[4.1] een tweede potje nadat het weekdoel met vrienden gehaald is, zegt niet nog eens dat het nu gehaald is', async function (check) {
+    const { a, b } = await potjeMetDoel({ kind: 'vriend', n: 1 }, null, false);
+    check('testopzet: het eerste potje haalde het doel', /Je weekdoel is gehaald/.test(tekstVan(a, 'eindkaart')));
+    const xp = a.get('P.xp');
+    tikTekst(a, 'Revanche');
+    tikTekst(b, 'Revanche');
+    await wacht();
+    for (const z of ZETTEN22) await speel(a, b, z);
+    await geefOp(aanZet(a, b));
+    await wacht();
+    check('testopzet: het tweede potje is klaar en telde', a.get('session.S.hist.length') >= 22 &&
+      /JIJ WINT|wint dit potje/.test(tekstVan(a, 'eindkaart')) && !/korter dan tien zetten/.test(tekstVan(a, 'eindkaart')));
+    check('niet nog eens gehaald, en alleen de 30 van het potje', !/gehaald/.test(tekstVan(a, 'eindkaart')) && a.get('P.xp') === xp + 30);
+  });
+
+  await regel('[4.1] met een weekdoel van een andere soort zegt de eindkaart van een potje tussen kinderen niet dat het meetelt', async function (check) {
+    const { a } = await potjeMetDoel({ kind: 'opdr', n: 10 }, null, false);
+    const kaart = tekstVan(a, 'eindkaart');
+    check('testopzet: het potje is klaar en telde', /JIJ WINT|wint dit potje/.test(kaart) && !/korter dan tien zetten/.test(kaart));
+    check('geen Telt mee voor je weekdoel', !/Telt mee voor je weekdoel/.test(kaart));
+  });
+
+  await regel('[4.2] Pauze uit een potje met een ander kind gaat naar Spelen, waar de kaart het potje toont, ook als het van Vrienden kwam', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    a.tik('tabVrienden');
+    await wacht();
+    await samenSpelen(a, b);
+    a.tik('backBtn');
+    await wacht();
+    check('geen vriend: op Spelen, met het potje op de kaart', zichtbaar(a, 'view-spelen') && /je potje met Daan/.test(tekstVan(a, 'verder')));
+    const c = maakApparaat('Mila'), d = maakApparaat('Sem');
+    const fid = await wordenVrienden(c, d);
+    c.ev('if (MP) mpStop(true); goHome("vrienden")');
+    d.ev('if (MP) mpStop(true); goHome()');
+    await wacht();
+    await nodigUit(c);
+    await d.ev('friendPoll()');
+    await wacht();
+    d.tik('invJa');
+    await wacht();
+    c.tik('mpGo');
+    await wacht();
+    check('testopzet: een potje tussen vrienden', c.get('!!(session && session.online && MP && MP.viaFriend)'));
+    c.tik('backBtn');
+    await wacht();
+    check('vriend: ook op Spelen, met het potje op de kaart', zichtbaar(c, 'view-spelen') && /je potje met Sem/.test(tekstVan(c, 'verder')));
+  });
+
+  await regel('[4.6] wie uitnodigt, leest dat de uitnodiging klaarstaat, zonder te zeggen dat de app van de ander dicht is', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await wordenVrienden(fien, daan);
+    await nodigUit(fien);
+    check('het venster', /Je uitnodiging staat klaar voor Daan\. Zeg het gerust even!/.test(fien.scherm()) && !/zodra de app open gaat/.test(fien.scherm()));
+    check('de rij', /Wachten op Daan…/.test(tekstVan(fien, 'friendList')) && !/SchaakHeld opent/.test(tekstVan(fien, 'friendList')));
   });
 
   await regel('[4.4] is de kamer weg, dan zien beiden hetzelfde einde en telt het voor niemand', async function (check) {
@@ -945,6 +2020,176 @@ async function orakelTwee() {
     tikTekst(daan, 'Nu niet');
     check('Fien leest het', await zagOoit(function () { return /Daan kan nu even niet/.test(zegt(fien)); }, 30000));
     check('de kaart toont het potje tegen Turbo', /Verder: je potje tegen/.test(tekstVan(daan, 'verder')) && !/Fien wil spelen/.test(tekstVan(daan, 'verder')));
+  });
+
+  /* de uitnodiging op de kaart: terugnemen, de minuten, en naast een lopend vriendenpotje */
+  async function semNodigtUitTijdensTurbo() {
+    const fien = maakApparaat('Fien'), sem = maakApparaat('Sem');
+    await wordenVrienden(fien, sem);
+    fien.ev('setPref("predict", false); setPref("guard", false)');
+    await startPotje(fien, 1);
+    await zetEnWacht(fien, 'e2e4');
+    await nodigUit(sem);
+    await fien.ev('friendPoll()');
+    await wacht();
+    return { fien, sem };
+  }
+  await regel('[4.5] een uitnodiging die de vriend terugnam, gaat van de kaart zodra het lezen van de bus dat ziet', async function (check) {
+    const { fien, sem } = await semNodigtUitTijdensTurbo();
+    check('testopzet: de uitnodiging wacht', fien.get('!!uitnodigingWacht'));
+    tikTekst(sem, 'Stop met wachten');
+    await wacht(20000);
+    fien.tik('backBtn');
+    await wacht();
+    check('thuis geen uitnodiging op de kaart en geen venster', !/Sem wil spelen/.test(tekstVan(fien, 'verder')) && !fien.open());
+  });
+
+  await regel('[4.5] kan de bus niet gelezen worden, dan blijft de uitnodiging staan tot het lezen weer lukt', async function (check) {
+    const { fien, sem } = await semNodigtUitTijdensTurbo();
+    geenNetwerk(fien);
+    tikTekst(sem, 'Stop met wachten');
+    await wacht(20000);
+    fien.tik('backBtn');
+    await wacht();
+    check('zonder netwerk blijft ze op de kaart', /Sem wil spelen/.test(tekstVan(fien, 'verder')));
+    weerNetwerk(fien);
+    await wacht(20000);
+    check('zodra het lezen lukt, is ze weg', !/Sem wil spelen/.test(tekstVan(fien, 'verder')) && !fien.open());
+  });
+
+  await regel('[4.5] de minuten op de kaart tellen af, en na tien minuten is de uitnodiging weg', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const { fien } = await semNodigtUitTijdensTurbo();
+    fien.tik('backBtn');
+    await wacht();
+    check('testopzet: nog 10 minuten', /De uitnodiging is nog 10 minuten geldig\./.test(tekstVan(fien, 'verder')));
+    await wacht(5 * 60000);
+    check('na vijf minuten: nog 5 minuten', /De uitnodiging is nog 5 minuten geldig\./.test(tekstVan(fien, 'verder')));
+    await wacht(4 * 60000 + 30000);
+    check('in de laatste minuut: nog 1 minuut', /De uitnodiging is nog 1 minuut geldig\./.test(tekstVan(fien, 'verder')));
+    await wacht(60000);
+    check('na tien minuten is ze weg', !/wil spelen/.test(tekstVan(fien, 'verder')) && !fien.open());
+  });
+
+  await regel('[4.5] een uitnodiging naast een lopend vriendenpotje: de zin dat het potje nog loopt heeft Nu niet, en wie uitnodigde hoort het meteen', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan'), sem = maakApparaat('Sem');
+    await wordenVrienden(fien, sem);
+    fien.ev('if (MP) mpStop(true); goHome()');
+    sem.ev('if (MP) mpStop(true); goHome()');
+    await wacht();
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    await nodigUit(sem);
+    await fien.ev('friendPoll()');
+    await wacht();
+    fien.tik('backBtn');
+    await wacht();
+    check('testopzet: de kaart toont het potje met Daan en de uitnodiging van Sem', /je potje met Daan/.test(tekstVan(fien, 'verder')) &&
+      /Sem wil spelen/.test(tekstVan(fien, 'verder')));
+    tikTekst(fien, 'Ja, spelen!');
+    await wacht();
+    check('de zin, met Nu niet en het kruisje', /Je potje met Daan loopt nog\. Speel dat eerst uit\./.test(fien.scherm()) && kanTikken(fien, 'Nu niet') &&
+      zichtbaar(fien, 'mClose'));
+    fien.tik('mClose');
+    await wacht(3000);
+    check('het kruisje sluit alleen: de uitnodiging staat er nog, en Sem wacht nog', /Sem wil spelen/.test(tekstVan(fien, 'verder')) &&
+      !/kan nu even niet/.test(zegt(sem)));
+    tikTekst(fien, 'Ja, spelen!');
+    await wacht();
+    tikTekst(fien, 'Nu niet');
+    check('Sem hoort het meteen', await zagOoit(function () { return /Fien kan nu even niet/.test(zegt(sem)); }, 30000));
+    check('de uitnodiging is van de kaart, het potje met Daan loopt nog', !/Sem wil spelen/.test(tekstVan(fien, 'verder')) && fien.get('samenLoopt()'));
+  });
+
+  await regel('[4.5] een uitnodiging die niet op de kaart past, komt als venster zodra het kind thuis is', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan'), lotte = maakApparaat('Lotte'), sem = maakApparaat('Sem');
+    await wordenVrienden(fien, sem);
+    fien.ev('if (MP) mpStop(true); goHome()');
+    sem.ev('if (MP) mpStop(true); goHome()');
+    await wacht();
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    fien.tik('backBtn');
+    await wacht();
+    await geefOp(daan);
+    await wacht(3000);
+    await samenSpelen(fien, lotte);
+    await speel(fien, lotte, 'e2e4');
+    await nodigUit(sem);
+    await fien.ev('friendPoll()');
+    await wacht();
+    check('testopzet: de uitnodiging wacht', fien.get('!!uitnodigingWacht'));
+    fien.tik('backBtn');
+    await wacht();
+    check('testopzet: de kaart toont het einde met Daan en een regel Ook nog, niet de uitnodiging',
+      /Je potje met Daan is klaar/.test(tekstVan(fien, 'verder')) && !/Sem wil spelen/.test(tekstVan(fien, 'verder')));
+    check('de uitnodiging komt als venster', /Sem wil een potje spelen!/.test(fien.scherm()) && kanTikken(fien, 'Nu niet'));
+  });
+
+  async function lotteLooptSemNodigtUit(metKapotPotje) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan'), lotte = maakApparaat('Lotte'), sem = maakApparaat('Sem');
+    await wordenVrienden(fien, sem);
+    fien.ev('if (MP) mpStop(true); goHome()');
+    sem.ev('if (MP) mpStop(true); goHome()');
+    await wacht();
+    if (metKapotPotje) fien.ev('localStorage.setItem(POTJE_KEY, "{dit is geen potje")');
+    else {
+      await samenSpelen(fien, daan);
+      await speel(fien, daan, 'e2e4');
+      fien.tik('backBtn');
+      await wacht();
+      await geefOp(daan);
+      await wacht(3000);
+    }
+    await samenSpelen(fien, lotte);
+    await speel(fien, lotte, 'e2e4');
+    await nodigUit(sem);
+    await fien.ev('friendPoll()');
+    await wacht();
+    fien.tik('backBtn');
+    await wacht();
+    return { fien, sem };
+  }
+  for (const kapot of [false, true]) {
+    await regel('[4.5] een uitnodiging naast een lopend vriendenpotje die niet op de kaart past' + (kapot ? ', naast een potje dat niet te lezen is' : '') +
+      ': één venster met de zin dat het potje nog loopt, en Nu niet laat het de vriend meteen weten', async function (check) {
+      const { fien, sem } = await lotteLooptSemNodigtUit(kapot);
+      if (kapot) check('testopzet: de kaart zegt dat een potje niet te lezen is', /kan ik niet meer openen/.test(tekstVan(fien, 'verder')));
+      check('het venster: wie uitnodigt en dat het potje met Lotte nog loopt', /Sem wil een potje spelen!/.test(fien.scherm()) &&
+        /Je potje met Lotte loopt nog\. Speel dat eerst uit\./.test(fien.scherm()));
+      check('Nu niet en het kruisje, geen Ja dat alleen naar die zin leidt', kanTikken(fien, 'Nu niet') && zichtbaar(fien, 'mClose') && !kanTikken(fien, 'Ja, spelen'));
+      tikTekst(fien, 'Nu niet');
+      check('Sem hoort het meteen', await zagOoit(function () { return /Fien kan nu even niet/.test(zegt(sem)); }, 30000));
+    });
+  }
+
+  await regel('[4.5] een uitnodiging verloopt ook zonder netwerk na haar tien minuten', async function (check) {
+    zetDatum('2026-11-12T16:00:00');
+    const { fien } = await semNodigtUitTijdensTurbo();
+    geenNetwerk(fien);
+    fien.tik('backBtn');
+    await wacht();
+    check('testopzet: op de kaart', /Sem wil spelen/.test(tekstVan(fien, 'verder')));
+    await wacht(10 * 60000 + 30000);
+    check('na tien minuten weg, ook zonder netwerk', !/wil spelen/.test(tekstVan(fien, 'verder')));
+  });
+
+  await regel('[4.5] een fout van de server bij het lezen van de bus laat de uitnodiging staan', async function (check) {
+    const { fien, sem } = await semNodigtUitTijdensTurbo();
+    const echt = fetch;
+    fetch = function (url, o) {
+      if (/\/v1\/bus\/check/.test(url)) return Promise.resolve({ status: 500, json: function () { return Promise.resolve({}); } });
+      return echt(url, o);
+    };
+    try {
+      tikTekst(sem, 'Stop met wachten');
+      await wacht(20000);
+      fien.tik('backBtn');
+      await wacht();
+      check('de uitnodiging staat er nog', /Sem wil spelen/.test(tekstVan(fien, 'verder')));
+    } finally { fetch = echt; }
+    await wacht(20000);
+    check('zodra het lezen lukt, is ze weg', !/Sem wil spelen/.test(tekstVan(fien, 'verder')));
   });
 
   await regel('[4.5] vastgelopen in ronde 0 bestaat niet meer: wie herlaadt, zit zonder nieuwe uitnodiging weer in hetzelfde potje, en dezelfde vriend nog eens uitnodigen opent dat potje', async function (check) {
@@ -1179,6 +2424,8 @@ async function orakelTwee() {
     await biedRemise(wit);
     await wacht();
     check('testopzet: het antwoord staat onder het bord, zonder venster', kanTikken(zwart, 'Remise aannemen') && !zwart.open());
+    check('Remise aannemen en Nee, doorspelen zijn allebei gewone knoppen', zwart.get('actionBtns.rmJa.className') === 'btn plain' &&
+      zwart.get('actionBtns.rmNee.className') === 'btn plain');
     tikTekst(zwart, 'Remise aannemen');
     await wacht();
     check('remise aan beide kanten', eindziet(wit, 'Gelijkspel') && eindziet(zwart, 'Gelijkspel'));
@@ -1516,7 +2763,7 @@ async function orakelTwee() {
     check('testopzet: de vraag komt aan', kanTikken(zwart, 'Remise aannemen'));
     await biedRemise(wit);
     await wacht(500);
-    check('een tweede aanbod zonder antwoord gaat ook weg', /Je biedt remise aan/.test(tekstVan(wit, 'bubble')) && !/net al/.test(tekstVan(wit, 'bubble')));
+    check('een tweede aanbod zonder antwoord gaat ook weg', /Je biedt \S+ remise aan\. \S+ kan ja zeggen of doorspelen\./.test(tekstVan(wit, 'bubble')) && !/net al/.test(tekstVan(wit, 'bubble')));
     zet(wit, 'g1f3');
     await wacht(2000);
     check('na de zet van wit is de vraag weg', !kanTikken(zwart, 'Remise aannemen'));

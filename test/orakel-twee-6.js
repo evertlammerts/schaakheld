@@ -959,6 +959,31 @@ async function orakelTwee6() {
       weekOnline(tel) === week + 1 && weekOnline(tab) === week + 1);
   });
 
+  await regel('[6.7] de eindkaart van een einde terwijl het kind weg was, zegt wat telde zoals een einde in de kamer: de XP, het weekdoel, of dat een kort potje niet telt', async function (check) {
+    for (const lang of [true, false]) {
+      zetDatum('2026-11-16T10:00:00');
+      let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+      await vriendenpotje(mees, fien);
+      if (lang) mees.ev('setPref("weekGoal", { kind: "vriend", n: 3 })');
+      await potjeTot(mees, fien, lang ? 22 : 4, fien);
+      const xp = mees.get('(DOC.cnt.xp || {})[DEV] || 0');
+      stopApparaat(mees);
+      await geefOp(fien);
+      schuifKlok(UUR);
+      mees = await opent(mees);
+      mees.tik('verderKaart');
+      await wacht();
+      const ek = tekstVan(mees, 'eindkaart');
+      if (lang) {
+        check('lang: +30 XP en dat het meetelt voor het weekdoel, en geteld', ek.indexOf('+30 XP. Telt mee voor je weekdoel. 🎯') >= 0 &&
+          mees.get('(DOC.cnt.xp || {})[DEV] || 0') === xp + 30);
+      } else {
+        check('kort: dat het niet telt, en geen XP', /Dit potje telt niet mee: het was korter dan tien zetten\./.test(ek) && !/XP/.test(ek) &&
+          mees.get('(DOC.cnt.xp || {})[DEV] || 0') === xp);
+      }
+    }
+  });
+
   await regel('[6.7] schaakmat terwijl de ander weg is: die ziet het bij het openen, op de kaart en de eindkaart', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     const a = maakApparaat('Mees'), b = maakApparaat('Fien');

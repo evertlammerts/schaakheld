@@ -27,7 +27,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.7', '4.8', '4.12', '6.4', '6.8', '6.9']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '6.4', '6.8', '6.9']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -692,6 +692,51 @@ for (const [W, H] of KLEIN) {
       check(n, 'Vrienden worden staat er niet naast Ja', !k.dubbel);` });
 }
 
+/* de volle kaart van een potje tussen kinderen: een potje dat telt (dus met de regel over wat telde), de trofee van
+   het eerste potje, de vriendschapsvraag en een naam van veertien letters, gewonnen of verloren; en het voller: het
+   vierde potje van vandaag met dit kind dat ook het weekdoel haalt; de zin dat het vandaag nog 15 XP geeft, staat dan in
+   de strook boven het bord, in hoogstens drie regels, en het bord blijft staan */
+for (const [W, H, uitslag, vol] of [[360, 640, 'w'], [375, 553, 'w'], [375, 647, 'w'], [360, 780, 'w'], [360, 640, 'b'], [360, 780, 'b'],
+  [360, 640, 'b', true], [375, 553, 'b', true], [375, 647, 'b', true], [360, 780, 'b', true]]) {
+  const n = '[4.7] ' + W + 'x' + H + ': de volle eindkaart van een potje tussen kinderen, ' + (uitslag === 'w' ? 'gewonnen' : 'verloren') +
+    (vol ? ', het vierde potje van vandaag dat ook het weekdoel haalt' : '') + ', met een trofee, de vriendschapsvraag en een lange naam: alles past';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      const k = await page.evaluate(async (vol) => {
+        if (vol) { setPref('weekGoal', { kind: 'vriend', n: 1 }); ensureDay(); P.day.vriend = { 'naam:Maximiliaantje': 3 }; saveP(); }
+        MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false, revTheirs: false,
+          peerName: 'Maximiliaantje', open: true, weg: false, gameId: 'potje-test-1', peerOn: true };
+        mpBeginGame();
+        await new Promise(r => setTimeout(r, 300));
+        const bord = () => { const r = document.getElementById('board').getBoundingClientRect(); return [r.top, r.left, r.width, r.height].map(Math.round).join(); };
+        const bordVoor = bord();
+        const S = session.S;
+        for (let i = 0; i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
+        endGame({ over: true, result: ${JSON.stringify(uitslag)}, reason: 'mat' });
+        await new Promise(r => setTimeout(r, 300));
+        mpOnVriendVraag({ t: 'vriend?', pub: 'A'.repeat(88) });
+        await new Promise(r => setTimeout(r, 1200));
+        const st = document.querySelector('#strook .s-txt'), bub = document.getElementById('bubble');
+        const strook = { tekst: bub.textContent, regels: Math.round(bub.getBoundingClientRect().height / parseFloat(getComputedStyle(bub).lineHeight)),
+          past: st.scrollHeight <= st.clientHeight + 1, bordStil: bord() === bordVoor };
+        const e = document.getElementById('eindkaart'), er = e.getBoundingClientRect();
+        const knoppen = [...e.querySelectorAll('button')].filter(b => b.getClientRects().length);
+        return { sh: e.scrollHeight, ch: e.clientHeight, vraag: /Maximiliaantje wil vrienden worden/.test(e.innerText),
+          trofee: e.querySelectorAll('.ek-badge').length, telde: [...e.querySelectorAll('p')].some(p => /XP|telt/.test(p.textContent)),
+          vol: /nog 15 XP per potje/.test(strook.tekst) && !/nog 15 XP per potje/.test(e.innerText) && /Je weekdoel is gehaald/.test(e.innerText), strook,
+          onder: Math.max(...knoppen.map(b => b.getBoundingClientRect().bottom)) - er.bottom };
+      }, ${!!vol});
+      check(n, 'testopzet: een potje dat telde, een trofee en de vraag met de lange naam', k.vraag && k.trofee >= 1 && k.telde);
+      if (${!!vol}) {
+        check(n, 'testopzet: de zin over 15 XP in de strook en niet op de kaart, het weekdoel op de kaart', k.vol);
+        check(n, 'de zin in de strook: hoogstens drie regels (' + k.strook.regels + '), zonder scrollen', k.strook.regels <= 3 && k.strook.past);
+        check(n, 'het bord blijft staan', k.strook.bordStil);
+      }
+      check(n, 'alles past in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
+      check(n, 'geen knop onder de rand van de kaart (' + Math.round(k.onder) + ' px)', k.onder <= 1);` });
+}
+
 /* in een kleine eindkaart krimpen de knoppen niet: elke knop is minstens 44 hoog */
 for (const [W, H] of KLEIN) {
   const n = '[2.5] ' + W + 'x' + H + ': elke knop van de eindkaart is minstens 44 hoog, ook met trofeeën of een vriendschapsvraag';
@@ -841,6 +886,73 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       check(n, 'elke knop minstens 44 hoog', rijen.every(r => r.knoppen.every(k => k.h >= 44 - 0.5)));
       const p = await pagina();
       check(n, 'de pagina scrolt niet opzij', p.sw <= p.W + 1);` });
+}
+
+/* visual.md, deel twee: hoogstens één regel Ook nog, zodat de spelknoppen boven de tabbalk blijven */
+const POTJES_TWEE = JSON.stringify({ v: 2, games: {
+  1: { level: 1, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null, started: 1, updated: 2, patXP: 0 },
+  2: { level: 2, moves: ['d2d4', 'd7d5'], tips: 3, drawAsked: null, started: 1, updated: 1, patXP: 0 } } });
+const RONDJES_TWEE = JSON.stringify({ scan: { round: 2, earned: 6 }, best3: { round: 1, earned: 3 } });
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n = '[3.3] ' + W + 'x' + H + ': met een uitnodiging, twee potjes tegen Turbo en twee rondjes: één regel Ook nog, en beide spelknoppen boven de tabbalk';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, { schaakheld1: ${JSON.stringify(VRIENDEN_DOC)}, 'schaakheld-potje': ${JSON.stringify(POTJES_TWEE)},
+        'schaakheld-rondjes': ${JSON.stringify(RONDJES_TWEE)} });
+      await page.evaluate(() => { uitnodigingWacht = { fid: 'vriendaaaaaa2', inv: { id: 'uitnodiging01', room: 'kamerkamer1', seat: 'stoelstoel1',
+        naam: 'Fien', ts: Date.now() } }; renderVerder(); });
+      await page.waitForTimeout(300);
+      check(n, 'testopzet: de uitnodiging is de kaart', await page.evaluate(() => /Fien wil spelen/.test(document.getElementById('verder').textContent)));
+      check(n, 'één regel Ook nog', await page.evaluate(() => document.querySelectorAll('#verder .verder-ook').length) === 1);
+      const tab = await rect('.tabbar'), t = await rect('#spelTurbo'), v = await rect('#spelVriend');
+      check(n, 'beide spelknoppen boven de tabbalk', !!tab && !!t && !!v && t.bottom <= tab.top + 0.5 && v.bottom <= tab.top + 0.5);` });
+}
+
+/* het venster "Je potje met ... loopt nog": het kruisje ligt over geen tekst */
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n = '[4.5] ' + W + 'x' + H + ': in het venster dat zegt dat een vriendenpotje nog loopt, ligt het kruisje over geen tekst';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, { schaakheld1: ${JSON.stringify(VRIENDEN_DOC)} });
+      await page.evaluate(() => {
+        MP = { room: 'kamerkamer1', seat: 'stoelstoel1', host: true, open: true, weg: true, peerOn: true, peerName: 'Maximiliaantje', myColor: 'w',
+          gameNo: 1, gameId: 'potjepotje12', S: newGame(), over: false, result: null, offer: null, viaFriend: null };
+        uitnodigingWacht = { fid: 'vriendaaaaaa2', inv: { id: 'uitnodiging01', room: 'kamerkamer2', seat: 'stoelstoel2', naam: 'Fien', ts: Date.now() } };
+        uitnodigingJa(uitnodigingWacht.fid, uitnodigingWacht.inv);
+      });
+      await page.waitForTimeout(500);
+      const x = await rect('#mClose');
+      const teksten = await page.evaluate(() => [...document.querySelectorAll('#modalBox p, #modalBox h2')].map(e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; }));
+      check(n, 'testopzet: het venster met het kruisje', !!x && teksten.length > 0 && await page.evaluate(() => /loopt nog/.test(document.getElementById('modalBox').textContent)));
+      check(n, 'het kruisje ligt over geen tekst', !!x && teksten.every(t => x.right <= t.left || x.left >= t.right || x.bottom <= t.top || x.top >= t.bottom));` });
+}
+
+/* de Openingsschool: de naam van een opening en de regel eronder staan op twee regels */
+for (const [W, H] of [[375, 553], [360, 640]]) {
+  const n = '[2.1] ' + W + 'x' + H + ': in de Openingsschool staan de naam van een opening en de regel eronder op eigen regels';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      await page.evaluate(() => openingChooser());
+      await page.waitForTimeout(500);
+      /* gemeten tegen de onderkant van de naam zelf: een regel die achter een naam van twee regels doorloopt, staat ook lager dan de bovenkant */
+      const r = await page.evaluate(() => { const s = document.querySelector('.opt-btn .o-sub'); if (!s) return null;
+        const naam = document.createRange(); naam.selectNodeContents(s.parentElement.firstChild);
+        return { naam: naam.getBoundingClientRect().bottom, q: s.getBoundingClientRect().top }; });
+      check(n, 'testopzet: een keuze met een regel eronder', !!r);
+      check(n, 'de regel begint onder de naam (' + (r && Math.round(r.q)) + ' tegen ' + (r && Math.round(r.naam)) + ')', !!r && r.q >= r.naam - 0.5);` });
+}
+
+/* de regel die van het level omhoog zweeft, blijft binnen het scherm */
+for (const [W, H] of [[375, 667], [360, 640]]) {
+  const n = '[3.11] ' + W + 'x' + H + ': de zwevende regel "+60 XP Weekdoel gehaald!" blijft binnen het scherm';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      await page.evaluate(() => floatXP('+60 XP Weekdoel gehaald! 🎯'));
+      await page.waitForTimeout(50);
+      const f = await rect('.xp-float');
+      check(n, 'binnen het scherm', !!f && f.left >= 0 && f.right <= ${W} + 0.5);` });
 }
 
 GEVALLEN.push({ regels: ['[3.5] 390x844: Ik begint met het level, dan bewaard, trofeeën, bordkleuren, de week, vorm en het trucboek'],

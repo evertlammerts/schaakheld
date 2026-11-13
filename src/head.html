@@ -546,6 +546,7 @@
     flex: 0 0 auto; width: 30px; height: 30px; display: grid; place-items: center;
     background: #E0F1FD; border-radius: 50%; font-size: 14px;
   }
+  .opt-btn .o-sub { display: block; font-size: 12.5px; font-weight: normal; opacity: .85; margin-top: 2px; }
   .opt-btn.picked { box-shadow: 0 0 0 3px var(--sun), var(--shadow); }
   .opt-btn.wrong { opacity: .45; text-decoration: line-through; pointer-events: none; }
   .opt-btn.right { box-shadow: 0 0 0 3px var(--leaf), var(--shadow); }
@@ -695,6 +696,9 @@
   .eindkaart.klein .ek-badge { flex-direction: row; gap: 6px; width: auto; }
   .eindkaart.klein .ek-be { font-size: 28px; }
   .eindkaart .ek-btns { display: flex; flex-direction: column; gap: 8px; width: min(100%, 280px); }
+  /* op een klein bord past de kaart met de vriendschapsvraag alleen met de twee antwoorden naast elkaar */
+  .eindkaart.klein #ekVraag .ek-btns { flex-direction: row; width: 100%; }
+  .eindkaart.klein #ekVraag .ek-btns .btn { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 0 8px; white-space: nowrap; }
   .play-bottom {
     grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
     padding: 0 var(--g) 8px;
@@ -950,7 +954,7 @@
       <div class="home-card" style="margin-top:10px">
         <div class="card-title">🤝 Jouw vrienden</div>
         <div id="friendList"></div>
-        <div class="note">Vrienden worden kan alleen samen: na een potje tikken jullie allebei op Ja. Niemand kan jou zomaar toevoegen.</div>
+        <div class="note">Vrienden worden kan alleen samen: na een potje vraagt de een het, en de ander tikt op Ja. Niemand kan jou zomaar toevoegen.</div>
       </div>
       <div class="home-card">
         <div class="card-title">🌟 Spelen met een nieuw maatje</div>

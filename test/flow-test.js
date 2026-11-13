@@ -863,6 +863,17 @@ ok('modal zonder cancel: eigen knop sluit', modalOpen === false &&
   ok('compat: een doc van nu houdt zijn lijst, alleen met trofeeën die er zijn', JSON.stringify(normDoc(metLijst).loc.shownBadges) === '["winst"]');
   ok('compat: de lijst gaat mee door bewaren en laden', JSON.stringify(normDoc(JSON.parse(JSON.stringify(normDoc(metLijst)))).loc.shownBadges) === '["winst"]');
   ok('compat: een oud plat profiel: elke trofee telt als getoond', JSON.stringify(migrateLegacy({ badges: { winst: true } }, 'd1').loc.shownBadges || null) === '["winst"]');
+  /* een gekoppeld apparaat schrijft een 0 onder zijn eigen naam in de XP-teller: de check houdt hem, elke som
+     blijft gelijk, en een doc van de vorige release blijft precies zoals hij was */
+  var metNul = JSON.parse(JSON.stringify(oud));
+  metNul.cnt.xp.d3 = 0;
+  var dn = normDoc(JSON.parse(JSON.stringify(metNul))), vn = viewFromDoc(dn);
+  ok('compat: een doc met een 0 laadt, de 0 blijft staan, en elke som is gelijk', dn.cnt.xp.d3 === 0 && vn.xp === 520 && vn.stars === 40 &&
+    vn.wins === 3 && vn.c.pat.vork === 4);
+  ok('compat: een doc van de vorige release blijft na de check precies zoals hij was',
+    JSON.stringify(normDoc(JSON.parse(JSON.stringify(oud))).cnt) === JSON.stringify(oud.cnt));
+  var samen = mergeDoc(normDoc(JSON.parse(JSON.stringify(oud))), dn);
+  ok('compat: samenvoegen met een doc met een 0: de 0 blijft, de sommen zijn gelijk', samen.cnt.xp.d3 === 0 && viewFromDoc(samen).xp === 520);
   ok('een nieuw profiel: niets getoond, en het kent zijn level', (emptyDoc().loc.shownBadges || [1]).length === 0 && emptyDoc().loc.lastLevel === 0);
 })();
 /* de velden van het startadvies: start (LWW), lastKind en lastSeen (per apparaat) en de teller c.drie */
@@ -1553,9 +1564,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     p3.status === 200 && d3.room === d2.room && d3.seat !== d2.seat &&
     d3.host === true && d2.host === false);
 
-  /* anti-farm (memo): een online winst geeft NOOIT XP en telt niet mee voor
-     de gedeelde 'wins'-teller of de week-wins; wel winsOnline en het
-     weekdoel "potjes met een vriend". */
+  /* een online winst die telt, geeft 30 XP zoals elk potje tussen kinderen, maar telt niet mee voor de gedeelde
+     'wins'-teller of de week-wins (die horen bij Turbo); wel winsOnline en het weekdoel "potjes met een vriend". */
   var xpVoor = P.xp, pWinsVoor = P.wins, onlineVoor2 = P.c.winsOnline || 0;
   var wkWinsVoor = wkGet(curWeek(), 'wins1') + wkGet(curWeek(), 'wins2') + wkGet(curWeek(), 'wins3');
   var wkOnlineVoor = wkGet(curWeek(), 'online');
@@ -1567,8 +1577,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   commitKid(legalMoves(session.S).find(function (x) { return alg(x.to) === 'a8'; }));
   drainTimers();
   for (i = 0; i < 20; i++) await null;
-  ok('mp: online winst geeft geen XP en raakt de HUD-wins niet',
-    P.xp === xpVoor && P.wins === pWinsVoor && (P.c.winsOnline || 0) === onlineVoor2 + 1);
+  ok('mp: een online winst die telt geeft 30 XP en raakt de HUD-wins niet',
+    P.xp === xpVoor + 30 && P.wins === pWinsVoor && (P.c.winsOnline || 0) === onlineVoor2 + 1);
   ok('mp: online potje telt voor de week als "met een vriend", niet als Turbo-winst',
     wkGet(curWeek(), 'online') === wkOnlineVoor + 1 &&
     wkGet(curWeek(), 'wins1') + wkGet(curWeek(), 'wins2') + wkGet(curWeek(), 'wins3') === wkWinsVoor);
@@ -1839,6 +1849,9 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var antw = vmaat.inbox.filter(function (m) { return m.t === 'vriend' && m.pub; })[0];
   var mK2 = await ecdhFinish(mKp2.kp, antw.pub);
   var fid2 = (await sha256hex(mK2)).slice(0, 16);
+  ok('vriend: wie ja zei, is pas vriend als wie vroeg het bevestigt', !P.friends[fid2] && !!MP.vriendWacht);
+  vmaat.send(JSON.stringify({ t: 'vriend', ok: true, ja: antw.pub }));
+  await tikje();
   ok('vriend: als ja-zegger opgeslagen met rol b', !!P.friends[fid2] && P.friends[fid2].host === false && P.friends[fid2].k === mK2);
   closeModal();
   ok('vriend: kapotte sleutel wordt genegeerd', (function () { mpOnVriendVraag({ t: 'vriend?', pub: 'x<script>' }); return __els.overlay.classList.contains('hidden'); })());
@@ -1860,6 +1873,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   for (i = 0; i < 30; i++) await null;
   await tikje();
   var dubAntw = vmaat.inbox.filter(function (m) { return m.t === 'vriend' && m.pub; })[0];
+  vmaat.send(JSON.stringify({ t: 'vriend', ok: true, ja: dubAntw && dubAntw.pub }));
+  await tikje();
   var dubK = dubAntw ? await ecdhFinish(dubKp.kp, dubAntw.pub) : null;
   var dubFid = dubK ? (await sha256hex(dubK)).slice(0, 16) : null;
   ok('vriend: zelf vragen is dan ja zeggen, één vriendschap met hetzelfde geheim',
@@ -1889,12 +1904,16 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     /* het maatje is de kleinste: die antwoordt met zijn eigen sleutel op onze vraag */
     vmaat.send(JSON.stringify({ t: 'vriend', pub: kruisKp.pub }));
     await tikje();
+  } else {
+    vmaat.send(JSON.stringify({ t: 'vriend', ok: true, ja: onzePub }));
+    await tikje();
   }
   var kKruis = await ecdhFinish(kruisKp.kp, onzePub);
   var fidKruis = (await sha256hex(kKruis)).slice(0, 16);
   ok('vriend: gekruist levert aan beide kanten hetzelfde geheim, precies één nieuwe vriend',
     !!P.friends[fidKruis] && P.friends[fidKruis].k === kKruis && Object.keys(P.friends).length === voorKruis + 1 &&
-    P.friends[fidKruis].host === !wijKleiner);
+    P.friends[fidKruis].host === !wijKleiner &&
+    (wijKleiner || vmaat.inbox.some(function (m) { return m.t === 'vriend' && m.ok === true && m.ja === kruisKp.pub; })));
   closeModal();
   setFriend(fidKruis, Object.assign({}, P.friends[fidKruis], { weg: true }));
   mpStop();
@@ -1918,7 +1937,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     catch (e) { return true; }
   })());
   renderFriends();
-  ok('uitnodiging: lijst toont het wachten', __els.friendList.innerHTML.indexOf('Wachten tot Mila') >= 0 &&
+  ok('uitnodiging: lijst toont het wachten', __els.friendList.innerHTML.indexOf('Wachten op Mila') >= 0 &&
     __els.friendList.innerHTML.indexOf('data-cancel') >= 0);
   var kamerInv = MP.room;
   /* nu de kant van Mila: zelfde geheim, andere rol. Haar app vraagt haar bus op. */
@@ -2143,22 +2162,16 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var stK5 = await nieuwBezet();
   __server.klok -= 3000;
   ok('kamers: na drie seconden wijkt de kamer van net weer gewoon', stK5 === 200 && !('vers' in __server.wsrooms));
-  /* de grens van precies drie seconden, op een stilgezette klok: de klok van
-     de nep-server is de echte tijd plus een stap, dus anders lopen er altijd
-     een paar milliseconden bij */
-  var echtNu = Date.now, vastNu = Date.now();
-  Date.now = function () { return vastNu; };
-  try {
-    __server.wsrooms = {};
-    nuK = __busNu();
-    nepKamer('grens', false, false, 0, 2999);
-    for (j = 0; Object.keys(__server.wsrooms).length < MAX_KAMERS; j++) nepKamer('bezet' + j, false, true, 0);
-    var stG1 = await nieuwBezet();
-    __server.wsrooms.grens.created = nuK - 3000;
-    var stG2 = await nieuwBezet();
-    ok('kamers: een lege kamer van 2999 ms wijkt niet, een van precies 3000 ms wel',
-      stG1 === 429 && stG2 === 200 && !('grens' in __server.wsrooms));
-  } finally { Date.now = echtNu; }
+  /* de grens van precies drie seconden */
+  __server.wsrooms = {};
+  nuK = __busNu();
+  nepKamer('grens', false, false, 0, 2999);
+  for (j = 0; Object.keys(__server.wsrooms).length < MAX_KAMERS; j++) nepKamer('bezet' + j, false, true, 0);
+  var stG1 = await nieuwBezet();
+  __server.wsrooms.grens.created = nuK - 3000;
+  var stG2 = await nieuwBezet();
+  ok('kamers: een lege kamer van 2999 ms wijkt niet, een van precies 3000 ms wel',
+    stG1 === 429 && stG2 === 200 && !('grens' in __server.wsrooms));
   nuK = __busNu();
   /* een speelcode-verzoek ruimt verlopen kamers op, zoals handlePair */
   __server.wsrooms = {};
