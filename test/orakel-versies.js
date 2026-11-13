@@ -166,7 +166,7 @@ async function orakelVersies() {
     check('alles volgens de tabel' + (fout.length ? ': ' + fout.slice(0, 6).join(' | ') : ''), fout.length === 0);
   });
 
-  await regel('[V1] AF4 wie een einde bekijkt, noemt hoe het afliep en wie won: een ander einde dan dat van de staat verandert niets en is gedaan', async function (check) {
+  await regel('[V1] wie een einde bekijkt, noemt hoe het afliep en wie won: een ander einde dan dat van de staat verandert niets en is gedaan', async function (check) {
     const staat = STATEN.klaarOnbekend, voor = JSON.stringify(staat), merk = 'nieuw-b---------';
     const goed = { soort: 'bekijk', id: 'potjeeen0001', ply: 1, merk: merk, einde: { soort: 'opgave', winnaar: 'b' } };
     const ander = Object.assign({}, goed, { einde: { soort: 'opgave', winnaar: 'a' } }), anders = Object.assign({}, goed, { einde: { soort: 'mat', winnaar: 'b' } });

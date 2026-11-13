@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Layoutcontroles in een echte browser-engine (WebKit via playwright-cli), voor
-   de regels van plan.md die op maten hangen. De DOM-shim van de flowtests
+   wat op schermmaten hangt. De DOM-shim van de flowtests
    heeft geen opmaak; hier staan de rechthoeken echt op een scherm.
 
    Draaien: node test/layout/run.mjs   (./test.sh doet dat als playwright-cli er is)
@@ -36,7 +36,7 @@ function oordeel(regel, fouten, gebouwd) {
   return fouten.length ? 'NOG NIET GEBOUWD' : 'FAIL';
 }
 
-/* elke maat uit de tabel van visual.md 8.3 die een doel is: alles behalve de telefoon dwars */
+/* elke schermmaat waarop de app moet werken, zoals een kind hem ziet (met en zonder browserbalken): alles behalve de telefoon dwars */
 const MATEN = [[360, 640], [375, 647], [375, 553], [390, 667], [402, 700], [360, 708], [390, 844], [402, 874],
   [768, 1004], [768, 904], [1024, 748], [1024, 648], [1024, 1346], [1024, 1246], [1366, 1004], [1366, 904],
   [834, 1170], [834, 1070], [1194, 810], [1194, 710], [1280, 720], [1280, 630], [1440, 900]];
@@ -181,7 +181,7 @@ for (const [W, H] of KLEIN) {
       const chip = await rect('#lvlChip'), gear = await rect('#setBtn');
       check(n, 'de levelchip en ⚙ staan er', !!chip && !!gear);
       check(n, 'naast elkaar, op één rij', !!chip && !!gear && chip.top < gear.bottom && gear.top < chip.bottom);
-      check(n, 'in de bovenste 64 pixels (visual.md 11.1: een rij van 56)', !!chip && !!gear && chip.bottom <= 64.5 && gear.bottom <= 64.5);`
+      check(n, 'in de bovenste 64 pixels (de bovenste rij is 56 hoog)', !!chip && !!gear && chip.bottom <= 64.5 && gear.bottom <= 64.5);`
   });
 
   GEVALLEN.push({ regels: ['[2.4] ' + W + 'x' + H + ': de uitleg staat onder het bord met Volgende in beeld, en het bord blijft waar het was'],
@@ -211,9 +211,9 @@ for (const [W, H] of KLEIN) {
         reden.top >= onder.top - 0.5 && reden.bottom <= onder.bottom + 0.5);`
   });
 
-  GEVALLEN.push({ regels: ['[2.4] ' + W + 'x' + H + ': elke vraag en elke uitleg uit tekst.md past, voor elke soort opdracht, en niets scrolt in de strook'],
+  GEVALLEN.push({ regels: ['[2.4] ' + W + 'x' + H + ': elke vraag en elke uitleg van de opdrachten past, voor elke soort opdracht, en niets scrolt in de strook'],
     code: `
-      const n = '[2.4] ${W}x${H}: elke vraag en elke uitleg uit tekst.md past, voor elke soort opdracht, en niets scrolt in de strook';
+      const n = '[2.4] ${W}x${H}: elke vraag en elke uitleg van de opdrachten past, voor elke soort opdracht, en niets scrolt in de strook';
       for (const groep of ['scan', 'best3.best3', 'best3.safe', 'trucs', 'koning', 'opening.coach', 'opening.pad']) {
         await vers(${W}, ${H});
         const uit = await page.evaluate(async (groep) => {
@@ -293,7 +293,7 @@ for (const [W, H] of KLEIN) {
       check(n, 'de weekregel is 44 hoog', !!week && Math.abs(week.h - 44) < 0.5);` });
 }
 
-/* visual.md 11.6: Ik met een grid van trofeeën, en elk label binnen zijn kaart */
+/* Ik met een grid van trofeeën, en elk label binnen zijn kaart */
 for (const [W, H] of [[360, 640], [375, 553], [1024, 748]]) {
   const n = '[3.11] ' + W + 'x' + H + ': Ik: Grootmeester blijft in de levelkaart, en de trofeeën zijn tegels van minstens 88 breed die binnen hun kaart blijven';
   GEVALLEN.push({ regels: [n], code: `
@@ -319,8 +319,8 @@ for (const [W, H] of [[360, 640], [375, 553], [1024, 748]]) {
       check(n, 'de pagina scrolt niet opzij', p.sw <= p.W + 1);` });
 }
 
-/* plan.md 3.3, ook op 375x647 (de app met browserbalken, waar het panel twee keer moest scrollen) en met
-   een bewaard potje op de kaart; en geen zin op Spelen die halverwege wordt afgeknipt. Plan 3.11: met een
+/* Spelen past, ook op 375x647 (de app met browserbalken, waar kinderen eerst twee keer moesten scrollen), en met
+   een bewaard potje op de kaart; geen zin op Spelen wordt halverwege afgeknipt. Met een
    potje en een rondje bewaard is Spelen het krapst, en ook dan staan de spelknoppen boven de tabbalk. */
 for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
   const regels = ['[3.3] ' + W + 'x' + H + ': de Verder-kaart, de weekregel en beide spelknoppen staan boven de tabbalk',
@@ -528,7 +528,7 @@ for (const [W, H] of [[375, 553], [360, 640]]) {
       past('de beste zet', await eersteReden());` });
 }
 
-/* visual.md G1: een lange naam in de groet breekt af in plaats van "…", en de rij blijft 40 tot 41 hoog */
+/* een lange naam in de groet breekt af in plaats van "…", en de rij blijft 40 tot 41 hoog */
 for (const [W, H] of [[360, 640], [375, 553]]) {
   const n = '[3.11] ' + W + 'x' + H + ': de groet met een naam van veertien W\'s is heel, de rij is hoogstens 41 hoog en de spelknoppen staan boven de tabbalk';
   const doc = (loc) => JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'WWWWWWWWWWWWWW', t: 1 } },
@@ -554,7 +554,7 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       }` });
 }
 
-/* visual.md 11.6: een tegel breekt een woord alleen bij een zacht afbreekstreepje, en niets loopt over */
+/* een tegel breekt een woord alleen bij een zacht afbreekstreepje, en niets loopt over */
 {
   const n = '[3.11] 360x640: de trofeetegels, met alle namen en met alle opdrachten: niets loopt over en "meteen" blijft heel';
   const alles = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: { potje: true, winst: true, turbo2: true, raket: true, speurneus: true,
@@ -589,11 +589,9 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       check(n, '"meteen" op één regel', heel);` });
 }
 
-/* plan.md 1.8: een speelscherm opent met het hele bord in beeld, ook als het
-   kind op Spelen eerst naar beneden scrolde (B03: het speelscherm erfde die
-   scroll); tot increment 2 mag dat door het bord in beeld te scrollen. Op
-   360x640 en 390x667 staat het bord vandaag al in beeld; vanaf increment 2
-   meet 2.1 elke maat. */
+/* een speelscherm opent met het hele bord in beeld, ook als het kind op Spelen
+   eerst naar beneden scrolde (vroeger erfde het speelscherm die scroll). De
+   andere maten meet de regel over het speelscherm van een oefening. */
 for (const [W, H] of [[375, 553]]) {
   const n = '[1.8] ' + W + 'x' + H + ': een oefening die onderaan Spelen staat, opent met het hele bord in beeld';
   GEVALLEN.push({ regels: [n], code: `
@@ -629,7 +627,7 @@ for (const [W, H] of MATEN) {
       await meet(${JSON.stringify(oefening)});` });
 }
 
-/* de langste zinnen in een potje (ux-run/reviews/inc2/strook-te-lang.md, na het inkorten): coach-tips, Turbo's
+/* de langste zinnen die in een potje in de strook kunnen staan: coach-tips, Turbo's
    trucs en de denkwolk; een zin die niet in twee regels past, staat een stap kleiner in drie */
 const LANGE_ZINNEN = [
   'Coach-tip: haal je paarden en lopers van de achterste rij. Thuisblijvers doen niet mee! 🐎',
@@ -714,8 +712,8 @@ GEVALLEN.push({ regels: ['[2.6] 375x553: Turbo\'s stukken zijn donkergroen (#124
       check(n2, 'het oplichten draait op de koning', /hero-glow/.test(anim || ''));`
 });
 
-/* plan.md 2.1 en de review van increment 2: elke soort opdracht, ook De Beste Zet met zijn keuzes, de
-   openingsles met zijn meters en de denkwolk, op de maten waar het misging */
+/* elke soort opdracht, ook De Beste Zet met zijn keuzes, de
+   openingsles met zijn meters en de denkwolk, op de maten waar het eerder misging */
 /* een tweede tik op Volgende mag niet op een knop van de volgende opdracht landen (Hint, Klaar!, de keuzes) */
 for (const [W, H] of KLEIN) {
   const regels = ['scan', 'best3', 'trucs', 'koning'].map(k => '[2.4] ' + W + 'x' + H + ': ' + k + ': waar Volgende stond, staat bij de volgende opdracht geen knop');
@@ -932,7 +930,7 @@ for (const [W, H] of [[375, 553], [360, 640], [375, 647]]) {
 }
 
 /* het speelscherm van een oefening is precies zo hoog als het venster, en het vak onder het bord past precies om
-   een uitleg van drie regels met de knoppen eronder (visual.md 8.6: op een kort scherm 120) */
+   een uitleg van drie regels met de knoppen eronder (op een kort scherm is dat vak 120 hoog) */
 for (const [W, H] of KLEIN) {
   const n = '[2.1] ' + W + 'x' + H + ': een oefening: het speelscherm en het vak onder het bord passen precies, ook met drie regels uitleg';
   GEVALLEN.push({ regels: [n], code: `
@@ -958,7 +956,7 @@ for (const [W, H] of KLEIN) {
       for (const f of uit.fout) check(n, f, false);` });
 }
 
-/* visual.md K2: een vriendschapsvraag in de eindkaart past, met één hoofdknop en zonder dubbele knop */
+/* een vriendschapsvraag in de eindkaart past, met één hoofdknop en zonder dubbele knop */
 for (const [W, H] of KLEIN) {
   const n = '[4.7] ' + W + 'x' + H + ': een vriendschapsvraag in de eindkaart: alles past, één hoofdknop, en Vrienden worden staat er niet nog eens';
   GEVALLEN.push({ regels: [n], code: `
@@ -1031,7 +1029,7 @@ for (const [W, H, uitslag, vol] of [[360, 640, 'w'], [375, 553, 'w'], [375, 647,
       check(n, 'geen knop onder de rand van de kaart (' + Math.round(k.onder) + ' px)', k.onder <= 1);` });
 }
 
-/* regel V9: de eindkaart van een potje tussen vrienden dat met de 500e halve zet remise werd, met de zin over de marathon */
+/* [V9] de eindkaart van een potje tussen vrienden dat met de 500e halve zet remise werd, met de zin over de marathon */
 for (const [W, H] of [[360, 640], [375, 553], [390, 844], [768, 1004]]) {
   const n = '[V9] ' + W + 'x' + H + ': de eindkaart van de remise na 250 zetten: de zin over de marathon staat erop, alles past, en geen knop valt eronder';
   GEVALLEN.push({ regels: [n], code: `
@@ -1094,7 +1092,7 @@ for (const [W, H] of KLEIN) {
       check(n, 'met een vriendschapsvraag: ' + vriend.join(', '), vriend.every(h => h >= 43.5));` });
 }
 
-/* visual.md K1: met het toetsenbord open blijven de woordsuggesties in beeld, en de knop springt niet */
+/* met het toetsenbord open blijven de woordsuggesties in beeld, en de knop springt niet */
 for (const [W, H, grens] of [[375, 553, 330], [375, 647, 380]]) {
   const n = '[4.8] ' + W + 'x' + H + ': het woordveld met focus: de suggesties staan boven het toetsenbord en de knop blijft staan';
   GEVALLEN.push({ regels: [n], code: `
@@ -1173,7 +1171,7 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647], [390, 667], [402, 700]
       await meet(regels[regels.length - 1]);` });
 }
 
-/* plan 4.12: Vrienden met drie vrienden, een met een naam van veertien letters en een met een lopend potje */
+/* Vrienden met drie vrienden, een met een naam van veertien letters en een met een lopend potje */
 const VRIENDEN_DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'Mees', t: 1 } }, max: { best: 0, goal: {} }, loc: {},
   friends: {
     vriendaaaaaa1: { k: 'sleutelsleutelsleutelsleutelsleutel1', naam: 'Maximiliaantje', t: 1, since: 1792000000000, host: true, weg: false },
@@ -1205,7 +1203,7 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       check(n, 'de pagina scrolt niet opzij', p.sw <= p.W + 1);` });
 }
 
-/* visual.md, deel twee: hoogstens één regel Ook nog, zodat de spelknoppen boven de tabbalk blijven */
+/* hoogstens één regel Ook nog, zodat de spelknoppen boven de tabbalk blijven */
 const POTJES_TWEE = JSON.stringify({ v: 2, games: {
   1: { level: 1, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null, started: 1, updated: 2, patXP: 0 },
   2: { level: 2, moves: ['d2d4', 'd7d5'], tips: 3, drawAsked: null, started: 1, updated: 1, patXP: 0 } } });
@@ -1283,7 +1281,7 @@ GEVALLEN.push({ regels: ['[3.5] 390x844: Ik begint met het level, dan bewaard, t
       for (const s of ids) { const r = await rect(s); check(n, s + ' staat er', !!r); tops.push(r ? r.top : NaN); }
       check(n, 'in deze volgorde', tops.every((t, i) => i === 0 || t > tops[i - 1]));` });
 
-/* plan.md 6.9: Spelen met vier dingen bezig, het eerste een remise-aanbod van een vriend met een lange naam, en Spelen
+/* Spelen met vier dingen bezig, het eerste een remise-aanbod van een vriend met een lange naam, en Spelen
    met een regel "Ook nog" die twee regels neemt: de kaart, één regel eronder, de weekregel en beide spelknoppen
    staan boven de tabbalk. Een vriendenpotje staat in de staat van het paar zoals dit apparaat die bewaart; de vriend
    is host, dus het kind heeft rol a. Elke stand heeft eigen geheimen: de server houdt wat eerdere gevallen schreven. */
@@ -1326,7 +1324,7 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       }` });
 }
 
-/* plan.md 6.8: een stil potje als kaart, met de uitweg eronder, en een tweede stil potje in de regel Ook nog */
+/* een stil potje als kaart, met de uitweg eronder, en een tweede stil potje in de regel Ook nog */
 const STIL_LANG = { schaakheld1: profielMet('stil', [['vriendmaxi01', 'Maximiliaantje'], ['vriendsem001', 'Sem']]),
   'schaakheld-paar': JSON.stringify({ vriendmaxi01: paarStaat('potjemaxi001', { zetten: ['d2d4', 'd7d5', 'c2c4'], t: Date.now() - 8 * 86400000 }),
     vriendsem001: paarStaat('potjesem0001', { zetten: ['c2c4', 'e7e5', 'g1f3'], t: Date.now() - 12 * 86400000 }) }) };
@@ -1345,7 +1343,7 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       check(n, 'de kaart is het stille potje met de uitweg', /heeft al een week niet gezet/.test(v) && /Klaar met wachten/.test(v));` });
 }
 
-/* plan.md 6.4: het venster als het paar bezet is: het plaatje bovenaan, de zin eronder, één Oké en geen kruisje */
+/* het venster als het paar bezet is: het plaatje bovenaan, de zin eronder, één Oké en geen kruisje */
 const BEZET = { schaakheld1: profielMet('bezet', [['vriendmaxi01', 'Maximiliaantje']]),
   'schaakheld-paar': JSON.stringify({ vriendmaxi01: paarStaat('potjemaxi001', { zetten: ['d2d4', 'd7d5'], uitslag: { soort: 'opgave', door: 'a', ply: 2 },
     weet: { a: 'merkvandittoest1', b: null }, bekeken: { a: true, b: false } }) }) };
@@ -1364,7 +1362,7 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       check(n, 'de doos en Oké in beeld', binnen(doos, ${W}, ${H}) && binnen(ok, ${W}, ${H}));` });
 }
 
-/* plan.md 6.9 met het blad: elke rij is minstens 56 hoog, de titel staat boven waar het ding staat, en niets is breder dan het scherm */
+/* het blad: elke rij is minstens 56 hoog, de titel staat boven waar het ding staat, en niets is breder dan het scherm */
 for (const [W, H] of [[360, 640], [375, 553]]) {
   const n = '[6.9] ' + W + 'x' + H + ': het blad Wat nog bezig is heeft per ding een rij van minstens 56 hoog, met de titel boven de plek';
   GEVALLEN.push({ regels: [n], code: `
@@ -1385,7 +1383,7 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       check(n, 'geen zijwaarts scrollen', (await pagina()).sw <= ${W});` });
 }
 
-/* plan.md 6.9: een uitdaging van een vriend met een lange naam: de rij op Vrienden noemt onder de naam alleen dat hij
+/* een uitdaging van een vriend met een lange naam: de rij op Vrienden noemt onder de naam alleen dat hij
    uitdaagt en welke kleur het kind heeft, in hoogstens twee regels; de kaart houdt de hele zin en blijft binnen het scherm */
 const UITDAGING = { schaakheld1: profielMet('uitdaging', [['vriendmaxi02', 'Maximiliaantje']]),
   'schaakheld-paar': JSON.stringify({ vriendmaxi02: paarStaat('potjemaxi002', { kleur: 'b', uitdaging: true, t: Date.now() }) }) };
