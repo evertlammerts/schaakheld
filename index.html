@@ -4270,7 +4270,7 @@ function openSamen() {
   if (st.over) { endGame(st); return; }
   BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off';
   if (remiseVraagOpen()) { toonRemiseVraag(); return; }
-  if (!MP.open && MP.pogingen > 0) say(GEEN_NET_SPEL); else zegBeurt();
+  zegBeurt(!MP.open && MP.pogingen > 0);
 }
 function toonSamenScherm(S = MP.S, kleur = MP.myColor, naam = mpNaam()) {
   showScreen('play');
@@ -4394,7 +4394,7 @@ function mpConnect() {
        het rustig proberen. */
     MP.pogingen = (MP.pogingen || 0) + 1;
     if (MP.S) thuisVerversen();
-    if (samenInBeeld() && samenLoopt() && MP.pogingen === 2 && !MP.zetZonderNet) say(GEEN_NET_SPEL);
+    if (samenInBeeld() && samenLoopt() && MP.pogingen === 2 && !MP.zetZonderNet) zegInPotje(GEEN_NET_SPEL);
     if (MP.pogingen > 8 && !samenBewaren()) { mpVerbindingWeg(); return; }
     const wacht = MP.backoff;
     MP.backoff = Math.min(MP.backoff * 2, samenBewaren() && !samenInBeeld() ? 30000 : 10000);
@@ -4498,7 +4498,7 @@ function mpMsg(m) {
       if (m.aan) { MP.beantwoord = null; mpHallo(); stuurStand(); }
       /* eerlijk: de ander is weg, het potje blijft staan; geen belofte dat zetten vanzelf komen */
       if (samenInBeeld() && !session.over) {
-        say(m.aan ? (mpNaam() + ' is er weer! 🎉') : anderWeg());
+        zegInPotje(m.aan ? (mpNaam() + ' is er weer! 🎉') : anderWeg());
       } else if (samenInBeeld()) {
         if (m.aan) { say(mpNaam() + ' is er weer! 🎉'); if ($('vrLijn')) $('vrLijn').textContent = ''; }
         else naEindeWeg(naEindeWegNu());
@@ -4678,17 +4678,16 @@ function mpOnZet(m) {
     if (st.over) { endGame(st); return; }
     BD.mode = 'move';
     remiseRij();
-    if (inCheck(S)) {
-      snd.check();
-      say('Schaak! Red je koning. 👑');
-    } else say(herhaalRegel(S, true) || 'Jij weer! Wat wordt je plan? 💭');
+    if (inCheck(S)) snd.check();
+    say(herhaalOpBeurt(S) || (inCheck(S) ? 'Schaak! Red je koning. 👑' : herhaalBord(S) || 'Jij weer! Wat wordt je plan? 💭'));
   });
 }
-/* is de ander weg, dan zegt de strook dat, en niet dat de ander nu zet; waar de strook zegt wie aan zet is, staat de regel
-   over herhaling als die er is */
-function zegBeurt() {
-  const mij = MP.S.turn === MP.myColor;
-  say(MP.peerWeg ? anderWeg() : herhaalRegel(MP.S, mij) || (mij ? 'Jij bent aan zet! 💭' : mpNaam() + ' is aan zet… ⏳'));
+function zegInPotje(zin) { say(herhaalOpBeurt(MP.S) || zin); }
+/* de strook van een vriendenpotje over de beurt: dat er geen verbinding is of dat de ander weg is (en niet dat de ander
+   nu zet), anders de regel over het bord of wie zet */
+function zegBeurt(zonderNet) {
+  say(herhaalOpBeurt(MP.S) || (zonderNet ? GEEN_NET_SPEL : MP.peerWeg ? anderWeg() :
+    herhaalBord(MP.S) || (MP.S.turn === MP.myColor ? 'Jij bent aan zet! 💭' : mpNaam() + ' is aan zet… ⏳')));
 }
 function anderWeg() { return mpNaam() + ' is er nu niet. Jullie potje blijft staan. Ga gerust iets anders doen: het staat bij Verder.'; }
 const SAMEN_NIET_BEWAARD = 'Dit potje kon ik niet bewaren. Laat de app open, dan kunnen jullie verder.';
@@ -8366,7 +8365,7 @@ function startGame(level, bewaard) {
   }
   if (session.S.turn === 'w') kidTurn(); else { BD.mode = 'off'; turboTurn(); }
   /* terug in het potje en aan zet: een regel over herhaling gaat voor het welkom, want de volgende zet kan de derde keer zijn */
-  if (bewaard) say((session.S.turn === 'w' && !inCheck(session.S) && herhaalRegel(session.S, true)) || 'Welkom terug! Je potje staat nog precies zo. ' +
+  if (bewaard) say(herhaalOpBeurt(session.S) || (session.S.turn === 'w' && !inCheck(session.S) && herhaalBord(session.S)) || 'Welkom terug! Je potje staat nog precies zo. ' +
     (session.S.turn !== 'w' ? 'Ik ben aan zet.' : inCheck(session.S) ? 'Je staat schaak!' : 'Jij bent aan zet.'));
 }
 
@@ -8813,26 +8812,41 @@ function tweedeKeer(S) { return repetitions(S) === 1; }
    elk bord. Of hij beloofd is, volgt uit de zetten van het potje; het potje onthoudt alleen bij welke halve zet de regel
    er het laatst stond (herhaalGezegd), zodat een herlading de belofte houdt en Zet terug haar met de zetten meeneemt. */
 const HERHAAL_SCHULD = 'Een stelling stond er net voor de tweede keer. De derde keer is het remise. Liever niet? Speel anders.';
-/* bij welke halve zet een stelling er het laatst voor de tweede keer stond, in het potje zoals het nu is (0: nooit) */
-function laatsteTweedeKeer(S) {
+/* bij welke halve zet een stelling er het laatst voor de tweede keer stond, voor de stelling die er nu staat (0: nooit) */
+function eerdereTweedeKeer(S) {
   const zetten = S.hist.map(u => u.m), tel = {};
   for (let i = 0; i < zetten.length; i++) unmakeMove(S);
   let p = 0;
-  const kijk = i => { const k = positionKey(S); tel[k] = (tel[k] || 0) + 1; if (tel[k] === 2) p = i; };
+  const kijk = i => { const k = positionKey(S); tel[k] = (tel[k] || 0) + 1; if (tel[k] === 2 && i < zetten.length) p = i; };
   kijk(0);
   zetten.forEach((m, i) => { makeMove(S, m); kijk(i + 1); });
   return p;
 }
-/* De regel over herhaling op een vrije strook: over het bord als dat er voor de tweede keer staat, en anders de beloofde
-   regel; die raadt de volgende keuze van het kind aan, dus hij komt alleen als het kind aan zet is. */
-function herhaalRegel(S, kindAanZet) {
-  const plek = session.online ? MP : session;
-  const r = tweedeKeer(S) ? HERHAAL_ZIN : kindAanZet && laatsteTweedeKeer(S) > (plek.herhaalGezegd || 0) ? HERHAAL_SCHULD : null;
-  if (r) {
-    plek.herhaalGezegd = S.hist.length;
-    if (session.online) bewaarSamen(); else bewaarPotje();
-  }
-  return r;
+function herhaalGezegdNu(S) {
+  (session.online ? MP : session).herhaalGezegd = S.hist.length;
+  if (session.online) bewaarSamen(); else bewaarPotje();
+}
+/* De beloofde regel raadt de volgende keuze van het kind aan: hij komt als het kind aan zet is, en gaat dan voor alles
+   wat de strook anders zou zeggen, ook voor schaak (dat het bord laat zien en horen); anders kan elke beurt tot de derde
+   keer met iets anders beginnen. */
+function herhaalBeloofd(S) {
+  if (!(eerdereTweedeKeer(S) > ((session.online ? MP : session).herhaalGezegd || 0))) return null;
+  herhaalGezegdNu(S);
+  return HERHAAL_SCHULD;
+}
+/* Op de beurt van het kind blijft een regel over herhaling staan tot het kind zet: de beloofde regel, of een regel die op
+   deze beurt al in de strook kwam, ook na een herlading. Een bericht over de verbinding of over de ander gaat er dan niet
+   overheen. */
+function herhaalOpBeurt(S) {
+  if (S.turn !== (session.online ? MP.myColor : 'w')) return null;
+  const gezegd = (session.online ? MP : session).herhaalGezegd;
+  return herhaalBeloofd(S) || (gezegd === S.hist.length ? (tweedeKeer(S) ? HERHAAL_ZIN : HERHAAL_SCHULD) : null);
+}
+/* de regel over het bord zelf, op een vrije strook */
+function herhaalBord(S) {
+  if (!tweedeKeer(S)) return null;
+  herhaalGezegdNu(S);
+  return HERHAAL_ZIN;
 }
 function commitKid(m) {
   if (!session || session.kind !== 'game') return;
@@ -8864,10 +8878,10 @@ function commitKid(m) {
       /* zonder verbinding geen belofte dat de ander de zet al ziet */
       say(!session.samenBewaard ? SAMEN_NIET_BEWAARD :
         MP && MP.zetZonderNet ? 'Je zet is bewaard. Er is nu geen verbinding, dus ' + mpNaam() + ' ziet hem nog niet.' :
-        MP && MP.peerWeg ? anderWeg() : herhaalRegel(S, false) || 'Nu ' + mpNaam() + '… 💭');
+        MP && MP.peerWeg ? anderWeg() : herhaalBord(S) || 'Nu ' + mpNaam() + '… 💭');
       return;
     }
-    const herhaling = co ? null : herhaalRegel(S, false);
+    const herhaling = co ? null : herhaalBord(S);
     if (co) {
       countPattern(co.key);
       if ((session.patXP || 0) < 3) {
@@ -9041,7 +9055,7 @@ function doTurboMove(m, na) {
     const st = potjeStatus(S);
     if (st.over) { endGame(st); return; }
     if (co) { countPattern(co.key); trucRandjes(co.squares); }
-    const regel = inCheck(S) ? SCHAAK_ZIN : co ? 'Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢' : herhaalRegel(S, true) || zin;
+    const regel = herhaalOpBeurt(S) || (inCheck(S) ? SCHAAK_ZIN : co ? 'Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢' : herhaalBord(S) || zin);
     /* Turbo's zin is de uitleg en wordt nooit ingekort: past de lof er niet bij, dan gaat de lof (de XP-melding zei het al) */
     const voor = na === 'goed' ? 'Goed voorspeld! ' : na === 'fout' ? 'Het was mijn ' + stukTurbo + '. ' : '';
     if (regel) say(voor && Array.from(voor + regel).length <= STROOK_TEKENS ? voor + regel : regel);
