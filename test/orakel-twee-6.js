@@ -1199,6 +1199,36 @@ async function orakelTwee6() {
     }));
   });
 
+  await regel('[6.9] een uitnodiging die wachtte terwijl het kind tegen Turbo speelde, komt thuis naast een vriendenpotje dat dagen loopt als venster, met Ja', async function (check) {
+    zetDatum('2026-11-16T10:00:00');
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan'), sem = maakApparaat('Sem');
+    const fidD = await wordenVrienden(fien, daan);
+    await vriendErbij(fien, sem);
+    fien.ev('setPref("predict", false); setPref("guard", false)');
+    tikInRij(fien, fidD, 'Uitnodigen');
+    await wacht();
+    await daan.ev('friendPoll()');
+    await wacht();
+    daan.tik('invJa');
+    await wacht();
+    fien.tik('mpGo');
+    await wacht();
+    await potjeTot(fien, daan, 2, fien);
+    for (const x of [fien, daan]) { x.tik('backBtn'); await wacht(); }
+    await startPotje(fien, 1);
+    await zetEnWacht(fien, 'e2e4');
+    await nodigUit(sem);
+    await fien.ev('friendPoll()');
+    await wacht();
+    check('testopzet: in het potje tegen Turbo komt geen venster', !fien.open());
+    fien.tik('backBtn');
+    await wacht(500);
+    check('testopzet: de kaart is het potje met Daan, eronder een regel die telt', /je potje met Daan/i.test(tekstVan(fien, 'verderKaart')) &&
+      /^Ook nog (een|twee)/.test(tekstVan(fien, 'ookNog')));
+    check('de uitnodiging komt als venster, met Ja, spelen!', /Sem wil een potje spelen!/.test(fien.scherm()) && kanTikken(fien, 'Ja, spelen!') &&
+      !/loopt nog/.test(fien.scherm()));
+  });
+
   await regel('[6.9] een uitnodiging van een andere vriend terwijl een vriendenpotje loopt: het kind kan ja zeggen, en het eerste potje blijft staan', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan'), sem = maakApparaat('Sem');

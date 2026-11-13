@@ -441,4 +441,38 @@ async function orakelFlow6() {
     check('de kaart noemt geen uitdaging meer', !/uitdaging/i.test(tekstVan(a, 'verder')) && ookNogRegels(a).length === 0);
     check('geen teller veranderd', tellers(a) === voor);
   });
+
+  await regel('[6.9] een nieuw potje ruimt de kaart op: wat niet te lezen is en een einde dat het kind zag en de vriend kent gaan weg; lopende potjes met andere kinderen, een einde dat het kind nog niet zag en wat de vriend nog moet leren blijven', function (check) {
+    const a = maakApparaat('Mees');
+    const r = function (id, extra) {
+      return Object.assign({ gameId: id, fid: null, room: 'kamer' + id, seat: 'stoel' + id, host: true, myColor: 'w', gameNo: 1, moves: ['e2e4'],
+        peerName: 'Daan', result: null, offer: null, shown: false, updated: 1 }, extra);
+    };
+    const klaar = { kind: 'opgave', by: 'b', ply: 1 };
+    const g = {
+      lopendVriend: r('lopendVriend', { fid: 'vriendfien1', room: null, seat: null }),
+      lopendAnder: r('lopendAnder'),
+      nietGezien: r('nietGezien', { result: klaar }),
+      gezienBekend: r('gezienBekend', { fid: 'vriendfien1', result: klaar, shown: true, vriendWeet: true }),
+      gezienNietBekend: r('gezienNietBekend', { fid: 'vriendfien1', result: klaar, shown: true }),
+      gezienAnder: r('gezienAnder', { result: klaar, shown: true }),
+      kapotPotje: { gameId: 'kapotPotje', moves: 'geen lijst' }
+    };
+    a.ev('schrijfSamen(' + JSON.stringify(g) + '); MP = { viaFriend: "vriendsem01", gameId: "nieuwpotje1" }; samenOpruimen(); MP = null');
+    const blijft = Object.keys(a.get('samenRauw() || {}')).sort().join();
+    check('blijven: de lopende potjes, het einde dat het kind niet zag, het einde dat de vriend nog moet leren',
+      blijft === ['gezienNietBekend', 'lopendAnder', 'lopendVriend', 'nietGezien'].sort().join());
+  });
+
+  await regel('[6.9] een uitnodiging die de ene regel onder de kaart is, komt niet ook als venster; de regel opent haar vraag', async function (check) {
+    const a = await kind(opslagMetVrienden([{ fid: 'vriendfien1', naam: 'Fien', zetten: ['e2e4', 'e7e5'] }, { fid: 'vriendsem01', naam: 'Sem' }]));
+    a.ev('uitnodigingWacht = { fid: "vriendsem01", inv: { id: "uitnodiging1", room: "kamersem0001", seat: "stoelsem0001", ts: Date.now() } }; renderVerder()');
+    await wacht(100);
+    check('testopzet: de kaart is het potje met Fien', /je potje met Fien/i.test(tekstVan(a, 'verderKaart')));
+    check('de regel noemt de uitnodiging', /Ook nog: Sem wil spelen/.test(tekstVan(a, 'ookNog')));
+    check('en er staat geen venster', !a.open());
+    a.tik('ookNog');
+    await wacht();
+    check('de regel opent haar vraag', /Sem wil een potje spelen!/.test(a.scherm()) && kanTikken(a, 'Ja, spelen!'));
+  });
 }
