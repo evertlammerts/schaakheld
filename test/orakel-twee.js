@@ -934,6 +934,64 @@ async function orakelTwee() {
     check('Weghalen haalt alleen dat potje weg', !!d3 && !d3.games.mnopqrstuvwx && Object.keys(d3.games).length === 1);
   });
 
+  /* de eindkaart van een potje tussen kinderen zegt wat telde: geen XP, wel een weekdoel met vrienden */
+  async function potjeMetDoel(doelFien, doelDaan, kort) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    if (doelFien) a.ev('setPref("weekGoal", ' + JSON.stringify(doelFien) + ')');
+    if (doelDaan) b.ev('setPref("weekGoal", ' + JSON.stringify(doelDaan) + ')');
+    await samenSpelen(a, b);
+    for (const z of (kort ? ['e2e4', 'e7e5'] : ZETTEN22)) await speel(a, b, z);
+    await geefOp(aanZet(a, b));
+    await wacht();
+    return { a, b };
+  }
+  await regel('[4.1] de eindkaart van een potje tussen kinderen: het weekdoel met vrienden gehaald, of geen XP', async function (check) {
+    const { a, b } = await potjeMetDoel({ kind: 'vriend', n: 1 }, null, false);
+    check('Fien haalde haar weekdoel', /Telt mee voor je weekdoel, en dat is nu gehaald: \+60 XP! 🎯/.test(tekstVan(a, 'eindkaart')));
+    check('Daan heeft geen weekdoel met vrienden', /Een potje met een vriend geeft geen XP\. Het telt wel voor een weekdoel met vrienden\./.test(tekstVan(b, 'eindkaart')));
+  });
+
+  await regel('[4.1] de eindkaart van een potje tussen kinderen: telt mee voor het weekdoel, of telt niet want te kort', async function (check) {
+    const lang = await potjeMetDoel({ kind: 'vriend', n: 3 }, null, false);
+    check('telt mee, het doel is nog niet gehaald', /Telt mee voor je weekdoel\. 🎯/.test(tekstVan(lang.a, 'eindkaart')) && !/gehaald/.test(tekstVan(lang.a, 'eindkaart')));
+    const kort = await potjeMetDoel({ kind: 'vriend', n: 3 }, null, true);
+    check('te kort: aan beide kanten', [kort.a, kort.b].every(function (x) { return /Dit potje telt niet mee: het was korter dan tien zetten\./.test(tekstVan(x, 'eindkaart')); }));
+  });
+
+  await regel('[4.2] Pauze uit een potje met een kind dat geen vriend is, gaat naar Spelen; uit een potje met een vriend naar het tabblad van waar het kwam', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    a.tik('tabVrienden');
+    await wacht();
+    await samenSpelen(a, b);
+    a.tik('backBtn');
+    await wacht();
+    check('geen vriend: op Spelen, met het potje op de kaart', zichtbaar(a, 'view-spelen') && /je potje met Daan/.test(tekstVan(a, 'verder')));
+    const c = maakApparaat('Mila'), d = maakApparaat('Sem');
+    const fid = await wordenVrienden(c, d);
+    c.ev('if (MP) mpStop(true); goHome("vrienden")');
+    d.ev('if (MP) mpStop(true); goHome()');
+    await wacht();
+    await nodigUit(c);
+    await d.ev('friendPoll()');
+    await wacht();
+    d.tik('invJa');
+    await wacht();
+    c.tik('mpGo');
+    await wacht();
+    check('testopzet: een potje tussen vrienden', c.get('!!(session && session.online && MP && MP.viaFriend)'));
+    c.tik('backBtn');
+    await wacht();
+    check('vriend: terug op Vrienden, waar de rij het potje toont', zichtbaar(c, 'view-vrienden') && /aan zet/.test(tekstVan(c, 'friendList')));
+  });
+
+  await regel('[4.6] wie uitnodigt, leest dat de uitnodiging klaarstaat, zonder te zeggen dat de app van de ander dicht is', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await wordenVrienden(fien, daan);
+    await nodigUit(fien);
+    check('het venster', /Je uitnodiging staat klaar voor Daan\. Zeg het gerust even!/.test(fien.scherm()) && !/zodra de app open gaat/.test(fien.scherm()));
+    check('de rij', /Wachten op Daan…/.test(tekstVan(fien, 'friendList')) && !/SchaakHeld opent/.test(tekstVan(fien, 'friendList')));
+  });
+
   await regel('[4.4] is de kamer weg, dan zien beiden hetzelfde einde en telt het voor niemand', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);

@@ -4253,7 +4253,7 @@ function renderFriends() {
   el.innerHTML = ids.map(id => {
     const f = P.friends[id], naam = escHtml(f.naam);
     const wacht = !!INV && INV.fid === id, g = !wacht && samenMet(id), beurt = !!g && g.S.turn === g.kleur;
-    const sub = wacht ? 'Wachten tot ' + naam + ' SchaakHeld opent…' : g ? (beurt ? 'Jij bent aan zet.' : naam + ' is aan zet.') :
+    const sub = wacht ? 'Wachten op ' + naam + '…' : g ? (beurt ? 'Jij bent aan zet.' : naam + ' is aan zet.') :
       'vrienden sinds ' + friendSince(f);
     const knop = wacht ? '<button class="btn plain small" data-cancel="' + id + '">Stop</button>' :
       g ? '<button class="btn plain small" data-speel="' + id + '">' + (beurt ? 'Speel verder' : 'Bekijk') + '</button>' :
@@ -4301,7 +4301,7 @@ async function mpHostQR() {
   mpStart(resp.room, resp.seat, true);
   const url = location.origin + location.pathname + '#' + PLAY_PREFIX + resp.room + '.' + resp.guest;
   showModal('<div class="m-emoji">🤝</div><h2>Samen spelen</h2>' + samenKapotZin() +
-    '<p>Laat je maatje deze code scannen in SchaakHeld: bij Vrienden, met 📷 Ik scan de code.</p>' +
+    '<p>Laat je maatje deze code scannen in SchaakHeld: bij Vrienden, met 📷 Ik&nbsp;scan de code.</p>' +
     '<div style="width:190px;max-width:60vw;margin:8px auto">' + QR.qrSvg(url) + '</div>' +
     '<p>Wachten op je maatje… ⏳</p>' +
     '<div class="m-btns"><button class="btn plain" id="mpNee">Stoppen</button></div>', () => {
@@ -4634,7 +4634,7 @@ function wachtScherm() {
   clearTimeout(inviteTimer);
   inviteTimer = setTimeout(inviteVerlopen, Math.max(0, (INV.tot || 0) - Date.now()));
   showModal('<div class="m-emoji">🐢</div><h2>Wachten op ' + escHtml(f.naam) + '…</h2>' + samenKapotZin() +
-    '<p>' + escHtml(f.naam) + ' krijgt een seintje zodra de app open gaat. Zeg het gerust even!</p>' +
+    '<p>Je uitnodiging staat klaar voor ' + escHtml(f.naam) + '. Zeg het gerust even!</p>' +
     '<div class="m-btns"><button class="btn plain" id="invStop">Stop met wachten</button></div>',
     () => $('invStop').addEventListener('click', inviteCancel), false, 'mpwacht');
 }
@@ -5725,7 +5725,7 @@ function pauze() {
       r ? '✔ Bewaard. Je kunt later verder bij opdracht ' + (r.round + 1) + '.' :
       'Nog geen opdracht af, dus er is nog niets bewaard. Volgende keer begin je bij opdracht 1.';
   }
-  goHome(terugTab, melding ? () => showToast(melding, false, 6000) : null);
+  goHome(pauzeTab(), melding ? () => showToast(melding, false, 6000) : null);
 }
 
 /* Wat een kind nu het best kan doen: eerst wat bezig is, dan een voorstel.
@@ -7735,7 +7735,7 @@ function openHulp() {
 /* einde van een online potje: neutrale taal (geen Turbo), geen XP (dat
    zou een farm-route zijn), wel de tellers, en de revanche uit het memo:
    alleen binnen deze sessie, kleuren wisselen om */
-function endGameOnline(st, drawTxt, telt) {
+function endGameOnline(st, drawTxt, telt, doelGehaald) {
   const ik = session.myColor || 'w', oud = !!session.oud, naam = oud ? session.oud.naam : mpNaam();
   let h, p;
   /* gameStatus meldt remise als result 'd', nooit als een leeg result. Op
@@ -7766,8 +7766,11 @@ function endGameOnline(st, drawTxt, telt) {
     '<p>Je laatste zet telt niet mee: het potje was al klaar voor je hem deed. Dat kon je niet zien, want er was geen verbinding.</p>' : '';
   if (vervallen) MP.zetVervallen = false;
   const vriendKnop = !oud && MP && !MP.viaFriend ? '<button class="btn plain" id="mpVriend">🤝 Vrienden worden</button>' : '';
-  /* een vriendenpotje geeft geen XP; alleen een weekdoel met vriendenpotjes telt het */
-  const week = telt && P.weekGoal && P.weekGoal.kind === 'vriend' ? '<p>Telt mee voor je weekdoel. 🎯</p>' : '';
+  /* een potje tussen kinderen geeft geen XP; het telt als potje, en alleen een weekdoel met vrienden telt het mee */
+  const vriendDoel = !!(P.weekGoal && P.weekGoal.kind === 'vriend');
+  const week = '<p>' + (!telt ? 'Dit potje telt niet mee: het was korter dan tien zetten.' :
+    vriendDoel && doelGehaald ? 'Telt mee voor je weekdoel, en dat is nu gehaald: +' + GOAL_XP + ' XP! 🎯' :
+    vriendDoel ? 'Telt mee voor je weekdoel. 🎯' : 'Een potje met een vriend geeft geen XP. Het telt wel voor een weekdoel met vrienden.') + '</p>';
   say(vervallen ? 'Je laatste zet telt niet mee: het potje was al klaar.' : h);
   toonEindkaart('<div class="ek-turbo">🐢</div><h2 id="ekKop">' + h + '</h2><p id="ekZin">' + p + '</p>' + vervallen + week + '<!--trofeeen-->' +
     '<div id="ekVraag"></div><p id="ekWacht"></p>' +
@@ -7824,8 +7827,9 @@ function endGame(st, stil) {
       bewaarSamen();
       stuurStand();
     }
+    const doelVoor = goalDoneWeek(curWeek());
     if (telt) bumpWeek('online', 1);
-    endGameOnline(st, drawTxt, telt);
+    endGameOnline(st, drawTxt, telt, !doelVoor && goalDoneWeek(curWeek()));
     return;
   }
   if (telt) bumpWeek('potjes' + session.level, 1);
@@ -8307,6 +8311,9 @@ function renderHome() {
    (uitnodigen of samen spelen) en Ik (week, vorm, trofeeën). */
 const HOME_TABS = { spelen: 'tabSpelen', vrienden: 'tabVrienden', ik: 'tabIk' };
 let laatsteTab = 'spelen', terugTab = 'spelen';
+/* Pauze gaat naar het tabblad van waar het kind kwam; een potje met een kind dat geen vriend is, staat alleen op
+   Spelen (de Verder-kaart), dus daar gaat het heen */
+function pauzeTab() { return session && session.online && !(MP && MP.viaFriend) ? 'spelen' : terugTab; }
 function showHomeTab(name) {
   if (!HOME_TABS[name]) name = 'spelen';
   laatsteTab = name;
@@ -8384,7 +8391,7 @@ $('backBtn').addEventListener('click', () => {
   /* een vriendenpotje blijft staan en de verbinding ook: de ander merkt niets */
   if (session && session.online && !session.over) {
     const gelukt = bewaarSamen();
-    goHome(terugTab, gelukt ? null : () => showToast(SAMEN_NIET_BEWAARD, false, 6000));
+    goHome(pauzeTab(), gelukt ? null : () => showToast(SAMEN_NIET_BEWAARD, false, 6000));
     return;
   }
   pauze();

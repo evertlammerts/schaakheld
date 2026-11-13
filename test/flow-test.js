@@ -1843,7 +1843,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     catch (e) { return true; }
   })());
   renderFriends();
-  ok('uitnodiging: lijst toont het wachten', __els.friendList.innerHTML.indexOf('Wachten tot Mila') >= 0 &&
+  ok('uitnodiging: lijst toont het wachten', __els.friendList.innerHTML.indexOf('Wachten op Mila') >= 0 &&
     __els.friendList.innerHTML.indexOf('data-cancel') >= 0);
   var kamerInv = MP.room;
   /* nu de kant van Mila: zelfde geheim, andere rol. Haar app vraagt haar bus op. */

@@ -321,6 +321,9 @@ async function orakelBlok(naam, blok, gebouwd) {
     fouten.push('uitzondering: ' + (e && e.message ? e.message : e));
   } finally {
     ORAKEL.apps.splice(voor).forEach(stopApparaat);
+    /* de kamers van de apparaten die net stopten, gaan mee weg: anders raakt de nep-server, net als room.go, na
+       vierenzestig kamers vol en kan een latere regel geen potje meer beginnen */
+    if (typeof __server !== 'undefined') { __server.wsrooms = {}; __server.pending = {}; }
     echteDatum();
     Math.random = __echteRandom;
   }
