@@ -1047,7 +1047,7 @@ function vergeetSamen(gameId) {
   schrijfSamen(g);
 }
 /* de uitslag zoals de games over dagen hem ook dragen: wat, door wie, na hoeveel halve zetten */
-const UITSLAG_SOORT = ['opgave', 'remise', 'mat', 'pat', '50', 'materiaal'];
+const UITSLAG_SOORT = ['opgave', 'remise', 'mat', 'pat', '50', 'materiaal', 'herhaling'];
 function geldigeUitslag(u) {
   if (!u || typeof u !== 'object' || !UITSLAG_SOORT.includes(u.kind) || !Number.isInteger(u.ply) || u.ply < 0) return null;
   if (u.by !== 'w' && u.by !== 'b' && u.by !== null) return null;
@@ -1115,7 +1115,7 @@ function openSamen() {
   toonSamenScherm();
   /* een einde dat binnenkwam terwijl het kind weg was: nu de eindkaart, en dan telt het */
   if (MP.result && !MP.shown) { session.eerderAfgelopen = true; endGame(stVanUitslag(MP.result)); return; }
-  const st = gameStatus(MP.S);
+  const st = potjeStatus(MP.S);
   if (st.over) { endGame(st); return; }
   BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off';
   if (remiseVraagOpen()) { toonRemiseVraag(); return; }
@@ -1527,7 +1527,7 @@ function mpOnZet(m) {
     BD.check = inCheck(S) ? S.kings[S.turn] : null;
     renderBoard();
     updateTrays();
-    const st = gameStatus(S);
+    const st = potjeStatus(S);
     if (st.over) { endGame(st); return; }
     BD.mode = 'move';
     remiseRij();
@@ -1614,7 +1614,7 @@ function mpOnSync(m) {
   if (session.over) return;
   if (einde) { closeModal(); BD.mode = 'off'; endGame(stVanUitslag(MP.result)); return; }
   /* de stand kan al uit zijn (mat tijdens het gat): dan meteen het eindscherm */
-  const st = gameStatus(MP.S);
+  const st = potjeStatus(MP.S);
   if (st.over) { BD.mode = 'off'; endGame(st); return; }
   if (bord) { BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off'; remiseRij(); zegBeurt(); }
   if (vraag) toonRemiseVraag();
@@ -1641,7 +1641,7 @@ function toonAllebeiOp() {
 function uitslagVanAnder(u) {
   if (u.kind === 'opgave') return u.by === other(MP.myColor);
   if (u.kind === 'remise') return !!MP.offer && MP.offer.by === MP.myColor && MP.offer.ply === u.ply && !MP.offer.answer;
-  const st = gameStatus(MP.S);
+  const st = potjeStatus(MP.S);
   return st.over && st.reason === u.kind;
 }
 /* een uitslag die van de ander kwam, kent de ander al */
@@ -5632,11 +5632,11 @@ function onKidMove(m) {
   commitKid(m);
 }
 
-/* Tegen Turbo is de derde keer dezelfde stelling remise; een vriendenpotje
-   krijgt die regel met de code van dat potje */
+/* de derde keer dezelfde stelling is remise, tegen Turbo en in een vriendenpotje; beide apparaten van een vriendenpotje
+   spelen de hele zettenlijst na, dus ze zien de herhaling allebei */
 function potjeStatus(S) {
   const st = gameStatus(S);
-  return st.over || session.online || repetitions(S) < 2 ? st : { over: true, result: 'd', reason: 'herhaling' };
+  return st.over || repetitions(S) < 2 ? st : { over: true, result: 'd', reason: 'herhaling' };
 }
 /* de tweede keer dezelfde stelling: de derde keer is remise, en dat hoort het kind voor het gebeurt; de regel gaat over
    de stelling die er staat, dus wie dan schaak staat hoort eerst "Schaak!" en de regel pas bij een volgende tweede keer */

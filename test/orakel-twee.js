@@ -3492,7 +3492,7 @@ async function orakelTwee() {
 
   /* drie keer dezelfde stelling in een vriendenpotje: remise op beide apparaten, met dezelfde regel op de eindkaart, en het
      telt voor elk kind een keer */
-  await nogNiet('[5.6] een vriendenpotje: de derde keer dezelfde stelling is remise op beide apparaten, met dezelfde regel op de eindkaart, en telt voor elk een keer', async function (check) {
+  await regel('[5.6] een vriendenpotje: de derde keer dezelfde stelling is remise op beide apparaten, met dezelfde regel op de eindkaart, en telt voor elk een keer', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
     const voor = [a, b].map(function (x) { return x.get('P.c.gamesPlayed || 0'); });
@@ -3503,6 +3503,22 @@ async function orakelTwee() {
       check('de regel op de eindkaart bij ' + x.naam + ' (' + tekstVan(x, 'eindkaart') + ')', tekstVan(x, 'eindkaart').indexOf('Remise: drie keer dezelfde stelling.') >= 0);
     }
     [a, b].forEach(function (x, i) { check('het telt een keer bij ' + x.naam, x.get('P.c.gamesPlayed || 0') === voor[i] + 1); });
+  });
+
+  /* de tweede keer is nog geen remise, en een remise door herhaling die de ander meldt, telt alleen op een bord waar de
+     stelling er echt voor de derde keer staat */
+  await regel('[5.6] een vriendenpotje: de tweede keer dezelfde stelling speelt door, en een gemelde herhaling die niet op het bord staat telt niet', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    for (const z of ['g1f3', 'g8f6', 'f3g1', 'f6g8']) await speel(a, b, z);
+    await wacht(3000);
+    for (const x of [a, b]) check('de tweede keer loopt het potje door bij ' + x.naam, x.get('!!session && session.over === false && !MP.result'));
+    a.ev('mpMsg(' + standVan(a, { result: { kind: 'herhaling', by: null, ply: 4 } }) + ')');
+    await wacht();
+    check('een herhaling die de ander meldt bij de tweede keer telt niet', a.get('session.over === false && MP.result === null'));
+    await speel(a, b, 'g1f3');
+    await wacht(3000);
+    check('na de gemelde herhaling speelt het potje gewoon verder', a.get('session.over === false') && a.get('MP.S.hist.length') === 5 && b.get('MP.S.hist.length') === 5);
   });
 
   /* zelfde grenzen als de Go-test van 4.10: na 9,5 minuten nog wel, na 10,5 niet meer */
