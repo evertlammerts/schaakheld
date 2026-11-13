@@ -27,7 +27,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.7', '4.8', '4.12', '6.9']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.7', '4.8', '4.12', '6.8', '6.9']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -893,6 +893,25 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
         check(n, soort + ': precies één regel Ook nog', v.ook.length === 1);
         if (soort === 'Ook nog in twee regels') check(n, 'testopzet: de regel Ook nog neemt twee regels', v.ook.length === 1 && v.ook[0] > 46);
       }` });
+}
+
+/* plan.md 6.8: een stil potje als kaart, met de uitweg eronder, en een tweede stil potje in de regel Ook nog */
+const STIL_LANG = { schaakheld1: POTJES_DOC, 'schaakheld-samen': JSON.stringify({ v: 1, games: {
+  potjevanvriendmaxi01: Object.assign(bewaardVriendenpotje('vriendmaxi01', 'Maximiliaantje', 0, ['d2d4', 'd7d5', 'c2c4'], false), { beurtT: Date.now() - 8 * 86400000 }),
+  potjevanvriendsem001: Object.assign(bewaardVriendenpotje('vriendsem001', 'Sem', 1, ['c2c4', 'e7e5', 'g1f3'], false), { beurtT: Date.now() - 12 * 86400000 }) } }) };
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[6.8] ' + W + 'x' + H + ': twee stille potjes, de kaart met de uitweg eronder en een regel Ook nog: de kaart, de regels, de weekregel en beide spelknoppen boven de tabbalk';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(STIL_LANG)});
+      await page.waitForTimeout(2500);
+      const tab = await rect('.tabbar');
+      for (const s of ['#verder', '#weekStrip', '#spelTurbo', '#spelVriend']) {
+        const r = await rect(s);
+        check(n, s + ' boven de tabbalk', !!r && !!tab && r.top >= 0 && r.bottom <= tab.top + 0.5);
+      }
+      const v = await page.evaluate(() => (document.getElementById('verder') || {}).textContent || '');
+      check(n, 'de kaart is het stille potje met de uitweg', /heeft al een week niet gezet/.test(v) && /Wacht je liever niet/.test(v));` });
 }
 
 /* plan.md 6.9 met het blad: elke rij is minstens 56 hoog, de titel staat boven waar het ding staat, en niets is breder dan het scherm */

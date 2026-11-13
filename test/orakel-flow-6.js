@@ -238,6 +238,24 @@ async function orakelFlow6() {
     check('Ook nog een potje, een uitdaging en je rondje', JSON.stringify(ookNogRegels(b)) === JSON.stringify(['Ook nog een potje, een uitdaging en je rondje']));
   });
 
+  await regel('[6.6] een potje met het eigen aanbod openen: de strook zegt het aanbod met de dag, en de balk "✔ bewaard · ½ aangeboden"', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const a = await kind(opslagMetPotjes([fien], [{ gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien',
+      moves: ['d2d4', 'd7d5', 'c2c4'], offer: { by: 'w', ply: 3, answer: null, t: Date.now() - UUR } }]));
+    a.tik('verderKaart');
+    await wacht();
+    check('de strook: het eigen aanbod met de dag', /Je biedt Fien remise aan\. Doet Fien tot en met .+ geen zet, dan is het remise\./.test(tekstVan(a, 'bubble')));
+    check('de balk: bewaard en aangeboden', /✔ bewaard/.test(tekstVan(a, 'bewaard')) && /½ aangeboden/.test(tekstVan(a, 'verschil')));
+  });
+
+  await regel('[6.8] onder de kaart van een stil potje staat de uitweg, niet dat het potje blijft staan', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const a = await kind(opslagMetPotjes([fien], [{ gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien', moves: ['d2d4', 'd7d5', 'c2c4'],
+      beurtT: Date.now() - 10 * DAG }]));
+    const v = tekstVan(a, 'verder');
+    check('de uitweg', /Wacht je liever niet\? In het potje kun je via ⋯ remise aanbieden\./.test(v) && !/blijft staan/.test(v));
+  });
+
   await regel('[6.1] de zetten in de bus houden elke promotie: dame, toren, loper en paard', async function (check) {
     const a = await kind(opslagMetVrienden([]));
     const lijst = ['a2a4', 'b7b5', 'a4b5', 'a7a6', 'b5a6', 'c8b7', 'a6b7', 'b8c6', 'b7a8q'];

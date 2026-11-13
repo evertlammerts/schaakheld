@@ -496,9 +496,9 @@ async function orakelTwee6() {
       if (kanTikken(mees, 'Naar huis')) { tikTekst(mees, 'Naar huis'); await wacht(); }
       schuifKlok(DAG);
       fien = await opent(fien);
-      const kaart = tekstVan(fien, 'verder'), fienWit = /Jij speelt met wit\./.test(kaart);
+      const kaart = tekstVan(fien, 'verder'), fienWit = /Jij speelt met wit: jij begint\./.test(kaart);
       kleurUitdaging.push(fienWit);
-      check('de kaart: Mees daagt je uit, met de kleur', /Mees daagt je uit/.test(kaart) && (fienWit || /Jij speelt met zwart\./.test(kaart)));
+      check('de kaart: Mees daagt je uit, met de kleur', /Mees daagt je uit/.test(kaart) && (fienWit || /Jij speelt met zwart: Mees begint\./.test(kaart)));
       check('in de kaart Nu niet en Ja, spelen!, en geen regel dat het potje blijft staan', kanTikken(fien, 'Nu niet') && kanTikken(fien, 'Ja, spelen!') &&
         !/blijft staan/.test(kaart));
       tikTekst(fien, 'Ja, spelen!');
@@ -565,6 +565,7 @@ async function orakelTwee6() {
     vierWeg(mees);
     await tijd(20000);
     const s = mees.scherm();
+    check('met Oké', kanTikken(mees, 'Oké'));
     check('Mees hoort het één keer, rustig', /Fien kan nu even niet/.test(s) && /Daag Fien later gerust nog eens uit\./.test(s));
     tikEl(mees, mees.el('modalBox').querySelectorAll('button')[0], 'de knop van het bericht');
     await wacht();
@@ -781,7 +782,7 @@ async function orakelTwee6() {
     schuifKlok(2 * DAG);
     fien = await opent(fien);
     const kaart = tekstVan(fien, 'verder');
-    check('de kaart: Mees biedt remise aan, met de laatste dag om te antwoorden', /Mees biedt remise aan/.test(kaart) && /Antwoorden kan tot en met vrijdag 27 november\./.test(kaart));
+    check('de kaart: Mees biedt remise aan, met de laatste dag om te antwoorden', /Mees biedt remise aan/.test(kaart) && /Doe je tot en met vrijdag 27 november geen zet, dan wordt het remise\./.test(kaart));
     check('een datum, geen klok', !/\d+:\d\d|nog \d+ dag/.test(kaart));
     check('geen regel dat het potje blijft staan', !/blijft staan/.test(kaart));
     fien.tik('verderKaart');
@@ -2600,5 +2601,32 @@ async function orakelTwee6() {
     for (const x of [tel, tab]) x.tik('tabVrienden');
     check('de telefoon: 5 dagen geleden', /Fien is aan zet · 5 dagen geleden/.test(vriendRijTekst(tel, fid)));
     check('de tablet ook', /Fien is aan zet · 5 dagen geleden/.test(vriendRijTekst(tab, fid)));
+  });
+
+  /* ================= zonder verbinding: de kaart en de strook zeggen alleen wat waar is ================= */
+
+  await regel('[6.2] zonder verbinding zegt de kaart van een potje zonder kamer dat er geen verbinding is, en zodra lezen weer lukt niet meer; bij het openen zegt de strook het ook', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 2, mees);
+    const kamer = mees.get('MP.room');
+    stopApparaat(fien);
+    stopApparaat(mees);
+    delete __server.wsrooms[kamer];
+    schuifKlok(UUR);
+    mees = await opent(mees);
+    check('testopzet: het potje heeft geen kamer meer', !(vriendenpotjeMet(mees, fid) || {}).room);
+    geenNetwerk(mees);
+    await tijd(20000);
+    check('de kaart zegt dat er geen verbinding is', /Er is nu geen verbinding. Je kunt wel je zet doen./.test(tekstVan(mees, 'verder')));
+    mees.tik('verderKaart');
+    await wacht();
+    check('bij het openen zegt de strook het ook', /Er is nu geen verbinding. Je kunt wel je zet doen./.test(zegt(mees)) && !/ziet hem bij het openen/.test(zegt(mees)));
+    mees.tik('backBtn');
+    await wacht();
+    weerNetwerk(mees);
+    await tijd(20000);
+    check('met verbinding is de zin weg', !/geen verbinding/.test(tekstVan(mees, 'verder')) && /Jij bent aan zet/.test(tekstVan(mees, 'verder')));
   });
 }

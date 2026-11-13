@@ -1116,6 +1116,7 @@ function openSamen(gameId) {
   } else stuurStand();
   session = { kind: 'game', online: true, S: MP.S, level: 0, tips: 0, over: false, pending: null, myColor: MP.myColor };
   toonSamenScherm();
+  if (MP.viaFriend && (samenRauw() || {})[MP.gameId]) toonBewaard(true);
   /* een einde dat binnenkwam terwijl het kind weg was: nu de eindkaart, en dan telt het */
   if (MP.result && !MP.shown) { session.eerderAfgelopen = true; endGame(stVanUitslag(MP.result)); return; }
   const st = gameStatus(MP.S);
@@ -1123,7 +1124,7 @@ function openSamen(gameId) {
   BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off';
   if (remiseVraagOpen()) { toonRemiseVraag(); return; }
   const rec = (samenRauw() || {})[MP.gameId], doetMee = rec && zinDoetMee(rec.mijnUitdaging, MP.S.hist.length, MP.myColor, mpNaam());
-  say(doetMee || (!MP.room && MP.viaFriend ? zinWeg() : !MP.open && MP.pogingen > 0 ? GEEN_NET_SPEL :
+  say(doetMee || (!MP.room && MP.viaFriend ? (eigenBodStaat() ? zinEigenBod() : zinOpenen()) : !MP.open && MP.pogingen > 0 ? GEEN_NET_SPEL :
     MP.S.turn === MP.myColor ? 'Jij bent aan zet! 💭' : mpNaam() + ' is aan zet… ⏳'));
 }
 function toonSamenScherm(S = MP.S, kleur = MP.myColor, naam = mpNaam()) {
@@ -1742,7 +1743,7 @@ function renderFriends() {
     const bezet = !wacht && !loopt && paarBezet(id), bezetZin = !!bezet && !bezet.ingetrokken;
     const g = !wacht && !uitd && stand[id].g, beurt = !!g && g.S.turn === g.kleur;
     const sub = wacht ? 'Wachten tot ' + naam + ' SchaakHeld opent…' :
-      uitd ? (uitd.mijnUitdaging ? 'Uitgedaagd · nog geen antwoord' : naam + ' daagt je uit · Jij speelt met ' + (uitd.myColor === 'w' ? 'wit' : 'zwart') + '.') :
+      uitd ? (uitd.mijnUitdaging ? 'Uitgedaagd · nog geen antwoord' : naam + ' daagt je uit · ' + escHtml(zinKleur(uitd.myColor, f.naam))) :
       g ? (beurt ? (g.S.hist.length ? naam + ' heeft gezet.' : 'Jij bent aan zet.') : stand[id].stil ? escHtml(stilZin(f.naam, stand[id].dagen)) :
         naam + ' is aan zet · ' + dagWoord(stand[id].dagen)) : bezetZin ? 'Weer uitnodigen kan als ' + naam + ' SchaakHeld opent.' :
       'vrienden sinds ' + friendSince(f);
@@ -2306,7 +2307,8 @@ function vriendPotjeVerder(fid, R, voor, ev) {
 function meldUitdagingNee() {
   if (!afgewezenUitdagingen.length || session || modalOpen) return;
   const naam = escHtml(afgewezenUitdagingen.shift());
-  naarHuisMelding('🙂', naam + ' kan nu even niet', 'Daag ' + naam + ' later gerust nog eens uit.');
+  meldInPlaats('<div class="m-emoji">🙂</div><h2>' + naam + ' kan nu even niet</h2><p>Daag ' + naam + ' later gerust nog eens uit.</p>' +
+    '<div class="m-btns"><button class="btn sun" id="meldOk">Oké</button></div>', () => $('meldOk').addEventListener('click', closeModal));
 }
 /* het potje van de verbinding volgt wat de potjesbussen brachten, en het scherm laat het zien */
 function mpVolgtRecord(r, ev) {
@@ -2329,6 +2331,11 @@ function mpVolgtRecord(r, ev) {
   if (ev.andereApparaat) say('Je zet op je andere apparaat telde al.');
   else if (remiseVraagOpen()) toonRemiseVraag();
   else if (bord) say(MP.S.turn === MP.myColor ? 'Jij weer! Wat wordt je plan? 💭' : zinWeg());
+}
+/* bij het openen van een potje met een vriend die er niet is; zonder verbinding belooft de strook niets over de vriend */
+function zinOpenen() {
+  if (!potjesNetFout) return zinWeg();
+  return 'Er is nu geen verbinding. ' + (MP.S.turn === MP.myColor ? 'Je kunt wel je zet doen.' : mpNaam() + ' is aan zet.');
 }
 /* een zet zonder verbinding: hij staat hier, en de potjesbus krijgt hem zodra er weer verbinding is */
 function zinBodZonderNet() { return 'Je biedt ' + mpNaam() + ' remise aan zodra er weer verbinding is.'; }
@@ -2568,8 +2575,8 @@ function inviteVerlopen() {
   inviteClear();
   if (MP) mpStop();
   /* de uitnodiging verliep; een uitdaging voor later kiest het kind zelf */
-  meldInPlaats('<div class="m-emoji">🐢</div><h2>' + naam + ' heeft niet gekeken</h2><p>De uitnodiging is verlopen. ' +
-    'Zeg het even, en nodig ' + naam + ' dan opnieuw uit!</p><div class="m-btns"><button class="btn sun" id="invLater2">Daag ' + naam +
+  meldInPlaats('<div class="m-emoji">🐢</div><h2>' + naam + ' is er nu niet</h2><p>De uitnodiging is verlopen. Daag ' + naam + ' uit voor later: dan ziet ' + naam +
+    ' het bij het openen van SchaakHeld.</p><div class="m-btns"><button class="btn sun" id="invLater2">Daag ' + naam +
     ' uit voor later</button><button class="btn plain" id="meldOk">🏠 Naar huis</button></div>', () => {
       $('invLater2').addEventListener('click', () => maakUitdaging(fid));
       $('meldOk').addEventListener('click', () => { closeModal(); goHome(); });
@@ -2781,6 +2788,8 @@ async function friendPoll() {
         deel.forEach(b => gelezen.add(b));
       }
     }
+    /* weer verbinding: de kaart hoeft niet meer te zeggen dat die er niet is */
+    if (potjesNetFout) pollVerversen = true;
     potjesNetFout = false;
     for (const id in potjes) {
       const p = potjes[id], f = P.friends[id];
@@ -3913,7 +3922,7 @@ function samenItem(s) {
   /* tussen vrienden staat een aanbod veertien dagen: de kaart zegt tot welke dag het kind kan antwoorden */
   if (s.bod) {
     const zin = !s.vriend ? 'Remise is gelijkspel: niemand wint, niemand verliest.' : s.bodT && antwoordDagVoorbij(s.bodT) ?
-      'Antwoorden kan nu nog.' : 'Antwoorden kan tot en met ' + antwoordDag(s.bodT || Date.now()) + '.';
+      'Antwoorden kan nu nog.' : 'Doe je tot en met ' + antwoordDag(s.bodT || Date.now()) + ' geen zet, dan wordt het remise.';
     return { rule: 'R1', title: naam + ' biedt remise aan', button: 'Antwoord', vriend: true, volgorde: 1, tijd, soort: 'potje', fid: s.fid,
       text: zin, ook: naam + ' biedt remise aan', rij: { titel, plek: naam + ' biedt remise aan. ' + zin }, action: actie };
   }
@@ -4053,7 +4062,7 @@ function vriendItems(alle) {
     if (vriend && !uitslag && eindeGezien(b.r.gameId)) continue;
     const bod = hier ? remiseVraagOpen() : !!b.r.offer && b.r.offer.by !== kleur && !b.r.offer.answer && b.r.offer.ply === S.hist.length;
     const aanbod = hier ? MP.offer : b.r.offer;
-    const kleurZin = 'Jij speelt met ' + (kleur === 'w' ? 'wit' : 'zwart') + '.';
+    const kleurZin = zinKleur(kleur, naam);
     if (b.r.state === 'uitdaging') uit.push(b.r.mijnUitdaging ?
       { rule: 'R1', title: 'Je uitdaging aan ' + naam, button: 'Bekijk', volgorde: 6, soort: 'uitdaging', fid, text: 'Nog geen antwoord van ' + naam + '.',
         ook: 'je uitdaging aan ' + naam + ', nog geen antwoord', action: { go: 'vrienden' }, rij: { titel: 'Je uitdaging aan ' + naam, plek: 'nog geen antwoord' } } :
@@ -4103,7 +4112,9 @@ function renderVerder() {
   if (ook.length) h += '<button class="verder-ook" id="ookNog"><span>' + escHtml(ook.length === 1 ? 'Ook nog: ' + ook[0].ook : 'Ook nog ' + telLijst(ook)) +
     '</span><span class="vo-pijl">›</span></button>';
   /* een potje met een vriend blijft staan zolang het loopt; een potje met iemand anders leeft hoogstens een dag in zijn kamer */
-  if (!kapotKey && eerste.wat) h += '<div class="verder-bewaard">✔ ' + (eerste.opDagen ? 'Je potje met ' + escHtml(eerste.naam) +
+  /* onder een stil potje de uitweg: wie niet wil wachten, biedt remise aan */
+  if (!kapotKey && eerste.wat && eerste.volgorde === 7) h += '<div class="verder-bewaard">Wacht je liever niet? In het potje kun je via ⋯ remise aanbieden.</div>';
+  else if (!kapotKey && eerste.wat) h += '<div class="verder-bewaard">✔ ' + (eerste.opDagen ? 'Je potje met ' + escHtml(eerste.naam) +
     ' blijft staan, ook als jullie allebei de app dichtdoen.' : 'Je ' + eerste.wat + (eerste.vriend ? ' blijft vandaag staan op ' + ditApparaat() + '.' :
       ' blijft staan op ' + ditApparaat() + ', ook als je de app dichtdoet.')) + '</div>';
   el.innerHTML = h;
@@ -4161,10 +4172,12 @@ function bezigBlad(lijst) {
     }, true);
 }
 /* een uitdaging of uitnodiging uit het blad: dezelfde twee antwoorden als op de kaart */
+/* wie wit heeft, begint: dat zegt de uitdaging meteen */
+function zinKleur(kleur, naam) { return kleur === 'w' ? 'Jij speelt met wit: jij begint.' : 'Jij speelt met zwart: ' + naam + ' begint.'; }
 function uitdagingVraag(gameId) {
   const r = (samenRauw() || {})[gameId], naam = r ? escHtml(r.peerName || 'je maatje') : '';
   if (!r || r.state !== 'uitdaging' || r.mijnUitdaging) return;
-  showModal('<div class="m-emoji">♟️</div><h2>' + naam + ' daagt je uit</h2><p>Jij speelt met ' + (r.myColor === 'w' ? 'wit' : 'zwart') + '.</p>' +
+  showModal('<div class="m-emoji">♟️</div><h2>' + naam + ' daagt je uit</h2><p>' + escHtml(zinKleur(r.myColor, r.peerName || 'je maatje')) + '</p>' +
     '<div class="m-btns"><button class="btn sun" id="uvJa">Ja, spelen!</button><button class="btn plain" id="uvNee">Nu niet</button></div>', () => {
       $('uvJa').addEventListener('click', () => { closeModal(); uitdagingJa(gameId); });
       $('uvNee').addEventListener('click', () => { closeModal(); uitdagingNee(gameId); });

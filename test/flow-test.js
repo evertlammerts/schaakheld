@@ -2346,7 +2346,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await nuNiet();
   for (i = 0; i < 20; i++) await null;
   ok('twee kanten: een verlopen uitnodiging stopt met wachten en zegt het',
-    INV === null && MP === null && __els.modalBox.innerHTML.indexOf('heeft niet gekeken') >= 0);
+    INV === null && MP === null && __els.modalBox.innerHTML.indexOf('is er nu niet') >= 0 && __els.modalBox.innerHTML.indexOf('Daag ') >= 0);
   fire(__els.meldOk, 'click');
   for (i = 0; i < 20; i++) await null;
 
