@@ -11,11 +11,14 @@ async function orakelFlow6() {
   const tellers = function (x) { return x.get('JSON.stringify([P.c.gamesPlayed, P.c.winsOnline, P.xp, P.wins])'); };
 
   /* een profiel met een naam en vrienden; wie zetten heeft, heeft een vriendenpotje waarin dit kind
-     wit speelt (of zwart), en desgewenst een remise-aanbod van de vriend in de stand van nu */
+     wit speelt (of zwart), en desgewenst een remise-aanbod van de vriend in de stand van nu. Elke keer een
+     eigen geheim: de nep-server is gedeeld, en de potjesbussen van een andere test horen er niet bij. */
+  let nummer = 0;
   const opslagMetVrienden = function (vrienden, extra) {
+    nummer++;
     const o = maakOpslag(), games = {}, friends = {};
     vrienden.forEach(function (v, i) {
-      friends[v.fid] = { k: 'geheimvoorvriendschap-' + v.fid + '-xxxxxxxx', naam: v.naam, t: 1, weg: false, host: true, since: 1794500000000 + i * 1000 };
+      friends[v.fid] = { k: 'geheimvoorvriendschap' + nummer + '-' + v.fid + '-xxxx', naam: v.naam, t: 1, weg: false, host: true, since: 1794500000000 + i * 1000 };
       if (!v.zetten) return;
       const kleur = v.kleur || 'w';
       games['potjevan' + v.fid] = { gameId: 'potjevan' + v.fid, fid: v.fid, room: 'kamervantoen' + i + 'xx', seat: 'stoelvantoen' + i + 'xx',
@@ -96,7 +99,7 @@ async function orakelFlow6() {
     check('twee potjes', JSON.stringify(ookNogRegels(b)) === JSON.stringify(['Ook nog 2 potjes']));
   });
 
-  await nogNiet('[6.9] acht vriendenpotjes tegelijk is de grens: Uitnodigen zegt waarom, en bij zeven kan het nog', async function (check) {
+  await regel('[6.9] acht vriendenpotjes tegelijk is de grens: Uitnodigen zegt waarom, en bij zeven kan het nog', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const vrienden = function (n) {
       const l = [];
@@ -185,7 +188,7 @@ async function orakelFlow6() {
     check('geen teller veranderd', tellers(a) === voor);
   });
 
-  await nogNiet('[6.4] wie uitnodigt en niet wil wachten, maakt er een uitdaging voor later van: het venster, de kaart en de rij zeggen het', async function (check) {
+  await regel('[6.4] wie uitnodigt en niet wil wachten, maakt er een uitdaging voor later van: het venster, de kaart en de rij zeggen het', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const a = await kind(opslagMetVrienden([{ fid: 'vriendfien1', naam: 'Fien' }]));
     const voor = tellers(a), potjes = Object.keys(__server.potjes).length;
@@ -210,7 +213,7 @@ async function orakelFlow6() {
     check('geen teller veranderd', tellers(a) === voor);
   });
 
-  await nogNiet('[6.4] wie een uitdaging intrekt, hoort het met een toast, en de rij en de kaart zijn weer als eerst', async function (check) {
+  await regel('[6.4] wie een uitdaging intrekt, hoort het met een toast, en de rij en de kaart zijn weer als eerst', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const a = await kind(opslagMetVrienden([{ fid: 'vriendfien1', naam: 'Fien' }]));
     const voor = tellers(a);

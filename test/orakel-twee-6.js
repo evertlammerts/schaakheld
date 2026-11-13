@@ -383,7 +383,7 @@ async function orakelTwee6() {
 
   const kleurUitdaging = [];
   for (const [vul, wat] of [[0, 'nullen'], [255, 'enen']]) {
-    await nogNiet('[6.4] een uitdaging (willekeur met ' + wat + '): Fien neemt hem aan bij het openen, en wit zet eerst', async function (check) {
+    await regel('[6.4] een uitdaging (willekeur met ' + wat + '): Fien neemt hem aan bij het openen, en wit zet eerst', async function (check) {
       zetDatum('2026-11-14T10:00:00');
       let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
       const fid = await wordenVrienden(mees, fien);
@@ -423,7 +423,7 @@ async function orakelTwee6() {
     });
   }
 
-  await nogNiet('[6.4] wie uitdaagde, trekt de uitdaging in: een toast, de rij is weer als eerst, de vriend ziet niets, en geen teller verandert', async function (check) {
+  await regel('[6.4] wie uitdaagde, trekt de uitdaging in: een toast, de rij is weer als eerst, de vriend ziet niets, en geen teller verandert', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await wordenVrienden(mees, fien);
@@ -444,7 +444,7 @@ async function orakelTwee6() {
     check('geen teller veranderd', tellers(mees) === voorM && tellers(fien) === voorF);
   });
 
-  await nogNiet('[6.4] de vriend zegt Nu niet: de uitdaging is aan beide kanten weg, en geen teller verandert', async function (check) {
+  await regel('[6.4] de vriend zegt Nu niet: de uitdaging is aan beide kanten weg, en geen teller verandert', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await wordenVrienden(mees, fien);
@@ -475,7 +475,7 @@ async function orakelTwee6() {
     check('geen teller veranderd', tellers(mees) === voorM && tellers(fien) === voorF);
   });
 
-  await nogNiet('[6.4] uitnodigen terwijl er een potje met die vriend loopt, opent dat potje en stuurt niets', async function (check) {
+  await regel('[6.4] uitnodigen terwijl er een potje met die vriend loopt, opent dat potje en stuurt niets', async function (check) {
     const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await vriendenpotje(mees, fien);
     await zetUit(RUSTIG, mees, fien);
@@ -487,7 +487,7 @@ async function orakelTwee6() {
     check('geen nieuwe uitnodiging', JSON.stringify(__server.buses) === bussen && !fien.open());
   });
 
-  await nogNiet('[6.4] één uitdaging per vriendenpaar: nog eens uitnodigen maakt geen tweede', async function (check) {
+  await regel('[6.4] één uitdaging per vriendenpaar: nog eens uitnodigen maakt geen tweede', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await wordenVrienden(mees, fien);
@@ -511,7 +511,7 @@ async function orakelTwee6() {
     check('Fien ziet precies één uitdaging', (zegt(fien).match(/Mees daagt je uit/g) || []).length === 1);
   });
 
-  await nogNiet('[6.4] een uitdaging trekt de uitnodiging in waar hij uit kwam: wie binnen tien minuten opent, ziet alleen de uitdaging', async function (check) {
+  await regel('[6.4] een uitdaging trekt de uitnodiging in waar hij uit kwam: wie binnen tien minuten opent, ziet alleen de uitdaging', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await wordenVrienden(mees, fien);
@@ -523,7 +523,7 @@ async function orakelTwee6() {
     check('wel de uitdaging', /Mees daagt je uit/.test(tekstVan(fien, 'verder')) && kanTikken(fien, 'Ja, spelen!'));
   });
 
-  await nogNiet('[6.4] zijn de tien minuten van een uitnodiging om, dan biedt het bericht de uitdaging aan, en pas een tik maakt hem', async function (check) {
+  await regel('[6.4] zijn de tien minuten van een uitnodiging om, dan biedt het bericht de uitdaging aan, en pas een tik maakt hem', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await wordenVrienden(mees, fien);
@@ -538,7 +538,7 @@ async function orakelTwee6() {
     check('na de tik wel', !!__server.potjes[bus] && /Uitdaging verstuurd!/.test(mees.scherm()));
   });
 
-  await nogNiet('[6.4] twee uitdagingen die elkaar kruisen: rol a houdt de zijne, de ander krijgt die van a om te beantwoorden', async function (check) {
+  await regel('[6.4] twee uitdagingen die elkaar kruisen: rol a houdt de zijne, de ander krijgt die van a om te beantwoorden', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await wordenVrienden(mees, fien);
@@ -1086,7 +1086,7 @@ async function orakelTwee6() {
     check('Fien ziet dat Mees opgaf', /Je potje met Mees is klaar/.test(kaart) && /Mees gaf op\. Jij wint dit potje!/.test(kaart));
   });
 
-  await nogNiet('[6.9] twee vriendenpotjes tegelijk: elk houdt zijn eigen zetten, Vrienden toont ze allebei, en onder de kaart staat één regel', async function (check) {
+  await regel('[6.9] twee vriendenpotjes tegelijk: elk houdt zijn eigen zetten, Vrienden toont ze allebei, en onder de kaart staat één regel', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     const mees = maakApparaat('Mees'), fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     const fidF = await wordenVrienden(mees, fien), fidD = await vriendErbij(mees, daan);

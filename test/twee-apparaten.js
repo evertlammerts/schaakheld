@@ -350,6 +350,9 @@ async function alles() {
 
   /* ---------- 12. Oscar nodigt uit; Evert heeft twee apparaten ---------- */
   __server.buses = {};
+  /* de potjes van hierboven zijn met mpVerlaat() verlaten en staan nog als lopend potje met een vriend; met een
+     vriend loopt hoogstens één potje, en uitnodigen opent dat. Deze vraag gaat over een nieuwe uitnodiging. */
+  for (const x of [evert, ipad, oscar]) x.ev('if (MP) mpStop(true); localStorage.removeItem(SAMEN_KEY)');
   evert.ev('seenInv = []; INV = null; session = null');
   ipad.ev('seenInv = []; INV = null; session = null');
   const oFid = oscar.get('Object.keys(P.friends)[0]');

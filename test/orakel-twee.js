@@ -947,7 +947,7 @@ async function orakelTwee() {
     check('de kaart toont het potje tegen Turbo', /Verder: je potje tegen/.test(tekstVan(daan, 'verder')) && !/Fien wil spelen/.test(tekstVan(daan, 'verder')));
   });
 
-  await regel('[4.5] vastgelopen in ronde 0 bestaat niet meer: wie herlaadt, zit zonder nieuwe uitnodiging weer in hetzelfde potje, en dezelfde vriend nog eens uitnodigen zegt dat het potje nog loopt', async function (check) {
+  await regel('[4.5] vastgelopen in ronde 0 bestaat niet meer: wie herlaadt, zit zonder nieuwe uitnodiging weer in hetzelfde potje, en dezelfde vriend nog eens uitnodigen opent dat potje', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     const fid = await wordenVrienden(fien, daan);
     await nodigUit(fien);
@@ -974,7 +974,7 @@ async function orakelTwee() {
     check('de rij van Daan biedt Speel verder, geen Uitnodigen', kanTikken(fien2, 'Speel verder') && !kanTikken(fien2, 'Uitnodigen'));
     fien2.ev('inviteFriend(' + JSON.stringify(fid) + ')');
     await wacht(100);
-    check('Daan nog eens uitnodigen zegt dat het potje nog loopt', toastTekst(fien2) === 'Je potje met Daan loopt nog. Speel dat eerst uit.');
+    check('Daan nog eens uitnodigen opent het potje dat loopt', opSpeelscherm(fien2) && fien2.fen() === naE4);
   });
 
   await regel('[4.6] "Nu niet" op een uitnodiging bereikt wie uitnodigde', async function (check) {
@@ -1125,9 +1125,9 @@ async function orakelTwee() {
     check('de ander krijgt de eindkaart van een opgave', eindziet(ander, 'WINT') && /geeft op/.test(tekstVan(ander, 'eindkaart')));
   });
 
-  await regel('[4.1] uitnodigen terwijl er een vriendenpotje bewaard staat: de zin noemt de vriend', async function (check) {
+  await regel('[4.1] uitnodigen terwijl er een vriendenpotje bewaard staat: de uitnodiging aan een andere vriend gaat uit, en het potje blijft', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
-    await wordenVrienden(fien, daan);
+    const fid = await wordenVrienden(fien, daan);
     await samenSpelen(fien, daan);
     /* de rij van Daan heeft nu Speel verder; een andere vriend nodigt Fien uit */
     fien.ev('setFriend("vriendsemsem1", { naam: "Sem", k: "sleutelsleutelsleutelsleutelsleutelsem", since: Date.now(), host: true, weg: false })');
@@ -1136,7 +1136,8 @@ async function orakelTwee() {
     fien.tik('tabVrienden');
     tikTekst(fien, 'Uitnodigen');
     await wacht(100);
-    check('de zin', toastTekst(fien) === 'Je potje met Daan loopt nog. Speel dat eerst uit.');
+    check('de uitnodiging aan Sem gaat uit', fien.ziet('Wachten op Sem') && !/loopt nog/.test(toastTekst(fien)));
+    check('het potje met Daan blijft bewaard', !!vriendenpotjeMet(fien, fid));
   });
 
   await regel('[4.1] een vriendenpotje dat niet bewaard kan worden: geen ✔ bewaard, en de strook zegt het', async function (check) {
