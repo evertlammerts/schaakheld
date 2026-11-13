@@ -1923,19 +1923,32 @@ async function orakelFlow() {
 
   await regel('[3.1] geval 4: wat bezig is gaat voor, in de volgorde van de kaart', async function (check) {
     zetDatum('2026-11-12T16:00:00');
-    const a = nieuwKind();
-    a.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(5)));
-    const potje = { v: 1, level: 2, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null, started: NU, updated: NU };
-    const samen = { room: 'r', seat: 's', host: true, myColor: 'w', gameNo: 1, moves: ['e2e4'], peerName: 'Fien', viaFriend: true, updated: NU };
-    const rondjes = { scan: { round: 2, earned: 6 } };
-    let r = await stap(a, { potje: potje });
-    check('R2 gaat voor R3', r.rule === 'R2');
-    r = await stap(a, { potje: potje, samen: samen });
-    check('R1 met "Ook nog" voor het potje', r.rule === 'R1' && /Fien/.test(r.title) && (r.ook || []).some(function (x) { return /Turbo/.test(x); }));
-    r = await stap(a, { potje: potje, rondjes: rondjes });
-    check('R2 met "Ook nog" voor het rondje', r.rule === 'R2' && (r.ook || []).some(function (x) { return /Speurogen/.test(x); }));
-    r = await stap(a, { rondjes: rondjes });
-    check('R2b bij opdracht 3', r.rule === 'R2b' && /Opdracht 3 van 5/.test(r.text));
+    /* de echte kaart: een kind dat vijf dagen weg was, met wat er bewaard staat */
+    const kaart = async function (metPotje, metVriend, metRondje) {
+      const o = maakOpslag();
+      o.setItem('schaakheld1', JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'Mees', t: 1 } },
+        max: { best: 0, goal: {} }, loc: {}, friends: metVriend ? { vriendfien1: { k: 'geheimvoorgeval4-vriendfien1-xxxx', naam: 'Fien', t: 1,
+          weg: false, host: true, since: 1794500000000 } } : {} }));
+      if (metPotje) o.setItem(POTJE, JSON.stringify({ v: 2, games: { 2: { level: 2, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null,
+        started: NU, updated: NU, patXP: 0 } } }));
+      if (metVriend) o.setItem(SAMEN_O, JSON.stringify({ v: 1, games: { potjevanfien1: { gameId: 'potjevanfien1', fid: 'vriendfien1', room: null,
+        seat: null, host: false, myColor: 'b', gameNo: 1, moves: ['e2e4'], peerName: 'Fien', result: null, offer: null, shown: false,
+        state: 'potje', beurtT: NU, updated: NU } } }));
+      if (metRondje) o.setItem(RONDJES, JSON.stringify({ scan: { round: 2, earned: 6 } }));
+      const a = nieuwKind({ opslag: o });
+      a.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(5)) + '; renderVerder()');
+      return { tekst: tekstVan(a, 'verderKaart'), ook: ookNogRegels(a) };
+    };
+    let k = await kaart(true, false, false);
+    check('het potje tegen Turbo gaat voor het welkom', /Verder: je potje tegen Turbo/.test(k.tekst) && !/Welkom terug/.test(k.tekst));
+    k = await kaart(true, true, false);
+    check('een vriendenpotje waarin het kind aan zet is, gaat voor, met Ook nog het potje tegen Turbo', /je potje met Fien/i.test(k.tekst) &&
+      JSON.stringify(k.ook) === JSON.stringify(['Ook nog: je potje tegen Turbo, zet 2']));
+    k = await kaart(true, false, true);
+    check('het potje tegen Turbo gaat voor het rondje, met Ook nog het rondje', /Verder: je potje tegen Turbo/.test(k.tekst) &&
+      JSON.stringify(k.ook) === JSON.stringify(['Ook nog: je rondje Speurogen, opdracht 3 van 5']));
+    k = await kaart(false, false, true);
+    check('alleen het rondje: de kaart bij opdracht 3', /Verder: Speurogen/.test(k.tekst) && /Opdracht 3 van 5/.test(k.tekst));
   });
 
   await regel('[3.1] geval 5: vier dagen weg: R3 met het level', async function (check) {

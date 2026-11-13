@@ -6562,12 +6562,6 @@ function nextStep(P, ctx) {
       text: zin, ook: ctx.uitnodiging.naam + ' wil spelen', rij: { titel: ctx.uitnodiging.naam + ' wil spelen', plek: zin },
       action: { go: 'uitnodiging' }, nee: { go: 'uitnodigingNee' }, vraag: { go: 'uitnodigingVraag' } });
   }
-  if (ctx.potje) {
-    const n = ctx.potje.moves.length, zet = Math.floor(n / 2) + 1, naam = TURBO_NAMES[ctx.potje.level];
-    bezig.push({ rule: 'R2', title: 'Verder: je potje tegen ' + naam, button: 'Speel verder', wat: 'potje', volgorde: 3,
-      text: 'Zet ' + zet + '. ' + (n % 2 === 0 ? 'Jij bent aan zet.' : 'Turbo is aan zet.'),
-      ook: 'je potje tegen ' + naam + ', zet ' + zet, action: { go: 'verder' } });
-  }
   for (const k of DRILL_KINDS) {
     const r = ctx.rondjes && ctx.rondjes[k];
     if (r) bezig.push({ rule: 'R2b', title: 'Verder: ' + DRILLS[k].naam, button: 'Ga verder', wat: 'rondje', volgorde: 4, soort: 'rondje', art: DRILLS[k].e,
@@ -6617,8 +6611,7 @@ function nextStep(P, ctx) {
   return uit('R7', 'Speel een potje', zin, 'Potje tegen ' + turboNaam(level), { go: 'game', level });
 }
 function doeActie(a) {
-  if (a.go === 'verder') hervatPotje();
-  else if (a.go === 'rondje' || a.go === 'oefening') startDrill(a.kind);
+  if (a.go === 'rondje' || a.go === 'oefening') startDrill(a.kind);
   else if (a.go === 'game') {
     const b = leesPotje(a.level);
     if (b && b.kapot) startGameFlow(); else startGame(a.level, b || undefined);
@@ -6685,7 +6678,7 @@ function renderVerder() {
   const el = $('verder');
   const rj = leesRondjes(), alle = leesSamenAlles();
   const v = vriendItems(alle);
-  const r = nextStep(P, { now: Date.now(), potje: null, rondjes: Object.keys(rj).length ? rj : null,
+  const r = nextStep(P, { now: Date.now(), rondjes: Object.keys(rj).length ? rj : null,
     samen: v.samen, uitnodiging: uitnodigingOpKaart(), moment: null });
   /* in volgorde, en binnen dezelfde soort het nieuwste eerst: de laatste zet, het laatst gespeelde potje */
   const bezig = v.items.concat(turboItems(), r.bezig).sort((x, y) => ((x.volgorde || 0) - (y.volgorde || 0)) || ((y.tijd || 0) - (x.tijd || 0)));
@@ -6776,11 +6769,6 @@ function uitdagingVraag(gameId) {
       $('uvJa').addEventListener('click', () => { closeModal(); uitdagingJa(gameId); });
       $('uvNee').addEventListener('click', () => { closeModal(); uitdagingNee(gameId); });
     }, true);
-}
-
-function hervatPotje() {
-  const b = leesPotje();
-  if (b && !b.kapot) startGame(b.r.level, b);
 }
 
 /* ---------- drills ---------- */
