@@ -712,6 +712,10 @@
      meer dan 12 px raakt op 375x553 de tweede regel van de eerste reden */
   .play-bottom.uitleg .e-body { grid-column: 1 / -1; grid-row: 2; min-height: 0; overflow-y: auto; padding-bottom: 12px; font-size: var(--fs-sm); line-height: 1.33;
     -webkit-mask-image: linear-gradient(#000 calc(100% - 12px), transparent); mask-image: linear-gradient(#000 calc(100% - 12px), transparent); }
+  /* er staat nog meer onder de rand: een pijltje, ook als de rand precies tussen twee redenen valt */
+  .play-bottom.uitleg { position: relative; }
+  .play-bottom.uitleg.meer::after { content: ''; position: absolute; right: 14px; bottom: 3px; width: 7px; height: 7px;
+    border-right: 2px solid var(--text-quiet); border-bottom: 2px solid var(--text-quiet); transform: rotate(45deg); pointer-events: none; }
   .e-body p { margin: 0 0 4px; }
   .e-body ul { margin: 0; padding-left: 1.1em; }
   .e-body li { margin: 0 0 4px; }
@@ -5158,10 +5162,17 @@ function strookModus(m) {
 function setTask(html, uitleg) {
   const t = $('taskBox');
   $('onder').classList.toggle('uitleg', html != null && uitleg !== false);
-  if (html == null) { t.classList.add('hidden'); return; }
+  if (html == null) { t.classList.add('hidden'); $('onder').classList.remove('meer'); return; }
   t.innerHTML = html;
   t.classList.remove('hidden');
+  requestAnimationFrame(meerTeLezen);
 }
+function meerTeLezen() {
+  const b = document.querySelector('#onder .e-body');
+  $('onder').classList.toggle('meer', !!b && b.clientHeight > 0 && b.scrollTop + b.clientHeight < b.scrollHeight - 2);
+}
+$('onder').addEventListener('scroll', meerTeLezen, true);
+addEventListener('resize', meerTeLezen);
 function setOptions(html) {
   const o = $('optionsBox');
   if (html == null) { o.classList.add('hidden'); o.innerHTML = ''; return; }

@@ -823,6 +823,33 @@ for (const [W, H] of KLEIN) {
   });
 }
 
+/* een uitleg die langer is dan zijn vak, toont onderaan een pijltje, ook als de rand precies tussen twee redenen valt;
+   het gaat weg als het kind tot het eind scrolt, en het komt niet als alles past */
+const REDENEN_VIER = ['De beste was B: Paard b1 → c3.',
+  'A: Paard f3 → e5, slaat pion. Turbo speelt dan Paard c6 → e5, slaat paard, en niemand kan terugpakken: je bent 2 punten kwijt.',
+  'B: Paard b1 → c3. Veilig: daarna kan Turbo niets winnen.', 'C: Pion a2 → a3. Niet fout, maar de beste zet doet meer.'];
+for (const [W, H] of [[768, 1024], [375, 553]]) {
+  const n = '[2.4] ' + W + 'x' + H + ': een uitleg die langer is dan zijn vak, toont een pijltje tot het kind tot het eind scrolt';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const meer = () => page.evaluate(() => document.getElementById('onder').classList.contains('meer'));
+      await vers(${W}, ${H});
+      await startOefening('best3');
+      await page.evaluate(r => { awardRound(0, 'Zo zit het', r); }, ${JSON.stringify(REDENEN_VIER)});
+      await page.waitForTimeout(300);
+      const u = await page.evaluate(() => { const e = document.querySelector('#onder .e-body'), o = document.getElementById('onder');
+        const na = getComputedStyle(o, '::after');
+        return e ? { meer: e.scrollHeight > e.clientHeight + 2, pijl: na.content !== 'none' && na.content !== 'normal', pijlOnder: parseFloat(na.bottom) } : null; });
+      check(n, 'testopzet: de uitleg gaat verder dan het vak', !!u && u.meer);
+      check(n, 'het pijltje staat er', await meer() && !!u && u.pijl);
+      await page.evaluate(() => { const e = document.querySelector('#onder .e-body'); e.scrollTop = e.scrollHeight; });
+      await page.waitForTimeout(200);
+      check(n, 'tot het eind gescrold: geen pijltje', !(await meer()));
+      await page.evaluate(() => { awardRound(0, 'Zo zit het', ['Een korte reden.']); });
+      await page.waitForTimeout(300);
+      check(n, 'past alles, dan geen pijltje', !(await meer()));` });
+}
+
 /* het moment met de langste tekst, en dat met de langste regel voor de volgende keer */
 const VOLSTE_MOMENTEN = [['het langste moment', { kind: 'hang', moveNo: 23, stuk: 'loper', naar: 'f4', defender: 'loper', piece: 'paard', sq: 'e5', points: 3, used: true }],
   ['de langste regel voor de volgende keer', { kind: 'hang', moveNo: 23, piece: 'paard', sq: 'e5', points: 3, used: true }]];

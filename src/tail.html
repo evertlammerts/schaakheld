@@ -2130,10 +2130,17 @@ function strookModus(m) {
 function setTask(html, uitleg) {
   const t = $('taskBox');
   $('onder').classList.toggle('uitleg', html != null && uitleg !== false);
-  if (html == null) { t.classList.add('hidden'); return; }
+  if (html == null) { t.classList.add('hidden'); $('onder').classList.remove('meer'); return; }
   t.innerHTML = html;
   t.classList.remove('hidden');
+  requestAnimationFrame(meerTeLezen);
 }
+function meerTeLezen() {
+  const b = document.querySelector('#onder .e-body');
+  $('onder').classList.toggle('meer', !!b && b.clientHeight > 0 && b.scrollTop + b.clientHeight < b.scrollHeight - 2);
+}
+$('onder').addEventListener('scroll', meerTeLezen, true);
+addEventListener('resize', meerTeLezen);
 function setOptions(html) {
   const o = $('optionsBox');
   if (html == null) { o.classList.add('hidden'); o.innerHTML = ''; return; }
