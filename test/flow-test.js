@@ -1689,6 +1689,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var vmaat = new WebSocket('ws://nep');
   vmaat.inbox = [];
   vmaat.onmessage = function (e) { vmaat.inbox.push(JSON.parse(e.data)); };
+  /* wat Mila over vrienden vasthoudt, gaat zoals in de app met een groet mee */
+  var milaGroet = function (vr) { vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', sessie: vr.sessie, vr: vr })); };
   await tikje();
   vmaat.send(JSON.stringify({ room: vk.id, seat: vk.gast }));
   await tikje();
@@ -1705,13 +1707,13 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   fire(__els.mpVriend, 'click');
   for (i = 0; i < 30; i++) await null;
   await tikje();
-  var vraag = vmaat.inbox.filter(function (m) { return m.t === 'vr' && m.vr && m.vr.wil === 1 && m.vr.pub; }).pop();
+  var vraag = vmaat.inbox.filter(function (m) { return m.t === 'hallo' && m.vr && m.vr.wil === 1 && m.vr.pub; }).pop();
   ok('vriend: wat dit kind wil, gaat als toestand met de publieke sleutel over de relay, K zelf niet',
     !!vraag && geldigePub(vraag.vr.pub) && !vraag.vr.k && !vraag.k && !P.friends[Object.keys(P.friends)[0]]);
   /* het maatje zegt ja: eigen sleutelpaar, en het zag ons willen */
   var mKp = await ecdhStart();
   var mK = await ecdhFinish(mKp.kp, vraag.vr.pub);
-  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: mKp.pub, wil: 1, nee: 0, zag: 1, voor: vraag.vr.sessie } }));
+  milaGroet({ sessie: 1, pub: mKp.pub, wil: 1, nee: 0, zag: 1, voor: vraag.vr.sessie });
   await tikje();
   var fids = Object.keys(P.friends);
   ok('vriend: opgeslagen in de CRDT met hetzelfde geheim als het maatje, de rol uit de volgorde van de sleutels', fids.length === 1 &&
@@ -1781,18 +1783,18 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   modalQueue.length = 0;
   closeModal();
   /* andersom: het maatje wil, wij zeggen nee en daarna ja; elk deel begint met een verse toestand na een einde */
-  var mijnVr = function () { var l = vmaat.inbox.filter(function (m) { return m.t === 'vr' && m.vr; }); return l.length ? l[l.length - 1].vr : null; };
+  var mijnVr = function () { var l = vmaat.inbox.filter(function (m) { return m.t === 'hallo' && m.vr; }); return l.length ? l[l.length - 1].vr : null; };
   var vers = function () { Object.assign(MP, vrBegin(1)); MP.anderKent = true; MP.S = parseFEN('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1'); MP.over = true; vmaat.inbox.length = 0; };
   MP.viaFriend = null;
   vers();
   var mKp2 = await ecdhStart();
-  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: mKp2.pub, wil: 1, nee: 0, zag: 0, voor: null } }));
+  milaGroet({ sessie: 1, pub: mKp2.pub, wil: 1, nee: 0, zag: 0, voor: null });
   await tikje();
   ok('vriend: wil van het maatje = venster', __els.modalBox.innerHTML.indexOf('Mila wil vrienden worden') >= 0);
   fire(__els.vrNee, 'click');
   await tikje();
   ok('vriend: het nee gaat terug als toestand', !!mijnVr() && mijnVr().nee === 1 && mijnVr().voor === 1 && mijnVr().wil === 0);
-  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: mKp2.pub, wil: 2, nee: 0, zag: 0, voor: 1 } }));
+  milaGroet({ sessie: 1, pub: mKp2.pub, wil: 2, nee: 0, zag: 0, voor: 1 });
   await tikje();
   fire(__els.vrJa, 'click');
   for (i = 0; i < 30; i++) await null;
@@ -1801,13 +1803,13 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var mK2 = await ecdhFinish(mKp2.kp, antw.pub);
   var fid2 = (await sha256hex(mK2)).slice(0, 16);
   ok('vriend: wie ja zei, bewaart pas als de ander zijn willen zag', !P.friends[fid2] && antw.wil === 1 && antw.zag === 2);
-  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: mKp2.pub, wil: 2, nee: 0, zag: 1, voor: 1 } }));
+  milaGroet({ sessie: 1, pub: mKp2.pub, wil: 2, nee: 0, zag: 1, voor: 1 });
   await tikje();
   ok('vriend: dan opgeslagen, met de rol uit de volgorde van de sleutels', !!P.friends[fid2] && P.friends[fid2].host === (antw.pub < mKp2.pub) && P.friends[fid2].k === mK2);
   closeModal();
   vers();
   var voorKapot = Object.keys(P.friends).length;
-  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: 'x<script>', wil: 1, nee: 0, zag: 1, voor: 1 } }));
+  milaGroet({ sessie: 1, pub: 'x<script>', wil: 1, nee: 0, zag: 1, voor: 1 });
   await tikje();
   closeModal();
   ok('vriend: een kapotte sleutel maakt geen vriend en breekt niets', (await vrWil(), true) && Object.keys(P.friends).length === voorKapot);
@@ -1819,14 +1821,14 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var voorDub = Object.keys(P.friends).length;
   showModal('<div class="m-emoji">🏆</div><h2>JIJ WINT!</h2>', function () {});
   var dubKp = await ecdhStart();
-  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: dubKp.pub, wil: 1, nee: 0, zag: 0, voor: null } }));
+  milaGroet({ sessie: 1, pub: dubKp.pub, wil: 1, nee: 0, zag: 0, voor: null });
   await tikje();
   ok('vriend: zijn vraag wacht achter het andere venster', modalQueue.length === 1 && __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0);
   await vrWil();
   for (i = 0; i < 30; i++) await null;
   await tikje();
   var dubAntw = mijnVr();
-  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: dubKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 } }));
+  milaGroet({ sessie: 1, pub: dubKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 });
   await tikje();
   var dubK = await ecdhFinish(dubKp.kp, dubAntw.pub);
   var dubFid = (await sha256hex(dubK)).slice(0, 16);
@@ -1846,11 +1848,11 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await tikje();
   var onzePub = mijnVr().pub;
   var kruisKp = await ecdhStart();
-  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: kruisKp.pub, wil: 1, nee: 0, zag: 0, voor: 1 } }));
+  milaGroet({ sessie: 1, pub: kruisKp.pub, wil: 1, nee: 0, zag: 0, voor: 1 });
   await tikje();
   ok('vriend: tegelijk gevraagd: wij zagen het willen van het maatje en zeggen dat, zonder vriend tot het ons willen zag',
     mijnVr().zag === 1 && Object.keys(P.friends).length === voorKruis);
-  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: kruisKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 } }));
+  milaGroet({ sessie: 1, pub: kruisKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 });
   await tikje();
   var kKruis = await ecdhFinish(kruisKp.kp, onzePub);
   var fidKruis = (await sha256hex(kKruis)).slice(0, 16);
@@ -1870,9 +1872,9 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var poortOpen, poort = new Promise(function (r) { poortOpen = r; });
   var echteFinish = ecdhFinish;
   ecdhFinish = async function (a, b) { await poort; return echteFinish(a, b); };
-  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: traagKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 } }));
+  milaGroet({ sessie: 1, pub: traagKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 });
   await tikje();
-  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 2, pub: null, wil: 0, nee: 0, zag: 0, voor: null } }));
+  milaGroet({ sessie: 2, pub: null, wil: 0, nee: 0, zag: 0, voor: null });
   await tikje();
   poortOpen();
   for (i = 0; i < 30; i++) await null;
@@ -1880,6 +1882,26 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ecdhFinish = echteFinish;
   ok('vriend: een nieuwe sessie van het maatje terwijl het geheim gemaakt wordt: geen vriend, en wij wachten weer op een ja',
     Object.keys(P.friends).length === voorTraag && !MP.kamer && vrKaart() === 'gevraagd');
+  closeModal();
+  /* een vriend van deze kamer, en dan een groet van een nieuwe sessie van het maatje die hem niet bewijst */
+  MP.viaFriend = null;
+  vers();
+  var terugKp = await ecdhStart();
+  milaGroet({ sessie: 1, pub: terugKp.pub, wil: 1, nee: 0, zag: 0, voor: null });
+  await tikje();
+  await vrWil();
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  milaGroet({ sessie: 1, pub: terugKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 });
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  var terugFid = MP.kamer && MP.kamer.fid;
+  ok('vriend: testopzet: een vriend van deze kamer, met het venster', !!terugFid && !!P.friends[terugFid] && !P.friends[terugFid].weg && modalKey === 'vriendklaar');
+  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', sessie: 2, bewijzen: [] }));
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  ok('vriend: een groet van een nieuwe sessie zonder bewijs neemt de vriend van deze kamer meteen terug, en het venster gaat dicht',
+    !MP.kamer && P.friends[terugFid].weg === true && modalKey !== 'vriendklaar' && /kwam net niet aan bij Mila/.test(__els.bubble.textContent));
   closeModal();
   mpStop();
   setFriend(fid2, Object.assign({}, P.friends[fid2], { weg: true }));

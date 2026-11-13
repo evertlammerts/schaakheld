@@ -1433,7 +1433,7 @@ async function orakelTwee() {
     } finally { __server.vertraging = null; }
   });
 
-  await regel('[2.5] een vriend die maar aan één kant aankwam, gaat terug als de ander na een herlading zonder die vriend terugkomt; daarna maken ze hem samen opnieuw', async function (check) {
+  await regel('[2.5] een vriend die maar aan één kant aankwam, gaat terug zodra de ander na een herlading zonder die vriend terugkomt, ook midden in de revanche; de strook zegt het aan het einde, en daarna maken ze hem samen opnieuw', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     await samenSpelen(fien, daan);
     await speel(fien, daan, 'e2e4');
@@ -1445,7 +1445,7 @@ async function orakelTwee() {
     tikTekst(daan, 'Vrienden worden');
     await wacht();
     /* het laatste dat Daan over vrienden stuurt, komt niet aan bij Fien */
-    fien.ev('globalThis.__blok = false; var __mmb = mpMsg; mpMsg = function (m) { if (globalThis.__blok && m && m.t === "vr") return; return __mmb(m); }');
+    fien.ev('globalThis.__blok = false; var __mmb = mpMsg; mpMsg = function (m) { if (globalThis.__blok && m && m.t === "hallo") return; return __mmb(m); }');
     tikTekst(fien, 'Ja, vrienden');
     globalThis.__blok = true;
     await tel(5);
@@ -1458,6 +1458,10 @@ async function orakelTwee() {
     await wacht();
     if (fien2.el('verderKaart')) { fien2.tik('verderKaart'); await wacht(); }
     check('testopzet: Fien is terug in het potje', fien2.get('!!(session && session.online && !session.over)'));
+    await tel(3);
+    check('nog tijdens de revanche: Daan heeft de vriend al niet meer, en er staat niets over het bord',
+      daan.get('!!(session && !session.over)') && !geheimen(daan) && !daan.open() && !fien2.open());
+    check('de strook zegt het nog niet midden in het potje', !/kwam net niet aan/.test(tekstVan(daan, 'bubble')));
     await geefOp(aanZet(fien2, daan));
     const terug = await zagOoit(function () { return /Vrienden worden kwam net niet aan bij Fien. Tik gewoon nog eens!/.test(tekstVan(daan, 'bubble')); }, 40000);
     check('Daan leest dat het net niet aankwam, en heeft de vriend niet meer', terug && !geheimen(daan));
@@ -1497,41 +1501,112 @@ async function orakelTwee() {
     } finally { crypto.subtle.generateKey = echt; }
   });
 
-  await regel('[2.5] herlaadt de ander tijdens de revanche, dan geldt bij het volgende einde de tabel van de twee toestanden van nu: een vriend op wat die ander voor de herlading wilde, gaat meteen terug', async function (check) {
+  await regel('[2.5] een vraag die openstaat als de revanche begint, en de ander herlaadt tijdens de revanche: aan het einde heeft die de vraag weer, en ja maakt één vriendschap', async function (check) {
     const { fien, daan } = await eindeTussenTwee();
     tikTekst(fien, 'Revanche');
     await wacht();
     tikTekst(daan, 'Vrienden worden');
     await wacht();
-    /* het ja van Fien komt bij Daan pas aan als de revanche loopt */
-    daan.ev('globalThis.__houd = null; var __mmh = mpMsg; globalThis.__houdLos = function (klaar) { var h = globalThis.__houd; globalThis.__houd = klaar ? null : []; h.forEach(function (m) { __mmh(m); }); }; mpMsg = function (m) { if (globalThis.__houd && m && m.t === "vr") { globalThis.__houd.push(m); return; } return __mmh(m); }');
-    daan.ev('globalThis.__klaar = 0; var __vkl = vriendKlaar; vriendKlaar = function (k) { globalThis.__klaar++; return __vkl(k); }');
-    globalThis.__houd = [];
-    tikTekst(fien, 'Ja, vrienden');
-    await tel(3);
+    check('testopzet: Fien heeft de vraag', vraagOpKaart(fien));
     tikTekst(daan, 'Revanche');
     await tel(3);
-    check('testopzet: een revanche loopt, en niemand heeft een vriend', fien.get('!!(session && !session.over)') && daan.get('!!(session && !session.over)') &&
-      !geheimen(fien) && !geheimen(daan) && globalThis.__houd.length > 0);
-    globalThis.__houdLos(false);
-    await tel(3);
-    check('testopzet: voor Daan wilde Fien en zag ze zijn vraag', daan.get('vrKaart()') === 'vrienden' && !geheimen(daan));
-    /* de groet van Fien na de herlading komt aan; wat ze bij het einde over vrienden zegt, eerst nog niet */
+    check('testopzet: een revanche loopt', fien.get('!!(session && !session.over)') && daan.get('!!(session && !session.over)'));
     const fien2 = herlaad(fien);
     await wacht();
     if (fien2.el('verderKaart')) { fien2.tik('verderKaart'); await wacht(); }
     check('testopzet: Fien is terug in het potje', fien2.get('!!(session && session.online && !session.over)'));
+    await tel(3);
+    check('midden in het potje geen vraag en geen venster', !fien2.open() && !daan.open() && !geheimen(fien2) && !geheimen(daan));
     await geefOp(aanZet(fien2, daan));
-    await tel(10);
-    check('testopzet: Daan maakte een vriend op wat Fien voor de herlading wilde', globalThis.__klaar === 1 && !!geheimen(daan));
-    globalThis.__houdLos(true);
-    const terug = await zagOoit(function () { return /Vrienden worden kwam net niet aan bij Fien\. Tik gewoon nog eens!/.test(tekstVan(daan, 'bubble')); }, 20000);
-    check('zodra de toestand van Fien van nu er is: Daan leest dat het net niet aankwam, en heeft de vriend niet meer', terug && !geheimen(daan));
-    check('en het venster dat zegt dat het gelukt is, is weg', !daan.ziet('Jullie zijn nu vrienden!'));
-    check('Fien heeft de vraag van Daan weer, en Daan wacht', vraagOpKaart(fien2) && /Gevraagd/.test(tekstVan(daan, 'ekWacht')));
+    await tel(5);
+    check('aan het einde heeft Fien de vraag van Daan weer, en Daan wacht', vraagOpKaart(fien2) && /Gevraagd/.test(tekstVan(daan, 'ekWacht')));
     tikTekst(fien2, 'Ja, vrienden');
     await tel(30);
     check('daarna allebei vrienden, één geheim', !!geheimen(fien2) && geheimen(fien2) === geheimen(daan) && geheimen(fien2).split(',').length === 1);
+  });
+
+  await regel('[2.5] komt de laatste toestand pas tijdens de revanche aan, dan hebben beide de vriend meteen, met één geheim en zonder venster over het bord; het venster komt aan het einde, het potje blijft wat het was', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    tikTekst(fien, 'Revanche');
+    await wacht();
+    tikTekst(daan, 'Vrienden worden');
+    await wacht();
+    check('testopzet: Fien heeft de vraag', vraagOpKaart(fien));
+    /* wat Daan na het ja over vrienden zegt, komt bij Fien pas aan als de revanche loopt */
+    fien.ev('globalThis.__houdF = []; var __mmf = mpMsg; globalThis.__losF = function () { var h = globalThis.__houdF; globalThis.__houdF = null; h.forEach(function (m) { __mmf(m); }); }; mpMsg = function (m) { if (globalThis.__houdF && m && m.t === "hallo") { globalThis.__houdF.push(m); return; } return __mmf(m); }');
+    tikTekst(fien, 'Ja, vrienden');
+    await tel(3);
+    check('testopzet: Daan heeft Fien en ziet het venster, Fien wacht op wat Daan zag', !!geheimen(daan) && !geheimen(fien) &&
+      daan.ziet('Jullie zijn nu vrienden!') && /Jullie willen het allebei/.test(tekstVan(fien, 'ekWacht')));
+    tikTekst(daan, 'Revanche');
+    await tel(3);
+    check('testopzet: de revanche loopt aan beide kanten', fien.get('!!(session && !session.over)') && daan.get('!!(session && !session.over)'));
+    globalThis.__losF();
+    await tel(3);
+    check('tijdens de revanche: allebei de vriend, met één geheim', !!geheimen(fien) && geheimen(fien) === geheimen(daan) && geheimen(fien).split(',').length === 1);
+    check('en geen venster over het bord', !fien.open() && !daan.open());
+    check('het potje van Fien begon niet tussen vrienden, en blijft dat', !fien.get('MP.viaFriend'));
+    for (const z of ['e2e4', 'e7e5']) await speel(fien, daan, z);
+    await geefOp(aanZet(fien, daan));
+    await wacht();
+    check('aan het einde ziet Fien het venster met de drie plaatjes, en Daan niet nog eens', fien.ziet('Jullie zijn nu vrienden!') && !daan.ziet('Jullie zijn nu vrienden!'));
+  });
+
+  await regel('[2.5] een toestand die tijdens de revanche verloren gaat, komt met de volgende groet: dan hebben beide de vriend, nog tijdens de revanche', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    tikTekst(fien, 'Revanche');
+    await wacht();
+    tikTekst(daan, 'Vrienden worden');
+    await wacht();
+    check('testopzet: Fien heeft de vraag', vraagOpKaart(fien));
+    /* wat Daan na het ja over vrienden stuurt, gaat verloren */
+    fien.ev('globalThis.__verloren = true; var __mmv = mpMsg; mpMsg = function (m) { if (globalThis.__verloren && m && m.t === "hallo") return; return __mmv(m); }');
+    tikTekst(fien, 'Ja, vrienden');
+    await tel(3);
+    check('testopzet: Daan heeft Fien, Fien nog niet', !!geheimen(daan) && !geheimen(fien));
+    tikTekst(daan, 'Revanche');
+    await tel(3);
+    check('testopzet: de revanche loopt', fien.get('!!(session && !session.over)') && daan.get('!!(session && !session.over)'));
+    globalThis.__verloren = false;
+    wissel(fien);
+    await tel(5);
+    check('na de nieuwe lijn, nog tijdens de revanche: allebei de vriend, met één geheim', fien.get('!!(session && !session.over)') &&
+      !!geheimen(fien) && geheimen(fien) === geheimen(daan) && geheimen(fien).split(',').length === 1);
+    check('en geen venster over het bord', !fien.open() && !daan.open());
+  });
+
+  await regel('[2.5] wat een groet bewijst, is van dat moment: wie daarna een vriend bewaart of terugneemt, groet opnieuw, en nooit hebben twee kinderen een ander geheim', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    /* bij Daan blijft liggen wat Fien stuurt nadat ze zijn willen zag, en na haar herlading alles wat ze stuurt */
+    daan.ev('globalThis.__houdD = { oud: [], nieuw: null }; var __mmd = mpMsg; globalThis.__losD = function (t) { var h = globalThis.__houdD[t]; globalThis.__houdD[t] = null; h.forEach(function (m) { __mmd(m); }); }; mpMsg = function (m) { var H = globalThis.__houdD; if (m && H.oud && m.t === "hallo" && m.vr && m.vr.sessie === 1 && m.vr.zag > 0) { H.oud.push(m); return; } if (m && H.nieuw && m.t === "hallo") { H.nieuw.push(m); return; } return __mmd(m); }');
+    /* allebei tegelijk: Fien bewaart als het zien van Daan aankomt, Daan wacht op het zien van Fien */
+    tikTekst(daan, 'Vrienden worden');
+    tikTekst(fien, 'Vrienden worden');
+    await tel(3);
+    check('testopzet: Fien heeft Daan, Daan nog niet', !!geheimen(fien) && !geheimen(daan));
+    tikTekst(fien, 'Revanche');
+    await wacht();
+    tikTekst(daan, 'Revanche');
+    await tel(3);
+    check('testopzet: de revanche loopt', fien.get('!!(session && !session.over)') && daan.get('!!(session && !session.over)'));
+    globalThis.__houdD.nieuw = [];
+    const fien2 = herlaad(fien);
+    await wacht();
+    if (fien2.el('verderKaart')) { fien2.tik('verderKaart'); await wacht(); }
+    check('testopzet: Fien is terug in het potje', fien2.get('!!(session && session.online && !session.over)'));
+    /* Daan bewaart de vriend pas nu, uit wat Fien voor de herlading wilde; dan pas komt wat ze daarna stuurde */
+    globalThis.__losD('oud');
+    await tel(3);
+    check('testopzet: Daan heeft de vriend nu ook, Fien niet meer', !!geheimen(daan) && !geheimen(fien2));
+    globalThis.__losD('nieuw');
+    await tel(10);
+    const gF = geheimen(fien2), gD = geheimen(daan);
+    check('tijdens de revanche: allebei dezelfde vriend of geen van beide (' + !!gF + ', ' + !!gD + ')', gF === gD);
+    await geefOp(aanZet(fien2, daan));
+    await tel(10);
+    if (kanTikken(fien2, 'Ja, vrienden')) { tikTekst(fien2, 'Ja, vrienden'); await tel(30); }
+    if (kanTikken(daan, 'Ja, vrienden')) { tikTekst(daan, 'Ja, vrienden'); await tel(30); }
+    check('na het einde en een ja: allebei vrienden, met één geheim', !!geheimen(fien2) && geheimen(fien2) === geheimen(daan) && geheimen(fien2).split(',').length === 1);
   });
 
   await regel('[2.5] het venster "Jullie zijn nu vrienden!" hoort bij het einde: begint de revanche, ook bij een gast die de start uit de stand haalt, dan is het weg', async function (check) {
@@ -1552,7 +1627,7 @@ async function orakelTwee() {
 
   /* een app van de vorige versie: zijn groet draagt geen toestand voor na het einde, en hij vraagt met een eigen bericht */
   function alsOudeApp(x) {
-    x.ev('var __oud = mpSend; mpSend = function (m) { if (m && m.t === "hallo") { m = Object.assign({}, m); delete m.naEinde; delete m.sessie; } if (m && m.t === "vr") return; return __oud(m); }');
+    x.ev('var __oud = mpSend; mpSend = function (m) { if (m && m.t === "hallo") { m = Object.assign({}, m); delete m.naEinde; delete m.sessie; delete m.vr; } return __oud(m); }');
   }
   await regel('[2.5] met een app die deze uitwisseling niet kent: geen Vrienden worden, wel de zin dat het kan als de ander de nieuwste SchaakHeld heeft', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
