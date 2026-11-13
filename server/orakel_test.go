@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -266,6 +268,7 @@ func schrijfPotje(s *server, bewijs, bus, blob string) int {
 type potjesGelezen struct {
 	Blobs       map[string]string
 	Ongewijzigd map[string]int64
+	Nu          *int64
 }
 
 func leesPotjes(s *server, ids ...string) potjesGelezen {
@@ -664,4 +667,264 @@ func TestOrakelPotjeGeenOpsomming(t *testing.T) {
 			t.Fatalf("een lege check noemt een bus: %q", w.Body.String())
 		}
 	}(t)
+}
+
+/* ---------- V2 en V6: een staat per paar, alleen voorwaardelijk te schrijven ---------- */
+
+// de versie zoals elk apparaat hem zelf uitrekent: sha256 van de tekst van
+// het briefje, in kleine hex
+func versieVan(blob string) string {
+	sum := sha256.Sum256([]byte(blob))
+	return hex.EncodeToString(sum[:])
+}
+
+type potjeAntwoord struct {
+	code    int
+	blob    string
+	metBlob bool
+	soort   string
+}
+
+func schrijfPotjeAls(s *server, bewijs, bus, blob, als string) potjeAntwoord {
+	w := doe(s, "POST", "/v1/potje", map[string]string{"bus": bus, "bewijs": bewijs, "blob": blob, "als": als})
+	a := potjeAntwoord{code: w.Code, soort: w.Header().Get("Content-Type")}
+	var lijf struct{ Blob *string }
+	if json.Unmarshal(w.Body.Bytes(), &lijf) == nil && lijf.Blob != nil {
+		a.blob, a.metBlob = *lijf.Blob, true
+	}
+	return a
+}
+
+func TestOrakelPotjeAlsGelijk(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	nogNiet(t, "[V2] een schrijven met de versie die de server houdt, gaat door", func(t tb) {
+		bewijs, bus := potjeBus("a")
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", ""); a.code != 204 {
+			t.Fatalf("eerste staat met als leeg: %+v, wil 204", a)
+		}
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-2", versieVan("staat-1")); a.code != 204 {
+			t.Fatalf("tweede staat met de versie van de eerste: %+v, wil 204", a)
+		}
+		if g := leesPotjes(s, bus); g.Blobs[bus] != "staat-2" {
+			t.Fatalf("na twee schrijven: %+v, wil staat-2", g)
+		}
+	})
+}
+
+func TestOrakelPotjeAlsOngelijk(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	nogNiet(t, "[V2] een schrijven met een andere versie verandert niets en krijgt 409 met wat er staat", func(t tb) {
+		bewijs, bus := potjeBus("a")
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", ""); a.code != 204 {
+			t.Fatalf("eerste staat: %+v", a)
+		}
+		for _, als := range []string{versieVan("staat-0"), ""} {
+			a := schrijfPotjeAls(s, bewijs, bus, "staat-2", als)
+			if a.code != 409 || !a.metBlob || a.blob != "staat-1" || a.soort != "application/json" {
+				t.Fatalf("als %q: %+v, wil 409 met json {\"blob\": \"staat-1\"}", als, a)
+			}
+		}
+		if g := leesPotjes(s, bus); g.Blobs[bus] != "staat-1" {
+			t.Fatalf("na twee geweigerde schrijven: %+v, wil staat-1", g)
+		}
+	})
+}
+
+func TestOrakelPotjeNietsDaar(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	nogNiet(t, "[V2] staat er niets, dan gaat alleen een schrijven met een lege als door", func(t tb) {
+		bewijs, bus := potjeBus("a")
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", versieVan("staat-0")); a.code != 409 || !a.metBlob || a.blob != "" {
+			t.Fatalf("met een versie terwijl er niets staat: %+v, wil 409 met een leeg briefje", a)
+		}
+		if g := leesPotjes(s, bus); len(g.Blobs) != 0 {
+			t.Fatalf("een geweigerd schrijven maakte toch een bus: %+v", g)
+		}
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", ""); a.code != 204 {
+			t.Fatalf("met een lege als: %+v, wil 204", a)
+		}
+	})
+}
+
+func TestOrakelPotjeZelfdeBytesMetVoorwaarde(t *testing.T) {
+	s, clk := newTestServer(t, nil)
+	nogNiet(t, "[V2] dezelfde bytes met hun eigen versie: 204, en de dertig dagen beginnen opnieuw", func(t tb) {
+		bewijs, bus := potjeBus("a")
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", ""); a.code != 204 {
+			t.Fatalf("eerste staat: %+v", a)
+		}
+		clk.advance(20 * 24 * time.Hour)
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", versieVan("staat-1")); a.code != 204 {
+			t.Fatalf("dezelfde bytes op dag 20: %+v, wil 204", a)
+		}
+		clk.advance(30*24*time.Hour - time.Second)
+		if g := leesPotjes(s, bus); g.Blobs[bus] != "staat-1" {
+			t.Fatalf("een seconde voor dag 50: %+v, wil er nog", g)
+		}
+		clk.advance(time.Second)
+		if g := leesPotjes(s, bus); len(g.Blobs) != 0 {
+			t.Fatalf("op dag 50: %+v, wil weg", g)
+		}
+	})
+}
+
+func TestOrakelPotjeTweeSchrijvers(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	nogNiet(t, "[V2] twee schrijvers op een versie: precies een krijgt 204, de ander 409 met wat de eerste schreef", func(t tb) {
+		bewijs, bus := potjeBus("a")
+		nu := "staat-0"
+		if a := schrijfPotjeAls(s, bewijs, bus, nu, ""); a.code != 204 {
+			t.Fatalf("eerste staat: %+v", a)
+		}
+		for ronde := 0; ronde < 20; ronde++ {
+			als := versieVan(nu)
+			var wg sync.WaitGroup
+			start := make(chan struct{})
+			uit := make([]potjeAntwoord, 2)
+			for i := range uit {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					<-start
+					uit[i] = schrijfPotjeAls(s, bewijs, bus, fmt.Sprintf("staat-%d-%d", ronde+1, i), als)
+				}(i)
+			}
+			close(start)
+			wg.Wait()
+			winnaar := -1
+			for i, a := range uit {
+				if a.code == 204 {
+					if winnaar >= 0 {
+						t.Fatalf("ronde %d: allebei 204", ronde)
+					}
+					winnaar = i
+				}
+			}
+			if winnaar < 0 {
+				t.Fatalf("ronde %d: niemand 204: %+v", ronde, uit)
+			}
+			nu = fmt.Sprintf("staat-%d-%d", ronde+1, winnaar)
+			if a := uit[1-winnaar]; a.code != 409 || a.blob != nu {
+				t.Fatalf("ronde %d: de verliezer kreeg %+v, wil 409 met %q", ronde, a, nu)
+			}
+			if g := leesPotjes(s, bus); g.Blobs[bus] != nu {
+				t.Fatalf("ronde %d: de server houdt %+v, wil %q", ronde, g, nu)
+			}
+		}
+	})
+}
+
+func TestOrakelPotjeWissenMetVoorwaarde(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	nogNiet(t, "[V2] wissen met een leeg briefje volgt dezelfde voorwaarde", func(t tb) {
+		bewijs, bus := potjeBus("a")
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", ""); a.code != 204 {
+			t.Fatalf("eerste staat: %+v", a)
+		}
+		for _, als := range []string{versieVan("staat-0"), ""} {
+			if a := schrijfPotjeAls(s, bewijs, bus, "", als); a.code != 409 || a.blob != "staat-1" {
+				t.Fatalf("wissen met als %q: %+v, wil 409 met staat-1", als, a)
+			}
+		}
+		if g := leesPotjes(s, bus); g.Blobs[bus] != "staat-1" {
+			t.Fatalf("na geweigerd wissen: %+v, wil staat-1", g)
+		}
+		if a := schrijfPotjeAls(s, bewijs, bus, "", versieVan("staat-1")); a.code != 204 {
+			t.Fatalf("wissen met de goede versie: %+v, wil 204", a)
+		}
+		if g := leesPotjes(s, bus); len(g.Blobs) != 0 {
+			t.Fatalf("na wissen: %+v, wil weg", g)
+		}
+		if a := schrijfPotjeAls(s, bewijs, bus, "", versieVan("staat-1")); a.code != 409 || !a.metBlob || a.blob != "" {
+			t.Fatalf("nog eens wissen met de oude versie: %+v, wil 409 met een leeg briefje", a)
+		}
+		if a := schrijfPotjeAls(s, bewijs, bus, "", ""); a.code != 204 {
+			t.Fatalf("niets wissen met een lege als: %+v, wil 204", a)
+		}
+	})
+}
+
+func TestOrakelPotjeVolMetVoorwaarde(t *testing.T) {
+	s, clk := newTestServer(t, nil)
+	nogNiet(t, "[V2] bij 1024 maakt alleen een gelukt nieuw schrijven plaats, een geweigerd schrijven duwt niemand weg", func(t tb) {
+		var bussen []string
+		for i := 0; i < 1024; i++ {
+			bewijs, bus := potjeBus(fmt.Sprintf("v%04d", i))
+			if a := schrijfPotjeAls(s, bewijs, bus, "x", ""); a.code != 204 {
+				t.Fatalf("bus %d: %+v", i, a)
+			}
+			bussen = append(bussen, bus)
+			clk.advance(time.Second)
+		}
+		bewijs, bus := potjeBus("nieuw")
+		if a := schrijfPotjeAls(s, bewijs, bus, "x", versieVan("x")); a.code != 409 {
+			t.Fatalf("nieuwe bus met een versie: %+v, wil 409", a)
+		}
+		if g := leesPotjes(s, bussen[0], bus); g.Blobs[bussen[0]] != "x" || len(g.Blobs) != 1 {
+			t.Fatalf("na een geweigerd schrijven bij een volle tabel: %+v, wil de eerste nog en de nieuwe niet", g)
+		}
+		if a := schrijfPotjeAls(s, bewijs, bus, "x", ""); a.code != 204 {
+			t.Fatalf("nieuwe bus met een lege als: %+v, wil 204", a)
+		}
+		if g := leesPotjes(s, bussen[0], bussen[1], bus); len(g.Blobs) != 2 || g.Blobs[bussen[0]] != "" {
+			t.Fatalf("na een gelukt schrijven bij een volle tabel: %+v, wil de eerste weg, de tweede en de nieuwe er", g)
+		}
+	})
+}
+
+func TestOrakelPotjeConflictAlleenMetBewijs(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	nogNiet(t, "[V2] het briefje in een 409 krijgt alleen wie het bewijs heeft", func(t tb) {
+		bewijs, bus := potjeBus("a")
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", ""); a.code != 204 {
+			t.Fatalf("eerste staat: %+v", a)
+		}
+		w := doe(s, "POST", "/v1/potje", map[string]string{"bus": bus, "bewijs": "een-ander-bewijs-0123456789", "blob": "x", "als": ""})
+		if w.Code != 400 || strings.Contains(w.Body.String(), "staat-1") {
+			t.Fatalf("met een verkeerd bewijs: %d %q, wil 400 zonder het briefje", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestOrakelPotjeZonderAlsGeweigerd(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	nogNiet(t, "[V2] een schrijven zonder als, of met een als die geen versie is, krijgt 400", func(t tb) {
+		bewijs, bus := potjeBus("a")
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", ""); a.code != 204 {
+			t.Fatalf("eerste staat: %+v", a)
+		}
+		bodies := []map[string]any{
+			{"bus": bus, "bewijs": bewijs, "blob": "staat-2"},
+			{"bus": bus, "bewijs": bewijs, "blob": "staat-2", "als": nil},
+			{"bus": bus, "bewijs": bewijs, "blob": "staat-2", "als": "staat-1"},
+			{"bus": bus, "bewijs": bewijs, "blob": "staat-2", "als": strings.ToUpper(versieVan("staat-1"))},
+			{"bus": bus, "bewijs": bewijs, "blob": "", "als": versieVan("staat-1")[:63]},
+		}
+		for _, b := range bodies {
+			if w := doe(s, "POST", "/v1/potje", b); w.Code != 400 {
+				t.Fatalf("%v: %d, wil 400", b, w.Code)
+			}
+		}
+		if g := leesPotjes(s, bus); g.Blobs[bus] != "staat-1" {
+			t.Fatalf("na de geweigerde schrijven: %+v, wil staat-1", g)
+		}
+	})
+}
+
+func TestOrakelPotjeNuInCheck(t *testing.T) {
+	s, clk := newTestServer(t, nil)
+	nogNiet(t, "[V6] de check zegt hoe laat het is op de server, in hele seconden", func(t tb) {
+		start := clk.now().Unix()
+		if g := leesPotjes(s); g.Nu == nil || *g.Nu != start {
+			t.Fatalf("een lege check: nu %v, wil %d", g.Nu, start)
+		}
+		bewijs, bus := potjeBus("a")
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", ""); a.code != 204 {
+			t.Fatalf("eerste staat: %+v", a)
+		}
+		clk.advance(90*time.Second + 500*time.Millisecond)
+		if g := leesPotjes(s, bus); g.Nu == nil || *g.Nu != start+90 || g.Blobs[bus] != "staat-1" {
+			t.Fatalf("anderhalve minuut later: %+v, wil nu %d", g, start+90)
+		}
+	})
 }
