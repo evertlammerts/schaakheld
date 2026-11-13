@@ -154,6 +154,30 @@
     check('Pxa2, de toren (' + (t && E.moveKey(t)) + ')', !!t && E.moveKey(t) === 'c3a2');
   });
 
+  /* Turbo's beste antwoord is zelf een slag: dan begint het verlies met die slag, ook als een andere slag meer wint */
+  regel('[5.4] is Turbo\'s beste antwoord een slag, dan begint het verlies daar, ook als een andere slag meer wint', function (check) {
+    const S = E.parseFEN('6k1/1b6/8/8/8/2n2N2/R7/6K1 b - - 0 1');
+    const t = E.lossStart(S, zet(S, 'b7f3'));
+    check('Lxf3, niet Pxa2 (' + (t && E.moveKey(t)) + ')', !!t && E.moveKey(t) === 'b7f3');
+  });
+
+  /* een promotie heet "..., promotie": zonder uitroepteken, zodat een zin die op de zetnaam eindigt een gewone punt krijgt */
+  regel('[5.5] een promotie heet "Pion b7 → a8, slaat toren, promotie", zonder uitroepteken', function (check) {
+    const S = E.parseFEN('r6k/1P6/8/8/8/8/8/6K1 w - - 0 1');
+    const n = E.moveNameNL(S, zet(S, 'b7a8q'));
+    check('de naam (' + n + ')', n === 'Pion b7 → a8, slaat toren, promotie');
+  });
+
+  /* en passant is ook een slag die wint: de pion op d5 is gratis; wordt de slag teruggepakt, dan is hij geen winst */
+  regel('[5.5] met winst slaan telt en passant mee: gratis is een doel, teruggepakt niet', function (check) {
+    const vrij = E.winnableCaptures(E.parseFEN('4k3/8/8/n2pP3/8/8/8/R3K3 w - d6 0 1'));
+    const d5 = vrij.find(function (x) { return x.sq === E.sqFromAlg('d5'); });
+    check('de pion op d5, met e5xd6 en passant, 1 pion winst (' + JSON.stringify(d5) + ')', !!d5 && d5.gain === 100 && d5.move.flags === 'e' && E.moveKey(d5.move) === 'e5d6');
+    const terug = E.winnableCaptures(E.parseFEN('r1bq1rk1/ppp1bppp/2n1pn2/3pP3/3P4/3B1N2/PPPN1PPP/R1BQK2R w KQ d6 0 1'));
+    check('teruggepakt: d5 is geen doel, f6 wel (' + terug.map(function (x) { return E.alg(x.sq); }).join(',') + ')',
+      !terug.some(function (x) { return x.sq === E.sqFromAlg('d5'); }) && terug.some(function (x) { return x.sq === E.sqFromAlg('f6'); }));
+  });
+
   regel('[5.4] de punten die een kind leest komen uit de tabel van de kinderen', function (check) {
     for (const g of [['twee lopers voor een toren', '3r2k1/3r1ppp/8/8/8/8/2B2PPP/5BK1 w - - 0 1', 'f1d3', 100],
       ['een toren voor een loper', '6k1/2p5/3b4/8/8/8/5PPP/3R2K1 w - - 0 1', 'd1d6', 200],

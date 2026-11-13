@@ -1877,19 +1877,29 @@ function seeSquare(S, t, vals) {
 
 /* Enemy pieces the side to move can win material on, judged per square with the
    exchange value. Returns details: {sq, victim (cp), gain (cp won), move}. */
+/* Het veld van het stuk dat zet m slaat: bij en passant staat de pion naast het veld waar de slag landt. */
+function slagVeld(S, m) { return m.flags === 'e' ? m.to + (S.turn === 'w' ? -16 : 16) : m.to; }
 function winnableCaptures(S) {
   const out = [];
-  const caps = legalMoves(S).filter(m => S.board[m.to] && m.flags !== 'e');
   const byTarget = new Map();
-  for (const m of caps) {
-    if (!byTarget.has(m.to)) byTarget.set(m.to, []);
-    byTarget.get(m.to).push(m);
+  for (const m of legalMoves(S)) {
+    const t = slagVeld(S, m);
+    if (!S.board[t]) continue;
+    if (!byTarget.has(t)) byTarget.set(t, []);
+    byTarget.get(t).push(m);
   }
   for (const [sq, moves] of byTarget) {
     const victim = VAL[S.board[sq].toLowerCase()];
-    const gain = seeSquare(S, sq);
     moves.sort((a, b) => VAL[S.board[a.from].toLowerCase()] - VAL[S.board[b.from].toLowerCase()]);
-    if (gain >= Math.min(victim, 90)) out.push({ sq, victim, gain, move: moves[0] });
+    let gain = seeSquare(S, sq), move = moves.find(m => m.flags !== 'e');
+    /* seeSquare kent alleen slagen die op het veld landen; en passant landt ernaast, en wint wat er daar niet terugkomt */
+    for (const m of moves.filter(x => x.flags === 'e')) {
+      makeMove(S, m);
+      const ep = victim - seeSquare(S, m.to);
+      unmakeMove(S);
+      if (!move || ep > gain) { gain = Math.max(gain, ep); move = m; }
+    }
+    if (gain >= Math.min(victim, 90)) out.push({ sq, victim, gain, move });
   }
   return out;
 }
@@ -2706,7 +2716,7 @@ function moveNameNL(S, m) {
   let s = NAME_NL[t].charAt(0).toUpperCase() + NAME_NL[t].slice(1) + ' ' + alg(m.from) + ' → ' + alg(m.to);
   const capPiece = m.flags === 'e' ? 'p' : (S.board[m.to] ? S.board[m.to].toLowerCase() : null);
   if (capPiece) s += ', slaat ' + NAME_NL[capPiece];
-  if (m.promo) s += ', promotie!';
+  if (m.promo) s += ', promotie';
   return s;
 }
 
@@ -2718,7 +2728,7 @@ if (typeof module !== 'undefined') {
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
-    winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
+    winnableCaptures, slagVeld, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
     repetitions, positionKey, pointsOf, forcedPoints, TABEL, lossStart, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
     POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };
@@ -5288,10 +5298,16 @@ const PATTERNS = {
 function patName(S, sq) { return NAME_NL[S.board[sq].toLowerCase()]; }
 /* het paard, de loper; een paard pak je "het", de andere stukken "hem" (de schaakcoach) */
 function hetStuk(p) { const t = p.toLowerCase(); return (t === 'n' ? 'het ' : 'de ') + NAME_NL[t]; }
-function hemVan(p) { return p.toLowerCase() === 'n' ? 'het' : 'hem'; }
+/* het voornaamwoord van een stuk, uit zijn letter of zijn naam: het paard is "het", de dame "ze" en "haar",
+   de andere stukken "hij" en "hem" */
+function voornaamwoord(p) {
+  const n = p.length === 1 ? NAME_NL[p.toLowerCase()] : p;
+  return n === 'paard' ? ['het', 'het'] : n === 'dame' ? ['ze', 'haar'] : ['hij', 'hem'];
+}
+function hijVan(p) { return voornaamwoord(p)[0]; }
+function hemVan(p) { return voornaamwoord(p)[1]; }
 function hoofd(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-/* een zetnaam vet aan het eind van een zin; "promotie!" sluit de zin al af */
-function zetB(naam) { return '<b>' + naam + '</b>' + (/!$/.test(naam) ? '' : '.'); }
+function zetB(naam) { return '<b>' + naam + '</b>.'; }
 
 /* Welk patroon maakt zet m (op positie S, vóór de zet)? Voor de duiding. */
 /* een zet kan meer trucs tegelijk zijn; met een voorkeur (de truc van de opdracht) wint die, anders de eerste */
@@ -6142,7 +6158,6 @@ const STUK_REGEL = {
   b: 'De loper gaat alleen schuin, en blijft altijd op dezelfde kleur.',
   n: 'Het paard springt in een L: twee stappen rechtdoor en één opzij. Het springt over andere stukken heen.'
 };
-function hijVan(p) { return p.toLowerCase() === 'n' ? 'het' : 'hij'; }
 /* Het eerste stuk tussen from en to, als to op een lijn van het stuk ligt; een paard heeft geen lijn */
 function inDeWeg(S, from, to) {
   const t = S.board[from].toLowerCase(), df = (to & 15) - (from & 15), dr = (to >> 4) - (from >> 4);
@@ -6154,12 +6169,11 @@ function inDeWeg(S, from, to) {
 }
 /* De goedkoopste slag op t door wie aan zet is, en het goedkoopste terugslaan daarna */
 function eersteRuil(S, t) {
-  const slag = () => legalMoves(S).filter(x => x.to === t && S.board[x.to])
-    .sort((a, b) => VAL[S.board[a.from].toLowerCase()] - VAL[S.board[b.from].toLowerCase()])[0] || null;
-  const m = slag();
+  const goedkoop = (a, b) => VAL[S.board[a.from].toLowerCase()] - VAL[S.board[b.from].toLowerCase()];
+  const m = legalMoves(S).filter(x => slagVeld(S, x) === t && S.board[t]).sort(goedkoop)[0] || null;
   if (!m) return null;
   makeMove(S, m);
-  const terug = slag();
+  const terug = legalMoves(S).filter(x => x.to === m.to && S.board[x.to]).sort(goedkoop)[0] || null;
   unmakeMove(S);
   return { m, terug };
 }
@@ -6175,7 +6189,7 @@ function kanTerug(S, m) {
    terugkomt, wat het oplevert) alleen als het bij slaan en een keer terugslaan blijft; gaat de ruil
    verder, of slaat niemand terug omdat dat meer kost, dan klopt die som niet en blijft de eerste zin. */
 function scanExplanations(task, bad, missed) {
-  const S = session.S, rijen = [];
+  const S = session.S, fouten = [], gemist = [];
   const naam = sq => NAME_NL[S.board[sq].toLowerCase()];
   const op = sq => naam(sq) + ' op ' + alg(sq);
   const hetOp = sq => hetStuk(S.board[sq]) + ' op ' + alg(sq);
@@ -6184,31 +6198,39 @@ function scanExplanations(task, bad, missed) {
     if (!p) return ['Op ' + alg(sq) + ' staat geen stuk.'];
     return colorOf(p) === 'w' ? eigen() : vanTurbo ? [hoofd(hetOp(sq)) + ' is van Turbo. ' + vanTurbo] : overig();
   };
-  const veilig = sq => ['Jouw ' + op(sq) + ' wordt door niemand aangevallen.', 'Die staat veilig.'];
+  /* een stuk van Turbo dat het veld aanvalt maar niet mag slaan, staat in een penning; alleen de koning mag niet
+     slaan omdat hij dan zelf schaak zou staan */
+  const veilig = sq => {
+    if (!attacked(S, sq, 'b')) return ['Jouw ' + op(sq) + ' wordt door niemand aangevallen.', 'Die staat veilig.'];
+    const a = findAttacker(S, sq, 'b'), x = S.board[a];
+    return [hoofd(hetOp(a)) + ' valt je ' + naam(sq) + ' aan, maar mag niet slaan.', x === 'k' ?
+      'Je ' + naam(sq) + ' is gedekt: slaat de koning, dan staat hij schaak.' :
+      hoofd(hijVan(x)) + ' staat in een penning: slaat ' + hijVan(x) + ', dan staat Turbo\'s eigen koning schaak.'];
+  };
   const vanJou = sq => [hoofd(hetOp(sq)) + ' is van jou. Tik de groene stukken aan.'];
   const nietTeSlaan = sq => ['Geen enkel wit stuk kan ' + hetOp(sq) + ' nu slaan.'];
   if (task.type === 'attacked') {
     for (const sq of missed) {
       const a = findAttacker(S, sq, 'b');
-      rijen.push(['Gemist: jouw ' + op(sq) + ' wordt aangevallen' + (a >= 0 ? ' door ' + hetOp(a) : '') + '.']);
+      gemist.push(['Gemist: jouw ' + op(sq) + ' wordt aangevallen' + (a >= 0 ? ' door ' + hetOp(a) : '') + '.']);
     }
-    for (const sq of bad) rijen.push(fout(sq, () => veilig(sq), 'Tik jouw eigen stukken aan.'));
+    for (const sq of bad) fouten.push(fout(sq, () => veilig(sq), 'Tik jouw eigen stukken aan.'));
   } else if (task.type === 'capture') {
     for (const sq of missed) {
-      const m = legalMoves(S).find(x => (x.to === sq && S.board[x.to]) || (x.flags === 'e' && x.to - 16 === sq));
-      if (m) rijen.push(['Gemist: jouw ' + op(m.from) + ' kan ' + hetOp(sq) + ' slaan.']);
+      const m = legalMoves(S).find(x => slagVeld(S, x) === sq && S.board[sq]);
+      if (m) gemist.push(['Gemist: jouw ' + op(m.from) + ' kan ' + hetOp(sq) + ' slaan.']);
     }
-    for (const sq of bad) rijen.push(fout(sq, () => vanJou(sq), null, () => nietTeSlaan(sq)));
+    for (const sq of bad) fouten.push(fout(sq, () => vanJou(sq), null, () => nietTeSlaan(sq)));
   } else if (task.type === 'mobility') {
     const p0 = S.board[task.extra], hn = NAME_NL[p0.toLowerCase()];
-    if (missed.size) rijen.push(['De omrande velden: daar kon je ' + hn + ' ook naartoe.', 'Tel ze eens na.']);
+    if (missed.size) gemist.push(['De omrande velden: daar kon je ' + hn + ' ook naartoe.', 'Tel ze eens na.']);
     for (const sq of bad) {
       const p = S.board[sq], w = inDeWeg(S, task.extra, sq);
-      if (sq === task.extra) rijen.push(['Dat is je ' + hn + ' zelf. Tik de velden aan waar ' + hijVan(p0) + ' heen kan.']);
-      else if (p && colorOf(p) === 'w') rijen.push(['Op ' + alg(sq) + ' staat je eigen ' + naam(sq) + '. Daar kan je ' + hn + ' niet heen.']);
-      else if (pseudoMoves(S).some(m => m.from === task.extra && m.to === sq)) rijen.push(['Naar ' + alg(sq) + ' mag niet: dan staat je eigen koning schaak.']);
-      else if (w >= 0) rijen.push(['Naar ' + alg(sq) + ' kan je ' + hn + ' niet: ' + hetOp(w) + ' staat in de weg.']);
-      else rijen.push(['Zo beweegt een ' + hn + ' niet.', STUK_REGEL[p0.toLowerCase()]]);
+      if (sq === task.extra) fouten.push(['Dat is je ' + hn + ' zelf. Tik de velden aan waar ' + hijVan(p0) + ' heen kan.']);
+      else if (p && colorOf(p) === 'w') fouten.push(['Op ' + alg(sq) + ' staat je eigen ' + naam(sq) + '. Daar kan je ' + hn + ' niet heen.']);
+      else if (pseudoMoves(S).some(m => m.from === task.extra && m.to === sq)) fouten.push(['Naar ' + alg(sq) + ' mag niet: dan staat je eigen koning schaak.']);
+      else if (w >= 0) fouten.push(['Naar ' + alg(sq) + ' kan je ' + hn + ' niet: ' + hetOp(w) + ' staat in de weg.']);
+      else fouten.push(['Zo beweegt een ' + hn + ' niet.', STUK_REGEL[p0.toLowerCase()]]);
     }
   } else if (task.type === 'threat') {
     const N = nullMoved(S);
@@ -6216,11 +6238,11 @@ function scanExplanations(task, bad, missed) {
       const d = (task.details || []).find(x => x.sq === sq);
       if (!d) continue;
       const wie = 'Gemist: Turbo\'s ' + op(d.move.from), terug = VAL[S.board[d.move.from].toLowerCase()];
-      if (!kanTerug(N, d.move)) rijen.push([wie + ' kan jouw ' + op(sq) + ' pakken.', 'Niemand kan terugpakken.']);
-      else rijen.push([wie + ' slaat jouw ' + op(sq) + ' (' + ptsNL(d.victim) + ').'].concat(d.gain === d.victim - terug ?
+      if (!kanTerug(N, d.move)) gemist.push([wie + ' kan jouw ' + op(sq) + ' pakken.', 'Niemand kan terugpakken.']);
+      else gemist.push([wie + ' slaat jouw ' + op(sq) + ' (' + ptsNL(d.victim) + ').'].concat(d.gain === d.victim - terug ?
         ['Jij slaat terug en pakt maar ' + ptsNL(terug) + '. Winst voor Turbo.'] : []));
     }
-    for (const sq of bad) rijen.push(fout(sq, () => {
+    for (const sq of bad) fouten.push(fout(sq, () => {
       const r = eersteRuil(N, sq);
       return r && r.terug ? ['Jouw ' + op(sq) + ' is gedekt door je ' + op(r.terug.from) + '.', 'Slaat Turbo, dan pak jij terug: dat levert hem niets op.'] : veilig(sq);
     }, 'Tik jouw stukken aan die in gevaar zijn.'));
@@ -6229,20 +6251,24 @@ function scanExplanations(task, bad, missed) {
       const d = (task.details || []).find(x => x.sq === sq);
       if (!d) continue;
       const terug = VAL[S.board[d.move.from].toLowerCase()], slaan = 'Gemist: jouw ' + op(d.move.from) + ' kan ' + hetOp(sq) + ' slaan (' + ptsNL(d.victim) + ').';
-      if (!kanTerug(S, d.move)) rijen.push(['Gemist: ' + hetOp(sq) + ' stond gratis: niemand kan terugpakken.', 'Jouw ' + op(d.move.from) + ' kon ' + hemVan(S.board[sq]) + ' pakken.']);
-      else rijen.push([slaan].concat(d.gain === d.victim - terug ? ['Turbo pakt terug (' + ptsNL(terug) + '). Winst voor jou: ' + ptsNL(d.gain) + '.'] : []));
+      if (!kanTerug(S, d.move)) gemist.push(['Gemist: ' + hetOp(sq) + ' stond gratis: niemand kan terugpakken.', 'Jouw ' + op(d.move.from) + ' kon ' + hemVan(S.board[sq]) + ' pakken.']);
+      else gemist.push([slaan].concat(d.gain === d.victim - terug ? ['Turbo pakt terug (' + ptsNL(terug) + '). Winst voor jou: ' + ptsNL(d.gain) + '.'] : []));
     }
-    for (const sq of bad) rijen.push(fout(sq, () => vanJou(sq), null, () => {
+    for (const sq of bad) fouten.push(fout(sq, () => vanJou(sq), null, () => {
       const r = eersteRuil(S, sq);
       if (!r || !r.terug) return nietTeSlaan(sq);
       const mijn = S.board[r.m.from].toLowerCase(), zijn = S.board[sq].toLowerCase(), a = POINTS[zijn], b = POINTS[mijn];
-      return [hoofd(hetOp(sq)) + ' is gedekt door ' + hetStuk(S.board[r.terug.from]) + ' op ' + alg(r.terug.from) + '.', a === b ?
+      const wie = hetStuk(S.board[r.terug.from]) + ' op ' + alg(r.terug.from);
+      /* en passant landt naast de pion: wie terugpakt, pakt daar terug en dekte de pion zelf niet */
+      return [r.m.flags === 'e' ? hoofd(hetOp(sq)) + ' kan je en passant slaan, maar ' + wie + ' pakt terug op ' + alg(r.m.to) + '.' :
+        hoofd(hetOp(sq)) + ' is gedekt door ' + wie + '.', a === b ?
         hoofd(NAME_NL[mijn]) + ' slaat ' + NAME_NL[zijn] + ', ' + NAME_NL[S.board[r.terug.from].toLowerCase()] + ' slaat terug: ' + a + ' tegen ' + ptsNL(b * 100) + '. Eerlijk, maar geen winst.' :
         'Sla je ' + hetStuk(S.board[sq]) + ', dan pakt Turbo terug en verlies jij meer.'];
     }));
   }
-  /* de eerste zin past onder het bord; een tweede zin in dezelfde reden mag scrollen */
-  return rijen.slice(0, 5).map(r => r.length > 1 ? '<span class="zin1">' + r[0] + '</span> ' + r.slice(1).join(' ') : r[0]);
+  /* eerst waarom een rood kruisje fout was, dan wat het kind miste (dat laat het bord al zien met een rand); de
+     eerste zin past onder het bord, een tweede zin in dezelfde reden mag scrollen */
+  return fouten.concat(gemist).slice(0, 5).map(r => r.length > 1 ? '<span class="zin1">' + r[0] + '</span> ' + r.slice(1).join(' ') : r[0]);
 }
 
 /* --- safe/trap drill --- */
@@ -6366,7 +6392,9 @@ function buildBest3() {
   /* na veilig of valstrik staan de keuzes waar Volgende stond: een tweede tik op Volgende kiest zo niets */
   session.keuzeOpen = false;
   later(() => { session.keuzeOpen = true; }, 350);
-  for (const o of task.options) if (o !== task.best) lijnVerlies(task.S, o);
+  /* de lijnen zijn pas na het antwoord nodig: de app rekent ze een voor een terwijl het kind naar het bord kijkt,
+     zodat een tik ertussen past; komt het antwoord eerder, dan rekent best3Explanations de rest */
+  task.options.filter(o => o !== task.best).forEach((o, i) => later(() => lijnVerlies(task.S, o), 400 + 300 * i));
   return true;
 }
 
@@ -6383,14 +6411,14 @@ function lijnVerlies(S, o) {
   o.lijn = rustig ? lineAfter(S, o.m, CHECK_NODES).material : null;
   return o.lijn;
 }
-/* Eerst welke de beste was, dan per keuze waarom. Verlies telt tegen het bord nu, nooit tegen de
-   beste keuze: een keuze die alleen niets wint, kost niets. */
+/* Eerst welke de beste was (niet als het kind hem koos: dan zegt zijn eigen regel het), dan per keuze waarom.
+   Verlies telt tegen het bord nu, nooit tegen de beste keuze: een keuze die alleen niets wint, kost niets. */
 const TRUC_NAAM = { vork: 'vork', penning: 'penning', spies: 'spies', aftrek: 'aftrekaanval' };
-function best3Explanations(task) {
-  const S = task.S, nu = material(S);
+function best3Explanations(task, gekozen) {
+  const S = task.S, nu = material(S), punten = pointsOf(S);
   /* position with black to move, to ask: was this piece capturable before the move? */
   const fenBlack = toFEN(S).replace(' w ', ' b ').replace(/ [a-h][36] /, ' - ');
-  const lines = ['De beste was ' + 'ABC'[task.options.indexOf(task.best)] + ': ' + zetB(moveNameNL(S, task.best.m))];
+  const lines = gekozen ? [] : ['De beste was ' + 'ABC'[task.options.indexOf(task.best)] + ': ' + zetB(moveNameNL(S, task.best.m))];
   task.options.forEach((o, i) => {
     const isBest = o === task.best;
     const name = moveNameNL(S, o.m), stuk = NAME_NL[S.board[o.m.from].toLowerCase()];
@@ -6400,29 +6428,38 @@ function best3Explanations(task) {
     makeMove(S, o.m);
     const st = gameStatus(S);
     const chk = !st.over && inCheck(S), mat = !st.over && !!mateReply(S);
-    const delta = forcedMaterial(S) - nu;
-    let pakt = null;
+    const delta = forcedMaterial(S) - nu, winst = st.over ? 0 : forcedPoints(S) - punten;
+    let pakt = null, terug = false;
     if (!st.over && delta <= -90) {
       const rs = rootScores(S, 2), z = lossStart(S, rs.length ? rs[0].m : null);
-      if (z) pakt = moveNameNL(S, z);
+      if (z) {
+        pakt = moveNameNL(S, z);
+        makeMove(S, z);
+        terug = legalMoves(S).some(x => x.to === z.to && S.board[x.to]);
+        unmakeMove(S);
+      }
     }
     unmakeMove(S);
+    const laterKwijt = !isBest && lijnVerlies(S, o) !== null && o.lijn <= -150;
     let why;
     if (st.over && st.result === 'w') why = 'Schaakmat, meteen gewonnen.';
     else if (mat) why = 'Daarna kan Turbo je mat zetten.';
-    else if (delta >= 90) why = 'Die levert je ' + ptsNL(delta) + ' op' + (chk ? ', met schaak' : '') + '.';
-    else if (delta <= -90) why = (pakt ? 'Turbo speelt dan <b>' + pakt + '</b>: na' : 'Na') + ' het slaan en terugslaan ben je ' + ptsNL(-delta) + ' kwijt.';
+    else if (delta >= 90) why = 'Die levert je ' + ptsNL(winst) + ' op' + (chk ? ', met schaak' : '') + '.';
+    else if (delta <= -90) why = !pakt ? 'Na het slaan en terugslaan ben je ' + ptsNL(-winst) + ' kwijt.' : terug ?
+      'Turbo speelt dan <b>' + pakt + '</b>: na het slaan en terugslaan ben je ' + ptsNL(-winst) + ' kwijt.' :
+      'Turbo speelt dan <b>' + pakt + '</b>, en niemand kan terugpakken: je bent ' + ptsNL(-winst) + ' kwijt.';
     else if (isBest && hangingBefore >= 90) why = 'Die redt je ' + stuk + ': die stond aangevallen.';
     else if (isBest && chk) why = 'Veilig, en schaak: Turbo moet eerst zijn koning redden.';
     else if (isBest) why = 'Veilig: daarna kan Turbo niets winnen.';
-    else if (lijnVerlies(S, o) !== null && o.lijn <= -150) why = 'Een paar zetten later kost deze je toch iets.';
+    else if (laterKwijt) why = 'Een paar zetten later kost deze je toch iets.';
     else why = 'Niet fout, maar de beste zet doet meer.';
-    if (co && TRUC_NAAM[co.key]) why = 'Een ' + (co.key === 'aftrek' && co.info.discovered.some(x => x.isKing) ? 'aftrekschaak' : TRUC_NAAM[co.key]) + '! ' + why;
+    /* een truc noemen bij een zet die toch verliest, zou zeggen dat verliezen slim was */
+    if (co && TRUC_NAAM[co.key] && !mat && delta > -90)
+      why = 'Een ' + (co.key === 'aftrek' && co.info.discovered.some(x => x.isKing) ? 'aftrekschaak' : TRUC_NAAM[co.key]) + '! ' + why;
     lines.push('ABC'[i] + ': ' + zetB(name) + ' ' + why);
   });
   return lines;
 }
-
 function pickOption(i) {
   if (!session || session.phase !== 'choose' || !session.keuzeOpen) return;
   const b = document.querySelector('.opt[data-i="' + i + '"]');
@@ -6449,7 +6486,7 @@ function best3Confirm() {
     session.phase = 'review';
     btn.classList.add('right');
     if (session.tries === 1) { bump('c.best3Gold', 1); }
-    const lines = best3Explanations(t);
+    const lines = best3Explanations(t, session.tries === 1);
     BD.arrows = [{ from: o.m.from, to: o.m.to, cls: 'a-leaf' }];
     playMove(o.m, () => {
       awardRound(session.tries === 1 ? 3 : 1, session.tries === 1 ? 'Goud! 🥇' : 'Ja, die is het!', lines);
@@ -6571,7 +6608,7 @@ function stukHow(S, m, hang) {
     case 'slaat': return 'Je ' + stuk + ' slaat ' + hetNaam(k.took) + ' (' + ptsNL(k.a * 100) + ') en staat daar veilig.';
     case 'weg': return 'Weggezet: daar kan Turbo ' + hemVan(p) + ' niet pakken.';
     case 'schaak': return 'Schaak! Daarmee win je tijd: Turbo moet eerst zijn koning redden.';
-    case 'weg-gedekt': return 'Weggezet naar ' + k.sq + ': daar is ' + (p.toLowerCase() === 'n' ? 'het' : 'hij') + ' gedekt.';
+    case 'weg-gedekt': return 'Weggezet naar ' + k.sq + ': daar is ' + hijVan(p) + ' gedekt.';
     case 'ruil': return m.from === hang.sq ?
       'Ruil: je ' + stuk + ' slaat ' + hetNaam(k.took) + ' (' + ptsNL(k.a * 100) + '); Turbo slaat terug (' + ptsNL(k.b * 100) + ').' :
       'Je ' + stuk + ' is niet te redden, maar jij pakt ' + hetNaam(k.took) + ' (' + k.a + ' tegen ' + ptsNL(k.b * 100) + ').';
@@ -7946,16 +7983,15 @@ function sleutelMoment(S) {
 function momentTekst(k) {
   if (!k) return { kop: null, tekst: 'Netjes gespeeld: je gaf geen stuk weg.' };
   const zet = 'Zet ' + k.moveNo + ': ', kop = 'Het belangrijkste moment', pt = p => ptsNL(p * 100);
-  const hem = n => n === 'paard' ? 'het' : 'hem', hij = n => n === 'paard' ? 'het' : 'hij';
   const verlies = ptsNL(k.verlies >= 100 ? k.verlies : k.loss);
-  const pakte = k.used ? ', en ik pakte ' + hem(k.piece) + ' (' + pt(k.points) + ').' : '. Ik had ' + hem(k.piece) + ' kunnen pakken (' + pt(k.points) + ').';
+  const pakte = () => k.used ? ', en ik pakte ' + hemVan(k.piece) + ' (' + pt(k.points) + ').' : '. Ik had ' + hemVan(k.piece) + ' kunnen pakken (' + pt(k.points) + ').';
   switch (k.kind) {
     case 'hang':
-      if (k.self) return { kop, tekst: zet + 'je ' + k.piece + ' ging naar ' + k.sq + '. Daar stond ' + hij(k.piece) + ' onbeschermd' + pakte,
+      if (k.self) return { kop, tekst: zet + 'je ' + k.piece + ' ging naar ' + k.sq + '. Daar stond ' + hijVan(k.piece) + ' onbeschermd' + pakte(),
         volgende: 'Volgende keer: kijk of je stuk daar gedekt is.' };
-      if (k.defender) return { kop, tekst: zet + 'je ' + k.stuk + ' ging naar ' + k.naar + '. Toen dekte niemand je ' + k.piece + ' op ' + k.sq + ' meer' + pakte,
+      if (k.defender) return { kop, tekst: zet + 'je ' + k.stuk + ' ging naar ' + k.naar + '. Toen dekte niemand je ' + k.piece + ' op ' + k.sq + ' meer' + pakte(),
         volgende: 'Volgende keer: kijk wat je stuk nog dekte, voor je het wegzet.' };
-      return { kop, tekst: zet + 'je ' + k.piece + ' op ' + k.sq + ' stond onbeschermd' + pakte, volgende: 'Volgende keer: kijk of je stuk daar gedekt is.' };
+      return { kop, tekst: zet + 'je ' + k.piece + ' op ' + k.sq + ' stond onbeschermd' + pakte(), volgende: 'Volgende keer: kijk of je stuk daar gedekt is.' };
     case 'truc': return { kop, tekst: zet + 'na je zet kon ik een ' + k.truc + ' zetten.' + (!k.used ? ' Ik zag het niet.' :
       k.doelen && k.doelen.length >= 2 ? ' Mijn ' + k.stukTurbo + ' viel je ' + k.doelen[0] + ' en je ' + k.doelen[1] + ' tegelijk aan.' : ''),
       volgende: 'Volgende keer: kijk wat ik na je zet kan aanvallen.' };

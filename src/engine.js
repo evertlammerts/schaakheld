@@ -867,19 +867,29 @@ function seeSquare(S, t, vals) {
 
 /* Enemy pieces the side to move can win material on, judged per square with the
    exchange value. Returns details: {sq, victim (cp), gain (cp won), move}. */
+/* Het veld van het stuk dat zet m slaat: bij en passant staat de pion naast het veld waar de slag landt. */
+function slagVeld(S, m) { return m.flags === 'e' ? m.to + (S.turn === 'w' ? -16 : 16) : m.to; }
 function winnableCaptures(S) {
   const out = [];
-  const caps = legalMoves(S).filter(m => S.board[m.to] && m.flags !== 'e');
   const byTarget = new Map();
-  for (const m of caps) {
-    if (!byTarget.has(m.to)) byTarget.set(m.to, []);
-    byTarget.get(m.to).push(m);
+  for (const m of legalMoves(S)) {
+    const t = slagVeld(S, m);
+    if (!S.board[t]) continue;
+    if (!byTarget.has(t)) byTarget.set(t, []);
+    byTarget.get(t).push(m);
   }
   for (const [sq, moves] of byTarget) {
     const victim = VAL[S.board[sq].toLowerCase()];
-    const gain = seeSquare(S, sq);
     moves.sort((a, b) => VAL[S.board[a.from].toLowerCase()] - VAL[S.board[b.from].toLowerCase()]);
-    if (gain >= Math.min(victim, 90)) out.push({ sq, victim, gain, move: moves[0] });
+    let gain = seeSquare(S, sq), move = moves.find(m => m.flags !== 'e');
+    /* seeSquare kent alleen slagen die op het veld landen; en passant landt ernaast, en wint wat er daar niet terugkomt */
+    for (const m of moves.filter(x => x.flags === 'e')) {
+      makeMove(S, m);
+      const ep = victim - seeSquare(S, m.to);
+      unmakeMove(S);
+      if (!move || ep > gain) { gain = Math.max(gain, ep); move = m; }
+    }
+    if (gain >= Math.min(victim, 90)) out.push({ sq, victim, gain, move });
   }
   return out;
 }
@@ -1696,7 +1706,7 @@ function moveNameNL(S, m) {
   let s = NAME_NL[t].charAt(0).toUpperCase() + NAME_NL[t].slice(1) + ' ' + alg(m.from) + ' → ' + alg(m.to);
   const capPiece = m.flags === 'e' ? 'p' : (S.board[m.to] ? S.board[m.to].toLowerCase() : null);
   if (capPiece) s += ', slaat ' + NAME_NL[capPiece];
-  if (m.promo) s += ', promotie!';
+  if (m.promo) s += ', promotie';
   return s;
 }
 
@@ -1708,7 +1718,7 @@ if (typeof module !== 'undefined') {
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
-    winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
+    winnableCaptures, slagVeld, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
     repetitions, positionKey, pointsOf, forcedPoints, TABEL, lossStart, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
     POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };

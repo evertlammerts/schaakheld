@@ -1081,7 +1081,23 @@ async function orakelFlow5() {
     ['SG19', '6k1/8/4p3/3r4/8/2N5/8/6K1 w - - 0 1', 'free', null, [], ['Gemist: jouw paard op c3 kan de toren op d5 slaan (5 punten).', 'Turbo pakt terug (3 punten). Winst voor jou: 2 punten.']],
     ['SG20', '6k1/8/4p3/3n4/8/2N5/8/6K1 w - - 0 1', 'free', null, ['d5'], ['Het paard op d5 is gedekt door de pion op e6.', 'Paard slaat paard, pion slaat terug: 3 tegen 3 punten. Eerlijk, maar geen winst.']],
     ['SG21', '6k1/8/4p3/3n4/8/8/8/3R2K1 w - - 0 1', 'free', null, ['d5'], ['Het paard op d5 is gedekt door de pion op e6.', 'Sla je het paard, dan pakt Turbo terug en verlies jij meer.']],
-    ['SG22', '6k1/8/8/8/8/2b5/8/R5K1 w - - 0 1', 'threat', null, ['a1'], ['Alles gevonden.']]
+    ['SG22', '6k1/8/8/8/8/2b5/8/R5K1 w - - 0 1', 'threat', null, ['a1'], ['Alles gevonden.']],
+    /* een stuk van Turbo dat aanvalt maar niet mag slaan: een penning, of de koning die een gedekt stuk niet mag slaan */
+    ['SG23, een stuk in een penning', 'r1bqk1nr/ppp2ppp/2nbp3/1B1p4/3PPB2/2N5/PPP2PPP/R2QK1NR w KQkq - 0 1', 'threat', null, ['d4'],
+      ['Het paard op c6 valt je pion aan, maar mag niet slaan.', 'Het staat in een penning: slaat het, dan staat Turbo\'s eigen koning schaak.']],
+    ['SG23, de koning', '8/6k1/7N/8/8/8/8/6KR w - - 0 1', 'threat', null, ['h6'], ['De koning op g7 valt je paard aan, maar mag niet slaan.', 'Je paard is gedekt: slaat de koning, dan staat hij schaak.']],
+    /* de dame is "ze" en "haar" */
+    ['SG9, de dame', '6k1/8/8/8/3Q4/8/8/6K1 w - - 0 1', 'mobility', 'd4', ['d4'], ['Dat is je dame zelf. Tik de velden aan waar ze heen kan.']],
+    ['SG18, de dame', '6k1/8/8/3q4/8/8/8/3R2K1 w - - 0 1', 'free', null, [], ['Gemist: de dame op d5 stond gratis: niemand kan terugpakken.', 'Jouw toren op d1 kon haar pakken.']],
+    /* en passant: slaan, gratis met winst, en teruggepakt */
+    ['SG5, en passant', '4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1', 'capture', null, [], ['Gemist: jouw pion op e5 kan de pion op d5 slaan.']],
+    ['SG18, en passant', '4k3/8/8/n2pP3/8/8/8/R3K3 w - d6 0 1', 'free', null, ['a5'], ['Gemist: de pion op d5 stond gratis: niemand kan terugpakken.', 'Jouw pion op e5 kon hem pakken.']],
+    ['SG20, en passant en teruggepakt', 'r1bq1rk1/ppp1bppp/2n1pn2/3pP3/3P4/3B1N2/PPPN1PPP/R1BQK2R w KQ d6 0 1', 'free', null, ['d5', 'f6'],
+      ['De pion op d5 kan je en passant slaan, maar de pion op c7 pakt terug op d6.', 'Pion slaat pion, pion slaat terug: 1 tegen 1 punt. Eerlijk, maar geen winst.']],
+    /* "staat in de weg" alleen op een lijn waar het stuk over kan: niet voor een paard, niet schuin voor een toren */
+    ['SG13, het paard met een stuk ertussen', '6k1/8/8/3p4/3N4/8/8/6K1 w - - 0 1', 'mobility', 'd4', ['d6'],
+      ['Zo beweegt een paard niet.', 'Het paard springt in een L: twee stappen rechtdoor en één opzij. Het springt over andere stukken heen.']],
+    ['SG13, de toren schuin met een stuk ertussen', '6k1/8/8/8/8/8/1P6/R5K1 w - - 0 1', 'mobility', 'a1', ['c3'], ['Zo beweegt een toren niet.', 'De toren gaat rechtdoor: vooruit, achteruit, opzij.']]
   ];
   for (const g of SPEUR) {
     await regel('[5.5] Speurogen, ' + g[0] + ': "' + g[5].join(' ') + '"', async function (check) {
@@ -1136,10 +1152,10 @@ async function orakelFlow5() {
     ['een stuk winnen met schaak', '3n2k1/8/8/8/8/8/8/3R2K1 w - - 0 1', ['d1d8', 'g1f2', 'd1d2'], 0,
       ['De beste was A: Toren d1 → d8, slaat paard.', 'A: Toren d1 → d8, slaat paard. Die levert je 3 punten op, met schaak.']],
     ['een stuk verliezen, en de rustige beste', 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3', ['f3e5', 'b1c3', 'a2a3'], 1,
-      ['De beste was B: Paard b1 → c3.', 'A: Paard f3 → e5, slaat pion. Turbo speelt dan Paard c6 → e5, slaat paard: na het slaan en terugslaan ben je 2 punten kwijt.',
+      ['De beste was B: Paard b1 → c3.', 'A: Paard f3 → e5, slaat pion. Turbo speelt dan Paard c6 → e5, slaat paard, en niemand kan terugpakken: je bent 2 punten kwijt.',
         'B: Paard b1 → c3. Veilig: daarna kan Turbo niets winnen.']],
     ['een aangevallen stuk redden', '6k1/8/8/3p4/4N3/8/P6P/6K1 w - - 0 1', ['h2h3', 'e4c3', 'a2a3'], 1,
-      ['De beste was B: Paard e4 → c3.', 'A: Pion h2 → h3. Turbo speelt dan Pion d5 → e4, slaat paard: na het slaan en terugslaan ben je 3 punten kwijt.',
+      ['De beste was B: Paard e4 → c3.', 'A: Pion h2 → h3. Turbo speelt dan Pion d5 → e4, slaat paard, en niemand kan terugpakken: je bent 3 punten kwijt.',
         'B: Paard e4 → c3. Die redt je paard: die stond aangevallen.']],
     ['schaak als beste, een vork later, en een rustige zet', '6k1/8/6n1/8/8/8/6K1/3Q4 w - - 0 1', ['d1d8', 'd1e2', 'g2h3'], 0,
       ['De beste was A: Dame d1 → d8.', 'A: Dame d1 → d8. Veilig, en schaak: Turbo moet eerst zijn koning redden.',
@@ -1152,7 +1168,26 @@ async function orakelFlow5() {
     ['een zet die later maar een pion kost', 'r2qk2r/ppp2ppp/2n2n2/3ppb2/3P4/b3P2N/PPP1BPPP/R1BQK2R w KQkq - 0 1', ['e2a6', 'b2a3', 'g2g3'], 1,
       ['De beste was B: Pion b2 → a3, slaat loper.', 'A: Loper e2 → a6. Niet fout, maar de beste zet doet meer.']],
     ['de beste is een vork', 'r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1', ['b5c7', 'e1d2', 'b5d4'], 0,
-      ['De beste was A: Paard b5 → c7.', 'A: Paard b5 → c7. Een vork! Veilig, en schaak: Turbo moet eerst zijn koning redden.']]
+      ['De beste was A: Paard b5 → c7.', 'A: Paard b5 → c7. Een vork! Veilig, en schaak: Turbo moet eerst zijn koning redden.']],
+    /* "na het slaan en terugslaan" alleen als er iets terug kan slaan */
+    ['een loper die niemand terugpakt', 'r1b1r1k1/ppppqppp/3b2n1/1Bn1p1N1/4P3/2NPB3/PPP2PPP/R2Q2KR w - - 0 1', ['b5c6', 'h2h3', 'a2a3'], 1,
+      ['De beste was B: Pion h2 → h3.', 'A: Loper b5 → c6. Turbo speelt dan Pion d7 → c6, slaat loper, en niemand kan terugpakken: je bent 3 punten kwijt.']],
+    ['een dame die wel teruggepakt wordt', '6k1/8/4p3/3p4/8/2N5/8/3Q2K1 w - - 0 1', ['d1d5', 'g1f2', 'd1d2'], 1,
+      ['De beste was B: Koning g1 → f2.', 'A: Dame d1 → d5, slaat pion. Turbo speelt dan Pion e6 → d5, slaat dame: na het slaan en terugslaan ben je 7 punten kwijt.']],
+    /* geen truc voor een zet die verliest */
+    ['een penning die een toren laat staan', '3q3k/8/5n2/b7/8/2R5/3B4/6K1 w - - 0 1', ['d2g5', 'g1f2', 'c3c1'], 0,
+      ['De beste was A: Loper d2 → g5.', 'A: Loper d2 → g5. Turbo speelt dan Loper a5 → c3, slaat toren, en niemand kan terugpakken: je bent 5 punten kwijt.']],
+    /* Turbo's beste antwoord is een stil schaak: "Turbo speelt dan" noemt de slag die het verlies begint, de grootste */
+    ['een zet waarna Turbo\'s beste antwoord niet slaat', 'rn1qkb1r/ppp2p1p/3p2p1/1N1b1Q2/3P4/2nB4/PPP2PPP/R1B2RK1 w kq - 0 11', ['h2h4', 'f1e1', 'd3c4'], 1,
+      ['De beste was B: Toren f1 → e1.', 'A: Pion h2 → h4. Turbo speelt dan Pion g6 → f5, slaat dame: na het slaan en terugslaan ben je 6 punten kwijt.',
+        'C: Loper d3 → c4. Turbo speelt dan Pion g6 → f5, slaat dame, en niemand kan terugpakken: je bent 9 punten kwijt.']],
+    /* punten uit de tabel van de kinderen: twee lopers voor een toren is 1 punt, niet de 1,6 van de engine afgerond */
+    ['twee lopers voor een toren', '3r2k1/3r1ppp/8/8/8/8/2B2PPP/5BK1 w - - 0 1', ['f1d3', 'g2g3', 'h2h3'], 1,
+      ['De beste was B: Pion g2 → g3.', 'A: Loper f1 → d3. Turbo speelt dan Toren d7 → d3, slaat loper: na het slaan en terugslaan ben je 1 punt kwijt.']],
+    ['een zet die later anderhalf punt kost', 'r2qk2r/p1p2ppp/2N1pn2/3p4/1pbP1b2/1Q2P3/PPP2PPP/RN3RK1 w kq - 0 13', ['c2c3', 'b3c4', 'a2a3'], 1,
+      ['De beste was B: Dame b3 → c4, slaat loper.', 'C: Pion a2 → a3. Een paar zetten later kost deze je toch iets.']],
+    ['de beste is een aftrekschaak', '4k3/p7/8/8/4N3/8/8/4R1K1 w - - 0 1', ['e4c3', 'g1f2', 'e1e2'], 0,
+      ['De beste was A: Paard e4 → c3.', 'A: Paard e4 → c3. Een aftrekschaak! Veilig, en schaak: Turbo moet eerst zijn koning redden.']]
   ];
   for (const g of BESTE) {
     await regel('[5.5] De Beste Zet, ' + g[0] + ': "' + g[4][0] + '" en per keuze waarom', async function (check) {
@@ -1165,7 +1200,7 @@ async function orakelFlow5() {
     });
   }
 
-  await regel('[5.5] De Beste Zet: na de goede keuze is de eerste reden "De beste was {A}: {zet}."', async function (check) {
+  await regel('[5.5] De Beste Zet: na de goede keuze (Goud) geen "De beste was": de eerste reden is die van de keuze zelf', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'best3');
     a.ev('(function () { var S = parseFEN("6k1/8/8/3n4/8/8/8/3R2K1 w - - 0 1");' +
@@ -1174,8 +1209,82 @@ async function orakelFlow5() {
     a.ev('pickOption(1); best3Confirm()');
     await wacht(3000);
     const r = redenen5(a);
-    check('de eerste reden (' + r.join(' / ') + ')', r[0] === 'De beste was B: Toren d1 → d5, slaat paard.');
-    check('daarna de keuzes, zonder emoji', r.length === 4 && r.every(function (z) { return !/[\u{1F300}-\u{1FAFF}]/u.test(z); }));
+    check('de eerste reden (' + r.join(' / ') + ')', r[0] === 'A: Koning g1 → f2. Niet fout, maar de beste zet doet meer.' && r[1] === 'B: Toren d1 → d5, slaat paard. Die levert je 3 punten op.');
+    check('alleen de keuzes, zonder emoji', r.length === 3 && r.every(function (z) { return !/[\u{1F300}-\u{1FAFF}]/u.test(z); }));
+  });
+
+
+  /* je eigen foute tikken (de rode kruisjes) eerst, dan wat je miste */
+  await regel('[5.5] Speurogen, met winst: eerst de reden bij je foute tik, dan wat je miste', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'scan');
+    a.ev(speurOpdracht5('6k1/8/8/3n4/8/8/1p6/3R2K1 w - - 0 1', 'free', null));
+    tikVeld(a, a.get('sqFromAlg("b2")'));
+    tikTekst(a, 'Klaar');
+    await wacht();
+    const r = redenen5(a);
+    check('de redenen (' + r.join(' / ') + ')', r[0] === 'Geen enkel wit stuk kan de pion op b2 nu slaan.' && /^Gemist: het paard op d5/.test(r[1] || ''));
+  });
+  /* hoogstens vijf redenen, en dan die bij je eigen tikken */
+  await regel('[5.5] Speurogen: hoogstens vijf redenen, de foute tikken voorop', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'scan');
+    a.ev(speurOpdracht5(TOREN5, 'mobility', 'a1'));
+    for (const v of ['b2', 'c3', 'd4', 'e5', 'f6', 'g7', 'b3']) tikVeld(a, a.get('sqFromAlg(' + JSON.stringify(v) + ')'));
+    tikTekst(a, 'Klaar');
+    await wacht();
+    const r = redenen5(a);
+    check('vijf redenen, alle bij een foute tik (' + r.join(' / ') + ')', r.length === 5 && r.every(function (z) { return /^Zo beweegt een toren niet/.test(z); }));
+  });
+
+  /* De Beste Zet: de goede keuze zegt zelf wat ze doet; "De beste was" alleen als het kind hem niet koos */
+  function besteKeuze5(a) {
+    a.ev('(function () { var S = parseFEN("6k1/8/8/3n4/8/8/8/3R2K1 w - - 0 1");' +
+      ' var opts = ["g1f2", "d1d5", "d1d2"].map(function (k) { return { m: legalMoves(S).find(function (x) { return moveKey(x) === k; }), deep: 0 }; });' +
+      ' session.task = { S: S, options: opts, best: opts[1] }; session.S = S; session.phase = "choose"; session.tries = 0; session.picked = null; session.keuzeOpen = true; renderBoard(); })()');
+  }
+  await regel('[5.5] De Beste Zet: na twee missers is de eerste reden "De beste was {B}: {zet}."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'best3');
+    besteKeuze5(a);
+    a.ev('pickOption(0); best3Confirm()');
+    await wacht(5000);
+    a.ev('pickOption(2); best3Confirm()');
+    await wacht(5000);
+    const r = redenen5(a);
+    check('de kop (' + tekstVan(a, 'taskBox').slice(0, 20) + ')', /Zo zit het/.test(tekstVan(a, 'taskBox')));
+    check('de eerste reden (' + r.join(' / ') + ')', r[0] === 'De beste was B: Toren d1 → d5, slaat paard.' && r.length === 4);
+  });
+  /* De lijnen van de keuzes rekent de app terwijl het kind naar het bord kijkt, niet voor de opdracht er staat;
+     komt het antwoord eerder, dan rekent hij ze dan */
+  await regel('[5.9] De Beste Zet: de opdracht staat er voor de lijnen van de keuzes zijn uitgerekend, en een snel antwoord krijgt ze toch', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'best3');
+    a.ev('buildBest3()');
+    const anderen = 'session.task.options.filter(function (o) { return o !== session.task.best; })';
+    check('meteen na het maken: nog geen lijn', a.get(anderen + '.every(function (o) { return o.lijn === undefined; })'));
+    await wacht();
+    check('even later: de lijn van elke andere keuze', a.get(anderen + '.every(function (o) { return o.lijn !== undefined; })'));
+    a.ev('buildBest3(); session.keuzeOpen = true; pickOption(session.task.options.indexOf(session.task.best)); best3Confirm()');
+    check('bij een antwoord meteen: de lijn van elke andere keuze', a.get(anderen + '.every(function (o) { return o.lijn !== undefined; })'));
+    await wacht(3000);
+    check('en drie redenen', redenen5(a).length === 3);
+  });
+
+  /* de dame is "ze" en "haar", ook in Turbo's zin en op de eindkaart */
+  await regel('[5.8] Turbo\'s dreigregel over een gedekte dame: "Je dekt haar, maar de ruil is goed voor mij."', async function (check) {
+    const a = nieuwKind();
+    a.ev('setPref("guard", true)');
+    await startPotje(a, 2);
+    const v = vraagOpen5(a, '7k/8/8/8/6n1/8/8/R2Q3K b - - 0 10', 'g4e3');
+    tikVeld(a, v.koning);
+    await wacht(2000);
+    check('de strook (' + strook5(a) + ')', strook5(a) === 'Mijn paard op e3 valt je dame op d1 aan. Je dekt haar, maar de ruil is goed voor mij.');
+  });
+  await regel('[5.8] de eindkaart over een dame die onbeschermd stond: "Daar stond ze onbeschermd, en ik pakte haar"', async function (check) {
+    const a = nieuwKind();
+    const t = a.get('momentTekst({ kind: "hang", self: true, moveNo: 5, piece: "dame", sq: "g5", points: 9, used: true }).tekst');
+    check('de zin (' + t + ')', t === 'Zet 5: je dame ging naar g5. Daar stond ze onbeschermd, en ik pakte haar (9 punten).');
   });
 
   /* ---------- 5.5: Trucendoos, mat in twee (T9 tot T11) ---------- */
@@ -1388,11 +1497,11 @@ async function orakelFlow5() {
     check('de laatste reden (' + r.join(' / ') + ')', /^De redding was /.test(r[0] || '') && /^Jouw zet: Turbo speelt /.test(r[r.length - 1] || '') && !/Probeer nog een zet/.test(r[r.length - 1]));
   });
 
-  /* "promotie!" sluit de zin al af: geen punt erachter */
-  await regel('[5.5] een zetnaam die op "!" eindigt krijgt geen punt: "De beste was B: Pion b7 → a8, slaat toren, promotie!"', async function (check) {
+  /* een promotie in een zin: de zetnaam heeft geen uitroepteken, dus de zin eindigt op een gewone punt */
+  await regel('[5.5] een promotie aan het eind van een zin: "De beste was B: Pion b7 → a8, slaat toren, promotie."', async function (check) {
     const a = nieuwKind();
     const u = besteUitleg5(a, 'r6k/1P6/8/8/8/8/8/6K1 w - - 0 1', ['g1f2', 'b7a8q', 'g1h2'], 1);
-    check('de eerste reden (' + u.regels[0] + ')', u.regels[0] === 'De beste was B: Pion b7 → a8, slaat toren, promotie!');
+    check('de eerste reden (' + u.regels[0] + ')', u.regels[0] === 'De beste was B: Pion b7 → a8, slaat toren, promotie.');
   });
 
   /* ---------- Trucendoos: wat er staat is waar op het bord dat er staat ---------- */

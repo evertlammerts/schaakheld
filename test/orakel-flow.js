@@ -1089,7 +1089,7 @@ async function orakelFlow() {
     });
   }
 
-  await regel('[2.4] na een antwoord blijft de vraag staan en staan alle redenen onder het bord, de gemiste eerst, zonder tussenkop', async function (check) {
+  await regel('[2.4] na een antwoord blijft de vraag staan en staan alle redenen onder het bord, eerst je eigen foute tikken en dan de gemiste, zonder tussenkop', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'scan');
     /* de toren op a1 wordt aangevallen en is gemist; de koning op g1 is fout getikt */
@@ -1106,7 +1106,7 @@ async function orakelFlow() {
     check('de strook houdt de vraag', strook(a) === vraag && vraag !== '');
     const redenen = a.el('taskBox').querySelectorAll('li').map(function (li) { return a.doc.__tekst(li); });
     check('twee redenen onder het bord', redenen.length === 2);
-    check('de gemiste eerst', /Gemist/.test(redenen[0] || '') && /g1|koning/.test(redenen[1] || ''));
+    check('eerst de foute tik, dan de gemiste', /g1|koning/.test(redenen[0] || '') && /Gemist/.test(redenen[1] || ''));
     check('geen tussenkop', !/Nog \d+ ding/.test(tekstVan(a, 'taskBox')));
     check('de uitleg van voor het antwoord is weg', onderZin(a) === '');
   });
