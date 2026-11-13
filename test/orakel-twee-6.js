@@ -390,9 +390,11 @@ async function orakelTwee6() {
       await wacht();
       check('Fien zit in het potje, en alleen wit kan zetten', opSpeelscherm(fien) && fien.get('session.S.hist.length') === 0 && magZetten(fien) === fienWit);
       if (fienWit) {
+        await wacht(20000);
+        check('Mees leest dat Fien meedoet en begint', /Fien doet mee\. Fien is aan zet\./.test(tekstVan(mees, 'verder')));
         zet(fien, 'e2e4');
         await wacht(20000);
-        check('Mees leest dat Fien zette', /Fien heeft gezet\. Jij bent aan zet\./.test(tekstVan(mees, 'verder')));
+        check('Mees leest dat Fien meedoet en zette', /Fien doet mee en heeft gezet\. Jij bent aan zet\./.test(tekstVan(mees, 'verder')));
       } else {
         await wacht(20000);
         check('Mees leest dat Fien meedoet en dat hij begint', /Fien doet mee\. Jij bent aan zet\./.test(zegt(mees)));
@@ -444,10 +446,18 @@ async function orakelTwee6() {
     check('de kaart toont hem niet meer', !/daagt je uit/.test(tekstVan(fien, 'verder')));
     fien = await opent(fien);
     check('ook niet na opnieuw openen', !/daagt je uit/.test(zegt(fien)));
-    mees = await opent(mees);
+    mees = herlaad(mees);
+    vierWeg(mees);
+    await wacht(20000);
+    const s = mees.scherm();
+    check('Mees hoort het één keer, rustig', /Fien kan nu even niet/.test(s) && /Daag Fien later gerust nog eens uit\./.test(s));
+    tikEl(mees, mees.el('modalBox').querySelectorAll('button')[0], 'de knop van het bericht');
+    await wacht();
     mees.tik('tabVrienden');
-    check('Mees wacht niet meer op een antwoord', !/nog geen antwoord/.test(vriendRijTekst(mees, fid) + ' ' + tekstVan(mees, 'verder')) &&
-      /Uitnodigen/.test(vriendRijTekst(mees, fid)));
+    check('Mees wacht niet meer op een antwoord, en kan weer uitnodigen', !mees.open() &&
+      !/nog geen antwoord/.test(vriendRijTekst(mees, fid) + ' ' + tekstVan(mees, 'verder')) && /Uitnodigen/.test(vriendRijTekst(mees, fid)));
+    mees = await opent(mees);
+    check('en hoort het niet nog eens', !/kan nu even niet/.test(mees.scherm()));
     check('geen teller veranderd', tellers(mees) === voorM && tellers(fien) === voorF);
   });
 
@@ -481,9 +491,68 @@ async function orakelTwee6() {
       if (kanTikken(mees, 'Naar huis')) { tikTekst(mees, 'Naar huis'); await wacht(); }
     } finally { fetch = echt; }
     check('geen tweede uitnodiging of uitdaging verstuurd', geschreven.length === 0);
+    check('Vrienden staat open, bij de rij met de uitdaging', zichtbaar(mees, 'view-vrienden') && /Uitgedaagd · nog geen antwoord/.test(vriendRijTekst(mees, fid)));
     schuifKlok(DAG);
     fien = await opent(fien);
     check('Fien ziet precies één uitdaging', (zegt(fien).match(/Mees daagt je uit/g) || []).length === 1);
+  });
+
+  await nogNiet('[6.4] een uitdaging trekt de uitnodiging in waar hij uit kwam: wie binnen tien minuten opent, ziet alleen de uitdaging', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await wordenVrienden(mees, fien);
+    stopApparaat(fien);
+    await daagUit(mees, fid, 'Fien');
+    schuifKlok(60000);
+    fien = await opent(fien);
+    check('Fien krijgt geen uitnodiging om nu te spelen', !/wil een potje spelen|wil spelen/.test(zegt(fien)));
+    check('wel de uitdaging', /Mees daagt je uit/.test(tekstVan(fien, 'verder')) && kanTikken(fien, 'Ja, spelen!'));
+  });
+
+  await nogNiet('[6.4] zijn de tien minuten van een uitnodiging om, dan biedt het bericht de uitdaging aan, en pas een tik maakt hem', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await wordenVrienden(mees, fien);
+    stopApparaat(fien);
+    const bus = await potjesbus(mees, fid, true);
+    tikInRij(mees, fid, 'Uitnodigen');
+    await wacht(11 * 60000);
+    check('het bericht biedt de uitdaging aan', kanTikken(mees, 'Daag Fien uit voor later'));
+    check('er is nog geen uitdaging', !__server.potjes[bus]);
+    tikTekst(mees, 'Daag Fien uit voor later');
+    await wacht();
+    check('na de tik wel', !!__server.potjes[bus] && /Uitdaging verstuurd!/.test(mees.scherm()));
+  });
+
+  await nogNiet('[6.4] twee uitdagingen die elkaar kruisen: rol a houdt de zijne, de ander krijgt die van a om te beantwoorden', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await wordenVrienden(mees, fien);
+    const meesA = mees.get('myRole(P.friends[' + JSON.stringify(fid) + '])') === 'a';
+    stopApparaat(fien);
+    /* de uitdaging van Mees is nog onderweg als Fien de hare maakt */
+    const echt = fetch, vast = [];
+    fetch = function (url, o) {
+      if (/\/v1\/potje$/.test(url)) return new Promise(function (klaar) { vast.push(function () { klaar(echt(url, o)); }); });
+      return echt(url, o);
+    };
+    try {
+      await daagUit(mees, fid, 'Fien');
+      stopApparaat(mees);
+      fien = await opent(fien);
+      check('testopzet: Fien ziet de uitdaging van Mees nog niet', !/Mees daagt je uit/.test(tekstVan(fien, 'verder')));
+      await daagUit(fien, fid, 'Mees');
+    } finally {
+      fetch = echt;
+      vast.splice(0).forEach(function (f) { f(); });
+    }
+    mees = await opent(mees);
+    await wacht(20000);
+    const a = meesA ? mees : fien, b = meesA ? fien : mees, naamA = meesA ? 'Mees' : 'Fien', naamB = meesA ? 'Fien' : 'Mees';
+    for (const x of [a, b]) x.tik('tabSpelen');
+    const ka = tekstVan(a, 'verder') + ' ' + ookNogRegels(a).join(' '), kb = tekstVan(b, 'verder') + ' ' + ookNogRegels(b).join(' ');
+    check('rol a houdt zijn uitdaging', new RegExp('Je uitdaging aan ' + naamB).test(ka) && !new RegExp(naamB + ' daagt je uit').test(ka));
+    check('de ander beantwoordt die van a, en de eigen is weg', new RegExp(naamA + ' daagt je uit').test(kb) && !new RegExp('Je uitdaging aan ' + naamA).test(kb));
   });
 
   await nogNiet('[6.5] tussen vrienden eindigt een potje niet als de kamer weg is: allebei spelen verder via de potjesbussen', async function (check) {
@@ -555,6 +624,7 @@ async function orakelTwee6() {
     await wacht(5000);
     let inhoud = await busInhoud(mees, fid, bus);
     check('op de eigen beurt staat er nog geen aanbod in de bus', !inhoud || !inhoud.offer);
+    check('de strook zegt wat nu', tekstVan(mees, 'bubble').indexOf('Doe nu je zet: daarmee bied je Fien remise aan.') >= 0);
     await zetUit(RUSTIG, mees);
     await wacht(5000);
     inhoud = await busInhoud(mees, fid, bus);
@@ -654,6 +724,8 @@ async function orakelTwee6() {
     zetOp(t0 + 13 * DAG + 23 * UUR);
     mees = await opent(mees);
     check('na 13 dagen en 23 uur nog geen remise', !/is remise/.test(tekstVan(mees, 'verder')) && tellers(mees) === voorM);
+    check('de kaart van Mees zegt dat zijn aanbod staat, zonder regel eronder', /Je bood remise aan\. Fien is aan zet\./.test(tekstVan(mees, 'verder')) &&
+      !/blijft staan/.test(tekstVan(mees, 'verder')));
     stopApparaat(mees);
     zetOp(t0 + 14 * DAG + 10 * 60000);
     mees = await opent(mees);
@@ -723,6 +795,9 @@ async function orakelTwee6() {
     };
     try {
       fien = await opent(fien);
+      const kaart = tekstVan(fien, 'verder');
+      check('na de laatste dag zegt de kaart van Fien dat antwoorden nu nog kan, zonder datum', /Mees biedt remise aan/.test(kaart) &&
+        /Antwoorden kan nu nog\./.test(kaart) && !/november|december/.test(kaart));
       fien.tik('verderKaart');
       await wacht();
       fienZet = true;
@@ -807,8 +882,7 @@ async function orakelTwee6() {
     await tel.ev('syncNow()');
     await wacht();
     tab = await opent(tab);
-    if (kanTikken(tab, 'Bekijk')) { tikTekst(tab, 'Bekijk'); await wacht(); }
-    if (kanTikken(tab, 'Naar huis')) { tikTekst(tab, 'Naar huis'); await wacht(); }
+    check('de tablet toont het einde niet nog eens: het telde al op de telefoon', !/is klaar|gaf op/.test(tekstVan(tab, 'verder')));
     await tab.ev('syncNow()');
     await wacht();
     await tel.ev('syncNow()');
@@ -876,6 +950,28 @@ async function orakelTwee6() {
     check('Fien: Mees gaf op', /Je potje met Mees is klaar/.test(kaart) && /Mees gaf op\. Jij wint dit potje!/.test(kaart));
   });
 
+  await nogNiet('[6.7] "Alles wissen" op een gekoppeld apparaat haalt het vriendenpotje alleen daar weg: het speelt verder op het andere, en de vriend ziet geen opgave', async function (check) {
+    zetDatum('2026-11-16T10:00:00');
+    let tel = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await vriendenpotje(tel, fien);
+    await zetUit(RUSTIG, tel, fien);
+    let tab = await tweedeApparaat(tel);
+    stopApparaat(fien);
+    tel.tik('backBtn');
+    await wacht(20000);
+    check('testopzet: de tablet heeft het potje', /Je potje met Fien/.test(tekstVan(tab, 'verder')));
+    tab.tik('setBtn');
+    tab.tik('setReset');
+    check('de vraag zegt niet dat het potje wordt opgegeven', !/geef je ook/.test(tab.scherm()) && /andere apparaat/.test(tab.scherm()));
+    tab.tik('rstGo');
+    await wacht(20000);
+    schuifKlok(DAG);
+    fien = await opent(fien);
+    check('Fien ziet geen opgave, en het potje loopt', !/gaf op|is klaar/.test(tekstVan(fien, 'verder')) && /Je potje met Mees/.test(tekstVan(fien, 'verder')));
+    tel = await opent(tel);
+    check('op de telefoon loopt het potje', /Je potje met Fien/.test(tekstVan(tel, 'verder')) && !!vriendenpotjeMet(tel, fid));
+  });
+
   await nogNiet('[6.8] een week zonder zet van de vriend: stil, onderaan, en weer bovenaan zodra de vriend zet', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien'), lotte = maakApparaat('Lotte');
@@ -908,7 +1004,7 @@ async function orakelTwee6() {
     mees = await opent(mees);
     let b = await blad();
     check('na zes dagen nog niet stil: het potje staat voor de eigen uitdaging', b.indexOf('Je potje met Fien') >= 0 &&
-      b.indexOf('Je potje met Fien') < b.indexOf('Je uitdaging aan Lotte') && /Fien is aan zet · \d+ dagen geleden/.test(b) && !/een week niet gezet/.test(b));
+      b.indexOf('Je potje met Fien') < b.indexOf('Je uitdaging aan Lotte') && /Fien is aan zet · 6 dagen geleden/.test(b) && !/een week niet gezet/.test(b));
     stopApparaat(mees);
     zetOp(t0 + 7 * DAG + UUR);
     mees = await opent(mees);
@@ -943,8 +1039,11 @@ async function orakelTwee6() {
     stopApparaat(mees);
     schuifKlok(400 * DAG);
     mees = await opent(mees);
+    const kaart = tekstVan(mees, 'verder');
+    check('na 400 dagen is het potje nog de kaart, het enige wat bezig is', !!vriendenpotjeMet(mees, fid) && /Je potje met Fien/.test(kaart) &&
+      /Fien heeft al 13 maanden niet gezet\./.test(kaart));
     mees.tik('tabVrienden');
-    check('na 400 dagen staat het potje er nog', !!vriendenpotjeMet(mees, fid) && /Fien heeft al een week niet gezet\./.test(vriendRijTekst(mees, fid)) &&
+    check('en de rij zegt hetzelfde, zonder Uitnodigen', /Fien heeft al 13 maanden niet gezet\./.test(vriendRijTekst(mees, fid)) &&
       !/Uitnodigen/.test(vriendRijTekst(mees, fid)));
     fien = await opent(fien);
     check('Fien krijgt de zet van Mees nog, want Mees schreef zijn bus terug', /Mees heeft gezet\. Jij bent aan zet\./.test(tekstVan(fien, 'verder')));
@@ -1005,6 +1104,33 @@ async function orakelTwee6() {
     check('Vrienden toont beide potjes, en bij geen van beide Uitnodigen', [fidF, fidD].every(function (id) {
       return !/Uitnodigen/.test(vriendRijTekst(mees, id)) && /aan zet|heeft gezet/.test(vriendRijTekst(mees, id));
     }));
+  });
+
+  await nogNiet('[6.9] een uitnodiging van een andere vriend terwijl een vriendenpotje loopt: het kind kan ja zeggen, en het eerste potje blijft staan', async function (check) {
+    zetDatum('2026-11-16T10:00:00');
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan'), sem = maakApparaat('Sem');
+    const fidD = await wordenVrienden(fien, daan), fidS = await vriendErbij(fien, sem);
+    tikInRij(fien, fidD, 'Uitnodigen');
+    await wacht();
+    await daan.ev('friendPoll()');
+    await wacht();
+    daan.tik('invJa');
+    await wacht();
+    fien.tik('mpGo');
+    await wacht();
+    await zetUit(RUSTIG, fien, daan);
+    for (const x of [fien, daan]) { x.tik('backBtn'); await wacht(); }
+    await nodigUit(sem);
+    await fien.ev('friendPoll()');
+    await wacht();
+    check('de uitnodiging van Sem komt aan, met Ja, spelen!', /Sem/.test(zegt(fien)) && kanTikken(fien, 'Ja, spelen!'));
+    tikTekst(fien, 'Ja, spelen!');
+    await wacht();
+    sem.tik('mpGo');
+    await wacht();
+    check('Fien speelt met Sem', opSpeelscherm(fien) && fien.get('session.S.hist.length') === 0 && opSpeelscherm(sem));
+    const d = vriendenpotjeMet(fien, fidD);
+    check('het potje met Daan blijft staan, met zijn zet', !!d && d.moves.length === 1 && !!vriendenpotjeMet(fien, fidS));
   });
 
   await nogNiet('[6.9] een uitdaging om te beantwoorden staat vóór het potje tegen Turbo, de eigen uitdaging erna, en de telregel noemt ze', async function (check) {

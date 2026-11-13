@@ -144,6 +144,8 @@ async function orakelFlow6() {
     check('de balk: bewaard en aangeboden', zichtbaar(a, 'bewaard') && /½ aangeboden/.test(tekstVan(a, 'verschil')));
     a.tik('backBtn');
     await wacht();
+    const v = tekstVan(a, 'verder');
+    check('thuis: de kaart zegt dat het aanbod staat, en er staat geen regel onder', /Je bood remise aan\. Fien is aan zet\./.test(v) && !/blijft staan/.test(v));
     verder(DAG);
     a = herlaad(a);
     thuisVenstersWeg(a);
