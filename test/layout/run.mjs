@@ -115,24 +115,79 @@ const HELPERS = `
 const GEVALLEN = [];
 
 for (const [W, H] of KLEIN) {
-  GEVALLEN.push({ regels: ['[1.13] ' + W + 'x' + H + ': het weekdoelvenster met "Potjes met een vriend" scrollt tot de laatste knop, en die werkt'],
+  GEVALLEN.push({ regels: ['[1.13] ' + W + 'x' + H + ': het weekdoelvenster met "Potjes met een vriend": bij elk aantal staat "Dat is mijn doel!" in beeld en is hij te tikken zonder te scrollen, en elke keuze erboven is met scrollen te bereiken'],
     code: `
-      const n = '[1.13] ${W}x${H}: het weekdoelvenster met "Potjes met een vriend" scrollt tot de laatste knop, en die werkt';
+      const n = '[1.13] ${W}x${H}: het weekdoelvenster met "Potjes met een vriend": bij elk aantal staat "Dat is mijn doel!" in beeld en is hij te tikken zonder te scrollen, en elke keuze erboven is met scrollen te bereiken';
       await vers(${W}, ${H});
       await klik('#weekStrip');
       await page.waitForTimeout(300);
       await klikTekst(/Potjes met een vriend/);
       await page.waitForTimeout(300);
-      const knop = page.getByRole('button', { name: /Dat is mijn doel/ }).first();
-      check(n, 'de knop bestaat', await knop.count() > 0);
-      if (await knop.count()) {
-        await knop.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => {});
-        const r = await knop.boundingBox();
-        const raak = r && await page.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y);
-          return !!e && !!e.closest('button') && /Dat is mijn doel/.test(e.closest('button').textContent); }, [r.x + r.width / 2, r.y + r.height / 2]);
-        check(n, 'de knop is in beeld te brengen', !!r && r.y >= 0 && r.y + r.height <= ${H} + 0.5);
-        check(n, 'en daar te tikken', !!raak);
-      }`
+      check(n, 'testopzet: het venster is hoger dan het scherm', await page.evaluate(() => { const o = document.getElementById('overlay'); return o.scrollHeight > o.clientHeight + 1; }));
+      for (const aantal of [1, 2, 3]) {
+        await page.evaluate(a => { const c = document.querySelector('#goalNs [data-n="' + a + '"]'); c.scrollIntoView({ block: 'center' }); }, aantal);
+        await page.waitForTimeout(100);
+        const keuze = await page.evaluate(a => { const c = document.querySelector('#goalNs [data-n="' + a + '"]'), r = c.getBoundingClientRect();
+          const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!e && c.contains(e); }, aantal);
+        check(n, 'het aantal ' + aantal + ' is met scrollen te bereiken en te tikken', keuze);
+        await klik('#goalNs [data-n="' + aantal + '"]');
+        await page.waitForTimeout(200);
+        for (const plek of ['waar het venster na de keuze staat', 'bovenaan het venster']) {
+          if (plek === 'bovenaan het venster') await page.evaluate(() => { document.getElementById('overlay').scrollTop = 0; });
+          await page.waitForTimeout(100);
+          const k = await page.evaluate(() => { const b = document.getElementById('goalOk'), r = b.getBoundingClientRect();
+            const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+            return { top: r.top, bottom: r.bottom, raak: !!e && b.contains(e) }; });
+          check(n, 'aantal ' + aantal + ', ' + plek + ': de knop staat helemaal in beeld', k.top >= 0 && k.bottom <= ${H} + 0.5);
+          check(n, 'aantal ' + aantal + ', ' + plek + ': en is daar te tikken', k.raak);
+        }
+      }
+      const keuzes = await page.evaluate(() => [...document.querySelectorAll('#goalKinds .chip')].map(c => c.dataset.kind));
+      for (const soort of keuzes) {
+        const ok = await page.evaluate(s => { const c = document.querySelector('#goalKinds [data-kind="' + s + '"]'); c.scrollIntoView({ block: 'center' });
+          const r = c.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!e && c.contains(e); }, soort);
+        check(n, 'de keuze ' + soort + ' is met scrollen te bereiken en te tikken', ok);
+      }
+      await klikTekst(/Potjes met een vriend/);
+      await klik('#goalNs [data-n="3"]');
+      await page.evaluate(() => { document.getElementById('overlay').scrollTop = 0; });
+      await page.waitForTimeout(100);
+      const r = await page.evaluate(() => { const b = document.getElementById('goalOk').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+      await page.mouse.click(r.x, r.y);
+      await page.waitForTimeout(300);
+      const doel = await page.evaluate(() => ({ dicht: document.getElementById('overlay').classList.contains('hidden'), doel: P.weekGoal }));
+      check(n, 'een tik op de knop zonder te scrollen zet het doel: 3 potjes met een vriend', doel.dicht && !!doel.doel && doel.doel.kind === 'vriend' && doel.doel.n === 3);
+      await page.evaluate(() => { P.weekGoal = null; goalFlow(); });
+      await klikTekst(/Potjes met een vriend/);
+      await page.evaluate(() => { document.getElementById('overlay').scrollTop = 0; });
+      await page.waitForTimeout(150);
+      await foto('weekdoel-${W}x${H}-boven');
+      await page.evaluate(() => { const o = document.getElementById('overlay'); o.scrollTop = o.scrollHeight; });
+      await page.waitForTimeout(150);
+      await foto('weekdoel-${W}x${H}-onder');`
+  });
+
+  GEVALLEN.push({ regels: ['[1.13] ' + W + 'x' + H + ': het venster met je vorige weken: Klaar staat in beeld en is te tikken zonder te scrollen, en de bovenste week is met scrollen te bereiken'],
+    code: `
+      const n = '[1.13] ${W}x${H}: het venster met je vorige weken: Klaar staat in beeld en is te tikken zonder te scrollen, en de bovenste week is met scrollen te bereiken';
+      await vers(${W}, ${H});
+      await klik('#tabIk');
+      await page.waitForTimeout(200);
+      await klik('#weeksBtn');
+      await page.waitForTimeout(300);
+      check(n, 'testopzet: het venster is hoger dan het scherm', await page.evaluate(() => { const o = document.getElementById('overlay'); return o.scrollHeight > o.clientHeight + 1; }));
+      const k = await page.evaluate(() => { const b = document.getElementById('weeksOk'), r = b.getBoundingClientRect();
+        const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return { top: r.top, bottom: r.bottom, raak: !!e && b.contains(e), scroll: document.getElementById('overlay').scrollTop }; });
+      check(n, 'het venster staat bovenaan', k.scroll === 0);
+      check(n, 'Klaar staat helemaal in beeld', k.top >= 0 && k.bottom <= ${H} + 0.5);
+      check(n, 'en is daar te tikken', k.raak);
+      const weken = await page.evaluate(() => [...document.querySelectorAll('#modalBox .goal')].map((w, i) => { w.scrollIntoView({ block: 'center' });
+        const r = w.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!e && w.contains(e); }));
+      check(n, 'elke week is met scrollen te bereiken (' + weken.length + ' weken)', weken.length >= 8 && weken.every(Boolean));
+      await page.evaluate(() => { document.getElementById('overlay').scrollTop = 0; });
+      await page.waitForTimeout(100);
+      await foto('weken-${W}x${H}-boven');`
   });
 
   GEVALLEN.push({ regels: ['[1.14] ' + W + 'x' + H + ': de melding staat onderaan boven de tabbalk, bedekt de Verder-kaart niet en vangt geen tikken'],

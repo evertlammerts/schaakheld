@@ -807,6 +807,20 @@
   .modal h2 { margin: 10px 0 8px; font-size: 23px; text-wrap: balance; } /* compat-allow css.properties.text-wrap: voor Safari 17.4 breekt de kop gewoon af */
   .modal p { margin: 0 0 16px; font-size: 15.5px; color: var(--ink-soft); line-height: 1.45; }
   .modal .m-btns { display: flex; flex-direction: column; gap: 10px; }
+  /* Een venster dat hoger is dan het scherm: zijn laatste rij knoppen blijft onderaan in beeld en de rest schuift
+     eronder door, met een zachte rand die laat zien dat er meer is. Past het venster, dan staat de rij op zijn plek:
+     de rij vult dan precies de onderste rand van het venster. bottom is min de rand van de overlay, zodat de rij tot
+     de onderkant van het scherm reikt en er niets onder doorschemert. */
+  .modal > .m-btns:last-child {
+    position: sticky; bottom: -18px; z-index: 1;
+    margin-left: -24px; margin-right: -24px; margin-bottom: -26px;
+    padding-left: 24px; padding-right: 24px; padding-bottom: 26px;
+    background: var(--card); border-radius: 0 0 26px 26px;
+  }
+  .modal > .m-btns:last-child::before {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 14px; pointer-events: none;
+    background: linear-gradient(rgba(255, 255, 255, 0), var(--card));
+  }
   .set-lijst { text-align: left; margin-top: 8px; }
   .set-row {
     display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;

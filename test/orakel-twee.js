@@ -3008,7 +3008,7 @@ async function orakelTwee() {
     check('zodra het lezen lukt, is ze weg', !/Sem wil spelen/.test(tekstVan(fien, 'verder')));
   });
 
-  await regel('[4.5] vastgelopen in ronde 0 bestaat niet meer: wie herlaadt, zit zonder nieuwe uitnodiging weer in hetzelfde potje, en dezelfde vriend nog eens uitnodigen opent dat potje', async function (check) {
+  await regel('[4.5] wie midden in een potje met een vriend herlaadt, zit zonder nieuwe uitnodiging en zonder dat de vriend eerst weg moet weer in hetzelfde potje, en dezelfde vriend nog eens uitnodigen opent dat potje', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     const fid = await wordenVrienden(fien, daan);
     await nodigUit(fien);
