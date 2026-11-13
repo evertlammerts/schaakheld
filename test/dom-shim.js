@@ -621,17 +621,17 @@ var fetch = function (url, opts) {
          plaatsmaken, dezelfde bytes verlengen alleen, en alleen bus, bewijs,
          blob en als mogen erin staan; als moet de versie zijn van wat er
          staat ('' voor niets), anders verandert er niets en komt er 409 met
-         wat er staat */
+         wat er staat; een leeg briefje is 400, want geen schrijven haalt een
+         staat weg */
       if (!body || typeof body !== 'object' ||
         Object.keys(body).some(function (k) { return ['bus', 'bewijs', 'blob', 'als'].indexOf(k) < 0; })) { res(400); return; }
       __sha256hex(body.bewijs).then(function (hex) {
-        if (!__busGeldig(body, hex) || typeof body.als !== 'string' ||
+        if (!__busGeldig(body, hex) || body.blob == null || body.blob === '' || typeof body.als !== 'string' ||
           !(body.als === '' || /^[a-f0-9]{64}$/.test(body.als))) { res(400); return; }
         __veegPotjes();
-        const blob = body.blob == null ? '' : String(body.blob), nu = __busNu();
+        const blob = body.blob, nu = __busNu();
         const oud = __server.potjes[body.bus];
         if (body.als !== (oud ? __versie(oud.blob) : '')) { res(409, { blob: oud ? oud.blob : '' }); return; }
-        if (blob === '') { delete __server.potjes[body.bus]; res(204); return; }
         if (!oud && Object.keys(__server.potjes).length >= MAX_POTJES) {
           let weg = null;
           for (const id in __server.potjes) if (weg === null || __server.potjes[id].tot < __server.potjes[weg].tot) weg = id;

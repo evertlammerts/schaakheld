@@ -2128,13 +2128,10 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('potje: alleen een schrijven met de versie die er staat gaat door, anders 409 met wat er staat',
     aC[0].status === 409 && aC[0].blob === '' && aC[1].status === 204 && aC[2].status === 409 && aC[2].blob === 'staat-1' &&
     aC[3].status === 409 && aC[3].blob === 'staat-1' && aC[4].status === 204 && (await pLees([pa.bus])).blobs[pa.bus] === 'staat-2');
-  var aW = [await pAls(pa, '', v1), await pAls(pa, '', ''), await pAls(pa, '', v2)];
-  var naWissen = pa.bus in (await pLees([pa.bus])).blobs;
-  aW.push(await pAls(pa, '', v2), await pAls(pa, '', ''));
-  ok('potje: wissen volgt dezelfde voorwaarde',
-    aW[0].status === 409 && aW[0].blob === 'staat-2' && aW[1].status === 409 && aW[2].status === 204 && !naWissen &&
-    aW[3].status === 409 && aW[3].blob === '' && aW[4].status === 204);
-  await pAls(pa, 'staat-0', '');
+  var aW = [await pAls(pa, '', v2), await pAls(pa, '', ''), await pAls(pa, '', v1)];
+  ok('potje: een leeg briefje weigert de server, ook met de goede versie, en de staat blijft',
+    aW.every(function (a) { return a.status === 400; }) && (await pLees([pa.bus])).blobs[pa.bus] === 'staat-2');
+  await pAls(pa, 'staat-0', v2);
   var duo = await Promise.all([pAls(pa, 'staat-x', v0), pAls(pa, 'staat-y', v0)]);
   var duoWint = duo[0].status === 204 ? 'staat-x' : 'staat-y';
   ok('potje: twee schrijvers op een versie, precies een gaat door en de ander krijgt wat die schreef',
@@ -2190,12 +2187,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var oAnders = (await pLees([pa.bus])).ongewijzigd[pa.bus];
   __server.klok += 1800000;
   var oHalf = (await pLees([pa.bus])).ongewijzigd[pa.bus];
-  await pSchrijf(pa, '');
-  var oGewist = pa.bus in (await pLees([pa.bus])).blobs;
-  await pSchrijf(pa, 'zet-2');
-  var oVers = (await pLees([pa.bus])).ongewijzigd[pa.bus];
-  ok('potje: ongewijzigd loopt door bij dezelfde bytes en begint opnieuw bij andere bytes of na wissen',
-    oZelfde === 7200 && oAnders === 0 && oHalf === 1800 && !oGewist && oVers === 0);
+  ok('potje: ongewijzigd loopt door bij dezelfde bytes en begint opnieuw bij andere bytes',
+    oZelfde === 7200 && oAnders === 0 && oHalf === 1800);
   __server.klok = klokP;
   __server.potjes = {};
   await pSchrijf(pa, 'zet-1');

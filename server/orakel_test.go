@@ -392,23 +392,25 @@ func TestOrakelPotjeLezenVerlengtNiet(t *testing.T) {
 	}(t)
 }
 
-func TestOrakelPotjeLeegWist(t *testing.T) {
+func TestOrakelPotjeLeegGeweigerd(t *testing.T) {
 	s, _ := newTestServer(t, nil)
-	// [6.10] een leeg potje wist de bus
+	// [V2] een leeg briefje weigert de server, ook met de goede versie: een staat gaat alleen weg door te verlopen
 	func(t tb) {
 		bewijs, bus := potjeBus("a")
-		if c := schrijfPotje(s, bewijs, bus, "x"); c != 204 {
-			t.Fatalf("schrijven: %d", c)
+		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", ""); a.code != 204 {
+			t.Fatalf("eerste staat: %+v", a)
 		}
-		if c := schrijfPotje(s, bewijs, bus, ""); c != 204 {
-			t.Fatalf("wissen: %d, wil 204", c)
+		for _, als := range []string{versieVan("staat-1"), "", versieVan("staat-0")} {
+			if a := schrijfPotjeAls(s, bewijs, bus, "", als); a.code != 400 {
+				t.Fatalf("een leeg briefje met als %q: %+v, wil 400", als, a)
+			}
 		}
-		if g := leesPotjes(s, bus); len(g.Blobs) != 0 {
-			t.Fatalf("na wissen hoort er niets te liggen: %+v", g)
+		if g := leesPotjes(s, bus); g.Blobs[bus] != "staat-1" {
+			t.Fatalf("na de geweigerde lege briefjes: %+v, wil staat-1", g)
 		}
 		onbekend, onbekendeBus := potjeBus("onbekend")
-		if c := schrijfPotje(s, onbekend, onbekendeBus, ""); c != 204 {
-			t.Fatalf("een onbekende bus wissen: %d, wil 204", c)
+		if a := schrijfPotjeAls(s, onbekend, onbekendeBus, "", ""); a.code != 400 {
+			t.Fatalf("een leeg briefje in een lege bus: %+v, wil 400", a)
 		}
 	}(t)
 }
@@ -578,11 +580,6 @@ func TestOrakelPotjeOngewijzigd(t *testing.T) {
 		clk.advance(30 * time.Minute)
 		if g := leesPotjes(s, bus); g.Ongewijzigd[bus] != 1800 {
 			t.Fatalf("een half uur na de wijziging: %+v, wil 1800", g)
-		}
-		schrijfPotje(s, bewijs, bus, "")
-		schrijfPotje(s, bewijs, bus, "zet-2")
-		if g := leesPotjes(s, bus); g.Blobs[bus] != "zet-2" || g.Ongewijzigd[bus] != 0 {
-			t.Fatalf("wissen en opnieuw maken begint vers, ook met dezelfde bytes: %+v", g)
 		}
 	}(t)
 }
@@ -795,37 +792,6 @@ func TestOrakelPotjeTweeSchrijvers(t *testing.T) {
 	}(t)
 }
 
-func TestOrakelPotjeWissenMetVoorwaarde(t *testing.T) {
-	s, _ := newTestServer(t, nil)
-	// [V2] wissen met een leeg briefje volgt dezelfde voorwaarde
-	func(t tb) {
-		bewijs, bus := potjeBus("a")
-		if a := schrijfPotjeAls(s, bewijs, bus, "staat-1", ""); a.code != 204 {
-			t.Fatalf("eerste staat: %+v", a)
-		}
-		for _, als := range []string{versieVan("staat-0"), ""} {
-			if a := schrijfPotjeAls(s, bewijs, bus, "", als); a.code != 409 || a.blob != "staat-1" {
-				t.Fatalf("wissen met als %q: %+v, wil 409 met staat-1", als, a)
-			}
-		}
-		if g := leesPotjes(s, bus); g.Blobs[bus] != "staat-1" {
-			t.Fatalf("na geweigerd wissen: %+v, wil staat-1", g)
-		}
-		if a := schrijfPotjeAls(s, bewijs, bus, "", versieVan("staat-1")); a.code != 204 {
-			t.Fatalf("wissen met de goede versie: %+v, wil 204", a)
-		}
-		if g := leesPotjes(s, bus); len(g.Blobs) != 0 {
-			t.Fatalf("na wissen: %+v, wil weg", g)
-		}
-		if a := schrijfPotjeAls(s, bewijs, bus, "", versieVan("staat-1")); a.code != 409 || !a.metBlob || a.blob != "" {
-			t.Fatalf("nog eens wissen met de oude versie: %+v, wil 409 met een leeg briefje", a)
-		}
-		if a := schrijfPotjeAls(s, bewijs, bus, "", ""); a.code != 204 {
-			t.Fatalf("niets wissen met een lege als: %+v, wil 204", a)
-		}
-	}(t)
-}
-
 func TestOrakelPotjeVolMetVoorwaarde(t *testing.T) {
 	s, clk := newTestServer(t, nil)
 	// [V2] bij 1024 maakt alleen een gelukt nieuw schrijven plaats, een geweigerd schrijven duwt niemand weg
@@ -883,7 +849,7 @@ func TestOrakelPotjeZonderAlsGeweigerd(t *testing.T) {
 			{"bus": bus, "bewijs": bewijs, "blob": "staat-2", "als": nil},
 			{"bus": bus, "bewijs": bewijs, "blob": "staat-2", "als": "staat-1"},
 			{"bus": bus, "bewijs": bewijs, "blob": "staat-2", "als": strings.ToUpper(versieVan("staat-1"))},
-			{"bus": bus, "bewijs": bewijs, "blob": "", "als": versieVan("staat-1")[:63]},
+			{"bus": bus, "bewijs": bewijs, "blob": "staat-2", "als": versieVan("staat-1")[:63]},
 		}
 		for _, b := range bodies {
 			if w := doe(s, "POST", "/v1/potje", b); w.Code != 400 {

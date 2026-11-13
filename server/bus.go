@@ -102,6 +102,13 @@ func (s *server) laadPotjes() error {
 			os.Remove(pad)
 			continue
 		}
+		// verder dan dertig dagen vooruit schrijft deze server niet; zo'n
+		// bestand krijgt dertig dagen vanaf nu, ook op schijf, anders begint
+		// elke herstart die dertig dagen opnieuw
+		if grens := now.Add(potjeTTL); pf.Tot.After(grens) {
+			pf.Tot = grens
+			s.writeFileAtomic(pad, pf)
+		}
 		s.potjes[id] = potjeEntry{blob: pf.Blob, expires: pf.Tot, changed: now}
 	}
 	for len(s.potjes) > maxPotjes {
@@ -209,7 +216,7 @@ func versieGeldig(v string) bool {
 // bus gewoon opnieuw geschreven wordt door zijn kant. En onbekende velden
 // worden geweigerd.
 //
-// Een schrijven (ook wissen) zegt in als welke versie de schrijver las.
+// Een schrijven zegt in als welke versie de schrijver las.
 // Alleen als dat de versie is die de server houdt, gaat het door; anders
 // verandert er niets en krijgt de schrijver 409 met wat er staat. Zo heeft
 // elke verandering precies een winnaar, en hoeft geen apparaat twee
@@ -223,8 +230,10 @@ func (s *server) handlePotjePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// zonder als zou een schrijven niet zeggen wat het las, en dan kunnen twee
-	// schrijvers allebei winnen
-	if !busGeldig(in.Bus, in.Bewijs, in.Blob) || in.Als == nil || !versieGeldig(*in.Als) {
+	// schrijvers allebei winnen; een leeg briefje wist niet, want geen schrijven
+	// haalt een staat weg: dat zou de teller en de afgelopen potjes van het paar
+	// kwijtmaken, dus een staat gaat alleen door te verlopen of plaats te maken
+	if !busGeldig(in.Bus, in.Bewijs, in.Blob) || in.Blob == "" || in.Als == nil || !versieGeldig(*in.Als) {
 		http.Error(w, "ongeldig verzoek", http.StatusBadRequest)
 		return
 	}
@@ -245,16 +254,6 @@ func (s *server) handlePotjePost(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusConflict, map[string]string{"blob": p.blob})
 		return
 	}
-	// eerst de schijf: lukt die niet, dan verandert er ook in het geheugen niets
-	if in.Blob == "" {
-		if err := os.Remove(s.potjePad(in.Bus)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			opslagMislukt(w, err)
-			return
-		}
-		delete(s.potjes, in.Bus)
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
 	now := s.cfg.now()
 	// dezelfde bytes opnieuw verlengen alleen: zo meet ongewijzigd hoe lang
 	// een kant niets nieuws schreef, ook als de app zijn bus vernieuwt
@@ -263,6 +262,7 @@ func (s *server) handlePotjePost(w http.ResponseWriter, r *http.Request) {
 	}
 	p.blob = in.Blob
 	p.expires = now.Add(potjeTTL)
+	// eerst de schijf: lukt die niet, dan verandert er ook in het geheugen niets
 	if err := s.writeFileAtomic(s.potjePad(in.Bus), potjeFile{Tot: p.expires, Blob: p.blob}); err != nil {
 		opslagMislukt(w, err)
 		return

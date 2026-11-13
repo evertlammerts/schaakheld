@@ -297,18 +297,6 @@ func TestPotjeGrensNaLaden(t *testing.T) {
 	}
 }
 
-func TestPotjeGewistBestandWeg(t *testing.T) {
-	dir := t.TempDir()
-	s, _ := newTestServer(t, opSchijf(dir, nil))
-	bewijs, bus := potjeBus("a")
-	if schrijfPotjeAls(s, bewijs, bus, "staat", "").code != 204 || schrijfPotjeAls(s, bewijs, bus, "", versieVan("staat")).code != 204 {
-		t.Fatal("schrijven en wissen lukken niet")
-	}
-	if bestaat(potjeBestand(dir, bus)) {
-		t.Fatal("een gewiste staat hoort ook van schijf te gaan")
-	}
-}
-
 func TestPotjeSchijfWeigert(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root schrijft ook in een map zonder schrijfrecht")
@@ -329,14 +317,25 @@ func TestPotjeSchijfWeigert(t *testing.T) {
 	if a := schrijfPotjeAls(s, bewijs, bus, "staat-2", versieVan("staat")); a.code != 500 {
 		t.Fatalf("schrijven op een schijf die weigert: %+v, wil 500", a)
 	}
-	if a := schrijfPotjeAls(s, bewijs, bus, "", versieVan("staat")); a.code != 500 {
-		t.Fatalf("wissen op een schijf die weigert: %+v, wil 500", a)
-	}
 	if g := leesPotjes(s, bus); g.Blobs[bus] != "staat" {
 		t.Fatalf("na geweigerd opslaan: %+v, wil de oude staat", g)
 	}
-	if logboek.Len() == 0 || strings.Contains(logboek.String(), bus) {
-		t.Fatalf("de log hoort het falen te melden zonder het id: %q", logboek.String())
+	if err := os.Chmod(potjesMapIn(dir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// een map op de plek van het bestand laat de rename falen, en die fout noemt het pad met het id
+	bewijsB, busB := potjeBus("b")
+	if err := os.Mkdir(potjeBestand(dir, busB), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if a := schrijfPotjeAls(s, bewijsB, busB, "staat", ""); a.code != 500 {
+		t.Fatalf("schrijven terwijl de rename faalt: %+v, wil 500", a)
+	}
+	if g := leesPotjes(s, busB); len(g.Blobs) != 0 {
+		t.Fatalf("na een gefaalde rename: %+v, wil niets", g)
+	}
+	if l := logboek.String(); strings.Count(l, "potjesbus opslaan") != 2 || strings.Contains(l, bus) || strings.Contains(l, busB) {
+		t.Fatalf("de log hoort beide keren het falen te melden zonder het id: %q", l)
 	}
 }
 
@@ -423,5 +422,23 @@ func TestPotjeOnleesbaarBestandBlijft(t *testing.T) {
 	s, _ := newTestServer(t, opSchijf(dir, clk.now))
 	if n := aantalPotjes(s); n != 0 || !bestaat(pad) {
 		t.Fatalf("een bestand dat niet te lezen is: %d geladen, er nog %v; wil 0 en blijven staan", n, bestaat(pad))
+	}
+}
+
+func TestPotjeTotVerVooruitWordtDertigDagen(t *testing.T) {
+	dir := t.TempDir()
+	_, clk := newTestServer(t, opSchijf(dir, nil))
+	_, bus := potjeBus("a")
+	schrijfBestand(t, potjeBestand(dir, bus), staatOpSchijf(clk.now().Add(10*365*24*time.Hour), "staat"))
+	newTestServer(t, opSchijf(dir, clk.now))
+	clk.advance(20 * 24 * time.Hour)
+	s, _ := newTestServer(t, opSchijf(dir, clk.now))
+	clk.advance(10*24*time.Hour - time.Second)
+	if g := leesPotjes(s, bus); g.Blobs[bus] != "staat" {
+		t.Fatalf("een seconde voor dertig dagen na de eerste start: %+v, wil er nog", g)
+	}
+	clk.advance(time.Second)
+	if g := leesPotjes(s, bus); len(g.Blobs) != 0 || bestaat(potjeBestand(dir, bus)) {
+		t.Fatalf("dertig dagen na de eerste start, ook na een tweede: %+v, bestand er nog %v; wil weg", g, bestaat(potjeBestand(dir, bus)))
 	}
 }
