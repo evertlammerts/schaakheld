@@ -1778,7 +1778,7 @@ function pickMove(S, level, rng, budgetMs) {
    move that ends the game in a draw is never counted as better. */
 function lossAfter(S, x, now, sign) {
   makeMove(S, x);
-  const st = gameStatus(S);
+  const st = gameEnd(S);
   const l = st.over ? (st.reason === 'mat' ? -Infinity : Infinity) : mateReply(S) ? MATE : now - forcedMaterial(S) * sign;
   unmakeMove(S);
   return l;
@@ -1806,7 +1806,7 @@ function blunderCheck(S, m, grens) {
 function blunderCheckZonderGrens(S, m) {
   const sign = S.turn === 'w' ? 1 : -1, now = material(S) * sign, pointsNow = pointsOf(S) * sign;
   makeMove(S, m);
-  const over = gameStatus(S).over, mate = over ? null : mateReply(S);
+  const over = gameEnd(S).over, mate = over ? null : mateReply(S);
   const loss = over ? 0 : mate ? MATE : now - forcedMaterial(S) * sign;
   unmakeMove(S);
   if (loss < 150) return null;
@@ -1865,6 +1865,13 @@ function gameStatus(S) {
   if (pieces.length === 0 || (pieces.length === 1 && (pieces[0] === 'n' || pieces[0] === 'b')))
     return { over: true, result: 'd', reason: 'materiaal' };
   return { over: false };
+}
+/* How a game stands after its last move: gameStatus looks only at the board, and a game also ends in a draw when the
+   same position stands for the third time. The board of a game and the blunder alarm both ask this, so the alarm never
+   judges a move after which the game is already over. */
+function gameEnd(S) {
+  const st = gameStatus(S);
+  return st.over || repetitions(S) < 2 ? st : { over: true, result: 'd', reason: 'herhaling' };
 }
 
 /* --- random position generator: noisy self-play from the start position --- */
@@ -2887,7 +2894,7 @@ if (typeof module !== 'undefined') {
   module.exports = { START_FEN, VAL, MATE, GLYPH, NAME_NL, parseFEN, toFEN, newGame, alg, sqFromAlg,
     colorOf, isWhitePiece, other, attacked, pseudoMoves, legalMoves, makeMove, unmakeMove,
     inCheck, isCapture, perft, material, evalWhite, search, rootScores, forcedMaterial, pickMove,
-    blunderCheck, gameStatus, randomPosition, piecesOf, attackedPieces, captureTargets,
+    blunderCheck, gameStatus, gameEnd, randomPosition, piecesOf, attackedPieces, captureTargets,
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
@@ -4389,7 +4396,7 @@ function openSamen(gameId) {
   if (MP.viaFriend && (samenRauw() || {})[MP.gameId]) toonBewaard(true);
   /* een einde dat binnenkwam terwijl het kind weg was: nu de eindkaart, en dan telt het */
   if (MP.result && !MP.shown) { session.eerderAfgelopen = true; endGame(stVanUitslag(MP.result)); return; }
-  const st = opStaat() ? statusOpStaat(MP.S) : potjeStatus(MP.S);
+  const st = opStaat() ? statusOpStaat(MP.S) : gameEnd(MP.S);
   if (st.over) { endGame(st); return; }
   BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off';
   if (remiseVraagOpen()) { toonRemiseVraag(); return; }
@@ -4924,7 +4931,7 @@ function mpOnZet(m) {
     nieuweStand(S);
     renderBoard();
     updateTrays();
-    const st = potjeStatus(S);
+    const st = gameEnd(S);
     if (st.over) { endGame(st); return; }
     BD.mode = 'move';
     remiseRij();
@@ -5017,7 +5024,7 @@ function mpOnSync(m) {
   if (session.over) return;
   if (einde) { closeModal(); BD.mode = 'off'; endGame(stVanUitslag(MP.result)); return; }
   /* de stand kan al uit zijn (mat tijdens het gat): dan meteen het eindscherm */
-  const st = potjeStatus(MP.S);
+  const st = gameEnd(MP.S);
   if (st.over) { BD.mode = 'off'; endGame(st); return; }
   if (bord) { BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off'; remiseRij(); zegBeurt(); }
   if (vraag) toonRemiseVraag();
@@ -5041,7 +5048,7 @@ function toonAllebeiOp() {
 function uitslagVanAnder(u) {
   if (u.kind === 'opgave') return u.by === other(MP.myColor);
   if (u.kind === 'remise') return !!MP.offer && MP.offer.by === MP.myColor && MP.offer.ply === u.ply && !MP.offer.answer;
-  const st = potjeStatus(MP.S);
+  const st = gameEnd(MP.S);
   return st.over && st.reason === u.kind;
 }
 /* een uitslag die van de ander kwam, kent de ander al; een remise na veertien dagen schreef dit kind zelf */
@@ -5499,7 +5506,7 @@ function rolAanZet(spel) { return (spel.zetten.length % 2 === 0) === (spel.wit =
 /* een potje tussen vrienden eindigt zoals elk potje met een ander kind, en ook met zijn langste lengte, als remise: de
    staat heeft één vaste grootte */
 function statusOpStaat(S) {
-  const st = potjeStatus(S);
+  const st = gameEnd(S);
   return st.over || S.hist.length < LANGSTE_POTJE ? st : { over: true, result: 'd', reason: 'lang' };
 }
 function standVanZetten(zetten) {
@@ -10350,12 +10357,6 @@ function onKidMove(m) {
   commitKid(m);
 }
 
-/* de derde keer dezelfde stelling is remise, tegen Turbo en in een vriendenpotje; beide apparaten van een vriendenpotje
-   spelen de hele zettenlijst na, dus ze zien de herhaling allebei */
-function potjeStatus(S) {
-  const st = gameStatus(S);
-  return st.over || repetitions(S) < 2 ? st : { over: true, result: 'd', reason: 'herhaling' };
-}
 /* de tweede keer dezelfde stelling: de derde keer is remise, en dat hoort het kind voor het gebeurt */
 const HERHAAL_ZIN = 'Deze stelling stond er al eens. Bij de derde keer is het remise. Wil je dat niet? Kies een andere zet.';
 function tweedeKeer(S) { return repetitions(S) === 1; }
@@ -10429,7 +10430,7 @@ function commitKid(m) {
       if (bodMee) mpSend({ t: 'remise?', gameNo: MP.gameNo, ply: S.hist.length });
       if (MP && MP.room && !MP.open) MP.zetZonderNet = true;
     }
-    const st = session.online && opStaat() ? statusOpStaat(S) : potjeStatus(S);
+    const st = session.online && opStaat() ? statusOpStaat(S) : gameEnd(S);
     if (st.over) { endGame(st); return; }
     if (inCheck(S)) snd.check();
     if (session.online) {
@@ -10612,7 +10613,7 @@ function doTurboMove(m, na) {
   playMove(m, () => {
     if (!session || session.kind !== 'game') return;
     updateTrays();
-    const st = potjeStatus(S);
+    const st = gameEnd(S);
     if (st.over) { endGame(st); return; }
     if (co) { countPattern(co.key); trucRandjes(co.squares); }
     const regel = herhaalOpBeurt(S) || (inCheck(S) ? SCHAAK_ZIN : co ? 'Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢' : zin);

@@ -600,6 +600,33 @@ async function orakelFlow5() {
     } finally { pickMove = echt; }
   });
 
+  /* het alarm zegt niets over een zet waarna het potje meteen remise is: het kind zet de stelling voor de derde keer neer en
+     het potje is uit, zonder venster */
+  await regel('[5.4] tegen Turbo met het alarm aan: zet het kind een stelling voor de derde keer neer, dan is het remise zonder venster', async function (check) {
+    const echt = pickMove, TURBO = { 0: 'f8g8', 2: 'g8f8', 4: 'f8g8', 6: 'g8f8' };
+    pickMove = function (S) { const k = TURBO[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
+    try {
+      const a = nieuwKind();
+      a.ev('setPref("guard", true)');
+      await startPotje(a, 2);
+      a.ev('session.S = parseFEN("r4k2/8/8/8/8/8/8/Q5K1 b - - 0 1"); BD.mode = "off"; renderBoard(); turboTurn()');
+      await wacht(3000);
+      let vensters = 0;
+      for (const k of ['g1h2', 'h2g1', 'g1h2']) {
+        zet(a, k);
+        await wacht(500);
+        if (a.open() && a.el('gGo')) { vensters++; a.tik('gGo'); }
+        await wacht(3000);
+      }
+      check('testopzet: de dame stond steeds in de lijn van de toren, en het alarm kwam (' + vensters + ' keer)', vensters === 3 && a.get('session.S.hist.length') === 7);
+      zet(a, 'h2g1');
+      await wacht(500);
+      check('geen venster na de derde keer (' + (a.open() ? a.scherm().slice(0, 60) : 'geen') + ')', !a.open() || !a.el('gGo'));
+      await wacht(2500);
+      check('het potje is remise door herhaling', a.get('session.over') === true && norm5(tekstVan(a, 'eindkaart')).indexOf('Remise: drie keer dezelfde stelling.') >= 0);
+    } finally { pickMove = echt; }
+  });
+
   /* ---------- 5.11: de voorspelvraag alleen als Turbo's zet ertoe doet ---------- */
 
   /* Over een heel potje, wat Turbo ook zet: de vraag komt precies als zijn zet
