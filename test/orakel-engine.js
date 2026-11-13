@@ -506,12 +506,16 @@
     const typeVan = function (bord) { const r = TRUC_POOL.find(function (x) { return x.split('|')[0] === bord; }); return r ? r.split('|')[1] : null; };
     for (const b of ['r1bqk1r1/pppp2p1/n6p/3Qbp2/5B2/2P1P3/P1P2PPP/R3KB1R w', 'r1b1k2r/p1p2p1p/2pbqp2/8/3p1B2/2P2Q2/PP2NPPP/R3K2R w',
       '2kr3r/ppp1bppp/3pqn2/4p1B1/3nP1b1/2N2N2/PPP1BPPP/R2Q2KR w', '1r2k1nr/1pp1bpp1/p1bqp2p/3pN3/3PP3/2N2Q2/PPPB1PPP/2R1R1K1 w',
-      'r1b1k2r/1ppp1ppp/p1nbq2n/3NN3/2BPPP2/4B3/PPP3PP/2RQK2R w', 'r1b1kb1r/pppn1pp1/3p1q1p/n2Pp3/2B5/2NQPN2/PPPB1PPP/R3K2R w']) {
+      'r1b1k2r/1ppp1ppp/p1nbq2n/3NN3/2BPPP2/4B3/PPP3PP/2RQK2R w', 'r1b1kb1r/pppn1pp1/3p1q1p/n2Pp3/2B5/2NQPN2/PPPB1PPP/R3K2R w',
+      /* twee vorken die echt zijn, maar het materiaal valt op een veld dat de vork niet raakt; en een aftrekaanval
+         die gewoon een paard slaat dat hangt */
+      'r1b1k2r/pppp1ppp/2nb1q2/3P4/4p3/2P1PN2/PP1NP1PP/R2QKB1R w', '1r1qkb1r/1pp1ppp1/p1n1bn1p/1N6/3pPB2/3P1N2/PPPQBPPP/R3K2R w',
+      '2kr1b1r/ppp1qppp/3p4/4pb2/3nn3/P2P1N2/1PPQPPPP/1RBK1BR1 w']) {
       check(b + ': niet in de voorraad (' + typeVan(b) + ')', typeVan(b) === null);
     }
     const per = {};
     TRUC_POOL.forEach(function (r) { const t = r.split('|')[1]; per[t] = (per[t] || 0) + 1; });
-    check('vork 141, penning 57, spies 31, aftrekaanval 32 (' + JSON.stringify(per) + ')', per.vork === 141 && per.penning === 57 && per.spies === 31 && per.aftrek === 32);
+    check('vork 139, penning 57, spies 31, aftrekaanval 31 (' + JSON.stringify(per) + ')', per.vork === 139 && per.penning === 57 && per.spies === 31 && per.aftrek === 31);
   });
 
   /* een vork die ook mat is, heet in de app "Dit was mat": in de voorraad heeft geen truc een mat in een */

@@ -377,9 +377,14 @@ for (const [W, H] of [[375, 553], [360, 640]]) {
       await klikTekst(/Klaar/);
       await page.waitForTimeout(1200);
       const u = await page.evaluate(() => { const e = document.querySelector('#taskBox .e-body'); if (!e) return null; const s = getComputedStyle(e);
-        return { meer: e.scrollHeight > e.clientHeight + 1, masker: s.webkitMaskImage || s.maskImage || 'none' }; });
+        const eerste = e.querySelector('li, p');
+        return { meer: e.scrollHeight > e.clientHeight + 1, masker: s.webkitMaskImage || s.maskImage || 'none', onder: s.paddingBottom,
+          eersteOnder: eerste ? eerste.getBoundingClientRect().bottom : null, bodyOnder: e.getBoundingClientRect().bottom }; });
       check(n4, 'testopzet: een uitleg die verder gaat dan het vak', !!u && u.meer);
-      if (u) check(n4, 'de voet vervaagt (' + u.masker + ')', u.masker !== 'none' && /gradient/.test(u.masker));` });
+      if (u) check(n4, 'de voet vervaagt over 12 px, met 12 px ruimte eronder (' + u.masker + '; ' + u.onder + ')',
+        u.masker !== 'none' && /gradient/.test(u.masker) && /100% - 12px/.test(u.masker) && u.onder === '12px');
+      if (u) check(n4, 'de eerste reden blijft helemaal helder: hij eindigt boven de vervaging (' + u.eersteOnder + ' tegen ' + (u.bodyOnder - 12) + ')',
+        u.eersteOnder != null && u.eersteOnder <= u.bodyOnder - 12 + 0.5);` });
 }
 
 /* een reden over een stuk is een punt in de lijst, ook met twee zinnen; de eerste zin
