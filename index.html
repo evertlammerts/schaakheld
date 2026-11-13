@@ -6119,8 +6119,8 @@ function puzzleAttempt(m) {
       if (uitleg) BD.spy = new Set(uitleg.velden);
       BD.glow.clear();
       renderBoard();
-      awardRound(0, 'Zo zit het', (uitleg ? ['De truc was ' + zetB(name)].concat(uitleg.zinnen) :
-        ['Dit was mat: ' + zetB(name)].concat(velden ? [velden] : [])).concat([jouwZet(zin.feit)]));
+      awardRound(0, 'Zo zit het', [jouwZet(zin.feit)].concat(uitleg ? ['De truc was ' + zetB(name)].concat(uitleg.zinnen) :
+        ['Dit was mat: ' + zetB(name)].concat(velden ? [velden] : [])));
     });
   });
 }
@@ -6171,7 +6171,7 @@ function mate2Second(m) {
     playMove(ans, () => {
       BD.arrows = [];
       renderBoard();
-      awardRound(0, 'Zo zit het', ['Dit was mat: ' + zetB(ansName), 'Je eerste zet was al goed!', jouwZet('Nog geen mat. Turbo kan zich dan nog redden.')]);
+      awardRound(0, 'Zo zit het', [jouwZet('Nog geen mat. Turbo kan zich dan nog redden.'), 'Dit was mat: ' + zetB(ansName), 'Je eerste zet was al goed!']);
     });
     hulpZin(null);
   } else hulpZin('Nog geen mat: Turbo kan zich dan nog redden. Probeer nog een zet.');
@@ -6195,7 +6195,7 @@ function revealMate2(first, laatste) {
           if (!session || session.kind !== 'trucs' || !mate) return;
           BD.arrows = [{ from: mate.from, to: mate.to, cls: 'a-leaf' }];
           playMove(mate, () => {
-            awardRound(0, 'Zo zit het', ['De eerste zet was ' + zetB(firstName), 'Daarna kon Turbo de mat niet meer tegenhouden.', laatste]);
+            awardRound(0, 'Zo zit het', [laatste, 'De eerste zet was ' + zetB(firstName), 'Daarna kon Turbo de mat niet meer tegenhouden.']);
           });
         }, 600);
       });
@@ -6794,7 +6794,19 @@ function koningRedenen(S, t, m) {
   const d = koningDreiging(S, t.type);
   const eerst = t.type === 'schaak' ? (d ? 'Je stond schaak van ' + hetStuk(S.board[d.van]) + ' op ' + alg(d.van) + '.' : null) :
     (d && d.zet ? 'Turbo dreigde mat met ' + d.zet + '.' : null);
-  return [eerst, koningHoe(S, m, d)].filter(Boolean);
+  return [eerst, koningHoe(S, m, d), verlorenStuk(S, m)].filter(Boolean);
+}
+/* soms kost elke redding van de koning een stuk: dan zegt de kaart dat ook, zodat het kind niet denkt dat het fout ging */
+function verlorenStuk(S, m) {
+  const nu = material(S);
+  makeMove(S, m);
+  let zin = null;
+  if (!gameStatus(S).over && forcedMaterial(S) - nu <= -250) {
+    const z = lossStart(S, null), t = z ? slagVeld(S, z) : -1;
+    if (t >= 0 && S.board[t]) zin = 'Je ' + NAME_NL[S.board[t].toLowerCase()] + ' op ' + alg(t) + ' gaat wel verloren, maar je koning is veilig.';
+  }
+  unmakeMove(S);
+  return zin;
 }
 /* een redding die ook goed is: wat het beste antwoord meer opleverde, onder een punt verschil alleen de zet */
 function nogSterker(S, o) {
@@ -6908,7 +6920,7 @@ function koningAttempt(m) {
           const redenen = koningRedenen(S, t, ans);
           const ansName = moveNameNL(S, ans);
           playMove(ans, () => {
-            awardRound(0, 'Zo zit het', ['De redding was ' + zetB(ansName)].concat(redenen, ['Jouw zet: ' + txt]));
+            awardRound(0, 'Zo zit het', ['Jouw zet: ' + txt, 'De redding was ' + zetB(ansName)].concat(redenen));
           });
         }, 900);
       });
@@ -6960,7 +6972,7 @@ function uitlegErbij(zin) {
 function drillSummary() {
   const e = session.earned;
   const emoji = e >= 12 ? '🤩' : (e >= 7 ? '😃' : '🙂');
-  const line = e >= 12 ? 'WAUW! Jij hebt echte speurogen!' :
+  const line = e >= 12 ? 'Wauw! Wat heb jij goed gekeken!' :
     (e >= 7 ? 'Lekker bezig! Je wordt steeds sterker.' : 'Goed geoefend! Oefenen maakt je supersterk.');
   if (e >= 12) { snd.win(); celebrate(); } else snd.good();
   const kind = session.kind;
@@ -6985,7 +6997,7 @@ const PADEN = [
     hint: ['Een pion naar het midden.', 'Je paard naar buiten, richting e5.', 'Je loper richting f7.',
       'De pion voor je paard een stapje: een steuntje voor d4.', 'De pion voor je dame een stapje: dek e4.', 'Rokeren: je koning twee stappen naar rechts.'],
     why: ['Een pion in het midden! Zo maak je ruimte voor je loper en je dame.',
-      'Je paard naar buiten, en hij valt meteen de pion op e5 aan.',
+      'Je paard naar buiten, en het valt meteen de pion op e5 aan.',
       'De loper kijkt naar f7: het zwakste veld van zwart, alleen de koning past erop.',
       'Een steuntje: straks wil je d4 spelen en het hele midden pakken.',
       'Je pion op e4 is gedekt en je loper op c1 kan straks naar buiten.',
@@ -7005,12 +7017,12 @@ const PADEN = [
       'Rokade: koning veilig, klaar voor de partij.'] },
   { id: 'zwart-e4', naam: 'Antwoord op 1.e4', kleur: 'b', e: '♚', sub: 'De spiegel-Italiaan, met zwart',
     moves: 'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3 g8f6 d2d3 d7d6 e1g1 e8g8'.split(' '),
-    hint: ['Zet ook een pion in het midden.', 'Je paard naar buiten, hij dekt e5.', 'Je loper naar buiten, richting f2.',
+    hint: ['Zet ook een pion in het midden.', 'Je paard naar buiten, het dekt e5.', 'Je loper naar buiten, richting f2.',
       'Je tweede paard naar buiten, richting e4.', 'De pion voor je dame een stapje: dek e5.', 'Rokeren: je koning twee stappen naar rechts.'],
     why: ['Jij pakt óók het midden. Gelijk oversteken!',
       'Je paard dekt e5 en kijkt naar het midden.',
       'Jouw loper kijkt naar f2, net zoals die van wit naar f7.',
-      'Tweede paard naar buiten, en hij valt e4 aan.',
+      'Tweede paard naar buiten, en het valt e4 aan.',
       'Je pion op e5 staat nu als een huis, en je loper op c8 kan eruit.',
       'Rokade: koning veilig. Nu kan de echte partij beginnen.'] }
 ];
@@ -7866,7 +7878,7 @@ function resolvePredict(sq) {
       snd.star();
       say('Goed voorspeld! +15 XP 🔮');
       na = 'goed';
-    } else say('Goede gok! Maar kijk wat ik écht doe… 🐢');
+    } else { say('Goede gok! Maar kijk wat ik écht doe… 🐢'); na = 'fout'; }
   }
   doTurboMove(m, na);
 }
@@ -7881,9 +7893,21 @@ function turboZin(S, m) {
     makeMove(S, m);
     const terug = legalMoves(S).some(z => z.to === m.to && S.board[z.to]), back = terug ? seeSquare(S, m.to) : 0;
     unmakeMove(S);
+    /* wat terugpakken oplevert; "Jij kunt terugpakken" zegt het kind zijn volgende zet, dus die zin valt weg tegen Super
+       Turbo en voor een kind dat al sterk is, zoals de dreigregel */
+    const vervolg = VAL[x] - back >= 100 ? (TABEL[y] < TABEL[x] ? ' Pak je terug, dan krijg je maar ' + ptsNL(TABEL[y]) + '.' : ' Pak je terug, dan pak ik nog eens.') :
+      session.level >= 3 || stadium(P) === 'sterk' ? '' : ' Jij kunt terugpakken.';
+    /* Turbo pakt terug als hij slaat waar het kind net sloeg: dan noemt de zin de ruil van twee kanten (een dame uit
+       een promotie telt als de pion die ze was) */
+    const vorig = S.hist[S.hist.length - 1];
+    if (vorig && vorig.cap && vorig.m.to === m.to && m.flags !== 'e') {
+      const y2 = vorig.cap.toLowerCase(), kop = 'Ik pak terug op ' + alg(m.to) + ': jij nam mijn ' + NAME_NL[y2] + ', ik jouw ' + NAME_NL[x] + '.';
+      if (terug) return kop + vervolg;
+      const d = TABEL[y2] - TABEL[vorig.m.promo ? 'p' : x];
+      return kop + (d === 0 ? ' Een eerlijke ruil.' : d > 0 ? ' Winst voor jou: ' + ptsNL(d) + '.' : ' Dat kost jou ' + ptsNL(-d) + '.');
+    }
     const kop = 'Ik pak je ' + NAME_NL[x] + ' op ' + alg(t) + ' (' + ptsNL(TABEL[x]) + ').';
-    if (!terug) return kop + ' Niemand kan terugpakken.';
-    if (VAL[x] - back >= 100) return kop + (TABEL[y] < TABEL[x] ? ' Pak je terug, dan krijg je maar ' + ptsNL(TABEL[y]) + '.' : ' Pak je terug, dan pak ik nog eens.');
+    return kop + (terug ? vervolg : ' Niemand kan terugpakken.');
   }
   /* de dreiging is hulp, net als het blunderalarm: met dat alarm uit zegt Turbo haar niet */
   if (!P.guard) return null;
@@ -7909,12 +7933,13 @@ function turboZin(S, m) {
   return zin;
 }
 /* Turbo's zin na zijn zet, de eerste die past: schaak, een truc, de tweede keer dezelfde stelling, wat hij pakt of dreigt. na: 'goed' na een goede
-   voorspelling (dan staat de lof ervoor als dat samen in de strook past, en zonder zin blijft de lof staan), of
+   voorspelling (dan staat de lof ervoor als dat samen in de strook past, en zonder zin blijft de lof staan), 'fout' na
+   een verkeerde (dan staat "Het was mijn {stuk}." ervoor als het past), of
    'remise' als Turbo net remise weigerde (die zin blijft staan, behalve voor schaak of een truc). */
 function doTurboMove(m, na) {
   if (!session || session.kind !== 'game' || !m) return;
   const S = session.S;
-  const co = patternCallout(S, m);
+  const co = patternCallout(S, m), stukTurbo = NAME_NL[S.board[m.from].toLowerCase()];
   const zin = co || na === 'remise' ? null : turboZin(S, m);
   playMove(m, () => {
     if (!session || session.kind !== 'game') return;
@@ -7925,12 +7950,13 @@ function doTurboMove(m, na) {
     if ((inCheck(S) || co) && tweedeKeer(S)) session.herhaalSchuld = true;
     const regel = inCheck(S) ? SCHAAK_ZIN : co ? 'Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢' : herhaalRegel(S) || zin;
     /* Turbo's zin is de uitleg en wordt nooit ingekort: past de lof er niet bij, dan gaat de lof (de XP-melding zei het al) */
-    if (regel) say(na === 'goed' && Array.from('Goed voorspeld! ' + regel).length <= STROOK_TEKENS ? 'Goed voorspeld! ' + regel : regel);
-    kidTurn(!!regel || na != null);
+    const voor = na === 'goed' ? 'Goed voorspeld! ' : na === 'fout' ? 'Het was mijn ' + stukTurbo + '. ' : '';
+    if (regel) say(voor && Array.from(voor + regel).length <= STROOK_TEKENS ? voor + regel : regel);
+    kidTurn(!!regel || na === 'goed' || na === 'remise');
   });
 }
-/* zoveel tekens passen op 360 breed in de drie regels van de strook */
-const STROOK_TEKENS = 115;
+/* gemeten: tot 103 tekens past alles op 360 breed in de drie regels van de strook, ook met de brede tekens van de trucs */
+const STROOK_TEKENS = 100;
 
 /* patience meter */
 let patT0 = 0, patRAF = 0, patFull = false;

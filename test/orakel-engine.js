@@ -215,6 +215,22 @@
     check('een lange lijn: Txd5 wint een paard (' + JSON.stringify(l) + ')', l.punten === 300 && l.material === 320 && E.toFEN(S) === voor);
   });
 
+  /* en passant naast een gewone slag op dezelfde pion: de slag die wint telt */
+  regel('[5.5] met winst slaan: kan een pion ook en passant geslagen worden, dan telt de slag die het meest wint', function (check) {
+    const w = E.winnableCaptures(E.parseFEN('4k3/8/4p3/3pP3/8/2N5/8/4K3 w - d6 0 1'));
+    const d5 = w.find(function (x) { return E.alg(x.sq) === 'd5'; });
+    check('de pion op d5 met e5xd6 en passant, niet met het paard (' + JSON.stringify(d5) + ')', !!d5 && d5.gain === 100 && d5.move.flags === 'e');
+  });
+  /* "na het terugslaan" alleen als het kind op dat veld terugsloeg, niet bij een slag ergens anders */
+  regel('[5.8] sleutelmoment: een slag ergens anders is geen terugslaan', function (check) {
+    const k = E.keyMoment(speel(E.parseFEN('6k1/p7/b7/8/8/8/2P5/R2Q2K1 w - - 0 1'), ['d1d3', 'a6d3', 'a1a7']));
+    check('Dd3, Lxd3, Txa7: niet teruggeslagen (' + JSON.stringify(k) + ')', !!k && k.kind === 'slag' && k.used === true && k.terug === false);
+  });
+  /* de punten van een redding die ook goed is, zijn een getal */
+  regel('[5.5] Red je stuk: een vierde veld met punten die geen getal zijn, telt niet', function (check) {
+    check('punten "x": de regel telt niet', E.trucTask('1rbqr1k1/pppn1ppp/4p3/2npP1b1/3N1Q1P/3P1N2/PPP2PP1/R3KB1R w|stuk|f3g5|f4g3:x:f3g5') === null);
+  });
+
   /* het alarm komt voor de zet op het bord staat: met een grens aan posities wacht het kind nooit lang; is de grens op,
      dan geen alarm voor die zet */
   regel('[5.4] het alarm kijkt naar hoogstens ALARM_NODES posities, en is de grens op, dan is er geen alarm', function (check) {

@@ -27,7 +27,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '5.5']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '5.5', '5.11']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -848,6 +848,27 @@ for (const [W, H] of [[768, 1024], [375, 553]]) {
       await page.evaluate(() => { awardRound(0, 'Zo zit het', ['Een korte reden.']); });
       await page.waitForTimeout(300);
       check(n, 'past alles, dan geen pijltje', !(await meer()));` });
+}
+
+/* de lof en Turbo's zin passen samen in de drie regels van de strook tot de grens van 100 tekens: het langste paar dat
+   mag, op het smalste scherm */
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[5.11] ' + W + 'x' + H + ': het langste paar van lof en zin dat de app samen toont, past in de strook';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      await startPotje();
+      const r = await page.evaluate(() => {
+        const paren = ['Het was mijn paard. Kijk uit, een PENNING! 📌 De loper kan niet meer weg! Wat doe je hiertegen? 🐢',
+          'Goed voorspeld! Ik pak je toren op d4 (5 punten). Pak je terug, dan krijg je maar 3 punten.'];
+        const t = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble'), uit = [];
+        for (const p of paren) { say(p); uit.push({ p, lang: Array.from(p).length, past: t.scrollHeight <= t.clientHeight + 1 && b.getBoundingClientRect().bottom <= t.getBoundingClientRect().bottom + 0.5 }); }
+        return uit;
+      });
+      for (const x of r) {
+        check(n, 'testopzet: hoogstens 100 tekens (' + x.lang + ')', x.lang <= 100);
+        check(n, 'past heel in de strook: ' + x.p, x.past);
+      }` });
 }
 
 /* het moment met de langste tekst, en dat met de langste regel voor de volgende keer */

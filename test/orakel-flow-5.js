@@ -637,20 +637,20 @@ async function orakelFlow5() {
       JSON.stringify(zet) + '; }); session.S = S; BD.last = null; BD.check = null; BD.arrows = []; renderBoard(); askPredict(m);' +
       ' return { van: m.from, koning: S.kings.b }; })()');
   }
-  /* goed voorspeld: "Goed voorspeld! " en dan Turbo's zin, als dat samen in de strook past (ongeveer 115 tekens);
-     anders alleen zijn zin, want die is de uitleg; verkeerd voorspeld: alleen zijn zin. Schaak gaat voor een truc,
-     een truc voor wat hij pakt of dreigt. */
+  /* goed voorspeld: "Goed voorspeld! " en dan Turbo's zin, als dat samen in de strook past (100 tekens, gemeten op 360
+     breed); anders alleen zijn zin, want die is de uitleg; verkeerd voorspeld: "Het was mijn {stuk}. " en zijn zin,
+     ook als het past. Schaak gaat voor een truc, een truc voor wat hij pakt of dreigt. */
   const NA_VRAAG5 = [
-    ['een slag', 'rnbqkbnr/ppp2ppp/3p4/4p1N1/4P3/8/PPPP1PPP/RNBQKB1R b KQkq - 1 3', 'd8g5', false, 'Ik pak je paard op g5 (3 punten). Niemand kan terugpakken.', true],
-    ['schaak', '1r5k/8/8/8/8/8/P7/4K3 b - - 0 10', 'b8b1', false, 'Je staat schaak! Red je koning! 👑', true],
-    ['een slag die schaak geeft', '1r5k/8/8/8/8/8/P7/1N2K3 b - - 0 10', 'b8b1', false, 'Je staat schaak! Red je koning! 👑', true],
-    ['een nieuwe dreiging', '6k1/r7/8/8/4N3/8/8/6K1 b - - 0 10', 'a7a4', true, 'Mijn toren op a4 valt je paard op e4 aan.', true],
-    ['een truc', '7k/8/8/8/6n1/8/8/3Q1RK1 b - - 0 10', 'g4e3', true, 'Kijk uit, een VORK! 🍴 Eén zet valt dame en toren tegelijk aan. Wat doe je hiertegen? 🐢', true],
+    ['een slag', 'rnbqkbnr/ppp2ppp/3p4/4p1N1/4P3/8/PPPP1PPP/RNBQKB1R b KQkq - 1 3', 'd8g5', false, 'Ik pak je paard op g5 (3 punten). Niemand kan terugpakken.', true, 'dame'],
+    ['schaak', '1r5k/8/8/8/8/8/P7/4K3 b - - 0 10', 'b8b1', false, 'Je staat schaak! Red je koning! 👑', true, 'toren'],
+    ['een slag die schaak geeft', '1r5k/8/8/8/8/8/P7/1N2K3 b - - 0 10', 'b8b1', false, 'Je staat schaak! Red je koning! 👑', true, 'toren'],
+    ['een nieuwe dreiging', '6k1/r7/8/8/4N3/8/8/6K1 b - - 0 10', 'a7a4', true, 'Mijn toren op a4 valt je paard op e4 aan.', true, 'toren'],
+    ['een truc die met de lof net te lang is', '7k/8/8/8/6n1/8/8/3Q1RK1 b - - 0 10', 'g4e3', true, 'Kijk uit, een VORK! 🍴 Eén zet valt dame en toren tegelijk aan. Wat doe je hiertegen? 🐢', false, 'paard'],
     ['een truc die met de lof te lang is', '7k/8/8/3R4/6n1/8/2Q4K/3R1B2 b - - 0 10', 'g4e3', true,
-      'Kijk uit, een VORK! 🍴 Eén zet valt toren, loper, dame en toren tegelijk aan. Wat doe je hiertegen? 🐢', false]];
-  for (const [wat, fen, zet, hulp, zin, past] of NA_VRAAG5) {
-    await regel('[5.11] na de voorspelvraag bij ' + wat + ': goed voorspeld zegt ' + (past ? '"Goed voorspeld!" en' : 'alleen') + ' Turbo\'s zin, verkeerd voorspeld alleen zijn zin', async function (check) {
-      check('testopzet: de lof en de zin samen ' + (past ? 'passen' : 'passen niet'), (Array.from('Goed voorspeld! ' + zin).length <= 115) === past);
+      'Kijk uit, een VORK! 🍴 Eén zet valt toren, loper, dame en toren tegelijk aan. Wat doe je hiertegen? 🐢', false, 'paard']];
+  for (const [wat, fen, zet, hulp, zin, past, stuk] of NA_VRAAG5) {
+    await regel('[5.11] na de voorspelvraag bij ' + wat + ': goed voorspeld zegt ' + (past ? '"Goed voorspeld!" en' : 'alleen') + ' Turbo\'s zin, verkeerd voorspeld "Het was mijn ' + stuk + '." ervoor als het past', async function (check) {
+      check('testopzet: de lof en de zin samen ' + (past ? 'passen' : 'passen niet'), (Array.from('Goed voorspeld! ' + zin).length <= 100) === past);
       for (const goed of [true, false]) {
         const a = nieuwKind();
         a.ev('setPref("guard", ' + hulp + ')');
@@ -658,7 +658,7 @@ async function orakelFlow5() {
         const v = vraagOpen5(a, fen, zet);
         tikVeld(a, goed ? v.van : v.koning);
         await wacht(2000);
-        const verwacht = goed && past ? 'Goed voorspeld! ' + zin : zin;
+        const fout = 'Het was mijn ' + stuk + '. ' + zin, verwacht = goed ? (past ? 'Goed voorspeld! ' + zin : zin) : Array.from(fout).length <= 100 ? fout : zin;
         check((goed ? 'goed' : 'verkeerd') + ' voorspeld: de strook (' + strook5(a) + ')', strook5(a) === norm5(verwacht));
       }
     });
@@ -1441,7 +1441,7 @@ async function orakelFlow5() {
     const v = vraagOpen5(a, '2r3k1/8/8/8/8/8/1p5K/2RQ4 b - - 0 30', 'b2c1q');
     tikVeld(a, v.koning);
     await wacht(2000);
-    check('de strook (' + strook5(a) + ')', strook5(a) === 'Ik pak je toren op c1 (5 punten). Pak je terug, dan pak ik nog eens.');
+    check('de strook (' + strook5(a) + ')', strook5(a) === 'Het was mijn pion. Ik pak je toren op c1 (5 punten). Pak je terug, dan pak ik nog eens.');
   });
 
   /* het alarm in een potje gebruikt de grens: bij de zwaarste zet van de reviewer geen alarm, de zet gaat gewoon door */
@@ -1488,15 +1488,17 @@ async function orakelFlow5() {
     const t = a.get('momentTekst({ kind: "truc", moveNo: 4, truc: "vork", used: true, doelen: ["dame", "toren"], stukTurbo: "paard" }).tekst');
     check('de zin (' + t + ')', t === 'Zet 4: na je zet kon ik een vork zetten. Mijn paard viel je dame en je toren tegelijk aan.');
   });
-  /* geen slagregel als Turbo met zijn slag niets wint */
-  await regel('[5.8] Turbo ruilt gelijk: geen "Ik pak je ..."', async function (check) {
-    const a = nieuwKind();
-    await startPotje(a, 2);
-    const v = vraagOpen5(a, '6k1/8/8/5n2/3N4/2P5/8/6K1 b - - 0 10', 'f5d4');
-    tikVeld(a, v.koning);
-    await wacht(2000);
-    check('de strook (' + strook5(a) + ')', !/^Ik pak/.test(strook5(a)));
-  });
+  /* elke slag van Turbo krijgt een zin, ook een gelijke ruil; "Jij kunt terugpakken." valt weg tegen Super Turbo, zoals de dreigregel */
+  for (const [niveau, zin] of [[2, 'Ik pak je paard op d4 (3 punten). Jij kunt terugpakken.'], [3, 'Ik pak je paard op d4 (3 punten).']]) {
+    await regel('[5.8] Turbo ruilt gelijk' + (niveau === 3 ? ', Super Turbo' : '') + ': "' + zin + '"', async function (check) {
+      const a = nieuwKind();
+      await startPotje(a, niveau);
+      const v = vraagOpen5(a, '6k1/8/8/5n2/3N4/2P5/8/6K1 b - - 0 10', 'f5d4');
+      tikVeld(a, v.van);
+      await wacht(2000);
+      check('de strook (' + strook5(a) + ')', strook5(a) === 'Goed voorspeld! ' + zin);
+    });
+  }
   /* na opgeven: kort en zonder oordeel */
   await regel('[5.8] de eindkaart na opgeven: "Je gaf op. Dit potje is klaar."', async function (check) {
     const a = nieuwKind();
@@ -1508,7 +1510,7 @@ async function orakelFlow5() {
   });
 
   /* mat in twee: na twee foute pogingen staat de laatste onder "Zo zit het", ook bij de matzet */
-  await regel('[5.5] Trucendoos, mat in twee, de eerste zet twee keer fout: de laatste reden is "Jouw zet: nog geen mat in twee."', async function (check) {
+  await regel('[5.5] Trucendoos, mat in twee, de eerste zet twee keer fout: de eerste reden is "Jouw zet: nog geen mat in twee."', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
     zetOpdracht(a, 'k7/8/2K5/8/8/8/8/7R w - - 0 1', 'mat2', ['c6b6']);
@@ -1517,9 +1519,9 @@ async function orakelFlow5() {
     zet(a, 'h1h3');
     await wacht(8000);
     const r = redenen5(a);
-    check('de laatste reden (' + r.join(' / ') + ')', r[r.length - 1] === 'Jouw zet: nog geen mat in twee.');
+    check('de eerste reden (' + r.join(' / ') + ')', r[0] === 'Jouw zet: nog geen mat in twee.');
   });
-  await regel('[5.5] Trucendoos, mat in twee, de matzet twee keer fout: de laatste reden is "Jouw zet: nog geen mat. Turbo kan zich dan nog redden."', async function (check) {
+  await regel('[5.5] Trucendoos, mat in twee, de matzet twee keer fout: de eerste reden is "Jouw zet: nog geen mat. Turbo kan zich dan nog redden."', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
     zetOpdracht(a, 'k7/8/2K5/8/8/8/8/7R w - - 0 1', 'mat2', ['c6b6']);
@@ -1530,7 +1532,7 @@ async function orakelFlow5() {
     zet(a, 'h1h3');
     await wacht(8000);
     const r = redenen5(a);
-    check('de laatste reden (' + r.join(' / ') + ')', r[r.length - 1] === 'Jouw zet: nog geen mat. Turbo kan zich dan nog redden.');
+    check('de eerste reden (' + r.join(' / ') + ')', r[0] === 'Jouw zet: nog geen mat. Turbo kan zich dan nog redden.');
   });
   /* na een gevonden truc: Turbo's antwoord uit de diepe zoektocht, en "Nu kun jij ... pakken" alleen bij een slag die wint */
   await regel('[5.5] Trucendoos, gevonden: Turbo antwoordt met de zet van de diepe zoektocht', async function (check) {
@@ -1708,6 +1710,81 @@ async function orakelFlow5() {
     });
   }
 
+  /* Turbo pakt terug op het veld waar het kind net sloeg: de zin noemt de ruil van twee kanten */
+  for (const [wat, fen, kind, turbo, zin] of [
+    ['een eerlijke ruil', '6k1/8/4p3/3n4/8/2N5/8/6K1 w - - 0 1', 'c3d5', 'e6d5', 'Ik pak terug op d5: jij nam mijn paard, ik jouw paard. Een eerlijke ruil.'],
+    ['winst voor het kind', '6k1/8/4p3/3r4/8/2N5/8/6K1 w - - 0 1', 'c3d5', 'e6d5', 'Ik pak terug op d5: jij nam mijn toren, ik jouw paard. Winst voor jou: 2 punten.'],
+    ['verlies voor het kind', '6k1/8/4p3/3p4/8/2N5/8/6K1 w - - 0 1', 'c3d5', 'e6d5', 'Ik pak terug op d5: jij nam mijn pion, ik jouw paard. Dat kost jou 2 punten.'],
+    ['het kind kan opnieuw slaan', '6k1/8/4p3/3n4/8/2N5/8/3R2K1 w - - 0 1', 'c3d5', 'e6d5', 'Ik pak terug op d5: jij nam mijn paard, ik jouw paard. Pak je terug, dan krijg je maar 1 punt.']]) {
+    await regel('[5.8] Turbo pakt terug, ' + wat + ': "' + zin + '"', async function (check) {
+      const echt = pickMove;
+      pickMove = function (S) { return legalMoves(S).find(function (m) { return moveKey(m) === turbo; }) || echt(S, 2); };
+      try {
+        const a = nieuwKind();
+        await startPotje(a, 2);
+        a.ev('session.S = parseFEN(' + JSON.stringify(fen) + '); BD.mode = "move"; renderBoard()');
+        zet(a, kind);
+        await wacht(3000);
+        check('de strook (' + strook5(a) + ')', strook5(a) === zin);
+      } finally { pickMove = echt; }
+    });
+  }
+
+  /* Koning ontsnapt: kost elke redding een stuk, dan zegt de kaart dat de koning toch veilig is */
+  await regel('[5.5] Koning ontsnapt: een redding die een stuk kost: "Je toren op a1 gaat wel verloren, maar je koning is veilig."', async function (check) {
+    const a = nieuwKind();
+    const fen = 'N1bk3r/p2p2pp/5q2/1B2b3/2pnP3/2N5/PPn2PPP/R1BQK2R w - - 0 1';
+    const r = a.get('(function () { var S = parseFEN(' + JSON.stringify(fen) + '); return koningRedenen(S, { type: "schaak" }, legalMoves(S).find(function (x) { return moveKey(x) === "e1f1"; })); })()');
+    check('de redenen (' + r.join(' / ') + ')', r.indexOf('Je toren op a1 gaat wel verloren, maar je koning is veilig.') >= 0);
+    const g = a.get('(function () { var S = parseFEN("r2qk2r/pp1nnppp/8/3p1b2/1p1K4/5N1P/PBP1PPP1/R2Q1B1R w - - 1 1"); return koningRedenen(S, { type: "mat1" }, legalMoves(S).find(function (x) { return moveKey(x) === "d4e3"; })); })()');
+    check('een redding die niets kost, zegt het niet (' + g.join(' / ') + ')', !g.some(function (z) { return /gaat wel verloren/.test(z); }));
+  });
+
+  /* de lof aan het eind van een rondje past bij elke oefening */
+  await regel('[5.5] een rondje met twaalf sterren of meer: "Wauw! Wat heb jij goed gekeken!"', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    a.ev('session.earned = 13; drillSummary()');
+    await wacht(500);
+    check('de kaart (' + a.scherm().slice(0, 90) + ')', a.ziet('Wauw! Wat heb jij goed gekeken!') && !/speurogen/i.test(a.scherm()));
+  });
+
+  /* het paard is "het", ook in de openingslessen */
+  await regel('[5.5] de openingslessen noemen een paard "het", nooit "hij"', async function (check) {
+    const a = nieuwKind();
+    const fout = a.get('JSON.stringify(PADEN).match(/[^"]*[Pp]aard[^".]*\\bhij\\b[^"]*/g) || []');
+    check('geen "hij" voor een paard (' + fout.join(' / ') + ')', fout.length === 0);
+  });
+
+  /* "Pas op" van de openingscoach heeft dezelfde grens aan posities als het alarm */
+  await regel('[5.4] "Pas op" van de openingscoach heeft de grens van het alarm', async function (check) {
+    const a = nieuwKind();
+    await startPotje(a, 2);
+    const t = a.get('(function () { session.movedTo = new Set(); session.kidMoves = 9; var S = parseFEN("1nb1kb1r/r2p3p/5p1n/pP2pPp1/PPpPq2P/N5P1/1B2N2R/1R1QKB2 w - - 0 1");' +
+      ' return coachEval(S, legalMoves(S).find(function (x) { return moveKey(x) === "h2h1"; })).msg; })()');
+    check('geen "Pas op" als de grens op is (' + t + ')', !/Pas op/.test(t || ''));
+  });
+
+  /* een valstrik zonder reden komt niet op het bord: de app probeert een paar opdrachten tot er een met een reden is */
+  await regel('[5.5] Veilig of valstrik: na drie valstrikken zonder reden komt de vierde, met een reden, op het bord', async function (check) {
+    const echt = genSafeTask;
+    let n = 0;
+    genSafeTask = function () {
+      n++;
+      const S = parseFEN(n < 4 ? '6k1/8/8/8/8/8/5PPP/R5K1 w - - 0 1' : 'rn1qkb1r/ppp2ppp/4pn2/3p4/4P1b1/2NB1N2/PPPP1PPP/R1BQK2R w KQkq - 0 1');
+      const m = legalMoves(S).find(function (x) { return moveKey(x) === (n < 4 ? 'a1a2' : 'f3g5'); });
+      makeMove(S, m); const p = legalMoves(S).find(function (x) { return moveKey(x) === (n < 4 ? 'g8f8' : 'g4d1'); }); unmakeMove(S);
+      return { S: S, move: m, punish: p, trap: true, mate: false, loss: 600 };
+    };
+    try {
+      const a = nieuwKind();
+      await startOefening(a, 'best3');
+      n = 0;
+      const gelukt = a.get('buildSafe()');
+      check('de vierde opdracht staat er (' + n + ' geprobeerd)', gelukt === true && n === 4 && a.get('moveKey(session.task.move)') === 'f3g5');
+    } finally { genSafeTask = echt; }
+  });
+
   /* ---------- 5.5: Trucendoos, mat in twee (T9 tot T11) ---------- */
 
   const MAT2_5 = 'k7/8/2K5/8/8/8/8/7R w - - 0 1';
@@ -1733,7 +1810,7 @@ async function orakelFlow5() {
     zet(a, 'h1h2');
     await wacht(3000);
     const r = redenen5(a);
-    check('de redenen (' + r.join(' / ') + ')', r[0] === 'Dit was mat: Toren h1 → h8.' && r[1] === 'Je eerste zet was al goed!');
+    check('de redenen (' + r.join(' / ') + ')', /^Jouw zet: /.test(r[0] || '') && r[1] === 'Dit was mat: Toren h1 → h8.' && r[2] === 'Je eerste zet was al goed!');
   });
   await regel('[5.5] Trucendoos, mat in twee, de eerste zet twee keer gemist: "De eerste zet was {zet}." en "Daarna kon Turbo de mat niet meer tegenhouden."', async function (check) {
     const a = nieuwKind();
@@ -1744,7 +1821,7 @@ async function orakelFlow5() {
     zet(a, 'h1h7');
     await wacht(8000);
     const r = redenen5(a);
-    check('de redenen (' + r.join(' / ') + ')', r[0] === 'De eerste zet was Koning c6 → b6.' && r[1] === 'Daarna kon Turbo de mat niet meer tegenhouden.');
+    check('de redenen (' + r.join(' / ') + ')', /^Jouw zet: /.test(r[0] || '') && r[1] === 'De eerste zet was Koning c6 → b6.' && r[2] === 'Daarna kon Turbo de mat niet meer tegenhouden.');
   });
 
   /* ---------- 5.5: de reden bij een veilige zet past bij de stelling, niet bij het antwoord ---------- */
@@ -1907,7 +1984,7 @@ async function orakelFlow5() {
   });
 
   /* de laatste foute poging: de zin van de eerste blijft niet staan, en die van de laatste komt onderaan "Zo zit het" */
-  await regel('[5.5] Koning ontsnapt, de laatste foute poging: de strook onder het bord is leeg zolang Turbo antwoordt, daarna "Jouw zet: ..." als laatste reden', async function (check) {
+  await regel('[5.5] Koning ontsnapt, de laatste foute poging: de strook onder het bord is leeg zolang Turbo antwoordt, daarna "Jouw zet: ..." als eerste reden', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'koning');
     zetOpdracht(a, 'r2qk2r/pp1nnppp/8/3p1b2/1p1K4/5N1P/PBP1PPP1/R2Q1B1R w - - 1 1', 'mat1', ['d4e3']);
@@ -1918,7 +1995,7 @@ async function orakelFlow5() {
     check('tijdens het antwoord geen oude zin (' + onder5(a) + ')', onder5(a) === '');
     await wacht(6000);
     const r = redenen5(a);
-    check('de laatste reden (' + r.join(' / ') + ')', /^De redding was /.test(r[0] || '') && /^Jouw zet: Turbo speelt /.test(r[r.length - 1] || '') && !/Probeer nog een zet/.test(r[r.length - 1]));
+    check('eerst je eigen poging (' + r.join(' / ') + ')', /^Jouw zet: Turbo speelt /.test(r[0] || '') && !/Probeer nog een zet/.test(r[0]) && /^De redding was /.test(r[1] || ''));
   });
 
   /* een promotie in een zin: de zetnaam heeft geen uitroepteken, dus de zin eindigt op een gewone punt */
@@ -1984,7 +2061,7 @@ async function orakelFlow5() {
   });
 
   /* de laatste foute poging: geen oude zin naast de nieuwe zet, en wat die zet deed onderaan "Zo zit het" */
-  await regel('[5.5] Trucendoos, de laatste foute poging: de strook onder het bord is leeg zolang Turbo antwoordt, daarna "Jouw zet: ..." als laatste reden', async function (check) {
+  await regel('[5.5] Trucendoos, de laatste foute poging: de strook onder het bord is leeg zolang Turbo antwoordt, daarna "Jouw zet: ..." als eerste reden', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
     zetOpdracht(a, VORK5[0], 'vork', [VORK5[1]]);
@@ -1995,8 +2072,8 @@ async function orakelFlow5() {
     check('tijdens het antwoord geen oude zin (' + onder5(a) + ')', onder5(a) === '');
     await wacht(8000);
     const r = redenen5(a);
-    check('de laatste reden (' + r.join(' / ') + ')', /^De truc was /.test(r[0] || '') && /^Jouw zet: nog niet de vork: Turbo speelt dan .+\.$/.test(r[r.length - 1] || '') &&
-      !/Probeer/.test(r[r.length - 1]));
+    check('eerst je eigen poging (' + r.join(' / ') + ')', /^Jouw zet: nog niet de vork: Turbo speelt dan .+\.$/.test(r[0] || '') && !/Probeer/.test(r[0]) &&
+      /^De truc was /.test(r[1] || ''));
   });
 
   /* "valt maar één stuk aan" alleen als de zet echt één stuk van Turbo aanvalt: De2 valt c4 en g4 aan */
@@ -2087,7 +2164,7 @@ async function orakelFlow5() {
     zet(a, 'g2g4');
     await wacht(8000);
     const r = redenen5(a);
-    check('de redenen (' + r.join(' / ') + ')', r[0] === 'Dit was mat: Dame g2 → g7.' && r[1] === 'h7 en g8 zijn ook gedekt.');
+    check('de redenen (' + r.join(' / ') + ')', /^Jouw zet: /.test(r[0] || '') && r[1] === 'Dit was mat: Dame g2 → g7.' && r[2] === 'h7 en g8 zijn ook gedekt.');
   });
 
   /* rood betekent schaak: na een foute poging is de koning alleen rood als hij schaak staat */
