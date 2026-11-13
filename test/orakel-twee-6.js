@@ -3569,4 +3569,37 @@ async function orakelTwee6() {
       check(k + ' komt terug (' + bij(na, k) + ', verwacht ' + verwacht + ')', bij(na, k) === verwacht);
     }
   });
+
+  /* ================= de vraag bij opgeven ================= */
+
+  const opgevenVraag = async function (x) {
+    if (!kanTikken(x, 'Opgeven')) { x.tik('meerBtn'); await wacht(); }
+    tikTekst(x, 'Opgeven');
+    await wacht();
+    const t = x.scherm();
+    tikTekst(x, 'Nee, doorspelen');
+    await wacht();
+    return t;
+  };
+
+  await regel('[6.3] AF1 de vraag bij opgeven in een potje op de staat belooft geen revanche, maar zegt dat het potje nooit vanzelf stopt', async function (check) {
+    zetDatum('2026-11-16T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 4, mees);
+    check('testopzet: een potje op de staat', mees.get('!!MP.paar') && !!(await busZegt(mees, mees.get('MP.paar'))));
+    const v = await opgevenVraag(mees);
+    check('de vraag staat er', /Opgeven\?/.test(v) && /Dan heeft Fien dit potje gewonnen\./.test(v));
+    check('wachten mag, en geen revanche', /Je mag ook gewoon wachten: dit potje stopt nooit vanzelf\./.test(v) && !/revanche spelen/.test(v));
+    check('en het potje loopt door', magZetten(mees) && !mees.get('session.over'));
+  });
+
+  await regel('[6.3] AF1 de vraag bij opgeven in een potje in de kamer zonder staat houdt de revanche', async function (check) {
+    const a = maakApparaat('Lotte'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    await speel(a, b, 'e2e4');
+    check('testopzet: een potje in de kamer', a.get('!!(session && session.online && MP && !MP.paar)'));
+    const v = await opgevenVraag(a);
+    check('revanche, en niets over wachten', /Jullie kunnen daarna wel revanche spelen\./.test(v) && !/stopt nooit vanzelf/.test(v));
+  });
 }

@@ -6187,7 +6187,8 @@ function resignAsk() {
   const naam = session.online ? escHtml(mpNaam()) : 'Turbo';
   showModal('<div class="m-emoji">🏳️</div><h2>Opgeven?</h2>' +
     '<p>Dan heeft ' + naam + ' dit potje gewonnen.' +
-    (session.online ? '<br>Jullie kunnen daarna wel revanche spelen.' : '<br>Vechten tot het eind is vaak slimmer: Turbo maakt ook fouten!') + '</p>' +
+    (!session.online ? '<br>Vechten tot het eind is vaak slimmer: Turbo maakt ook fouten!' :
+      opStaat() ? '<br>Je mag ook gewoon wachten: dit potje stopt nooit vanzelf.' : '<br>Jullie kunnen daarna wel revanche spelen.') + '</p>' +
     '<div class="m-btns"><button class="btn sun" id="rsNee">↩️ Nee, doorspelen</button>' +
     '<button class="btn plain" id="rsJa">🏳️ Ja, ik geef op</button></div>', () => {
       $('rsNee').addEventListener('click', closeModal);
