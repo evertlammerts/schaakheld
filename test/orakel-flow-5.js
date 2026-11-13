@@ -577,9 +577,8 @@ async function orakelFlow5() {
       check('na de zet van het kind de regel (' + strook5(a) + ')', strook5(a) === HERHAAL_ZIN5);
     } finally { pickMove = echt; }
   });
-  /* staat het kind de tweede keer schaak, dan gaat "Schaak!" voor; de regel komt bij de volgende stelling die er voor de
-     tweede keer staat (een regel over een andere stelling zou niet kloppen) */
-  await regel('[5.6] de tweede keer dezelfde stelling met het kind in schaak: eerst "Je staat schaak!", de regel bij de volgende tweede keer', async function (check) {
+  /* staat het kind de tweede keer schaak, dan gaat de regel over het bord voor; het schaak blijft op het bord */
+  await regel('[5.6] de tweede keer dezelfde stelling met het kind in schaak: de regel over het bord, en ook bij de volgende tweede keer', async function (check) {
     const echt = pickMove;
     pickMove = function (S) { const k = S.board[sqFromAlg('a2')] === 'r' ? 'a2a1' : 'a1a2'; return legalMoves(S).find(function (m) { return moveKey(m) === k; }); };
     try {
@@ -593,7 +592,7 @@ async function orakelFlow5() {
       check('de beginstelling de tweede keer, na de zet van het kind: de regel (' + strook5(a) + ')', strook5(a) === HERHAAL_ZIN5);
       await wacht(3000);
       check('testopzet: Turbo gaf weer schaak', a.get('session.S.hist.length') === 5 && a.get('inCheck(session.S)'));
-      check('de tweede keer in schaak: "Je staat schaak!" (' + strook5(a) + ')', strook5(a) === 'Je staat schaak! Red je koning! 👑');
+      check('de tweede keer in schaak: de regel over het bord (' + strook5(a) + '), en het schaak op het bord', strook5(a) === HERHAAL_ZIN5 && a.get('BD.check === session.S.kings.w'));
       zet(a, 'h1h2');
       check('daarna de volgende tweede keer: de regel (' + strook5(a) + ')', strook5(a) === HERHAAL_ZIN5);
       check('en het potje loopt', a.get('session.over') !== true);
@@ -1715,68 +1714,164 @@ async function orakelFlow5() {
     });
   }
 
-  /* de waarschuwing voor remise door herhaling is beloofd: had iets anders de strook toen een stelling er voor de tweede
-     keer stond, dan komt bij de volgende vrije strook een regel die op elk bord waar is */
+  /* De regel over herhaling wordt gevraagd op de beurt van het kind en gaat dan voor alles wat de strook anders zou zeggen.
+     Hij telt alleen als gezegd als hij op de beurt van het kind stond; staat er sinds de tweede keer een stelling die nog
+     terug kan komen en stond de regel er sindsdien niet op een beurt van het kind, dan is hij beloofd. */
   const HERHAAL_SCHULD5 = 'Een stelling stond er net voor de tweede keer. De derde keer is het remise. Liever niet? Speel anders.';
-  for (const [wat, fen, turbo, kind, eerste, na] of [
-    ['schaak', '3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30', { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4d5' }, ['g1h1', 'h1g1', 'g1f1'], null, 'Je staat schaak! Red je koning! 👑'],
-    ['schaak, en Turbo\'s volgende zet is weer schaak', '3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30', { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4d3' }, ['g1h1', 'h1g1', 'g1f1'], null, 'Je staat schaak! Red je koning! 👑'],
-    ['een truc van Turbo', '7k/8/8/8/6n1/8/8/3Q1RK1 b - - 0 30', { 0: 'g4e3', 2: 'e3g4', 4: 'g4e3', 6: 'e3c4' }, ['g1h2', 'h2g1', 'g1h1'], null, null],
-    ['een truc van het kind', '3q1r1k/8/8/6N1/8/8/8/6K1 w - - 0 30', { 1: 'h8g8', 3: 'g8h8', 5: 'd8d7' }, ['g5e6', 'e6g5', 'g5e6'], true, null]]) {
-    await regel('[5.6] had ' + wat + ' de strook toen een stelling er voor de tweede keer stond, dan komt "Een stelling stond er net voor de tweede keer. ..." als het kind weer aan zet is', async function (check) {
+  const geenHerhaling5 = function (z) { return z !== HERHAAL_SCHULD5 && z !== HERHAAL_ZIN5; };
+  const turboVolgt5 = function (turbo, echt) {
+    return function (S) { const k = turbo[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
+  };
+  async function potjeVanaf5(fen) {
+    const a = nieuwKind();
+    await startPotje(a, 2);
+    a.ev('session.S = parseFEN(' + JSON.stringify(fen) + '); BD.mode = "off"; renderBoard(); if (session.S.turn === "b") turboTurn(); else { BD.mode = "move"; renderBoard(); }');
+    await wacht(3000);
+    return a;
+  }
+
+  /* zet Turbo een stelling voor de tweede keer neer terwijl hij schaak geeft of een truc doet, dan gaat de regel over het
+     bord voor; daarna komt hij niet nog eens */
+  for (const [wat, fen, turbo, kind, na] of [
+    ['met schaak', '3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30', { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4d5' }, ['g1h1', 'h1g1', 'g1f1'], null],
+    ['met schaak, en zijn volgende zet is weer schaak', '3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30', { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4d3' }, ['g1h1', 'h1g1', 'g1f1'], 'Je staat schaak! Red je koning! 👑'],
+    ['met een truc', '7k/8/8/8/6n1/8/8/3Q1RK1 b - - 0 30', { 0: 'g4e3', 2: 'e3g4', 4: 'g4e3', 6: 'e3c4' }, ['g1h2', 'h2g1', 'g1h1'], null]]) {
+    await regel('[5.6] Turbo zet een stelling voor de tweede keer neer ' + wat + ': de regel over het bord gaat voor, en daarna komt hij niet nog eens', async function (check) {
       const echt = pickMove;
-      pickMove = function (S) { const k = turbo[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
+      pickMove = turboVolgt5(turbo, echt);
       try {
-        const a = nieuwKind();
-        await startPotje(a, 2);
-        a.ev('session.S = parseFEN(' + JSON.stringify(fen) + '); BD.mode = "off"; renderBoard(); if (session.S.turn === "b") turboTurn(); else { BD.mode = "move"; renderBoard(); }');
-        await wacht(3000);
+        const a = await potjeVanaf5(fen);
         const stroken = [];
+        let koning = false;
         for (let i = 0; i < kind.length; i++) {
           zet(a, kind[i]);
           stroken.push(strook5(a));
           await wacht(3000);
           stroken.push(strook5(a));
+          if (i === 1) koning = !a.get('inCheck(session.S)') || a.get('BD.check === session.S.kings.w');
         }
-        if (eerste) {
-          /* het kind maakt de truc voor de tweede keer: daarna speelt Turbo iets anders, en dan komt de regel */
-          check('testopzet: de lof voor de truc stond in de strook bij de tweede keer', /^Dat is een VORK/.test(stroken[4] || ''));
-          check('na Turbo\'s volgende zet de regel (' + stroken[5] + ')', stroken[5] === HERHAAL_SCHULD5);
-        } else {
-          check('testopzet: bij de tweede keer stond ' + wat + ' in de strook (' + stroken[3] + ')', na ? stroken[3] === na : /^Kijk uit, een /.test(stroken[3] || ''));
-          check('na de volgende zet van het kind nog niet: Turbo is aan zet (' + stroken[4] + ')', stroken[4] !== HERHAAL_SCHULD5);
-          check('na Turbo\'s volgende zet de regel (' + stroken[5] + ')', stroken[5] === HERHAAL_SCHULD5);
-        }
+        check('bij de tweede keer de regel over het bord (' + stroken[3] + '), en een schaak blijft op het bord', stroken[3] === HERHAAL_ZIN5 && koning);
+        check('na de volgende zet van het kind (' + stroken[4] + ') en van Turbo (' + stroken[5] + ') niet nog eens',
+          geenHerhaling5(stroken[4]) && geenHerhaling5(stroken[5]) && (!na || stroken[5] === na));
       } finally { pickMove = echt; }
     });
   }
 
-  /* of de waarschuwing voor herhaling nog moet komen, volgt uit de zetten van het potje: hij is beloofd als een stelling er
-     voor de tweede keer stond en de regel sindsdien niet in de strook stond; het potje onthoudt alleen bij welke halve
-     zet de regel er het laatst stond. De beloofde regel komt als het kind aan zet is en blijft tot het kind zet. */
+  /* zet het kind de tweede keer neer, dan stond de regel er op de beurt van Turbo: hij telt niet als gezegd. Op de
+     volgende beurt van het kind is hij beloofd en blijft staan tot het kind zet, ook voor de lof of de waarschuwing voor
+     een truc; na een slag of een pionzet van Turbo kan de stelling niet meer terugkomen, en dan is er niets */
+  await regel('[5.6] had de lof voor een truc van het kind de strook toen het een stelling voor de tweede keer neerzette: na Turbo\'s volgende zet de beloofde regel', async function (check) {
+    const echt = pickMove;
+    pickMove = turboVolgt5({ 1: 'h8g8', 3: 'g8h8', 5: 'd8d7' }, echt);
+    try {
+      const a = await potjeVanaf5('3q1r1k/8/8/6N1/8/8/8/6K1 w - - 0 30');
+      const stroken = [];
+      for (const k of ['g5e6', 'e6g5', 'g5e6']) { zet(a, k); stroken.push(strook5(a)); await wacht(3000); stroken.push(strook5(a)); }
+      check('testopzet: de lof voor de truc stond in de strook bij de tweede keer', /^Dat is een VORK/.test(stroken[4] || ''));
+      check('na Turbo\'s volgende zet de regel (' + stroken[5] + ')', stroken[5] === HERHAAL_SCHULD5);
+    } finally { pickMove = echt; }
+  });
+  for (const [wat, turbo, zin] of [['een rustige zet', 'd2d3', true], ['een slag', 'd2h2', false], ['een pionzet', 'a7a6', false]]) {
+    await regel('[5.6] het kind zet een stelling voor de tweede keer neer en Turbo antwoordt met ' + wat + ': ' + (zin ? 'op de beurt van het kind de beloofde regel, tot het kind zet' : 'geen regel'), async function (check) {
+      const echt = pickMove;
+      pickMove = turboVolgt5({ 1: 'h8g8', 3: 'g8h8', 5: turbo }, echt);
+      try {
+        const a = await potjeVanaf5('7k/p7/8/8/8/8/3r3P/1R4K1 w - - 0 1');
+        for (const k of ['b1a1', 'a1b1']) { zet(a, k); await wacht(3000); }
+        check('testopzet: de regel over het bord op de beurt van het kind (' + strook5(a) + ')', a.get('session.S.hist.length') === 4 && strook5(a) === HERHAAL_ZIN5);
+        zet(a, 'b1a1');
+        check('na de eigen zet van het kind de regel over het bord (' + strook5(a) + ')', strook5(a) === HERHAAL_ZIN5);
+        await wacht(3000);
+        check('testopzet: Turbo speelde ' + turbo, a.get('session.S.hist.length') === 6 && a.get('moveKey(session.S.hist[5].m)') === turbo);
+        if (zin) {
+          check('de beloofde regel (' + strook5(a) + ')', strook5(a) === HERHAAL_SCHULD5);
+          await wacht(30000);
+          check('hij blijft staan tot het kind zet (' + strook5(a) + ')', strook5(a) === HERHAAL_SCHULD5);
+        } else check('geen regel over herhaling (' + strook5(a) + ')', geenHerhaling5(strook5(a)));
+      } finally { pickMove = echt; }
+    });
+  }
+  await regel('[5.6] de beloofde regel na de eigen zet van het kind gaat voor de waarschuwing voor een truc van Turbo', async function (check) {
+    const echt = pickMove;
+    pickMove = turboVolgt5({ 1: 'h8g8', 3: 'g8h8', 5: 'd4c2' }, echt);
+    try {
+      const a = await potjeVanaf5('7k/8/8/8/3n4/8/8/1R2Q1K1 w - - 0 1');
+      for (const k of ['b1a1', 'a1b1', 'b1a1']) { zet(a, k); await wacht(3000); }
+      check('testopzet: Turbo\'s Pd4-c2 is een truc', a.get('session.S.hist.length') === 6 &&
+        !!a.get('(function () { var S = session.S, u = S.hist[S.hist.length - 1]; unmakeMove(S); var c = patternCallout(S, u.m); makeMove(S, u.m); return c && c.key; })()'));
+      check('de beloofde regel (' + strook5(a) + ')', strook5(a) === HERHAAL_SCHULD5);
+    } finally { pickMove = echt; }
+  });
+
+  /* vanaf de beginstelling, zodat het bewaarde potje terugkomt: de beloofde regel blijft over een herlading op die beurt,
+     komt daarna niet nog eens, en het bewaarde getal ligt nooit voorbij het potje */
+  await regel('[5.6] de beloofde regel na de eigen zet van het kind blijft over een herlading, komt één keer, en het bewaarde getal ligt nooit voorbij het potje', async function (check) {
+    const echt = pickMove;
+    pickMove = turboVolgt5({ 1: 'g8f6', 3: 'f6g8', 5: 'b8c6', 7: 'c6b8' }, echt);
+    try {
+      let a = nieuwKind();
+      await startPotje(a, 2);
+      for (const k of ['g1f3', 'f3g1', 'g1f3']) { zet(a, k); await wacht(3000); }
+      check('de beloofde regel (' + strook5(a) + ')', a.get('session.S.hist.length') === 6 && strook5(a) === HERHAAL_SCHULD5);
+      a = herlaad(a);
+      await wacht(1000);
+      a.tik('verderKaart');
+      await wacht(1500);
+      check('na een herlading op die beurt staat hij er weer (' + strook5(a) + ')', a.get('!!session && session.S.hist.length === 6') && strook5(a) === HERHAAL_SCHULD5);
+      zet(a, 'b1c3');
+      await wacht(3000);
+      check('na de volgende zetten niet nog eens (' + strook5(a) + ')', a.get('session.S.hist.length') === 8 && geenHerhaling5(strook5(a)));
+      check('het potje bewaart bij welke halve zet de regel er stond', JSON.parse(a.opslag.getItem(POTJE)).games[2].herhaalGezegd === 6);
+      for (let i = 0; i < 2; i++) { tikTekst(a, 'Zet terug'); await wacht(); }
+      const terug = JSON.parse(a.opslag.getItem(POTJE)).games[2];
+      check('na Zet terug ligt het getal nooit voorbij het potje (' + terug.herhaalGezegd + ' bij ' + terug.moves.length + ' halve zetten)', terug.moves.length === 4 && terug.herhaalGezegd === 4);
+    } finally { pickMove = echt; }
+  });
+
+  /* dat de regel er op deze beurt stond, gaat meteen met het potje mee: wie de app sluit zodra hij er staat, vindt bij het
+     openen het getal van deze beurt en dezelfde regel */
+  await regel('[5.6] de regel over herhaling wordt meteen met het potje bewaard: wie de app sluit zodra hij er staat, vindt hem terug als gezegd op die beurt', async function (check) {
+    const echt = pickMove;
+    pickMove = turboVolgt5({ 1: 'g8f6', 3: 'f6g8' }, echt);
+    try {
+      let a = nieuwKind();
+      await startPotje(a, 2);
+      for (const k of ['g1f3', 'f3g1']) { zet(a, k); await wacht(3000); }
+      check('testopzet: de regel over het bord bij halve zet 4 (' + strook5(a) + ')', a.get('session.S.hist.length') === 4 && strook5(a) === HERHAAL_ZIN5);
+      const bewaard = JSON.parse(a.opslag.getItem(POTJE)).games[2];
+      check('het bewaarde potje heeft meteen het getal van deze beurt (' + JSON.stringify(bewaard.herhaalGezegd) + ')', bewaard.herhaalGezegd === 4);
+      a = herlaad(a);
+      await wacht(1000);
+      a.tik('verderKaart');
+      await wacht(1500);
+      check('na het openen staat dezelfde regel er (' + strook5(a) + ')', a.get('session.S.hist.length') === 4 && strook5(a) === HERHAAL_ZIN5);
+      check('en het getal is nog dat van deze beurt', JSON.parse(a.opslag.getItem(POTJE)).games[2].herhaalGezegd === 4);
+    } finally { pickMove = echt; }
+  });
+
+  /* de reeks met schaak bij de tweede keer, vanaf de beginstelling: de regel over het bord staat er op die beurt, ook na een
+     herlading, en de derde keer is remise */
   const HERHAAL_R = { 1: 'e7e6', 3: 'd8g5', 5: 'g5a5', 7: 'a5b6', 9: 'b6a5', 11: 'a5a6', 13: 'a6a5' };
   for (const herladen of [false, true]) {
-    await regel('[5.6] had schaak de strook bij de tweede keer' + (herladen ? ' en laadt de app daarna opnieuw' : '') + ': de regel komt na Turbo\'s volgende zet en blijft tot het kind zet, en dan is het de derde keer remise', async function (check) {
+    await regel('[5.6] Turbo zet de tweede keer neer met schaak' + (herladen ? ' en de app herlaadt op die beurt' : '') + ': de regel over het bord staat er, niet nog eens na de volgende zetten, en de derde keer is remise', async function (check) {
       const echt = pickMove;
       pickMove = function (S) { const k = HERHAAL_R[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt.apply(null, arguments); };
       try {
         let a = nieuwKind();
         await startPotje(a, 2);
         for (const k of ['d2d4', 'e1d2', 'd2e1', 'c1d2', 'd2c1']) { zet(a, k); await wacht(3000); }
-        check('testopzet: de tweede keer, met het kind in schaak (' + strook5(a) + ')', a.get('session.S.hist.length') === 10 && a.get('repetitions(session.S)') === 1 && strook5(a) === 'Je staat schaak! Red je koning! 👑');
+        check('de tweede keer, met het kind in schaak: de regel over het bord (' + strook5(a) + ')', a.get('session.S.hist.length') === 10 && a.get('inCheck(session.S)') && strook5(a) === HERHAAL_ZIN5);
         if (herladen) {
           a = herlaad(a);
           await wacht(1000);
           a.tik('verderKaart');
           await wacht(1500);
-          check('testopzet: het potje is terug, en de strook zegt eerst het schaak (' + strook5(a) + ')', a.get('!!session && session.kind === "game" && session.S.hist.length === 10') && /Je staat schaak!$/.test(strook5(a)));
+          check('na een herlading op die beurt staat hij er weer (' + strook5(a) + ')', a.get('!!session && session.kind === "game" && session.S.hist.length === 10') && strook5(a) === HERHAAL_ZIN5);
         }
         zet(a, 'b1c3');
-        check('na de zet van het kind nog niet: Turbo is aan zet (' + strook5(a) + ')', strook5(a) !== HERHAAL_SCHULD5);
+        const naKind = strook5(a);
         await wacht(3000);
-        check('na Turbo\'s zet de regel (' + strook5(a) + ')', strook5(a) === HERHAAL_SCHULD5);
-        await wacht(30000);
-        check('de regel blijft staan tot het kind zet (' + strook5(a) + ')', strook5(a) === HERHAAL_SCHULD5);
+        check('na de zet van het kind (' + naKind + ') en van Turbo (' + strook5(a) + ') niet nog eens', geenHerhaling5(naKind) && geenHerhaling5(strook5(a)));
         zet(a, 'c3b1');
         await wacht(3000);
         check('de derde keer is remise', a.get('session.over') === true && norm5(tekstVan(a, 'eindkaart')).indexOf('Remise: drie keer dezelfde stelling.') >= 0);
@@ -1784,68 +1879,60 @@ async function orakelFlow5() {
     });
   }
 
-  /* geeft Turbo elke zet schaak, dan wint de beloofde regel de strook op de eerste beurt van het kind na de tweede keer; het
-     schaak blijft op het bord te zien, en de regel staat er voor de derde keer remise is */
-  await regel('[5.6] Turbo geeft elke zet schaak: de beloofde regel staat in de strook voor de derde keer, ook als het kind schaak staat, en het schaak blijft op het bord', async function (check) {
-    const echt = pickMove, TURBO = { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4d3', 8: 'd3d4' };
-    pickMove = function (S) { const k = TURBO[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
+  /* geeft Turbo elke zet schaak, dan staat de regel er toch voor de derde keer, en het schaak blijft op het bord */
+  await regel('[5.6] Turbo geeft elke zet schaak: de regel staat in de strook voor de derde keer, en het schaak blijft op het bord', async function (check) {
+    const echt = pickMove;
+    pickMove = turboVolgt5({ 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4d3', 8: 'd3d4' }, echt);
     try {
-      const a = nieuwKind();
-      await startPotje(a, 2);
-      a.ev('session.S = parseFEN("3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30"); BD.mode = "off"; renderBoard(); turboTurn()');
-      await wacht(3000);
+      const a = await potjeVanaf5('3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30');
       const gelezen = [];
       for (const k of ['g1h1', 'h1g1', 'g1f1', 'f1g1']) {
         zet(a, k);
         await wacht(3000);
         if (a.get('session.over')) break;
         gelezen.push(strook5(a));
-        if (a.get('session.S.hist.length') === 7) {
-          check('testopzet: het kind staat schaak na Turbo\'s Dd3', a.get('inCheck(session.S)'));
-          check('de beloofde regel wint de strook (' + strook5(a) + ')', strook5(a) === HERHAAL_SCHULD5);
-          check('het schaak blijft op het bord: het veld van de koning is gemarkeerd', a.get('BD.check === session.S.kings.w') &&
+        if (a.get('session.S.hist.length') === 5) {
+          check('bij de tweede keer de regel (' + strook5(a) + ')', strook5(a) === HERHAAL_ZIN5);
+          check('het schaak blijft op het bord: het veld van de koning is gemarkeerd', a.get('inCheck(session.S) && BD.check === session.S.kings.w') &&
             a.get('/\\bcheck\\b/.test(cellEls[session.S.kings.w].className)'));
         }
       }
       check('de derde keer is remise', a.get('session.over') === true && norm5(tekstVan(a, 'eindkaart')).indexOf('Remise: drie keer dezelfde stelling.') >= 0);
-      check('de regel stond in de strook voor het remise (' + gelezen.join(' / ') + ')', gelezen.indexOf(HERHAAL_SCHULD5) >= 0);
+      check('de regel stond in de strook voor het remise (' + gelezen.join(' / ') + ')', gelezen.indexOf(HERHAAL_ZIN5) >= 0);
     } finally { pickMove = echt; }
   });
 
-  /* de beloofde regel gaat over een stelling die nog terug kan komen: na een slag of een pionzet sinds die tweede keer kan
-     dat niet meer, en dan is er niets beloofd */
-  for (const [wat, fen, turbo] of [
-    ['een slag', '3q2k1/8/8/P7/8/8/3P4/6K1 b - - 0 30', { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4d2' }],
-    ['een pionzet', '3q2k1/7p/8/P7/8/8/8/6K1 b - - 0 30', { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'h7h6' }]]) {
-    await regel('[5.6] had schaak de strook bij de tweede keer en komt daarna ' + wat + ': de stelling kan niet meer terugkomen, dus geen beloofde regel', async function (check) {
-      const echt = pickMove;
-      pickMove = function (S) { const k = turbo[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
-      try {
-        const a = nieuwKind();
-        await startPotje(a, 2);
-        a.ev('session.S = parseFEN(' + JSON.stringify(fen) + '); BD.mode = "off"; renderBoard(); turboTurn()');
-        await wacht(3000);
-        for (const k of ['g1h1', 'h1g1']) { zet(a, k); await wacht(3000); }
-        check('testopzet: de tweede keer, met schaak (' + strook5(a) + ')', a.get('repetitions(session.S)') === 1 && strook5(a) === 'Je staat schaak! Red je koning! 👑');
-        zet(a, 'g1f1');
-        await wacht(3000);
-        check('testopzet: Turbo speelde ' + turbo[6], a.get('session.S.hist.length') === 7 && a.get('moveKey(session.S.hist[6].m)') === turbo[6]);
-        check('geen beloofde regel (' + strook5(a) + ')', strook5(a) !== HERHAAL_SCHULD5 && strook5(a) !== HERHAAL_ZIN5);
-      } finally { pickMove = echt; }
-    });
-  }
-
-  /* Zet terug neemt de tweede keer mee: staat er in het potje zoals het nu is geen stelling twee keer, dan is er niets beloofd */
-  await regel('[5.6] Zet terug neemt de tweede keer terug: daarna zegt de strook niets over herhaling', async function (check) {
-    const echt = pickMove, TURBO = { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4' };
-    pickMove = function (S) { const k = TURBO[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
+  /* na Zet terug en een herlading: staat er in het potje zoals het nu is geen stelling twee keer, dan zegt de strook niets
+     over herhaling, ook niet als het bewaarde getal nu precies de lengte van het potje is */
+  await regel('[5.6] de regel stond er, dan twee keer Zet terug en een herlading: geen regel over herhaling', async function (check) {
+    const echt = pickMove;
+    pickMove = function (S) { const k = HERHAAL_R[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt.apply(null, arguments); };
     try {
-      const a = nieuwKind();
+      let a = nieuwKind();
       await startPotje(a, 2);
-      a.ev('session.S = parseFEN("3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30"); BD.mode = "off"; renderBoard(); turboTurn()');
+      for (const k of ['d2d4', 'e1d2', 'd2e1', 'c1d2', 'd2c1']) { zet(a, k); await wacht(3000); }
+      check('testopzet: de regel staat er (' + strook5(a) + ')', a.get('session.S.hist.length') === 10 && strook5(a) === HERHAAL_ZIN5);
+      zet(a, 'b1c3');
       await wacht(3000);
+      for (let i = 0; i < 2; i++) { tikTekst(a, 'Zet terug'); await wacht(); }
+      check('testopzet: acht halve zetten, en geen stelling staat er twee keer', a.get('session.S.hist.length') === 8 && a.get('repetitions(session.S)') === 0);
+      a = herlaad(a);
+      await wacht(1000);
+      a.tik('verderKaart');
+      await wacht(1500);
+      check('testopzet: het potje is terug', a.get('!!session && session.kind === "game" && session.S.hist.length === 8'));
+      check('geen regel over herhaling (' + strook5(a) + ')', geenHerhaling5(strook5(a)));
+    } finally { pickMove = echt; }
+  });
+
+  /* Zet terug neemt de tweede keer mee: staat er in het potje zoals het nu is geen stelling twee keer, dan is er niets */
+  await regel('[5.6] Zet terug neemt de tweede keer terug: daarna zegt de strook niets over herhaling', async function (check) {
+    const echt = pickMove;
+    pickMove = turboVolgt5({ 0: 'd8d4', 2: 'd4d5', 4: 'd5d4' }, echt);
+    try {
+      const a = await potjeVanaf5('3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30');
       for (const k of ['g1h1', 'h1g1']) { zet(a, k); await wacht(3000); }
-      check('testopzet: de tweede keer, met schaak (' + strook5(a) + ')', a.get('repetitions(session.S)') === 1 && strook5(a) === 'Je staat schaak! Red je koning! 👑');
+      check('testopzet: de tweede keer (' + strook5(a) + ')', a.get('repetitions(session.S)') === 1 && strook5(a) === HERHAAL_ZIN5);
       tikTekst(a, 'Zet terug');
       await wacht();
       check('testopzet: twee halve zetten terug', a.get('session.S.hist.length') === 3);
@@ -1853,39 +1940,13 @@ async function orakelFlow5() {
       const naKind = strook5(a);
       await wacht(3000);
       check('testopzet: Turbo zette', a.get('session.S.hist.length') === 5);
-      check('geen regel over herhaling na de zet van het kind (' + naKind + ') en na die van Turbo (' + strook5(a) + ')',
-        [naKind, strook5(a)].every(function (z) { return z !== HERHAAL_SCHULD5 && z !== HERHAAL_ZIN5; }));
-    } finally { pickMove = echt; }
-  });
-
-  /* de beloofde regel komt één keer, en het bewaarde potje weet bij welke halve zet hij er stond */
-  await regel('[5.6] de beloofde regel komt één keer, en het bewaarde potje houdt bij welke halve zet hij er stond, nooit voorbij zijn lengte', async function (check) {
-    const echt = pickMove, TURBO = { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4e4', 8: 'e4e5' };
-    pickMove = function (S) { const k = TURBO[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
-    try {
-      let a = nieuwKind();
-      await startPotje(a, 2);
-      a.ev('session.S = parseFEN("3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30"); BD.mode = "off"; renderBoard(); turboTurn()');
-      await wacht(3000);
-      for (const k of ['g1h1', 'h1g1', 'g1f1']) { zet(a, k); await wacht(3000); }
-      check('testopzet: na Turbo\'s zet de beloofde regel (' + strook5(a) + ')', strook5(a) === HERHAAL_SCHULD5);
-      zet(a, 'f1g1');
-      await wacht(3000);
-      check('na de volgende zetten niet nog eens (' + strook5(a) + ')', a.get('session.S.hist.length') === 9 && strook5(a) !== HERHAAL_SCHULD5);
-      const bewaard = JSON.parse(a.opslag.getItem(POTJE));
-      check('het potje bewaart bij welke halve zet de regel er stond (' + JSON.stringify(bewaard.games[2].herhaalGezegd) + ')', bewaard.games[2].herhaalGezegd === 7);
-      tikTekst(a, 'Zet terug');
-      await wacht();
-      tikTekst(a, 'Zet terug');
-      await wacht();
-      const terug = JSON.parse(a.opslag.getItem(POTJE)).games[2];
-      check('na Zet terug ligt het getal nooit voorbij het potje (' + terug.herhaalGezegd + ' bij ' + terug.moves.length + ' halve zetten)', terug.moves.length === 5 && terug.herhaalGezegd === 5);
+      check('geen regel over herhaling na de zet van het kind (' + naKind + ') en na die van Turbo (' + strook5(a) + ')', geenHerhaling5(naKind) && geenHerhaling5(strook5(a)));
     } finally { pickMove = echt; }
   });
 
   /* een bewaard potje met een stelling die er al twee keer stond: wat het potje onthoudt, beslist of de regel nog komt;
      een potje zonder dat getal (van een eerdere versie) of met een getal voorbij zijn lengte krijgt de regel */
-  for (const [wat, extra, zin] of [['zonder het getal, van een eerdere versie', {}, true], ['met het getal van de halve zet waarop de regel er stond', { herhaalGezegd: 5 }, false],
+  for (const [wat, extra, zin] of [['zonder het getal, van een eerdere versie', {}, true], ['met het getal van een eerdere beurt van het kind sinds de tweede keer', { herhaalGezegd: 5 }, false],
     ['met een getal voorbij het potje', { herhaalGezegd: 99 }, true],
     ['met het getal van deze beurt: de regel stond er al, en het kind zette nog niet', { herhaalGezegd: 6 }, true]]) {
     await regel('[5.6] een bewaard potje ' + wat + ': ' + (zin ? 'terug in het potje staat de beloofde regel in de strook' : 'geen regel, maar het welkom'), async function (check) {
@@ -1896,13 +1957,12 @@ async function orakelFlow5() {
       check('de strook (' + strook5(a) + ')', zin ? strook5(a) === HERHAAL_SCHULD5 : /^Welkom terug!/.test(strook5(a)));
     });
   }
-  /* terug in het potje: de beloofde regel gaat voor de regel over het bord; in HERHAAL_KIND staat het bord nu voor de tweede
-     keer, maar de volgende zet van het kind kan een eerdere stelling voor de derde keer neerzetten */
-  await regel('[5.6] een bewaard potje met een eerdere tweede keer en het bord nu ook voor de tweede keer: terug in het potje gaat de beloofde regel voor', async function (check) {
+  /* terug in het potje: staat het bord zelf er voor de tweede keer, dan de regel over het bord */
+  await regel('[5.6] een bewaard potje met een eerdere tweede keer en het bord nu ook voor de tweede keer: terug in het potje de regel over het bord', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(2, HERHAAL_KIND) });
     a.tik('verderKaart');
     await wacht(1500);
-    check('de strook (' + strook5(a) + ')', a.get('session.S.hist.length') === 8 && strook5(a) === HERHAAL_SCHULD5);
+    check('de strook (' + strook5(a) + ')', a.get('session.S.hist.length') === 8 && strook5(a) === HERHAAL_ZIN5);
   });
   await regel('[5.6] een bewaard potje met een beloofde regel waarin het kind schaak staat: terug in het potje gaat de beloofde regel voor, en het schaak blijft op het bord', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(2, ['f2f3', 'e7e6', 'g1h3', 'g8h6', 'h3g1', 'h6g8', 'g1h3', 'd8h4']) });
