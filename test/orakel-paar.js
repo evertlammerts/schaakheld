@@ -287,4 +287,20 @@ async function orakelPaar() {
     check('drie schrijfacties, geen 409', log.log.length === 3 && s.seq === 5);
     check('de zet, het aanbod en de stempel staan er', s.spel.zetten.length === 1 && !!s.spel.bod && s.spel.bod.ply === 1 && Number.isInteger(s.spel.bod.t));
   });
+
+  await regel('[V2] [P15] een 429 van de server bij schrijven of lezen: de handeling wacht en gaat de volgende keer, en het kind ziet niets', async function (check) {
+    const w = await paarMeesFien();
+    const echt = fetch, druk = { status: 429, json: function () { return Promise.reject(new SyntaxError('geen json')); } };
+    let keer = 0;
+    fetch = function (url, o) { if (/\/v1\/potje$/.test(url) && keer++ === 0) return Promise.resolve(druk); return echt(url, o); };
+    try { await doe(w.mees, w.fm, { soort: 'uitdaging', id: 'potjeeen0001', wit: w.rm, op: null }); } finally { fetch = echt; }
+    check('na een 429 bij schrijven wacht de uitdaging, en de server heeft niets', bewaard(w.mees, w.fm).rij.length === 1 && (await serverStaat(w.mees, w.fm)) === null);
+    fetch = function (url, o) { if (/\/v1\/bus\/check$/.test(url)) return Promise.resolve(druk); return echt(url, o); };
+    try { await leesP(w.mees, w.fm); } finally { fetch = echt; }
+    check('na een 429 bij lezen wacht ze nog', bewaard(w.mees, w.fm).rij.length === 1 && (await serverStaat(w.mees, w.fm)) === null);
+    check('geen venster', !w.mees.open());
+    await leesP(w.mees, w.fm);
+    const s = await serverStaat(w.mees, w.fm);
+    check('de volgende keer staat ze op de server, één keer', !!s && s.seq === 1 && s.spel.fase === 'uitdaging' && bewaard(w.mees, w.fm).rij.length === 0);
+  });
 }

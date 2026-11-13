@@ -321,7 +321,10 @@ async function orakelVersies() {
       [STATEN.klaarOnbekend, { soort: 'neem', id: 'potjeeen0001' }, 'b'], [STATEN.aAanZet, { soort: 'weghalen' }, 'a'],
       [mat, { soort: 'zet', id: 'potjeeen0001', ply: 6, zet: 'h5f7' }, 'a']];
     const fout = [];
-    zonder.forEach(function (g) { slecht.forEach(function (m) { if (staatNa(g[0], Object.assign({}, g[1], { merk: m }), g[2], NU).past) fout.push(g[1].soort + ' met merk ' + m); }); });
+    zonder.forEach(function (g) { slecht.forEach(function (m) {
+      const voor = JSON.stringify(g[0]), r = staatNa(g[0], Object.assign({}, g[1], { merk: m }), g[2], NU);
+      if (r.past || !r.waarom || JSON.stringify(g[0]) !== voor) fout.push(g[1].soort + ' met merk ' + m);
+    }); });
     check('een einde of Nu niet zonder goed merk' + (fout.length ? ': ' + fout.join(', ') : ''), fout.length === 0);
     check('met een goed merk past elk ervan', zonder.every(function (g) { return staatNa(g[0], Object.assign({}, g[1], { merk: goedMerk.replace('-a', '-' + g[2]) }), g[2], NU).past; }));
     check('een zet die het potje niet beëindigt, heeft geen merk nodig', staatNa(STATEN.aAanZet, { soort: 'zet', id: 'potjeeen0001', ply: 0, zet: 'e2e4' }, 'a', NU).past);

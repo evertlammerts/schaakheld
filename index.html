@@ -4501,7 +4501,7 @@ function renderFriends() {
     const bezet = !wacht && !loopt && paarBezet(id), bezetZin = !!bezet && !bezet.ingetrokken;
     const g = !wacht && !uitd && stand[id].g, beurt = !!g && g.S.turn === g.kleur;
     const sub = wacht ? 'Wachten op ' + naam + '…' :
-      uitd ? (uitd.mijnUitdaging ? 'Uitgedaagd · nog geen antwoord' : naam + ' daagt je uit · ' + escHtml(zinKleur(uitd.myColor, f.naam))) :
+      uitd ? (uitd.mijnUitdaging ? 'Uitgedaagd · nog geen antwoord' : 'Daagt je uit · Jij hebt ' + (uitd.myColor === 'w' ? 'wit' : 'zwart') + '.') :
       g ? (beurt ? (g.S.hist.length ? naam + ' heeft gezet.' : 'Jij bent aan zet.') : stand[id].stil ? escHtml(stilZin(f.naam, stand[id].dagen)) :
         naam + ' is aan zet · ' + dagWoord(stand[id].dagen)) : bezetZin ? 'Weer uitnodigen kan als ' + naam + ' SchaakHeld opent.' :
       'vrienden sinds ' + friendSince(f);
@@ -7266,7 +7266,7 @@ function samenItem(s) {
     stil ? stilZin(naam, dagen) : zinDoetMee(s.mijnUitdaging, n, s.myColor, naam) || (!beurt ? naam + ' is aan zet.' :
       s.vriend && n ? naam + ' heeft gezet. Jij bent aan zet.' : 'Jij bent aan zet.');
   return { rule: 'R1', title: 'Verder: je potje met ' + naam, button: 'Speel verder', vriend: true, naam, opDagen: !!s.vriend,
-    wat: s.nietBewaard || s.eigenBod ? null : 'potje', volgorde: beurt ? 1 : stil ? 7 : 5, tijd, soort: 'potje', fid: s.fid, text: zin,
+    wat: s.nietBewaard || s.eigenBod ? null : 'potje', volgorde: beurt ? 1 : stil ? 7 : 5, stil, tijd, soort: 'potje', fid: s.fid, text: zin,
     ook: 'je potje met ' + naam, action: actie,
     rij: { titel, plek: s.vriend && !beurt && !stil && !s.eigenBod && !s.zonderNet ? naam + ' is aan zet · ' + dagWoord(dagen) : zin } };
 }
@@ -7442,7 +7442,7 @@ function renderVerder() {
     '</span><span class="vo-pijl">›</span></button>';
   /* een potje met een vriend blijft staan zolang het loopt; een potje met iemand anders leeft hoogstens een dag in zijn kamer */
   /* onder een stil potje de uitweg: wie niet wil wachten, biedt remise aan */
-  if (!kapotKey && eerste.wat && eerste.volgorde === 7) h += '<div class="verder-bewaard">Wacht je liever niet? In het potje kun je via ⋯ remise aanbieden.</div>';
+  if (!kapotKey && eerste.wat && eerste.stil) h += '<div class="verder-bewaard">Wacht je liever niet? In het potje kun je via ⋯ remise aanbieden.</div>';
   else if (!kapotKey && eerste.wat) h += '<div class="verder-bewaard">✔ ' + (eerste.opDagen ? 'Je potje met ' + escHtml(eerste.naam) +
     ' blijft staan, ook als jullie allebei de app dichtdoen.' : 'Je ' + eerste.wat + (eerste.vriend ? ' blijft vandaag staan op ' + ditApparaat() + '.' :
       ' blijft staan op ' + ditApparaat() + ', ook als je de app dichtdoet.')) + '</div>';
@@ -7490,7 +7490,7 @@ function bezigBlad(lijst) {
       '<span class="l-art">' + (it.art || '🤝') + '</span>';
   };
   /* het kind aan zet valt op; een stil potje staat er rustig bij */
-  showModal('<h2>Wat nog bezig is</h2><div class="lopend-lijst">' + lijst.map((it, i) => '<button class="lopend' + (it.volgorde === 7 ? ' stil' : '') +
+  showModal('<h2>Wat nog bezig is</h2><div class="lopend-lijst">' + lijst.map((it, i) => '<button class="lopend' + (it.stil ? ' stil' : '') +
     '" data-rij="' + i + '">' + art(it) + '<span class="l-txt"><span class="l-titel">' + escHtml(it.rij ? it.rij.titel : it.title) + '</span>' +
     '<span class="l-plek' + (it.volgorde === 1 ? ' beurt' : '') + '">' + escHtml(it.rij ? it.rij.plek : it.text) + '</span></span>' +
     '<span class="l-pijl">›</span></button>').join('') + '</div>', () => {

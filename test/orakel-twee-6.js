@@ -502,6 +502,12 @@ async function orakelTwee6() {
       check('de kaart: Mees daagt je uit, met de kleur', /Mees daagt je uit/.test(kaart) && (fienWit || /Jij speelt met zwart: Mees begint\./.test(kaart)));
       check('in de kaart Nu niet en Ja, spelen!, en geen regel dat het potje blijft staan', kanTikken(fien, 'Nu niet') && kanTikken(fien, 'Ja, spelen!') &&
         !/blijft staan/.test(kaart));
+      fien.tik('tabVrienden');
+      await wacht();
+      check('de rij op Vrienden: onder de naam alleen of zij uitgedaagd is en welke kleur ze heeft',
+        new RegExp('Daagt je uit · Jij hebt ' + (fienWit ? 'wit' : 'zwart') + '\\.').test(vriendRijTekst(fien, fid)) && !/Mees daagt|begint/.test(vriendRijTekst(fien, fid)));
+      fien.tik('tabSpelen');
+      await wacht();
       tikTekst(fien, 'Ja, spelen!');
       await wacht();
       check('Fien zit in het potje, en alleen wit kan zetten', opSpeelscherm(fien) && fien.get('session.S.hist.length') === 0 && magZetten(fien) === fienWit);
@@ -542,7 +548,7 @@ async function orakelTwee6() {
     schuifKlok(DAG);
     fien = await opent(fien);
     fien.tik('tabVrienden');
-    check('Fien ziet geen uitdaging en geen bericht', !/daagt je uit|ingetrokken/.test(zegt(fien) + ' ' + toastTekst(fien) + ' ' + vriendRijTekst(fien, fid)));
+    check('Fien ziet geen uitdaging en geen bericht', !/daagt je uit|ingetrokken/i.test(zegt(fien) + ' ' + toastTekst(fien) + ' ' + vriendRijTekst(fien, fid)));
     check('geen teller veranderd', tellers(mees) === voorM && tellers(fien) === voorF);
   });
 

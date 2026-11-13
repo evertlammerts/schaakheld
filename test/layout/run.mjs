@@ -27,11 +27,11 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '6.4', '6.8', '6.9']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '6.4', '6.8', '6.9', 'V2']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
-  const nr = (regel.match(/^\[([\d.]+)\]/) || [])[1];
+  const nr = (regel.match(/^\[([\dV.]+)\]/) || [])[1];
   if (gebouwd.has(nr)) return fouten.length ? 'FAIL' : 'PASS';
   return fouten.length ? 'NOG NIET GEBOUWD' : 'FAIL';
 }
@@ -1065,6 +1065,60 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       check(n, 'binnen het scherm', rijen.every(r => r.left >= -0.5 && r.right <= ${W} + 0.5));
       check(n, 'geen zijwaarts scrollen', (await pagina()).sw <= ${W});` });
 }
+
+/* plan.md 6.9: een uitdaging van een vriend met een lange naam: de rij op Vrienden noemt onder de naam alleen dat hij
+   uitdaagt en welke kleur het kind heeft, in hoogstens twee regels; de kaart houdt de hele zin en blijft binnen het scherm */
+/* een eigen sleutel: de bussen van vriendmaxi01 houden op de server wat eerdere gevallen schreven */
+const UITDAGING = { schaakheld1: JSON.stringify(Object.assign(JSON.parse(POTJES_DOC), { friends: { vriendmaxi02: { k: 'sleutelsleutelsleutelsleuteluitdaging',
+  naam: 'Maximiliaantje', t: 1, since: 1792000000000, host: true, weg: false } } })), 'schaakheld-samen': JSON.stringify({ v: 1, games: { potjevanvriendmaxi02:
+  Object.assign(bewaardVriendenpotje('vriendmaxi02', 'Maximiliaantje', 0, [], false),
+    { room: null, seat: null, myColor: 'b', state: 'uitdaging', mijnUitdaging: false, beurtT: Date.now() }) } }) };
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[6.9] ' + W + 'x' + H + ': een uitdaging van een vriend met een lange naam: de rij zegt in hoogstens twee regels dat hij uitdaagt en welke kleur het kind heeft, en de kaart past';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(UITDAGING)});
+      await page.waitForTimeout(1500);
+      const kaart = await rect('#verder'), ja = await rect('#verderJa'), nee = await rect('#verderNee');
+      const kaartTekst = await page.evaluate(() => (document.getElementById('verder') || {}).textContent || '');
+      check(n, 'de kaart houdt de hele zin', /Maximiliaantje daagt je uit/.test(kaartTekst) && /Jij speelt met zwart: Maximiliaantje begint\./.test(kaartTekst));
+      check(n, 'de kaart en haar knoppen binnen het scherm', binnen(kaart, ${W}, ${H}) && binnen(ja, ${W}, ${H}) && binnen(nee, ${W}, ${H}));
+      await klik('#tabVrienden');
+      await page.waitForTimeout(500);
+      const rij = await page.evaluate(() => {
+        const r = document.querySelector('.friend[data-fid="vriendmaxi02"]'), s = r && r.querySelector('.f-sub');
+        if (!s) return null;
+        const z = document.createRange(); z.selectNodeContents(s);
+        const b = r.getBoundingClientRect();
+        return { tekst: s.textContent, regels: new Set([...z.getClientRects()].filter(x => x.width > 0).map(x => Math.round(x.top))).size, left: b.left, right: b.right };
+      });
+      check(n, 'de rij: Daagt je uit · Jij hebt zwart.', !!rij && rij.tekst === 'Daagt je uit · Jij hebt zwart.');
+      check(n, 'in hoogstens twee regels', !!rij && rij.regels <= 2);
+      check(n, 'de rij binnen het scherm', !!rij && rij.left >= -0.5 && rij.right <= ${W} + 0.5);
+      check(n, 'geen zijwaarts scrollen', (await pagina()).sw <= ${W});` });
+}
+
+/* In een echte browser is de versie een echte SHA-256: alleen hier moet de versie die de app uitrekent, die van de echte
+   server zijn. De app schrijft een staat en dan nog een die de eerste versie noemt. */
+const versieRegel = '[V2] de app schrijft een staat en dan nog een met de versie die zij zelf uitrekende, en de echte server neemt allebei aan';
+GEVALLEN.push({ regels: [versieRegel], code: `
+    const n = ${JSON.stringify(versieRegel)};
+    await vers(360, 640);
+    const uit = await page.evaluate(async () => {
+      const fid = 'vriendversie1';
+      setFriend(fid, { k: 'geheimvoordeversietest-' + Math.random().toString(36).slice(2) + '-xxxxxxxxxx', naam: 'Fien', t: Date.now(), weg: false,
+        host: true, since: Date.now() });
+      await pasToe(fid, { soort: 'uitdaging', id: 'potjeeen0001', wit: 'a', op: null });
+      const p1 = paarVan(fid);
+      await pasToe(fid, { soort: 'intrekken', id: 'potjeeen0001' });
+      const p2 = paarVan(fid);
+      return { eerste: p1.versie, toont1: p1.toont, seq1: p1.staat && p1.staat.seq, tweede: p2.versie, toont2: p2.toont, rij: p2.rij.length,
+        seq2: p2.staat && p2.staat.seq, spel: p2.staat ? p2.staat.spel : 'geen', onbekend: versiesOnbekend };
+    });
+    check(n, 'de server kent versies', uit.onbekend === false);
+    check(n, 'de eerste staat erop, met de versie van de app', /^[0-9a-f]{64}$/.test(uit.eerste) && uit.toont1 === uit.eerste && uit.seq1 === 1);
+    check(n, 'de tweede noemde die versie en staat er ook: seq 2, en niets wacht', uit.seq2 === 2 && uit.rij === 0 && uit.toont2 === uit.tweede &&
+      uit.spel === null);` });
 
 function draai(geval) {
   const code = 'async page => {' + HELPERS + '\ntry {' + geval.code + '\n} catch (e) { for (const r of ' +
