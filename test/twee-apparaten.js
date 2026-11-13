@@ -417,6 +417,9 @@ async function alles() {
   await tik();
 
   /* ---------- 15. vriend weghalen: herkennen stopt ---------- */
+  /* het potje van hierboven is met mpVerlaat() verlaten en staat bij Evert nog als lopend potje met een vriend; dan
+     vraagt weghalen eerst om op te geven. Hier gaat het om weghalen zonder potje. */
+  evert.ev('localStorage.removeItem(SAMEN_KEY)');
   evert.ev('showHomeTab("vrienden")');
   fire(evert.el('friendList'), 'click', { target: { dataset: { meer: fid } } });
   evert.tik('vrWeg');

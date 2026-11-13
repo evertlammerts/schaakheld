@@ -172,7 +172,7 @@ async function orakelFlow6() {
     check('na je zet is het aanbod weg en loopt het potje', !kanTikken(a, 'Remise aannemen') && !a.get('session.over'));
   });
 
-  await nogNiet('[6.8] een vriend met een lopend potje weghalen: eerst de vraag, en Nee, laat staan houdt alles', async function (check) {
+  await regel('[6.8] een vriend met een lopend potje weghalen: eerst de vraag, en Nee, laat staan houdt alles', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const a = await kind(opslagMetVrienden([MET_FIEN_MEES_AAN_ZET]));
     const voor = tellers(a);

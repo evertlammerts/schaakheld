@@ -671,7 +671,7 @@ async function orakelTwee6() {
     check('het potje gaat door', !mees.get('session.over') && !fien.get('session.over'));
   });
 
-  await nogNiet('[6.6] Fien neemt het aanbod twee dagen later aan: remise voor allebei, met de datum op de kaart, en één keer geteld', async function (check) {
+  await regel('[6.6] Fien neemt het aanbod twee dagen later aan: remise voor allebei, met de datum op de kaart, en één keer geteld', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     await aanbodVanMees(mees, fien);
@@ -728,7 +728,7 @@ async function orakelTwee6() {
     check('het aanbod staat niet meer, en Mees kan zetten', !/aangeboden/.test(tekstVan(mees, 'verschil')) && magZetten(mees));
   });
 
-  await nogNiet('[6.6] na 13 dagen en 23 uur geen remise; na 14 dagen remise voor allebei, met de dag van het aanbod, één keer geteld', async function (check) {
+  await regel('[6.6] na 13 dagen en 23 uur geen remise; na 14 dagen remise voor allebei, met de dag van het aanbod, één keer geteld', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     await aanbodVanMees(mees, fien);
@@ -764,7 +764,7 @@ async function orakelTwee6() {
     check('één keer geteld bij Fien', tellers(fien) === nogEen(voorF, false) && weekOnline(fien) === 1);
   });
 
-  await nogNiet('[6.6] een klok die een week voorloopt, maakt de termijn niet korter: de server meet', async function (check) {
+  await regel('[6.6] een klok die een week voorloopt, maakt de termijn niet korter: de server meet', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     await aanbodVanMees(mees, fien);
@@ -833,7 +833,7 @@ async function orakelTwee6() {
     check('niets geteld', tellers(mees) === voorM && tellers(fien) === voorF);
   });
 
-  await nogNiet('[6.6] dezelfde bytes opnieuw schrijven zet de termijn niet terug', async function (check) {
+  await regel('[6.6] dezelfde bytes opnieuw schrijven zet de termijn niet terug', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await aanbodVanMees(mees, fien);
@@ -849,7 +849,7 @@ async function orakelTwee6() {
     check('toch na 14 dagen remise', /Je potje met Fien is remise/.test(tekstVan(mees, 'verder')));
   });
 
-  await nogNiet('[6.6] een herstart van de server maakt de termijn langer, nooit korter', async function (check) {
+  await regel('[6.6] een herstart van de server maakt de termijn langer, nooit korter', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await aanbodVanMees(mees, fien);
@@ -870,7 +870,7 @@ async function orakelTwee6() {
     check('na 20 dagen wel', /Je potje met Fien is remise/.test(tekstVan(mees, 'verder')));
   });
 
-  await nogNiet('[6.7] Fien geeft op terwijl Mees weg is; Mees opent op twee gekoppelde apparaten na elkaar: de winst en de week tellen één keer', async function (check) {
+  await regel('[6.7] Fien geeft op terwijl Mees weg is; Mees opent op twee gekoppelde apparaten na elkaar: de winst en de week tellen één keer', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     let tel = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await vriendenpotje(tel, fien);
@@ -905,7 +905,7 @@ async function orakelTwee6() {
       weekOnline(tel) === week + 1 && weekOnline(tab) === week + 1);
   });
 
-  await nogNiet('[6.7] schaakmat terwijl de ander weg is: die ziet het bij het openen, op de kaart en de eindkaart', async function (check) {
+  await regel('[6.7] schaakmat terwijl de ander weg is: die ziet het bij het openen, op de kaart en de eindkaart', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     const a = maakApparaat('Mees'), b = maakApparaat('Fien');
     await vriendenpotje(a, b);
@@ -926,7 +926,7 @@ async function orakelTwee6() {
     check('één keer geteld: een potje, geen winst', tellers(zw) === nogEen(voor, false));
   });
 
-  await nogNiet('[6.7] pat terwijl de ander weg is: remise bij het openen, met de reden op de eindkaart', async function (check) {
+  await regel('[6.7] pat terwijl de ander weg is: remise bij het openen, met de reden op de eindkaart', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     const a = maakApparaat('Mees'), b = maakApparaat('Fien');
     await vriendenpotje(a, b);
@@ -945,7 +945,7 @@ async function orakelTwee6() {
     check('één keer geteld', tellers(zw) === nogEen(voor, false));
   });
 
-  await nogNiet('[6.7] "Alles wissen" terwijl de vriend weg is: de vriend ziet bij het openen dat Mees opgaf', async function (check) {
+  await regel('[6.7] "Alles wissen" terwijl de vriend weg is: de vriend ziet bij het openen dat Mees opgaf', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     await vriendenpotje(mees, fien);
@@ -964,7 +964,7 @@ async function orakelTwee6() {
     check('Fien: Mees gaf op', /Je potje met Mees is klaar/.test(kaart) && /Mees gaf op\. Jij wint dit potje!/.test(kaart));
   });
 
-  await nogNiet('[6.7] "Alles wissen" op een gekoppeld apparaat haalt het vriendenpotje alleen daar weg: het speelt verder op het andere, en de vriend ziet geen opgave', async function (check) {
+  await regel('[6.7] "Alles wissen" op een gekoppeld apparaat haalt het vriendenpotje alleen daar weg: het speelt verder op het andere, en de vriend ziet geen opgave', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     let tel = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await vriendenpotje(tel, fien);
@@ -1064,7 +1064,7 @@ async function orakelTwee6() {
     check('er telde niets', alles(mees) === voorM && alles(fien) === voorF);
   });
 
-  await nogNiet('[6.8] een vriend met een lopend potje weghalen vraagt eerst om op te geven; de vriend ziet de opgave bij het openen', async function (check) {
+  await regel('[6.8] een vriend met een lopend potje weghalen vraagt eerst om op te geven; de vriend ziet de opgave bij het openen', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await vriendenpotje(mees, fien);
@@ -1120,7 +1120,7 @@ async function orakelTwee6() {
     }));
   });
 
-  await nogNiet('[6.9] een uitnodiging van een andere vriend terwijl een vriendenpotje loopt: het kind kan ja zeggen, en het eerste potje blijft staan', async function (check) {
+  await regel('[6.9] een uitnodiging van een andere vriend terwijl een vriendenpotje loopt: het kind kan ja zeggen, en het eerste potje blijft staan', async function (check) {
     zetDatum('2026-11-16T10:00:00');
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan'), sem = maakApparaat('Sem');
     const fidD = await wordenVrienden(fien, daan), fidS = await vriendErbij(fien, sem);

@@ -674,6 +674,10 @@
   #ekVraag p { margin: 0; }
   .eindkaart .ek-turbo { width: 88px; height: 88px; display: grid; place-items: center; font-size: 56px; line-height: 1;
     background: var(--leaf-soft); border-radius: 50%; }
+  /* de drie plaatjes van de vriend, in plaats van Turbo, bij een potje dat afliep terwijl het kind weg was */
+  .eindkaart .ek-trio { font-size: 32px; line-height: 1; letter-spacing: .12em; padding: 8px 14px; background: var(--rose-soft, var(--leaf-soft));
+    border-radius: 999px; }
+  .eindkaart.klein .ek-trio { font-size: 24px; padding: 4px 10px; }
   .eindkaart h2 { margin: 0; font-size: var(--fs-xl); }
   .eindkaart p { margin: 0; font-size: var(--fs-sm); color: var(--text-quiet); }
   .eindkaart .ek-xp { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); color: var(--accent-text); }
@@ -3666,7 +3670,7 @@ function toonOudEinde(gameId) {
   if (!u || (MP && MP.gameId === gameId)) { renderVerder(); return; }
   const naam = b.r.peerName || 'je maatje';
   session = { kind: 'game', online: true, S: b.S, level: 0, tips: 0, over: false, pending: null, myColor: b.r.myColor,
-    oud: { naam, gameId }, eerderAfgelopen: true };
+    oud: { naam, gameId, fid: b.r.fid || null, result: u }, eerderAfgelopen: true };
   toonSamenScherm(b.S, b.r.myColor, naam);
   endGame(stVanUitslag(u));
   vergeetSamen(gameId);
@@ -3707,8 +3711,9 @@ function samenBezet() {
   showToast('Je potje met ' + mpNaam() + ' loopt nog. Speel dat eerst uit.');
   return true;
 }
-/* bezig is verbinden, wachten op een maatje of een potje dat loopt; een afgelopen potje maakt nooit bezig */
-function mpBezig() { return !!MP && (!MP.S || samenLoopt()); }
+/* bezig is verbinden, wachten op een maatje of een potje dat loopt; een afgelopen potje maakt nooit bezig, en een
+   potje met een vriend ook niet: dat gaat via de potjesbussen door terwijl het kind iets anders doet */
+function mpBezig() { return !!MP && (!MP.S || (samenLoopt() && !vriendZonderKamer())); }
 function mpStart(room, seat, host) {
   dropModal('melding');
   /* een nieuwe verbinding sluit de oude; wordt het geen potje, dan komt de oude terug */
@@ -4131,9 +4136,9 @@ function uitslagVanAnder(u) {
   const st = gameStatus(MP.S);
   return st.over && st.reason === u.kind;
 }
-/* een uitslag die van de ander kwam, kent de ander al */
+/* een uitslag die van de ander kwam, kent de ander al; een remise na veertien dagen schreef dit kind zelf */
 function uitslagVanAnderKant(u, mijnKleur) {
-  return (u.kind === 'opgave' && u.by !== mijnKleur) || (u.kind === 'remise' && u.by === mijnKleur);
+  return (u.kind === 'opgave' && u.by !== mijnKleur) || (u.kind === 'remise' && u.by === mijnKleur && !u.vanzelf);
 }
 /* beide kanten kennen de uitslag en dit kind zag hem: niets meer te bewaren of te bezorgen */
 function samenKlaar() {
@@ -5177,20 +5182,45 @@ async function zegNee(f, bus, op) {
       body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob }) });
   } catch (e) {}
 }
+/* Een potje met een vriend eindigt alleen door uitspelen, opgeven of remise: wie een vriend weghaalt terwijl er een
+   potje loopt, geeft het eerst op. De vriend ziet de opgave bij het openen. */
 function removeFriendAsk(fid) {
-  const f = P.friends[fid];
+  const f = P.friends[fid], loopt = lopendMet(fid);
   if (!f) return;
+  if (loopt && loopt.state !== 'uitdaging') {
+    const naam = escHtml(f.naam);
+    showModal('<div class="m-emoji">👋</div><h2>' + naam + ' weghalen?</h2><p>Je potje met ' + naam + ' loopt nog. ' +
+      'Weghalen kan als het potje klaar is. Opgeven?</p><div class="m-btns"><button class="btn sun" id="rmLaat">Nee, laat staan</button>' +
+      '<button class="btn plain gevaar" id="rmOpWeg">Opgeven en weghalen</button></div>', () => {
+        $('rmLaat').addEventListener('click', closeModal);
+        $('rmOpWeg').addEventListener('click', () => { closeModal(); opgevenEnWeghalen(fid); });
+      }, true);
+    return;
+  }
   showModal('<div class="m-emoji">👋</div><h2>' + escHtml(f.naam) + ' weghalen?</h2>' +
     '<p>Dan kunnen jullie elkaar niet meer uitnodigen. Vrienden worden kan altijd weer na een potje samen.</p>' +
     '<div class="m-btns"><button class="btn plain" id="rmVrJa">Ja, weghalen</button>' +
     '<button class="btn sun" id="rmVrNee">Nee, houden!</button></div>', () => {
       $('rmVrJa').addEventListener('click', () => {
-        setFriend(fid, Object.assign({}, f, { weg: true }));
+        /* een uitdaging aan of van deze vriend gaat mee weg; de eigen trekt het kind eerst in, met de sleutel van nu */
+        const r = lopendMet(fid), weg = () => { setFriend(fid, Object.assign({}, f, { weg: true })); renderFriends(); };
         closeModal();
-        renderFriends();
+        if (r && r.mijnUitdaging) { trekUitdagingIn(r); inBusRij(fid, weg); } else { if (r) vergeetSamen(r.gameId); weg(); }
       });
       $('rmVrNee').addEventListener('click', closeModal);
     }, true);
+}
+/* het potje met deze vriend opgeven, de opgave in de eigen bus, en daarna de vriend weghalen */
+function opgevenEnWeghalen(fid) {
+  const f = P.friends[fid], r = lopendMet(fid);
+  if (!f || !r) return;
+  if (MP && MP.gameId === r.gameId) mpStop(true);
+  const ply = r.moves.length;
+  bijSamen(r.gameId, { result: { kind: 'opgave', by: r.myColor, ply }, offer: null, claim: null, shown: true });
+  if (eersteKeerGeteld(r.gameId) && ply >= MIN_PLIES_TELT) { bump('c.gamesPlayed', 1); bumpWeek('online', 1); }
+  potjeNaarBus(r.gameId, true);
+  inBusRij(fid, () => { vergeetSamen(r.gameId); setFriend(fid, Object.assign({}, f, { weg: true })); thuisVerversen(); });
+  renderFriends();
 }
 
 /* ---------- in-app QR-scanner ----------
@@ -6281,8 +6311,13 @@ function vriendItems(alle) {
       { rule: 'R1u', title: naam + ' daagt je uit', button: 'Ja, spelen!', volgorde: 2, text: 'Jij speelt met ' + (kleur === 'w' ? 'wit' : 'zwart') + '.',
         ook: naam + ' daagt je uit', action: { go: 'uitdagingJa', gameId: b.r.gameId }, nee: { go: 'uitdagingNee', gameId: b.r.gameId } });
     /* een afgelopen potje dat dit kind al zag, wacht alleen nog tot de ander het weet: geen kaart */
-    else if (uitslag && !gezien) uit.push({ rule: 'R1', title: 'Je potje met ' + naam + ' is klaar', button: 'Bekijk', volgorde: 0,
-      text: 'Kijk hoe het afliep.', ook: 'je potje met ' + naam, action: hier ? { go: 'samen', gameId: b.r.gameId } : { go: 'oud', gameId: b.r.gameId } });
+    else if (uitslag && !gezien) {
+      /* een potje met een vriend dat telde op een ander apparaat van dit kind, toonde dat apparaat al */
+      if (vriend && DOC.set.potjes[b.r.gameId]) continue;
+      const e = vriend ? kaartEinde(uitslag, kleur, naam) : { titel: 'Je potje met ' + naam + ' is klaar', zin: 'Kijk hoe het afliep.' };
+      uit.push({ rule: 'R1', title: e.titel, button: 'Bekijk', volgorde: 0, text: e.zin, ook: 'je potje met ' + naam,
+        action: hier ? { go: 'samen', gameId: b.r.gameId } : { go: 'oud', gameId: b.r.gameId } });
+    }
     else if (!uitslag) uit.push(samenItem({ peerName: naam, moves: S.hist.map(u => moveKey(u.m)), myColor: kleur, bod, vriend,
       bodT: bod ? (hier ? MP.offer : b.r.offer).t : null, eigenBod: vriend && !!aanbod && aanbod.by === kleur && !aanbod.answer && aanbod.ply === S.hist.length,
       gameId: b.r.gameId, mijnUitdaging: !!b.r.mijnUitdaging, zonderNet: (hier && !!MP.room && !MP.open && MP.pogingen > 0) || (vriend && potjesNetFout),
@@ -8175,8 +8210,33 @@ function eersteKeerGeteld(gameId) {
   syncSoon();
   return true;
 }
+/* Een potje met een vriend dat afliep terwijl het kind weg was. De kaart zegt eerst alleen dat het klaar is (of
+   remise), de eindkaart zegt de uitslag en wat er gebeurde; de strook zegt de kop van de eindkaart. */
+const REMISE_SOORT = ['remise', 'pat', '50', 'materiaal'];
+function kaartEinde(u, ik, naam) {
+  const titel = 'Je potje met ' + naam + ' is ' + (REMISE_SOORT.includes(u.kind) ? 'remise' : 'klaar');
+  const zin = u.kind === 'opgave' && u.by !== ik ? naam + ' gaf op. Jij wint dit potje!' :
+    u.kind === 'mat' && u.by !== ik ? 'Schaakmat. ' + naam + ' wint dit potje.' :
+    u.kind === 'remise' && u.vanzelf ? (u.by === ik ? 'Je aanbod stond twee weken open.' : 'Het aanbod van ' + naam + ' stond twee weken open.') :
+    u.kind === 'remise' && u.by === ik ? naam + ' nam je aanbod aan. Goed gespeeld, allebei!' :
+    REMISE_SOORT.includes(u.kind) ? 'Het werd remise. Goed gespeeld, allebei!' : 'Kijk hoe het afliep.';
+  return { titel, zin };
+}
+function eindeVanVriend(u, ik, naam, drawTxt) {
+  const n = escHtml(naam), remise = 'Je potje met ' + n + ' is remise.';
+  if (u.kind === 'opgave' && u.by !== ik) return { kop: 'Jij wint dit potje!', regels: [n + ' gaf op.'] };
+  if (u.kind === 'mat' && u.by !== ik) return { kop: n + ' wint dit potje', regels: ['Schaakmat. Goed gespeeld! Revanche?'] };
+  if (u.kind === 'remise' && u.vanzelf) return { kop: remise, regels: [(u.by === ik ? 'Je bood' : n + ' bood') + ' het' +
+    (u.t ? ' op ' + datumVan(u.t) : '') + ' aan, en na twee weken werd het vanzelf remise.', 'Goed gespeeld, allebei!'] };
+  if (u.kind === 'remise' && u.by === ik) return { kop: remise, regels: [n + ' nam je aanbod aan. Goed gespeeld, allebei!'] };
+  if (REMISE_SOORT.includes(u.kind)) return { kop: remise, regels: [drawTxt[u.kind] || 'Remise!', 'Goed gespeeld, allebei!'] };
+  return null;
+}
 function endGameOnline(st, drawTxt, telt, nieuw) {
   const ik = session.myColor || 'w', oud = !!session.oud, naam = oud ? session.oud.naam : mpNaam();
+  const fid = oud ? session.oud.fid : MP && MP.viaFriend, u = oud ? session.oud.result : MP && MP.result;
+  const weg = session.eerderAfgelopen && fid && P.friends[fid] && u ? eindeVanVriend(u, ik, naam, drawTxt) : null;
+  if (weg) { eindeTerwijlWeg(st, weg, fid, naam, telt, nieuw, oud); return; }
   let h, p;
   /* gameStatus meldt remise als result 'd', nooit als een leeg result. Op
      !st.result testen betekende dat de remise-tak nooit aansloeg: bij pat,
@@ -8230,6 +8290,23 @@ function endGameOnline(st, drawTxt, telt, nieuw) {
     });
 }
 
+/* de eindkaart van een potje dat afliep terwijl het kind weg was: Nieuw potje met de vriend, of naar huis */
+function eindeTerwijlWeg(st, weg, fid, naam, telt, nieuw, oud) {
+  if (st.result === (session.myColor || 'w')) { if (nieuw) bump('c.winsOnline', 1); snd.win(); celebrate(); }
+  else if (st.result === 'd') snd.star(); else snd.bad();
+  checkBadges();
+  const week = telt && P.weekGoal && P.weekGoal.kind === 'vriend' ? '<p>Telt mee voor je weekdoel. 🎯</p>' : '';
+  const f = P.friends[fid], n = escHtml(naam);
+  say(weg.kop);
+  toonEindkaart('<div class="ek-trio">' + friendTrio(f.k) + '</div><h2 id="ekKop">' + weg.kop + '</h2>' +
+    weg.regels.map(r => '<p>' + r + '</p>').join('') + week + '<!--trofeeen-->' +
+    '<div class="ek-btns"><button class="btn sun" id="mpNieuw">Nieuw potje met ' + n + '</button>' +
+    '<button class="btn plain" id="mpEind">🏠 Naar huis</button></div>', () => {
+      const naarHuis = () => { sluitEindkaart(); if (oud) goHome(); else mpVerlaat(); };
+      $('mpEind').addEventListener('click', naarHuis);
+      $('mpNieuw').addEventListener('click', () => { naarHuis(); inviteFriend(fid); });
+    });
+}
 function endGame(st, stil) {
   /* een potje eindigt precies één keer: een zet-animatie die nog uitloopt
      of een laat relay-bericht mag geen tweede einde inluiden */
@@ -8831,20 +8908,33 @@ $('backBtn').addEventListener('click', () => {
 $('setBtn').addEventListener('click', openSettings);
 for (const t in HOME_TABS) $(HOME_TABS[t]).addEventListener('click', () => showHomeTab(t));
 function confirmReset() {
-  /* wissen tijdens een vriendenpotje is dat potje opgeven: de vraag zegt het */
-  const sp = leesSamen(), vriend = sp && !sp.kapot && !sp.r.result ? sp.r.peerName || 'je maatje' : null;
+  /* Wissen is een potje met een vriend opgeven, en dat zegt de vraag. Met een ander gekoppeld apparaat niet: daar
+     speelt het kind het potje verder, en hier gaat het alleen weg. */
+  const ander = anderApparaat(), g = samenRauw() || {}, sp = leesSamen();
+  const lopend = Object.keys(g).map(k => g[k]).filter(r => samenVorm(r, r.gameId) && r.fid && !r.result && !r.nee && P.friends[r.fid]);
+  const potjes = ander ? [] : lopend.filter(r => r.state !== 'uitdaging');
+  const namen = potjes.map(r => P.friends[r.fid].naam);
+  if (!ander && sp && !sp.r.result && !sp.r.fid) namen.push(sp.r.peerName || 'je maatje');
+  const lijst = namen.length > 1 ? namen.slice(0, -1).map(escHtml).join(', ') + ' en ' + escHtml(namen[namen.length - 1]) : escHtml(namen[0] || '');
   showModal('<div class="m-emoji">🗑️</div><h2>Alles wissen?</h2>' +
     '<p>Je naam, je XP, je sterren, je level, je trofeeën en een potje dat bezig is gaan weg van dit apparaat.' +
-    (anderApparaat() ? '<br>Op je andere apparaat blijft alles staan.' : '') +
-    (vriend ? '<br>Dan geef je ook je potje met ' + escHtml(vriend) + ' op.' : '') + '<br>Weet je het heel zeker?</p>' +
+    (ander ? '<br>Op je andere apparaat blijft alles staan.' : '') +
+    (namen.length ? '<br>Dan geef je ook je ' + (namen.length > 1 ? 'potjes' : 'potje') + ' met ' + lijst + ' op.' : '') +
+    '<br>Weet je het heel zeker?</p>' +
     '<div class="m-btns"><button class="btn coral" id="rstGo">Ja, wis alles</button>' +
     '<button class="btn plain" id="rstNo">Nee, bewaren!</button></div>', () => {
       $('rstNo').addEventListener('click', closeModal);
       $('rstGo').addEventListener('click', () => {
+        /* de opgaven en ingetrokken uitdagingen gaan nog met de sleutels van nu de bus in */
+        if (!ander) for (const r of lopend) {
+          if (r.state === 'uitdaging') { if (r.mijnUitdaging) trekUitdagingIn(r); continue; }
+          const f = P.friends[r.fid], inhoud = Object.assign(vriendBusInhoud(r), { offer: null, result: { kind: 'opgave', by: r.myColor, ply: r.moves.length } });
+          inBusRij(r.fid, async () => schrijfPotjesbus(f, b64url(await sealJSON(f.k, 'potje', vasteLengte(inhoud, POTJE_LENGTE)))));
+        }
         try { localStorage.removeItem('schaakheld1'); } catch (e) {}
         opslag(POTJE_KEY, null);
         opslag(RONDJES_KEY, null);
-        if (samenLoopt()) {
+        if (samenLoopt() && !(ander && vriendZonderKamer())) {
           MP.result = { kind: 'opgave', by: MP.myColor, ply: MP.S.hist.length };
           mpSend({ t: 'opgave', gameNo: MP.gameNo, ply: MP.S.hist.length });
           stuurStand();
