@@ -1049,7 +1049,8 @@ function bewaarSamen() {
       seat: MP.room ? MP.seat : null, host: MP.host, myColor: MP.myColor, gameNo: MP.gameNo, moves,
       peerName: MP.peerName || '', result: MP.result || null, offer: MP.offer || null,
       shown: !!MP.shown, beurtT: oud && oud.moves.length === moves.length ? oud.beurtT : Date.now(), updated: Date.now(),
-      sessie: MP.vr ? MP.vr.sessie : 0, kamer: MP.kamer || null }, vriendWeet ? { vriendWeet: true } : {});
+      sessie: MP.vr ? MP.vr.sessie : 0, kamer: MP.kamer || null, nogTonen: MP.vrNogTonen || null, terugZeggen: !!MP.vrTerugZeggen,
+      tel: MP.telWie || null }, vriendWeet ? { vriendWeet: true } : {});
   }
   const gelukt = schrijfSamen(games);
   MP.nietBewaard = !gelukt;
@@ -1134,6 +1135,9 @@ function samenHervat(b) {
   /* terug in de kamer is een nieuwe sessie; het nummer staat meteen bewaard, zodat elke terugkeer een hoger heeft */
   MP.vr.sessie = telGetal(b.r.sessie) + 1;
   MP.kamer = geldigeKamer(b.r.kamer);
+  MP.vrNogTonen = typeof b.r.nogTonen === 'string' && ID_RE.test(b.r.nogTonen) ? b.r.nogTonen : null;
+  MP.vrTerugZeggen = b.r.terugZeggen === true;
+  MP.telWie = typeof b.r.tel === 'string' && b.r.tel.length <= 80 ? b.r.tel : null;
   bewaarSamen();
 }
 /* de hele stand, voor de ander na elke verbinding en zodra die terug is */
@@ -1214,7 +1218,8 @@ function toonOudEinde(gameId) {
   if (!u || (MP && MP.gameId === gameId)) { renderVerder(); return; }
   const naam = b.r.peerName || 'je maatje';
   session = { kind: 'game', online: true, S: b.S, level: 0, tips: 0, over: false, pending: null, myColor: b.r.myColor,
-    oud: { naam, gameId, fid: b.r.fid || null, paar: b.r.paar || null, result: u }, eerderAfgelopen: true };
+    oud: { naam, gameId, fid: b.r.fid || null, paar: b.r.paar || null, tel: typeof b.r.tel === 'string' ? b.r.tel : null, result: u },
+    eerderAfgelopen: true };
   toonSamenScherm(b.S, b.r.myColor, naam);
   endGame(stVanUitslag(u));
   /* tussen vrienden blijft het potje tot de vriend het einde ook kent */
@@ -1611,6 +1616,7 @@ function mpBeginGame(S0) {
   const kv = MP.kamer && P.friends[MP.kamer.fid];
   if (MP.viaFriend && (!P.friends[MP.viaFriend] || P.friends[MP.viaFriend].weg)) MP.viaFriend = null;
   if (!MP.viaFriend && kv && !kv.weg) MP.viaFriend = MP.kamer.fid;
+  vrTelNaar(MP.viaFriend || 'naam:' + mpNaam());
   MP.revMine = MP.revTheirs = false;
   Object.assign(MP, { S: S0 || newGame(), over: false, result: null, offer: null, shown: false, bekend: false, vriendWeet: false });
   /* een nieuw potje met dezelfde vriend: de kaart van het gestopte potje mag weg, en dat potje zelf ook */
@@ -1850,11 +1856,11 @@ function naEindeTekenen() {
   if (!session || !session.online || !session.over || session.oud || !$('eindkaart') || $('eindkaart').classList.contains('hidden')) { vrVenster(); return; }
   const er = anderBereikbaar(), k = vrKaart(), naam = mpNaam();
   /* een app die vrienden worden als toestand niet kent: geen knop, wel waarom */
-  const oud = !!MP && MP.anderKent === false && !MP.bewezen, vraag = er && !oud && k === 'vraag';
+  const oud = !!MP && MP.anderKent === false && !MP.bewezen, bezig = vrTikBezig(), vraag = er && !oud && k === 'vraag' && !bezig;
   /* zolang de vriendschapsvraag van de ander openstaat, is Ja de enige hoofdknop */
-  if ($('mpRev')) $('mpRev').classList.toggle('hidden', !er || vraag);
+  if ($('mpRev')) $('mpRev').classList.toggle('hidden', !er || (!oud && k === 'vraag'));
   if ($('vrOk')) $('vrOk').classList.toggle('hidden', !er);
-  if ($('mpVriend')) $('mpVriend').classList.toggle('hidden', !er || oud || k !== 'knop' || !MP || MP.anderKent !== true);
+  if ($('mpVriend')) $('mpVriend').classList.toggle('hidden', !er || oud || bezig || k !== 'knop' || !MP || MP.anderKent !== true);
   if ($('ekWacht')) $('ekWacht').textContent = oud ? 'Vrienden worden kan als ' + naam + ' de nieuwste SchaakHeld heeft.' : !er ? '' :
     k === 'gevraagd' ? 'Gevraagd. Nu wachten op ' + naam + '.' : k === 'wacht' ? 'Jullie willen het allebei! Nu wachten tot ' + naam + ' het ziet. 🤝' : '';
   const vak = $('ekVraag');
@@ -2932,7 +2938,7 @@ function geldigePub(p) { return typeof p === 'string' && /^[A-Za-z0-9_-]{40,140}
 function vrNieuw(sessie) { return { sessie, kp: null, pub: null, wil: 0, nee: 0, zag: 0, voor: null }; }
 function vrBegin(sessie) {
   return { vr: vrNieuw(sessie), hun: vrNieuw(-1), kamer: null, anderKent: null, hunGroet: null, bewezen: false, neeGezegd: 0, vrMaakt: null,
-    vrNogTonen: null, vrTerugZeggen: false };
+    vrNogTonen: null, vrTerugZeggen: false, vrSleutel: null, telWie: null };
 }
 const vrHunNee = () => MP.hun.voor === MP.vr.sessie ? MP.hun.nee : 0;
 const vrHunZag = () => MP.hun.voor === MP.vr.sessie ? MP.hun.zag : 0;
@@ -2942,7 +2948,9 @@ function vrKaart() {
   const m = MP.vr.wil > vrHunNee(), h = MP.hun.wil > vrMijnNee();
   return m && h ? (vrHunZag() >= MP.vr.wil ? 'vrienden' : 'wacht') : m ? 'gevraagd' : h ? 'vraag' : 'knop';
 }
-function vrVroeg() { const k = vrKaart(); return k === 'gevraagd' || k === 'wacht'; }
+/* een tik die op zijn sleutel wacht, ziet het kind al als tik; meetellen en versturen doet hij pas met de sleutel */
+const vrTikBezig = () => !!(MP && MP.vr && MP.vrSleutel && !MP.vr.kp);
+function vrVroeg() { const k = vrKaart(); return vrTikBezig() || k === 'gevraagd' || k === 'wacht'; }
 function vrStaat() { const v = MP.vr; return { sessie: v.sessie, pub: v.pub, wil: v.wil, nee: v.nee, zag: v.zag, voor: v.voor }; }
 /* Wat een apparaat over deze vriendschap vasthoudt (sessie, toestand, bewijzen) gaat alleen met een groet mee, en
    elke verandering daarvan groet opnieuw: zo beslist de ander altijd op wat dit apparaat nu vasthoudt. Voor het
@@ -2951,7 +2959,9 @@ function vrMeld() { if (MP && MP.vr && MP.S) mpHallo(); }
 /* wat een apparaat vasthoudt volgt de tabel altijd; wat een kind ziet en tikt, hoort bij het einde van een potje */
 function vrBijEinde() { return !!(MP && MP.vr && MP.S && (MP.over || MP.result)); }
 const vrPotjeLoopt = () => !!(MP && MP.S && !MP.over && !MP.result);
-const TERUG_ZIN = naam => 'Vrienden worden kwam net niet aan bij ' + naam + '. Tik gewoon nog eens!';
+/* na terugnemen: staat het eigen willen nog open, dan is de volgende tik aan de ander */
+const terugZin = () => 'Vrienden worden kwam net niet aan bij ' + mpNaam() + '. ' +
+  (vrVroeg() ? mpNaam() + ' krijgt je vraag nog een keer.' : 'Tik gewoon nog eens!');
 const telGetal = x => Number.isInteger(x) && x >= 0 ? x : 0;
 function vrKrijg(s) {
   if (!MP || !MP.vr || !s || typeof s !== 'object' || !Number.isInteger(s.sessie) || s.sessie < MP.hun.sessie) return;
@@ -3004,9 +3014,10 @@ async function vrMaak(paar) {
   /* de kant met de kleinste sleutel heeft de rol die vroeger wie vroeg had: zo kiezen beide dezelfde bussen */
   bewaarVriend(fid, k, v.pub < mp.hun.pub);
   mp.kamer = { fid, paar, voor: mp.hun.sessie, mijn: v.sessie };
+  vrTelNaar(fid);
+  /* tijdens een potje niets over het bord: de drie plaatjes komen bij het volgende einde, ook na een herlading */
+  if (vrPotjeLoopt()) mp.vrNogTonen = fid; else vriendKlaar(k);
   bewaarSamen();
-  /* tijdens een potje niets over het bord: de drie plaatjes komen bij het volgende einde */
-  if (vrPotjeLoopt()) mp.vrNogTonen = k; else vriendKlaar(k);
   vrMeld();
 }
 function vrWeg(fid) {
@@ -3021,35 +3032,49 @@ function vrTerug() {
   if (MP.viaFriend === k.fid && !loopt) MP.viaFriend = null;
   MP.bewijzenP = null;
   vrWeg(k.fid);
+  if (loopt) MP.vrTerugZeggen = true; else say(terugZin());
   bewaarSamen();
-  if (loopt) MP.vrTerugZeggen = true; else say(TERUG_ZIN(mpNaam()));
   vrMeld();
 }
 /* wat er tijdens het potje met de vriend van deze kamer gebeurde, ziet het kind bij het einde */
 function vrNaEinde() {
   if (!MP || !MP.vr) return;
-  if (MP.vrTerugZeggen) { MP.vrTerugZeggen = false; say(TERUG_ZIN(mpNaam())); }
-  const k = MP.vrNogTonen, f = MP.kamer && P.friends[MP.kamer.fid];
+  if (MP.vrTerugZeggen) { MP.vrTerugZeggen = false; say(terugZin()); }
+  const f = MP.vrNogTonen && MP.kamer && MP.kamer.fid === MP.vrNogTonen && P.friends[MP.vrNogTonen];
   MP.vrNogTonen = null;
-  if (k && f && !f.weg) vriendKlaar(k);
+  bewaarSamen();
+  if (f && !f.weg) vriendKlaar(f.k);
+}
+/* één telling van de potjes van vandaag per kind: krijgt dat kind op dit apparaat een andere sleutel, dan gaat de telling mee */
+function vrTelNaar(wie) {
+  const oud = MP.telWie;
+  MP.telWie = wie;
+  if (!oud || oud === wie) return;
+  ensureDay();
+  const dag = P.day.vriend && typeof P.day.vriend === 'object' ? P.day.vriend : (P.day.vriend = {});
+  if (dag[oud]) { dag[wie] = (+dag[wie] || 0) + (+dag[oud] || 0); delete dag[oud]; saveP(); }
 }
 /* "Vrienden worden" en "Ja, vrienden!" zijn dezelfde tik: dit kind wil. Een tik telt één keer. */
 async function vrWil() {
   if (!vrBijEinde()) return;
-  const k = vrKaart();
-  if (k !== 'knop' && k !== 'vraag') return;
   const mp = MP;
+  if (!mp.vr.kp) {
+    /* eerst de sleutel: een teller gaat nooit omlaag, dus een tik telt pas als de sleutel er is */
+    if (!mp.vrSleutel) { mp.vrSleutel = ecdhStart(); dropModal('vriendvraag'); naEindeTekenen(); }
+    let e;
+    try { e = await mp.vrSleutel; } catch (x) {
+      if (MP === mp && mp.vrSleutel) { mp.vrSleutel = null; say('Dat lukt hier niet 😕'); naEindeTekenen(); }
+      return;
+    }
+    if (MP !== mp) return;
+    if (!mp.vr.kp) { mp.vr.kp = e.kp; mp.vr.pub = e.pub; }
+  }
+  const k = vrKaart();
+  if (!vrBijEinde() || (k !== 'knop' && k !== 'vraag')) return;
   mp.vr.wil++;
   if (k === 'knop') say('Gevraagd! Wachten op ' + mpNaam() + '… 🤝');
   dropModal('vriendvraag');
   naEindeTekenen();
-  if (!mp.vr.kp) {
-    try {
-      const e = await ecdhStart();
-      if (MP !== mp) return;
-      if (!mp.vr.kp) { mp.vr.kp = e.kp; mp.vr.pub = e.pub; }
-    } catch (e) { mp.vr.wil--; say('Dat lukt hier niet 😕'); naEindeTekenen(); return; }
-  }
   vrMeld();
   vrKijk();
 }
@@ -3066,7 +3091,7 @@ const VRAAG_ZIN = naam => naam + ' wil vrienden worden!';
 /* de vraag van de ander, als het einde niet op het scherm staat: in een venster, met dezelfde twee antwoorden */
 function vrVenster() {
   if (!vrBijEinde() || samenInBeeld()) return;
-  const vraag = anderBereikbaar() && MP.anderKent === true && vrKaart() === 'vraag';
+  const vraag = anderBereikbaar() && MP.anderKent === true && vrKaart() === 'vraag' && !vrTikBezig();
   if (!vraag) { dropModal('vriendvraag'); return; }
   if ((modalOpen && modalKey === 'vriendvraag') || modalQueue.some(q => q[3] === 'vriendvraag')) return;
   showModal('<div class="m-emoji">🤝</div><h2>' + escHtml(VRAAG_ZIN(mpNaam())) + '</h2>' +
@@ -6821,7 +6846,8 @@ function endGame(st, stil) {
       return;
     }
     const doelVoor = goalDoneWeek(curWeek());
-    const xp = telt ? vriendPotjeXP(session.oud ? (session.oud.fid || 'naam:' + session.oud.naam) : (MP && MP.viaFriend) || 'naam:' + mpNaam()) : 0;
+    const xp = telt ? vriendPotjeXP(session.oud ? (session.oud.tel || session.oud.fid || 'naam:' + session.oud.naam) :
+      (MP && (MP.telWie || MP.viaFriend)) || 'naam:' + mpNaam()) : 0;
     if (xp) addXP(xp, 'Goed gespeeld!');
     if (telt) bumpWeek('online', 1);
     endGameOnline(st, drawTxt, nieuw, xp, eindTelRegel(xp, !doelVoor && goalDoneWeek(curWeek()), nieuw));
