@@ -1717,9 +1717,10 @@ function trucTask(line) {
   return task;
 }
 /* De zetten van een Red je stuk-opdracht die het stuk ook echt redden (geen "anders", geen ruil), geen mat in een
-   toelaten en niet verliezen: goed, met per zet hoeveel het beste antwoord meer oplevert. De voorraad maakt dit
-   vooraf, dus diep: een lijn van zes halve zetten en een zoektocht van twee keer `nodes` posities. Een ondiepe lijn
-   stopt midden in een ruil en een ondiepe zoektocht ziet een verlies niet; verloren is wat beide diepe maten zeggen. */
+   toelaten en geen pion kosten: goed, met per zet hoeveel het beste antwoord meer oplevert. De voorraad maakt dit
+   vooraf, dus diep: een lijn van zes halve zetten en een zoektocht van twee keer `nodes` posities, want een ondiepe
+   lijn stopt midden in een ruil. Een redding is goed als een van beide maten zegt dat ze geen pion kost; wat niet
+   goed is, kost dan volgens beide een pion of meer. */
 function ookGoed(task, nodes) {
   const S = task.S, uit = [], nu = evalWhite(S);
   const diep = m => {
@@ -1729,7 +1730,7 @@ function ookGoed(task, nodes) {
     clearTT();
     const zoek = -think(S, 600000, 30, { nodes: 2 * nodes }).score - nu;
     unmakeMove(S);
-    return { verlies: Math.max(l.material, zoek), punten: l.punten };
+    return { lijn: l.material, zoek, punten: l.punten };
   };
   const beste = task.answers.map(a => ({ a: a.m, d: diep(a.m) })).reduce((x, y) => y.d.punten > x.d.punten ? y : x);
   for (const m of legalMoves(S)) {
@@ -1741,10 +1742,15 @@ function ookGoed(task, nodes) {
     unmakeMove(S);
     if (mat) continue;
     const d = diep(m);
-    if (d.verlies <= -150) continue;
+    if (!ookMag(k, d.lijn, d.zoek)) continue;
     uit.push({ m, n: Math.max(0, beste.d.punten - d.punten), ans: beste.a });
   }
   return uit;
+}
+/* Een redding is ook goed als een van de twee diepe maten zegt dat ze geen pion kost; na een tegenaanval of schaak
+   staat het stuk nog aangevallen, en dan moeten beide het zeggen. */
+function ookMag(kind, lijn, zoek) {
+  return (kind === 'tegenaanval' || kind === 'schaak' ? Math.min(lijn, zoek) : Math.max(lijn, zoek)) >= -90;
 }
 /* Een lijn van `halve` halve zetten na m, elk de beste zet van een zoektocht van `nodes` posities, met de slagen aan
    het eind uitgerekend: wat wit dan meer of minder heeft dan nu, in materiaal en in de punten van de tabel. Mat in de
@@ -1795,7 +1801,7 @@ if (typeof module !== 'undefined') {
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
-    winnableCaptures, slagVeld, nullMoved, ookGoed, lijnDiep, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
+    winnableCaptures, slagVeld, nullMoved, ookGoed, ookMag, lijnDiep, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
     repetitions, positionKey, pointsOf, forcedPoints, TABEL, lossStart, ALARM_NODES, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
     POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };

@@ -90,7 +90,7 @@ function wRij(fen, k, type) {
   if (type === 'mat1') {
     const naam = moveNameNL(S, m);
     makeMove(S, m);
-    let zin = 'Dat is geen schaak. Zoek een zet die schaak geeft.';
+    let zin = /^Dat is geen schaak: Turbo speelt dan .+\. Zoek een zet die schaak geeft\.$/;
     if (inCheck(S)) {
       const a = findAttacker(S, S.kings.b, 'w'), red = legalMoves(S);
       const koning = red.find(function (x) { return x.from === S.kings.b; });
@@ -104,6 +104,9 @@ function wRij(fen, k, type) {
     return 'Je ' + NAME_NL[S.board[m.from].toLowerCase()] + ' valt maar één stuk aan. Zoek een zet die twee stukken aanvalt.';
   return null;
 }
+
+/* een zin zoals een kind hem leest: een vaste tekst, of een patroon waar de naam van Turbo's antwoord in staat */
+function past(rij, t) { t = t.replace(/\s+/g, ' ').replace(/ ([.,:;!?])/g, '$1').trim(); return rij instanceof RegExp ? rij.test(t) : t === rij; }
 
 async function orakelFlow() {
   /* ================= increment 1 ================= */
@@ -1322,7 +1325,7 @@ async function orakelFlow() {
       zet(a, fout[0]);
       await wacht(3000);
       /* "mat" is een het-woord: nog geen mat in twee */
-      check('de poging noemt deze truc', rij ? tekstVan(a, 'hulpZin').trim() === rij :
+      check('de poging noemt deze truc', rij ? past(rij, tekstVan(a, 'hulpZin')) :
         tekstVan(a, 'hulpZin').indexOf(type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + naam + ': Turbo speelt dan ') === 0);
       zet(a, fout[1]);
       await wacht(8000);
@@ -1783,7 +1786,7 @@ async function orakelFlow() {
       const rij = wRij(fen, fout[0], type);
       zet(a, fout[0]);
       await wacht(3000);
-      check('de poging noemt deze truc', rij ? tekstVan(a, 'hulpZin').trim() === rij :
+      check('de poging noemt deze truc', rij ? past(rij, tekstVan(a, 'hulpZin')) :
         tekstVan(a, 'hulpZin').indexOf('Nog niet de ' + a.get('PATTERNS.' + type + '.n.toLowerCase()') + ': Turbo speelt dan ') === 0);
       zet(a, fout[1]);
       await wacht(8000);
