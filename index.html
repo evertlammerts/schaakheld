@@ -7174,7 +7174,7 @@ function offerDraw() {
   if (!session || session.kind !== 'game' || session.over || (BD.mode !== 'move' && !wacht)) return;
   const S = session.S;
   /* Turbo antwoordt eerst; zegt hij nee, dan doet hij daarna de zet waar de vraag over ging */
-  const daarna = () => { if (wacht && session && !session.over) later(() => doTurboMove(wacht, true), 900); };
+  const daarna = () => { if (wacht && session && !session.over) later(() => doTurboMove(wacht, 'remise'), 900); };
   if (session.online) {
     if (session.drawAsked != null && S.hist.length - session.drawAsked < 10) {
       say('Je hebt net al remise aangeboden. Speel eerst nog even door. 🐢');
@@ -7325,11 +7325,11 @@ function kidTurn(quiet) {
   if (!session || session.kind !== 'game' || session.over) return;
   BD.mode = 'move';
   startPatience();
-  if (inCheck(session.S)) {
-    snd.check();
-    say('Je staat schaak! Red je koning! 👑');
-  } else if (!quiet) say(coachSay());
+  const schaak = inCheck(session.S);
+  if (schaak) snd.check();
+  if (!quiet) say(schaak ? SCHAAK_ZIN : coachSay());
 }
+const SCHAAK_ZIN = 'Je staat schaak! Red je koning! 👑';
 
 /* Strategie-coach: kijkt naar de stelling en geeft gerichte tips over de
    basisprincipes (centrum, ontwikkelen, rokade, dame, hangende stukken).
@@ -7562,14 +7562,25 @@ function bewaarMoment(S) {
 }
 /* De voorspelvraag alleen als Turbo's zet ertoe doet: hij slaat, geeft schaak of maakt een nieuwe
    dreiging; nooit voor zijn vijfde zet, en hoogstens eens in vier zetten */
-function voorspelVraag(S, m) {
-  if (!P.predict || S.full < 5 || S.full - (session.laatsteVraag || -10) < 4) return false;
+function voorspelVraag(S, m) { return P.predict && vraagBij(S, m, laatsteVraag(S)); }
+function vraagBij(S, m, laatste) {
+  if (S.full < 5 || S.full - laatste < 4) return false;
   if (isCapture(S, m)) return true;
   const voor = winnableCaptures(S).map(x => x.sq);
   makeMove(S, m);
   const schaak = inCheck(S), nieuw = !schaak && threatDetails(S).some(x => voor.indexOf(x.sq) < 0);
   unmakeMove(S);
   return schaak || nieuw;
+}
+/* Wanneer Turbo het laatst vroeg, volgt uit de zetten van het potje (de regel kijkt alleen naar zijn zetten): na herladen
+   of Zet terug weet de app het weer zonder iets te bewaren */
+function laatsteVraag(S) {
+  if (session.laatsteVraag != null) return session.laatsteVraag;
+  const zetten = S.hist.map(u => u.m);
+  for (let i = 0; i < zetten.length; i++) unmakeMove(S);
+  let laatste = -10;
+  for (const m of zetten) { if (S.turn === 'b' && vraagBij(S, m, laatste)) laatste = S.full; makeMove(S, m); }
+  return session.laatsteVraag = laatste;
 }
 function turboTurn() {
   if (!session || session.kind !== 'game' || session.over) return;
@@ -7614,7 +7625,7 @@ function resolvePredict(sq) {
   BD.mode = 'off';
   strookModus(null);
   hulpjesAan(true);
-  let stil = false;
+  let na = null;
   if (sq != null) {
     const rokadeToren = m.flags === 'K' ? m.from + 3 : m.flags === 'Q' ? m.from - 4 : -1;
     if (sq === m.from || sq === rokadeToren) {
@@ -7623,10 +7634,10 @@ function resolvePredict(sq) {
       checkBadges();
       snd.star();
       say('Goed voorspeld! +15 XP 🔮');
-      stil = true;
+      na = 'goed';
     } else say('Goede gok! Maar kijk wat ik écht doe… 🐢');
   }
-  doTurboMove(m, stil);
+  doTurboMove(m, na);
 }
 
 /* Turbo's zin na zijn zet, de eerste die past ("Schaak!" zegt kidTurn):
@@ -7665,28 +7676,28 @@ function turboZin(S, m) {
   unmakeMove(S);
   return zin;
 }
-function doTurboMove(m, stil) {
+/* Turbo's zin na zijn zet, de eerste die past: schaak, een truc, wat hij pakt of dreigt. na: 'goed' na een goede
+   voorspelling (dan staat de lof ervoor als dat samen in de strook past, en zonder zin blijft de lof staan), of
+   'remise' als Turbo net remise weigerde (die zin blijft staan, behalve voor schaak of een truc). */
+function doTurboMove(m, na) {
   if (!session || session.kind !== 'game' || !m) return;
   const S = session.S;
   const co = patternCallout(S, m);
-  /* stil: in de strook staat al iets dat blijft, het antwoord op de voorspelvraag of op remise aanbieden */
-  const zin = co || stil ? null : turboZin(S, m);
+  const zin = co || na === 'remise' ? null : turboZin(S, m);
   playMove(m, () => {
     if (!session || session.kind !== 'game') return;
     updateTrays();
     const st = potjeStatus(S);
     if (st.over) { endGame(st); return; }
-    if (co) {
-      countPattern(co.key);
-      say('Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢');
-      trucRandjes(co.squares);
-      kidTurn(true);
-    } else if (zin) {
-      say(zin);
-      kidTurn(true);
-    } else kidTurn(stil);
+    if (co) { countPattern(co.key); trucRandjes(co.squares); }
+    const regel = inCheck(S) ? SCHAAK_ZIN : co ? 'Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢' : zin;
+    /* Turbo's zin is de uitleg en wordt nooit ingekort: past de lof er niet bij, dan gaat de lof (de XP-melding zei het al) */
+    if (regel) say(na === 'goed' && Array.from('Goed voorspeld! ' + regel).length <= STROOK_TEKENS ? 'Goed voorspeld! ' + regel : regel);
+    kidTurn(!!regel || na != null);
   });
 }
+/* zoveel tekens passen op 360 breed in de drie regels van de strook */
+const STROOK_TEKENS = 115;
 
 /* patience meter */
 let patT0 = 0, patRAF = 0, patFull = false;
@@ -7713,6 +7724,7 @@ function undoMove() {
   const S = session.S;
   if (S.hist.length < 2) return;
   unmakeMove(S); unmakeMove(S);
+  session.laatsteVraag = null;
   /* een moment hoort bij een zet in de geschiedenis: een teruggenomen zet neemt zijn moment mee */
   for (const k in session.momenten || {}) if (+k >= S.hist.length) delete session.momenten[k];
   bewaarPotje();

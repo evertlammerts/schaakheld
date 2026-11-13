@@ -578,6 +578,112 @@ async function orakelFlow5() {
     } finally { Math.random = echt; }
   });
 
+  /* ---------- na de voorspelvraag: de strook zegt één ding ---------- */
+
+  /* een stelling met Turbo aan zet en de zet die hij doet; de vraag staat open */
+  function vraagOpen5(a, fen, zet) {
+    return a.get('(function () { var S = parseFEN(' + JSON.stringify(fen) + '); var m = legalMoves(S).find(function (x) { return moveKey(x) === ' +
+      JSON.stringify(zet) + '; }); session.S = S; BD.last = null; BD.check = null; BD.arrows = []; renderBoard(); askPredict(m);' +
+      ' return { van: m.from, koning: S.kings.b }; })()');
+  }
+  /* goed voorspeld: "Goed voorspeld! " en dan Turbo's zin, als dat samen in de strook past (ongeveer 115 tekens);
+     anders alleen zijn zin, want die is de uitleg; verkeerd voorspeld: alleen zijn zin. Schaak gaat voor een truc,
+     een truc voor wat hij pakt of dreigt. */
+  const NA_VRAAG5 = [
+    ['een slag', 'rnbqkbnr/ppp2ppp/3p4/4p1N1/4P3/8/PPPP1PPP/RNBQKB1R b KQkq - 1 3', 'd8g5', false, 'Ik pak je paard op g5 (3 punten). Niemand kan terugpakken.', true],
+    ['schaak', '1r5k/8/8/8/8/8/P7/4K3 b - - 0 10', 'b8b1', false, 'Je staat schaak! Red je koning! 👑', true],
+    ['een slag die schaak geeft', '1r5k/8/8/8/8/8/P7/1N2K3 b - - 0 10', 'b8b1', false, 'Je staat schaak! Red je koning! 👑', true],
+    ['een nieuwe dreiging', '6k1/r7/8/8/4N3/8/8/6K1 b - - 0 10', 'a7a4', true, 'Mijn toren op a4 valt je paard op e4 aan.', true],
+    ['een truc', '7k/8/8/8/6n1/8/8/3Q1RK1 b - - 0 10', 'g4e3', true, 'Kijk uit, een VORK! 🍴 Eén zet valt dame en toren tegelijk aan. Wat doe je hiertegen? 🐢', true],
+    ['een truc die met de lof te lang is', '7k/8/8/3R4/6n1/8/2Q4K/3R1B2 b - - 0 10', 'g4e3', true,
+      'Kijk uit, een VORK! 🍴 Eén zet valt toren, loper, dame en toren tegelijk aan. Wat doe je hiertegen? 🐢', false]];
+  for (const [wat, fen, zet, hulp, zin, past] of NA_VRAAG5) {
+    await regel('[5.11] na de voorspelvraag bij ' + wat + ': goed voorspeld zegt ' + (past ? '"Goed voorspeld!" en' : 'alleen') + ' Turbo\'s zin, verkeerd voorspeld alleen zijn zin', async function (check) {
+      check('testopzet: de lof en de zin samen ' + (past ? 'passen' : 'passen niet'), (Array.from('Goed voorspeld! ' + zin).length <= 115) === past);
+      for (const goed of [true, false]) {
+        const a = nieuwKind();
+        a.ev('setPref("guard", ' + hulp + ')');
+        await startPotje(a, 2);
+        const v = vraagOpen5(a, fen, zet);
+        tikVeld(a, goed ? v.van : v.koning);
+        await wacht(2000);
+        const verwacht = goed && past ? 'Goed voorspeld! ' + zin : zin;
+        check((goed ? 'goed' : 'verkeerd') + ' voorspeld: de strook (' + strook5(a) + ')', strook5(a) === norm5(verwacht));
+      }
+    });
+  }
+  /* zonder zin van Turbo: de lof blijft staan, of na een verkeerde voorspelling komt de coach */
+  await regel('[5.11] na de voorspelvraag bij een stille zet: goed voorspeld laat "Goed voorspeld! +15 XP" staan, verkeerd voorspeld geeft de coach', async function (check) {
+    for (const goed of [true, false]) {
+      const a = nieuwKind();
+      await startPotje(a, 2);
+      const v = vraagOpen5(a, '7k/8/8/8/8/8/P7/6K1 b - - 0 10', 'h8g8');
+      tikVeld(a, goed ? v.van : sqFromAlg('a2'));
+      await wacht(2000);
+      const s = strook5(a);
+      if (goed) check('goed voorspeld: de lof blijft (' + s + ')', s === 'Goed voorspeld! +15 XP 🔮');
+      else check('verkeerd voorspeld: een zin van de coach (' + s + ')', s !== '' && !/Goed voorspeld|Goede gok|Turbo zet/.test(s));
+    }
+  });
+
+  /* de vraag komt niet al bij Turbo's vierde zet, wel bij zijn vijfde; ook een schaak zonder slag of nieuwe dreiging telt */
+  await regel('[5.11] de voorspelvraag: niet bij Turbo\'s vierde zet, wel bij zijn vijfde, en ook bij een schaak zonder slag', async function (check) {
+    const echt = pickMove;
+    try {
+      for (const [wat, fen, zet, vraag] of [
+        ['een slag bij zijn vierde zet', 'rnbqkbnr/ppp2ppp/3p4/4p1N1/4P3/8/PPPP1PPP/RNBQKB1R b KQkq - 1 4', 'd8g5', false],
+        ['dezelfde slag bij zijn vijfde zet', 'rnbqkbnr/ppp2ppp/3p4/4p1N1/4P3/8/PPPP1PPP/RNBQKB1R b KQkq - 1 5', 'd8g5', true],
+        ['een schaak zonder slag en zonder nieuwe dreiging', '1r5k/8/8/8/8/8/P7/4K3 b - - 0 10', 'b8b1', true]]) {
+        pickMove = function (S) { return legalMoves(S).find(function (m) { return moveKey(m) === zet; }); };
+        const a = nieuwKind();
+        a.ev('setPref("predict", true)');
+        await startPotje(a, 2);
+        a.ev('session.S = parseFEN(' + JSON.stringify(fen) + '); BD.mode = "off"; renderBoard(); turboTurn()');
+        await wacht(1000);
+        check(wat + ': ' + (vraag ? 'de vraag' : 'geen vraag'), (a.get('BD.mode') === 'predict') === vraag);
+      }
+    } finally { pickMove = echt; }
+  });
+
+  /* wanneer Turbo het laatst vroeg, volgt uit de zetten van het potje: na herladen komt de vraag niet een zet later
+     opnieuw, en wie met Zet terug voor de vraag teruggaat, krijgt hem bij die zet weer */
+  await regel('[5.11] na herladen komt de voorspelvraag niet al een zet na de vorige; zonder vorige vraag wel', async function (check) {
+    const echt = pickMove;
+    pickMove = function (S) { return legalMoves(S).find(function (m) { return moveKey(m) === 'e8f7'; }); };
+    try {
+      /* 5...Pxd5 was een slag bij Turbo's vijfde zet, dus toen kwam de vraag; 5...a6 was stil */
+      for (const [wat, zetten, vraag] of [
+        ['na een vraag bij zijn vijfde zet', ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6', 'f3g5', 'd7d5', 'e4d5', 'f6d5', 'g5f7'], false],
+        ['zonder vraag bij zijn vijfde zet', ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6', 'f3g5', 'd7d5', 'e4d5', 'a7a6', 'g5f7'], true]]) {
+        const a = nieuwKind({ opslag: opslagMetPotje(2, zetten) });
+        a.ev('setPref("predict", true); hervatPotje()');
+        await wacht(1500);
+        check(wat + ': ' + (vraag ? 'de vraag bij Kxf7' : 'geen vraag bij Kxf7'), (a.get('BD.mode') === 'predict') === vraag);
+      }
+    } finally { pickMove = echt; }
+  });
+  await regel('[5.11] wie met Zet terug voor de vraag teruggaat, krijgt de vraag bij die zet weer', async function (check) {
+    const echt = pickMove;
+    pickMove = function (S) { const ms = legalMoves(S); return ms.find(function (m) { return moveKey(m) === 'f6d5'; }) || ms.find(function (m) { return moveKey(m) === 'a7a6'; }) || ms[0]; };
+    try {
+      const a = nieuwKind({ opslag: opslagMetPotje(2, ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6', 'f3g5', 'd7d5', 'e4d5']) });
+      a.ev('setPref("predict", true); hervatPotje()');
+      await wacht(1500);
+      if (!check('testopzet: de vraag bij Turbo\'s vijfde zet', a.get('BD.mode') === 'predict')) return;
+      tikTekst(a, 'Speel maar');
+      await wacht(1500);
+      zet(a, 'h2h3');
+      await wacht(3000);
+      if (!check('testopzet: na Pxd5, h3 en a6 is het kind aan zet', a.get('session.S.hist.length') === 12 && a.get('BD.mode') === 'move')) return;
+      tikTekst(a, 'Zet terug'); await wacht(500);
+      tikTekst(a, 'Zet terug'); await wacht(500);
+      if (!check('testopzet: terug voor exd5 (' + a.get('session.S.hist.length') + ')', a.get('session.S.hist.length') === 8)) return;
+      zet(a, 'e4d5');
+      await wacht(1500);
+      check('de vraag komt bij dezelfde zet weer', a.get('BD.mode') === 'predict');
+    } finally { pickMove = echt; }
+  });
+
   /* ---------- 5.8: Turbo's zin na zijn zet noemt een nieuwe dreiging ---------- */
 
   /* Bij een rustige zet van Turbo (geen slag, geen schaak) komt eerst de
