@@ -4392,7 +4392,8 @@ function openSamen(gameId) {
   const rec = (samenRauw() || {})[MP.gameId], doetMee = rec && zinDoetMee(rec.mijnUitdaging, MP.S.hist.length, MP.myColor, mpNaam());
   if (doetMee) { say(doetMee); return; }
   if (rec && rec.doorGespeeld && MP.S.turn === MP.myColor) { zegDoorGespeeld(); return; }
-  if (!MP.room && MP.viaFriend) zegInPotje(eigenBodStaat() ? zinEigenBod() : zinOpenen());
+  if (!MP.room && MP.viaFriend) say(herhaalOpBeurt(MP.S) || (MP.S.turn === MP.myColor && !inCheck(MP.S) && herhaalBord(MP.S)) ||
+    (eigenBodStaat() ? zinEigenBod() : zinOpenen()));
   else zegBeurt(!MP.open && MP.pogingen > 0);
 }
 function toonSamenScherm(S = MP.S, kleur = MP.myColor, naam = mpNaam()) {
@@ -5491,9 +5492,10 @@ function eigenZetten(spel, rol) { const n = spel.zetten.length; return spel.wit 
 const VEERTIEN_DAGEN_S = 14 * 86400;
 const andereRol = r => r === 'a' ? 'b' : 'a';
 function rolAanZet(spel) { return (spel.zetten.length % 2 === 0) === (spel.wit === 'a') ? 'a' : 'b'; }
-/* een potje tussen vrienden eindigt ook met zijn langste lengte, als remise: de staat heeft één vaste grootte */
+/* een potje tussen vrienden eindigt zoals elk potje met een ander kind, en ook met zijn langste lengte, als remise: de
+   staat heeft één vaste grootte */
 function statusOpStaat(S) {
-  const st = gameStatus(S);
+  const st = potjeStatus(S);
   return st.over || S.hist.length < LANGSTE_POTJE ? st : { over: true, result: 'd', reason: 'lang' };
 }
 function standVanZetten(zetten) {
@@ -5739,7 +5741,8 @@ function paarVan(fid) {
     rij: Array.isArray(p.rij) ? p.rij.filter(a => a && typeof a === 'object' && typeof a.soort === 'string') : [],
     telBij: p.telBij && typeof p.telBij === 'object' && !Array.isArray(p.telBij) ? p.telBij : {},
     potjes: p.potjes && typeof p.potjes === 'object' && !Array.isArray(p.potjes) ? p.potjes : {}, verschil: Number.isFinite(p.verschil) ? p.verschil : 0,
-    vernieuwd: Number.isFinite(p.vernieuwd) ? p.vernieuwd : null, doorGespeeld: typeof p.doorGespeeld === 'string' ? p.doorGespeeld : null, vriend: p.vriend && typeof p.vriend === 'object' && typeof p.vriend.k === 'string' ? p.vriend : null };
+    vernieuwd: Number.isFinite(p.vernieuwd) ? p.vernieuwd : null, doorGespeeld: typeof p.doorGespeeld === 'string' ? p.doorGespeeld : null,
+    herhaalGezegd: typeof p.herhaalGezegd === 'string' ? p.herhaalGezegd : null, vriend: p.vriend && typeof p.vriend === 'object' && typeof p.vriend.k === 'string' ? p.vriend : null };
 }
 function bewaarPaar(fid, p) {
   const o = paren();
@@ -6198,7 +6201,8 @@ function paarRecords(fid, staat, ookBekeken) {
       result: u ? Object.assign({ kind: u.soort, by: ['opgave', 'mat', 'remise'].includes(u.soort) ? kleur(u.door) : null, ply: u.ply },
         u.vanzelf ? { vanzelf: true, t: ms(u.bodT) } : {}) : null,
       offer: g.bod ? { by: kleur(g.bod.door), ply: g.bod.ply, answer: null, t: ms(g.bod.t) } : null,
-      doorGespeeld: p.doorGespeeld === id + ':' + zetten.length, shown: !!g.bekeken && !!g.bekeken[rol], vriendWeet: !!g.weet && !!g.weet[ander], beurtT: ms(t), updated: ms(t),
+      doorGespeeld: p.doorGespeeld === id + ':' + zetten.length,
+      herhaalGezegd: p.herhaalGezegd && p.herhaalGezegd.startsWith(id + ':') ? +p.herhaalGezegd.slice(id.length + 1) : 0, shown: !!g.bekeken && !!g.bekeken[rol], vriendWeet: !!g.weet && !!g.weet[ander], beurtT: ms(t), updated: ms(t),
       state: g.fase === 'uitdaging' ? 'uitdaging' : 'potje', mijnUitdaging: door === rol, paar: fid };
   };
   const sp = s.spel;
@@ -6280,10 +6284,12 @@ function mpVolgtRecord(r, ev) {
   if (ev.andereApparaat) say('Je zet op je andere apparaat telde al.');
   else if (remiseVraagOpen()) toonRemiseVraag();
   else if (bord && r.doorGespeeld && MP.S.turn === MP.myColor) zegDoorGespeeld();
-  else if (bord) say(MP.S.turn === MP.myColor ? 'Jij weer! Wat wordt je plan? 💭' : zinWeg());
+  else if (bord && MP.S.turn === MP.myColor) say(herhaalOpBeurt(MP.S) || (inCheck(MP.S) ? 'Schaak! Red je koning. 👑' : herhaalBord(MP.S) || 'Jij weer! Wat wordt je plan? 💭'));
+  else if (bord) say(zinWeg());
 }
 function zegDoorGespeeld() {
-  const fid = MP.paar;
+  const fid = MP.paar, herhaling = herhaalOpBeurt(MP.S);
+  if (herhaling) { say(herhaling); return; }
   say(mpNaam() + ' speelt liever door, dus het wordt geen remise. Jij bent aan zet.');
   inPaarSlot(fid, async () => { const p = paarVan(fid); p.doorGespeeld = null; bewaarPaar(fid, p); });
 }
@@ -6314,7 +6320,7 @@ function kamerWegVriend() {
   clearTimeout(MP.reTimer);
   Object.assign(MP, { room: null, seat: null, open: false, peerOn: false });
   bewaarSamen();
-  if (samenInBeeld() && !session.over) say(zinWeg()); else thuisVerversen();
+  if (samenInBeeld() && !session.over) zegInPotje(zinWeg()); else thuisVerversen();
   friendPollSoon(500);
 }
 async function ecdhStart() {
@@ -10318,7 +10324,9 @@ function eerdereTweedeKeer(S) {
 }
 function herhaalGezegdNu(S) {
   (session.online ? MP : session).herhaalGezegd = S.hist.length;
-  if (session.online) bewaarSamen(); else bewaarPotje();
+  if (!session.online) bewaarPotje();
+  else if (opStaat()) { const fid = MP.paar, id = MP.gameId, n = S.hist.length; inPaarSlot(fid, async () => { const p = paarVan(fid); p.herhaalGezegd = id + ':' + n; bewaarPaar(fid, p); }); }
+  else bewaarSamen();
 }
 /* De beloofde regel raadt de volgende keuze van het kind aan: hij komt als het kind aan zet is, en gaat dan voor alles
    wat de strook anders zou zeggen, ook voor schaak (dat het bord laat zien en horen); anders kan elke beurt tot de derde
@@ -10732,7 +10740,7 @@ function openHulp() {
 
 /* Een potje met een vriend dat afliep terwijl het kind weg was. De kaart zegt eerst alleen dat het klaar is (of
    remise), de eindkaart zegt de uitslag en wat er gebeurde; de strook zegt de kop van de eindkaart. */
-const REMISE_SOORT = ['remise', 'pat', '50', 'materiaal', 'lang'];
+const REMISE_SOORT = ['remise', 'pat', '50', 'materiaal', 'lang', 'herhaling'];
 function kaartEinde(u, ik, naam) {
   const titel = 'Je potje met ' + naam + ' is ' + (REMISE_SOORT.includes(u.kind) ? 'remise' : 'klaar');
   const zin = u.kind === 'opgave' && u.by !== ik ? naam + ' gaf op. Jij wint dit potje!' :

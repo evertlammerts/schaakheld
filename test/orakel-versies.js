@@ -15,18 +15,8 @@ async function orakelVersies() {
   /* a zet met de negentiende halve zet pat; b zet met de honderdste halve zet zonder slaan of pionzet remise */
   const PAT_VOOR = ['e2e3', 'a7a5', 'd1h5', 'a8a6', 'h5a5', 'h7h5', 'h2h4', 'a6h6', 'a5c7', 'f7f6', 'c7d7', 'e8f7', 'd7b7',
     'd8d3', 'b7b8', 'd3h7', 'b8c8', 'f7g6'];
-  /* een rustig potje van n halve zetten: paarden heen en weer, en om de 98 halve zetten een pionzet van elk, zodat de
-     vijftigzettenregel het niet beëindigt */
-  const rustig = function (n) {
-    const z = [], wit = ['a2a3', 'b2b3', 'c2c3', 'd2d3', 'e2e3', 'f2f3'], zwart = ['a7a6', 'b7b6', 'c7c6', 'd7d6', 'e7e6', 'f7f6'];
-    while (z.length < n) {
-      const i = z.length % 98, blok = Math.floor(z.length / 98);
-      z.push(i === 96 ? wit[blok] : i === 97 ? zwart[blok] : ['g1f3', 'g8f6', 'f3g1', 'f6g8'][i % 4]);
-    }
-    return z;
-  };
-  const VIJFTIG_VOOR = [];
-  while (VIJFTIG_VOOR.length < 99) VIJFTIG_VOOR.push(['g1f3', 'g8f6', 'f3g1', 'f6g8'][VIJFTIG_VOOR.length % 4]);
+  const rustig = function (n) { return rustigePartij(n, true); };
+  const VIJFTIG = rustigePartij(100, false), VIJFTIG_VOOR = VIJFTIG.slice(0, 99);
   /* de soorten staat; bij elk wie aan zet is en welke zet er kan */
   const STATEN = {
     leeg: leeg,
@@ -34,6 +24,7 @@ async function orakelVersies() {
     uitdagingVanB: met(spel({ fase: 'uitdaging', door: 'b' })),
     voorPat: met(spel({ zetten: PAT_VOOR })),
     voorVijftig: met(spel({ zetten: VIJFTIG_VOOR })),
+    voorHerhaling: met(spel({ zetten: ['g1f3', 'g8f6', 'f3g1', 'f6g8', 'g1f3', 'g8f6', 'f3g1'] })),
     neeOnbekend: met(spel({ fase: 'nee', weet: { a: null, b: 'merk-b----------' } })),
     neeBekend: met(spel({ fase: 'nee', weet: { a: 'merk-a----------', b: 'merk-b----------' } })),
     aAanZet: met(spel({})),
@@ -46,7 +37,7 @@ async function orakelVersies() {
     klaarBekend: met(spel({ fase: 'klaar', zetten: ['e2e4'], uitslag: { soort: 'opgave', door: 'a', ply: 1 }, weet: { a: 'merk-a----------', b: 'merk-b----------' },
       bekeken: { a: true, b: false } }))
   };
-  const ZET = { voorPat: 'c8e6', voorVijftig: 'f6g8', aAanZet: 'e2e4', bAanZet: 'e7e5', bodZonderStempel: 'e7e5', bodVanEenDag: 'e7e5', bodVanVeertienDagen: 'e7e5' };
+  const ZET = { voorPat: 'c8e6', voorVijftig: VIJFTIG[99], voorHerhaling: 'f6g8', aAanZet: 'e2e4', bAanZet: 'e7e5', bodZonderStempel: 'e7e5', bodVanEenDag: 'e7e5', bodVanVeertienDagen: 'e7e5' };
   /* de handelingen, op het potje en de halve zet van de staat */
   const handeling = function (soort, staat, rol, naam) {
     const s = staat.spel, id = s ? s.id : 'niets', ply = s ? s.zetten.length : 0, merk = ('nieuw-' + rol).padEnd(16, '-');
@@ -89,6 +80,14 @@ async function orakelVersies() {
     ['voorVijftig', 'opgeven', 'b', function (u) { return u.spel.uitslag.soort === 'opgave'; }],
     ['voorVijftig', 'weghalen', 'a', function (u) { return u.spel.fase === 'klaar'; }],
     ['voorVijftig', 'weghalen', 'b', function (u) { return u.spel.fase === 'klaar'; }],
+    ['voorHerhaling', 'zet', 'b', function (u) { return u.spel.fase === 'klaar' && u.spel.uitslag.soort === 'herhaling' && u.spel.uitslag.door === 'b' &&
+      u.spel.uitslag.ply === 8 && u.spel.weet.b === 'nieuw-b---------' && u.spel.bekeken.b === true; }],
+    ['voorHerhaling', 'zetMetBod', 'b', function (u) { return u.spel.uitslag.soort === 'herhaling' && u.spel.bod === null; }],
+    ['voorHerhaling', 'bod', 'a', function (u) { return u.spel.bod.door === 'a' && u.spel.bod.ply === 7; }],
+    ['voorHerhaling', 'opgeven', 'a', function (u) { return u.spel.uitslag.soort === 'opgave'; }],
+    ['voorHerhaling', 'opgeven', 'b', function (u) { return u.spel.uitslag.soort === 'opgave'; }],
+    ['voorHerhaling', 'weghalen', 'a', function (u) { return u.spel.fase === 'klaar'; }],
+    ['voorHerhaling', 'weghalen', 'b', function (u) { return u.spel.fase === 'klaar'; }],
     ['neeOnbekend', 'neem', 'a', function (u) { return u.spel.weet.a === 'nieuw-a---------' && u.spel.weet.b === 'merk-b----------'; }],
     ['neeOnbekend', 'weghalen', 'a', function (u) { return u.spel.weet.a === 'nieuw-a---------'; }],
     ['neeBekend', 'uitdaging', 'a', function (u) { return u.spel.fase === 'uitdaging' && u.vorige.length === 0; }],
