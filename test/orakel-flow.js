@@ -2064,6 +2064,7 @@ async function orakelFlow() {
         staat: { v: 2, seq: 2, vorige: [], spel: { id: 'potjevanfien', wit: 'b', door: 'b', fase: 'potje', zetten: ['e2e4'], bod: null, uitslag: null,
           weet: { a: null, b: null }, bekeken: { a: false, b: false }, t: Math.floor(NU / 1000) } } } }));
       if (metRondje) o.setItem(RONDJES, JSON.stringify({ scan: { round: 2, earned: 6 } }));
+      await verzegelParen(o);
       const a = nieuwKind({ opslag: o });
       a.ev('P.lastSeen = ' + JSON.stringify(dagenTerug(5)) + '; renderVerder()');
       return { tekst: tekstVan(a, 'verderKaart'), ook: ookNogRegels(a) };

@@ -5231,8 +5231,6 @@ async function verwerkPaar(fid, X) {
     }
     if (terug) {
       bewaarPaar(fid, p);
-      /* een bewaarde staat zonder zijn tekst (van voor deze vorm) wordt opnieuw verzegeld */
-      if (!p.blob) { p.blob = await staatNaarBlob(f.k, p.staat); p.versie = await versieVan(p.blob); bewaarPaar(fid, p); }
       const ant = await schrijfPaar(f, p.blob, vx);
       if (ant.code === 409) { X = ant.blob; continue; }
       if (ant.code !== 204) return false;

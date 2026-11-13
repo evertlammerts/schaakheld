@@ -71,6 +71,22 @@ function maakApparaat(naam, opties) {
   return app;
 }
 
+/* De staten van een paar die een test in de opslag zet, verzegeld zoals een apparaat ze bewaart: als tekst, met de
+   versie. Voor de flowsuite, waar de app in de globale scope staat. */
+async function verzegelParen(o) {
+  const t = o.getItem('schaakheld-paar');
+  if (!t) return o;
+  const paren = JSON.parse(t), doc = JSON.parse(o.getItem('schaakheld1') || '{}'), vrienden = doc.friends || {};
+  for (const fid in paren) {
+    const p = paren[fid];
+    if (!p.staat || p.blob || !vrienden[fid]) continue;
+    p.blob = await staatNaarBlob(vrienden[fid].k, p.staat);
+    p.versie = await versieVan(p.blob);
+  }
+  o.setItem('schaakheld-paar', JSON.stringify(paren));
+  return o;
+}
+
 function stopApparaat(app) {
   if (app.leven.dood) return;
   app.leven.dood = true;

@@ -52,6 +52,7 @@ async function orakelFlow6() {
   const MET_FIEN_MEES_AAN_ZET = { fid: 'vriendfien1', naam: 'Fien', zetten: ['d2d4', 'd7d5'] };
   /* het kind opent de app met deze opslag en kijkt even rond */
   const kind = async function (o) {
+    await verzegelParen(o);
     const a = nieuwKind({ opslag: o });
     thuisVenstersWeg(a);
     await wacht(20000);

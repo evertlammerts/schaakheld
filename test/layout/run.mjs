@@ -57,6 +57,19 @@ const HELPERS = `
     await page.goto(URL);
     await page.evaluate(([d, x]) => { localStorage.clear(); localStorage.setItem('schaakheld1', d);
       for (const k in x) localStorage.setItem(k, x[k]); }, [DOC, extra || {}]);
+    /* de staten van een paar verzegeld zoals een apparaat ze bewaart, met de functies van de app op de pagina */
+    await page.evaluate(async () => {
+      const t = localStorage.getItem('schaakheld-paar');
+      if (!t) return;
+      const paren = JSON.parse(t), vrienden = JSON.parse(localStorage.getItem('schaakheld1')).friends || {};
+      for (const fid in paren) {
+        const p = paren[fid];
+        if (!p.staat || p.blob || !vrienden[fid]) continue;
+        p.blob = await staatNaarBlob(vrienden[fid].k, p.staat);
+        p.versie = await versieVan(p.blob);
+      }
+      localStorage.setItem('schaakheld-paar', JSON.stringify(paren));
+    });
     await page.reload();
     await page.waitForTimeout(300);
   };
