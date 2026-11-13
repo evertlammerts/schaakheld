@@ -914,3 +914,17 @@ func TestOrakelPotjeNuInCheck(t *testing.T) {
 		}
 	}(t)
 }
+
+func TestOrakelPotjeVersieVastPaar(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	// [V2] de versie is sha256 van de tekst van het briefje zoals verstuurd, in kleine hex: "abc" uit FIPS 180-2
+	func(t tb) {
+		bewijs, bus := potjeBus("a")
+		if a := schrijfPotjeAls(s, bewijs, bus, "abc", ""); a.code != 204 {
+			t.Fatalf("eerste staat: %+v", a)
+		}
+		if a := schrijfPotjeAls(s, bewijs, bus, "abd", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"); a.code != 204 {
+			t.Fatalf("met de vaste versie van abc: %+v, wil 204", a)
+		}
+	}(t)
+}
