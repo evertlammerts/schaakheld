@@ -682,6 +682,33 @@ async function orakelTwee6() {
   });
 
   /* wat al zo werkt en zo moet blijven: zonder vriendschap geen geheim, dus geen staat van een paar */
+  await regel('[6.5] W10 de gast doet zijn eerste zet voordat de gastheer het potje in de staat schreef: de zet wacht daarop en telt, en de borden blijven gelijk', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await wordenVrienden(mees, fien), J6 = JSON.stringify;
+    await nodigUit(mees);
+    await fien.ev('friendPoll()');
+    await wacht();
+    fien.tik('invJa');
+    await wacht();
+    const bus = await potjesbus(mees, fid), net = onderweg();
+    try {
+      net.houd(bus);
+      /* met deze willekeur speelt de gastheer zwart */
+      await metVasteWillekeur(200, async function () { mees.tik('mpGo'); await wacht(); });
+      check('testopzet: Fien speelt wit op de staat, en het begin van Mees hangt', magZetten(fien) && fien.get('MP.myColor') === 'w' &&
+        fien.get('!!MP.paar') && !(await busZegt(mees, fid)));
+      await zetUit(RUSTIG, fien);
+      await tijd(3000);
+      check('de zet van Fien wacht op haar apparaat', fien.get('paarVan(' + J6(fid) + ').rij.length') === 1);
+      net.laat(bus);
+      await tijd(10000);
+    } finally { net.stop(); }
+    const z = await busZegt(mees, fid);
+    check('het potje en de zet van Fien staan in de staat, en er wacht niets meer', !!z && z.zetten === 1 && fien.get('paarVan(' + J6(fid) + ').rij.length') === 0);
+    check('de borden zijn gelijk', mees.fen() === fien.fen() && mees.get('session.S.hist.length') === 1);
+  });
+
   await regel('[6.12] een potje met woordcodes tussen kinderen die geen vrienden zijn, eindigt nog als de kamer weg is, en heeft geen staat op de server', async function (check) {
     const a = maakApparaat('Lotte'), b = maakApparaat('Sem');
     a.ev('mpWordFlow()');

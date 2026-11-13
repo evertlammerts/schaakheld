@@ -674,11 +674,12 @@ for (const [W, H] of KLEIN) {
       await vers(${W}, ${H});
       const k = await page.evaluate(async () => {
         MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false, revTheirs: false,
-          peerName: 'Fien', open: false, weg: false, gameId: 'potje-test-1', peerOn: true };
+          peerName: 'Fien', open: true, weg: false, gameId: 'potje-test-1', peerOn: true };
+        Object.assign(MP, vrBegin(1));
         mpBeginGame();
         endGame({ over: true, result: 'b', reason: 'opgave' });
         await new Promise(r => setTimeout(r, 300));
-        mpOnVriendVraag({ t: 'vriend?', pub: 'A'.repeat(88) });
+        MP.anderKent = true; vrKrijg({ sessie: 1, pub: 'A'.repeat(87), wil: 1, nee: 0, zag: 0, voor: null });
         await new Promise(r => setTimeout(r, 300));
         const e = document.getElementById('eindkaart');
         const zichtbaar = [...e.querySelectorAll('button')].filter(b => b.getClientRects().length);
@@ -707,6 +708,7 @@ for (const [W, H, uitslag, vol] of [[360, 640, 'w'], [375, 553, 'w'], [375, 647,
         if (vol) { setPref('weekGoal', { kind: 'vriend', n: 1 }); ensureDay(); P.day.vriend = { 'naam:Maximiliaantje': 3 }; saveP(); }
         MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false, revTheirs: false,
           peerName: 'Maximiliaantje', open: true, weg: false, gameId: 'potje-test-1', peerOn: true };
+        Object.assign(MP, vrBegin(1));
         mpBeginGame();
         await new Promise(r => setTimeout(r, 300));
         const bord = () => { const r = document.getElementById('board').getBoundingClientRect(); return [r.top, r.left, r.width, r.height].map(Math.round).join(); };
@@ -715,7 +717,7 @@ for (const [W, H, uitslag, vol] of [[360, 640, 'w'], [375, 553, 'w'], [375, 647,
         for (let i = 0; i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
         endGame({ over: true, result: ${JSON.stringify(uitslag)}, reason: 'mat' });
         await new Promise(r => setTimeout(r, 300));
-        mpOnVriendVraag({ t: 'vriend?', pub: 'A'.repeat(88) });
+        MP.anderKent = true; vrKrijg({ sessie: 1, pub: 'A'.repeat(87), wil: 1, nee: 0, zag: 0, voor: null });
         await new Promise(r => setTimeout(r, 1200));
         const st = document.querySelector('#strook .s-txt'), bub = document.getElementById('bubble');
         const strook = { tekst: bub.textContent, regels: Math.round(bub.getBoundingClientRect().height / parseFloat(getComputedStyle(bub).lineHeight)),
@@ -787,11 +789,12 @@ for (const [W, H] of KLEIN) {
       await vers(${W}, ${H});
       await page.evaluate(async () => {
         MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false, revTheirs: false,
-          peerName: 'Fien', open: false, weg: false, gameId: 'potje-test-1', peerOn: true };
+          peerName: 'Fien', open: true, weg: false, gameId: 'potje-test-1', peerOn: true };
+        Object.assign(MP, vrBegin(1));
         mpBeginGame();
         endGame({ over: true, result: 'b', reason: 'opgave' });
         await new Promise(r => setTimeout(r, 300));
-        mpOnVriendVraag({ t: 'vriend?', pub: 'A'.repeat(88) });
+        MP.anderKent = true; vrKrijg({ sessie: 1, pub: 'A'.repeat(87), wil: 1, nee: 0, zag: 0, voor: null });
         await new Promise(r => setTimeout(r, 300));
       });
       const vriend = await meet();

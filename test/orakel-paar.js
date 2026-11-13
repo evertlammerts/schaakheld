@@ -628,6 +628,38 @@ async function orakelPaar() {
     check('het zicht heeft de zet met een tijd van nu', s.spel.zetten.length === 1 && Number.isFinite(s.spel.t) && Math.abs(s.spel.t - nu) <= 5);
   });
 
+  await regel('[V5] [P35] een potje tussen vrienden dat telt, geeft 30 XP; het vierde op een dag met dezelfde vriend 15, en met een andere vriend weer 30', async function (check) {
+    const w = await paarMeesFien();
+    const daan = maakApparaat('Daan');
+    await wordenVrienden(w.mees, daan);
+    const fd = w.mees.get('Object.keys(P.friends).filter(function (k) { return k !== ' + J(w.fm) + '; })[0]'), fdD = daan.get('Object.keys(P.friends)[0]');
+    const matVan = async function (x, fx, y, fy, id, op) {
+      await doe(x, fx, { soort: 'uitdaging', id: id, wit: rolVan(x, fx), op: op });
+      await leesP(y, fy);
+      await doe(y, fy, { soort: 'ja', id: id });
+      for (let i = 0; i < MAT_WIT.length; i++) {
+        const [a, f] = i % 2 === 0 ? [x, fx] : [y, fy];
+        await leesP(a, f);
+        await doe(a, f, { soort: 'zet', id: id, ply: i, zet: MAT_WIT[i] });
+      }
+      await leesP(y, fy);
+      await leesP(x, fx);
+    };
+    const xp = function () { return w.mees.get('P.xp || 0'); }, erbij = [];
+    let vorig = null;
+    for (const id of ['potjeeen0001', 'potjetwee002', 'potjedrie003', 'potjevier004']) {
+      const voor = xp();
+      await matVan(w.mees, w.fm, w.fien, w.ff, id, vorig);
+      vorig = id;
+      erbij.push(xp() - voor);
+    }
+    const voorDaan = xp();
+    await matVan(w.mees, fd, daan, fdD, 'potjedaan001', null);
+    check('testopzet: elk potje liep af met mat', JSON.stringify(bewaard(w.mees, fd).staat.spel.uitslag.soort) === '"mat"');
+    check('met Fien 30, 30, 30 en dan 15', JSON.stringify(erbij) === '[30,30,30,15]');
+    check('met Daan daarna weer 30', xp() - voorDaan === 30);
+  });
+
   await regel('[V2] [V3] [V5] [P29] willekeurige reeksen op vier apparaten (Mees en Fien, elk met een tablet): tikken, lezen, een schrijfactie die blijft hangen of haar antwoord kwijtraakt, netwerk weg, herstarts en de klok; daarna komt alles tot rust, elk apparaat heeft wat de server heeft, niets wacht, elk kind telt elk afgelopen potje één keer met de juiste tellers, en geen afgelopen potje loopt weer', async function (check) {
     const r = await willekeurigeReeksen(1, 20, 60);
     check('testopzet: er liepen potjes af', r.afgelopen >= 20);
