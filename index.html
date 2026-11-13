@@ -4171,7 +4171,7 @@ function bewaarSamen() {
       myColor: MP.myColor, gameNo: MP.gameNo, moves: MP.S.hist.map(u => moveKey(u.m)),
       peerName: MP.peerName || '', result: MP.result || null, offer: MP.offer || null,
       shown: !!MP.shown, updated: Date.now(), sessie: MP.vr ? MP.vr.sessie : 0, kamer: MP.kamer || null,
-      nogTonen: MP.vrNogTonen || null, terugZeggen: !!MP.vrTerugZeggen, tel: MP.telWie || null };
+      nogTonen: MP.vrNogTonen || null, terugZeggen: !!MP.vrTerugZeggen, tel: MP.telWie || null, herhaalGezegd: MP.herhaalGezegd || 0 };
   }
   const gelukt = schrijfSamen(games);
   MP.nietBewaard = !gelukt;
@@ -4237,6 +4237,7 @@ function samenHervat(b) {
   MP.vrNogTonen = typeof b.r.nogTonen === 'string' && ID_RE.test(b.r.nogTonen) ? b.r.nogTonen : null;
   MP.vrTerugZeggen = b.r.terugZeggen === true;
   MP.telWie = typeof b.r.tel === 'string' && b.r.tel.length <= 80 ? b.r.tel : null;
+  MP.herhaalGezegd = Number.isInteger(b.r.herhaalGezegd) && b.r.herhaalGezegd >= 0 && b.r.herhaalGezegd <= b.S.hist.length ? b.r.herhaalGezegd : 0;
   bewaarSamen();
 }
 /* de hele stand, voor de ander na elke verbinding en zodra die terug is */
@@ -4276,9 +4277,7 @@ function toonSamenScherm(S = MP.S, kleur = MP.myColor, naam = mpNaam()) {
   $('modeTitle').textContent = naam; /* textContent: geen escHtml */
   $('roundChip').textContent = '';
   clearBD();
-  const laatste = S.hist[S.hist.length - 1];
-  if (laatste) BD.last = [laatste.m.from, laatste.m.to];
-  BD.check = inCheck(S) ? S.kings[S.turn] : null;
+  nieuweStand(S);
   draaiBord(kleur === 'b');
   renderBoard();
   setTask(null);
@@ -4634,7 +4633,7 @@ function mpBeginGame(S0) {
   if (!MP.viaFriend && bv && !bv.weg) MP.viaFriend = MP.bewezenFid;
   vrTelNaar(MP.viaFriend || 'naam:' + mpNaam());
   MP.revMine = MP.revTheirs = false;
-  Object.assign(MP, { S: S0 || newGame(), over: false, result: null, offer: null, shown: false, bekend: false });
+  Object.assign(MP, { S: S0 || newGame(), over: false, result: null, offer: null, shown: false, bekend: false, herhaalGezegd: 0 });
   /* een nieuw potje met dezelfde vriend: de kaart van het gestopte potje mag weg */
   if (samenWeg && (samenWeg.fid ? samenWeg.fid === MP.viaFriend : samenWeg.naam === mpNaam())) samenWeg = null;
   session = { kind: 'game', online: true, S: MP.S, level: 0, tips: 0,
@@ -4672,8 +4671,7 @@ function mpOnZet(m) {
   animateMove(zet, () => {
     if (!samenInBeeld() || session.S !== S) return;
     if (wasCap) snd.cap(); else snd.move();
-    BD.last = [zet.from, zet.to];
-    BD.check = inCheck(S) ? S.kings[S.turn] : null;
+    nieuweStand(S);
     renderBoard();
     updateTrays();
     const st = potjeStatus(S);
@@ -4682,15 +4680,15 @@ function mpOnZet(m) {
     remiseRij();
     if (inCheck(S)) {
       snd.check();
-      if (tweedeKeer(S)) session.herhaalSchuld = true;
       say('Schaak! Red je koning. 👑');
-    } else say(herhaalRegel(S) || 'Jij weer! Wat wordt je plan? 💭');
+    } else say(herhaalRegel(S, true) || 'Jij weer! Wat wordt je plan? 💭');
   });
 }
 /* is de ander weg, dan zegt de strook dat, en niet dat de ander nu zet; waar de strook zegt wie aan zet is, staat de regel
    over herhaling als die er is */
 function zegBeurt() {
-  say(MP.peerWeg ? anderWeg() : herhaalRegel(MP.S) || (MP.S.turn === MP.myColor ? 'Jij bent aan zet! 💭' : mpNaam() + ' is aan zet… ⏳'));
+  const mij = MP.S.turn === MP.myColor;
+  say(MP.peerWeg ? anderWeg() : herhaalRegel(MP.S, mij) || (mij ? 'Jij bent aan zet! 💭' : mpNaam() + ' is aan zet… ⏳'));
 }
 function anderWeg() { return mpNaam() + ' is er nu niet. Jullie potje blijft staan. Ga gerust iets anders doen: het staat bij Verder.'; }
 const SAMEN_NIET_BEWAARD = 'Dit potje kon ik niet bewaren. Laat de app open, dan kunnen jullie verder.';
@@ -4779,10 +4777,7 @@ function mpOnSync(m) {
 /* een nieuwe stand van het vriendenpotje op het bord */
 function toonStand(S) {
   session.S = S;
-  clearSel();
-  const laatste = S.hist[S.hist.length - 1];
-  BD.last = laatste ? [laatste.m.from, laatste.m.to] : null;
-  BD.check = inCheck(S) ? S.kings[S.turn] : null;
+  nieuweStand(S);
   renderBoard();
   updateTrays();
 }
@@ -5971,6 +5966,15 @@ setAppH();
 const BD = { mode: 'off', sel: null, dots: new Set(), marks: new Set(), last: null,
   check: null, glow: new Set(), spy: new Set(), result: null, arrows: [] };
 function clearSel() { BD.sel = null; BD.dots.clear(); }
+/* in een potje hoort wat op het bord staat bij de stelling (het licht van het alarm, de randjes, de pijlen, een gekozen
+   stuk): het gaat weg zodra de stelling verandert, langs elke weg; in een oefening hoort het bij de opdracht */
+function nieuweStand(S) {
+  clearSel();
+  BD.glow.clear(); BD.spy = new Set(); BD.marks.clear(); BD.arrows = []; BD.result = null;
+  const u = S.hist[S.hist.length - 1];
+  BD.last = u ? [u.m.from, u.m.to] : null;
+  BD.check = inCheck(S) ? S.kings[S.turn] : null;
+}
 function clearBD() {
   BD.mode = 'off'; BD.sel = null; BD.dots.clear(); BD.marks.clear();
   BD.last = null; BD.check = null; BD.glow.clear(); BD.spy.clear();
@@ -6066,8 +6070,7 @@ function playMove(m, cb) {
     if (!nog()) return;
     if (wasCap) snd.cap(); else snd.move();
     makeMove(S, m);
-    BD.last = [m.from, m.to];
-    BD.check = inCheck(S) ? S.kings[S.turn] : null;
+    if (mine.kind === 'game') nieuweStand(S); else { BD.last = [m.from, m.to]; BD.check = inCheck(S) ? S.kings[S.turn] : null; }
     renderBoard();
     if (mine.kind === 'game' && !mine.cloud) bewaarPotje();
     if (cb) cb();
@@ -6481,6 +6484,8 @@ function leesRecord(r, k) {
     if (!(r.drawAsked === null || geheel(r.drawAsked, 0, r.moves.length))) r.drawAsked = null;
     if (r.patXP === undefined) r.patXP = 0;
     else if (!geheel(r.patXP, 0, 3)) r.patXP = 3;
+    /* zonder een geldig getal is de regel over herhaling nog beloofd als er een stelling twee keer stond */
+    if (!geheel(r.herhaalGezegd, 0, r.moves.length)) r.herhaalGezegd = 0;
     return { r, S };
   } catch (e) { return { kapot: true }; }
 }
@@ -6488,7 +6493,8 @@ function leesRecord(r, k) {
 function potjeInhoud() {
   const S = session.cloud ? session.cloud.realS : session.S;
   return { level: session.level, moves: S.hist.map(h => moveKey(h.m)), tips: session.tips,
-    drawAsked: session.drawAsked == null ? null : session.drawAsked, started: session.started, patXP: session.patXP || 0 };
+    drawAsked: session.drawAsked == null ? null : session.drawAsked, started: session.started, patXP: session.patXP || 0,
+    herhaalGezegd: session.herhaalGezegd || 0 };
 }
 function bewaarPotje() {
   if (!session || session.kind !== 'game' || session.online || session.over) return;
@@ -7519,8 +7525,9 @@ function buildBest3() {
 /* De lijnen zijn pas na het antwoord nodig: de app rekent ze een voor een terwijl het kind naar het bord kijkt, zodat
    een tik ertussen past; komt het antwoord eerder, dan rekent best3Explanations de rest. Ze rekenen op een eigen kopie
    van de stelling, want op het bord kan intussen een foute keuze staan. */
+function rekenStand(task) { return task.rekenS || (task.rekenS = parseFEN(toFEN(task.S))); }
 function lijnenLater(task) {
-  task.rekenS = parseFEN(toFEN(task.S));
+  rekenStand(task);
   task.options.forEach((o, i) => later(() => lijnVerlies(task, o), 400 + 300 * i));
 }
 
@@ -7530,7 +7537,7 @@ function lijnenLater(task) {
    verliest en geen mat toelaat; twee zoektochten van CHECK_NODES posities, dus een keer per keuze. */
 function lijnVerlies(task, o) {
   if (o.lijn !== undefined) return o.lijn;
-  const S = task.rekenS || (task.rekenS = parseFEN(toFEN(task.S))), nu = material(S), stand = evalWhite(S);
+  const S = rekenStand(task), nu = material(S), stand = evalWhite(S);
   makeMove(S, o.m);
   const rustig = !gameStatus(S).over && !mateReply(S) && Math.abs(forcedMaterial(S) - nu) < 90;
   unmakeMove(S);
@@ -7597,7 +7604,7 @@ function best3Explanations(task, gekozen) {
 /* wat een andere keuze kost, op dezelfde maat als de lijn van de beste: de slagen meteen als die een pion of meer
    schelen, anders langs haar lijn; mat kost het meest */
 function keuzeKost(task, o) {
-  const S = task.rekenS || (task.rekenS = parseFEN(toFEN(task.S))), nu = material(S);
+  const S = rekenStand(task), nu = material(S);
   makeMove(S, o.m);
   const st = gameStatus(S), mat = !st.over && !!mateReply(S), d = st.over ? (st.result === 'w' ? MATE : 0) : forcedMaterial(S) - nu;
   unmakeMove(S);
@@ -7850,6 +7857,11 @@ function nietSlaan(S, a) {
   const w = piecesOf(S, 'w').filter(p => p !== k && pieceAttacksSq(S, p, a)).sort(goedkoop)[0];
   return w == null ? '' : ' Je ' + NAME_NL[S.board[w].toLowerCase()] + ' op ' + alg(w) + ' mag ' + hetStuk(x) + ' niet slaan: ' + hijVan(S.board[w]) + ' staat in een penning.';
 }
+/* niet veilig zoals saveKind het meet: Turbo wint iets door op dat veld te slaan; wie schaak staat, is alleen veilig als niets het aanvalt */
+function nietVeilig(S, sq) {
+  if (!attacked(S, sq, 'b')) return false;
+  return inCheck(S) || seeSquare(nullMoved(S), sq) > 0;
+}
 function koningAttempt(m) {
   if (!session || session.phase !== 'puzzle') return;
   const t = session.task, S = session.S;
@@ -7878,6 +7890,7 @@ function koningAttempt(m) {
   hulpZin(null);
   /* in Red je stuk zegt een rustig antwoord van Turbo niet dat er gevaar is: de zin volgt uit de zet van het kind */
   const redding = t.type === 'stuk' ? saveKind(S, m, t.hang.sq) : null, hangNaam = redding ? NAME_NL[S.board[t.hang.sq].toLowerCase()] : null;
+  const plek = redding ? (m.from === t.hang.sq ? m.to : t.hang.sq) : null;
   /* laat zien wat er dan gebeurt, ook bij de laatste poging: Turbo slaat toe, en het bord komt terug */
   session.phase = 'busy';
   BD.mode = 'off';
@@ -7902,14 +7915,16 @@ function koningAttempt(m) {
         const st2 = gameStatus(S);
         const cap = S.hist[S.hist.length - 1].cap;
         /* "nog steeds aangevallen" alleen als Turbo het stuk pakt dat al hing */
-        const hing = t.type === 'stuk' && reply.to === (m.from === t.hang.sq ? m.to : t.hang.sq);
+        const hing = plek != null && reply.to === plek;
         const txt = st2.over && st2.reason === 'mat' ? 'Turbo speelt <b>' + replyName + '</b>: schaakmat.' + matUitleg(S) :
           mat2 ? 'Turbo speelt ' + zetB(replyName) + ' Mat is niet meer te stoppen.' :
             cap && hing ? 'Turbo speelt <b>' + replyName + '</b>: je ' + NAME_NL[cap.toLowerCase()] + ' stond nog steeds aangevallen.' :
               cap ? 'Turbo speelt ' + zetB(replyName) : !redding ? 'Turbo speelt <b>' + replyName + '</b>, en het gevaar is er nog.' :
-                /* na een tegenaanval of schaak staat het stuk nog aangevallen, net als na een zet die het niet redt */
-                'Turbo speelt ' + zetB(replyName) + ' ' + (['anders', 'ruil', 'tegenaanval', 'schaak'].includes(redding.kind) ?
-                  'Je ' + hangNaam + ' op ' + redding.sq + ' is nog niet veilig.' : 'Een paar zetten later verlies je toch iets.');
+                /* wat het bord na Turbo's antwoord laat zien, en anders of de zet van het kind een echte redding was: een
+                   zet die het stuk niet redt en niet in de voorraad staat, is minstens anderhalve pion slechter dan het antwoord */
+                'Turbo speelt ' + zetB(replyName) + ' ' + (nietVeilig(S, plek) ? 'Je ' + hangNaam + ' op ' + redding.sq + ' is nog niet veilig.' :
+                  ['anders', 'ruil', 'tegenaanval', 'schaak'].includes(redding.kind) ? 'Er is een betere zet om je ' + hangNaam + ' te redden.' :
+                    'Een paar zetten later verlies je toch iets.');
         later(() => {
           unmakeMove(S); unmakeMove(S);
           /* de pijl van Turbo's antwoord blijft staan zolang de zin erover staat */
@@ -8323,7 +8338,7 @@ function startGame(level, bewaard) {
   gezien();
   session = { kind: 'game', S: bewaard ? bewaard.S : newGame(), level, tips: bewaard ? bewaard.r.tips : 3, over: false,
     pending: null, drawAsked: bewaard ? bewaard.r.drawAsked : null, started: bewaard ? bewaard.r.started : Date.now(),
-    patXP: bewaard ? bewaard.r.patXP || 0 : 0 };
+    patXP: bewaard ? bewaard.r.patXP || 0 : 0, herhaalGezegd: bewaard ? bewaard.r.herhaalGezegd : 0 };
   showScreen('play');
   /* in de balk de naam zonder het plaatje van de niveaukeuze: zo past de naam */
   $('modeTitle').textContent = TURBO_NAMES[level].replace(/^\S+\s/, '');
@@ -8337,9 +8352,7 @@ function startGame(level, bewaard) {
   strookModus(null);
   updateTrays();
   gameActions();
-  const laatste = session.S.hist[session.S.hist.length - 1];
-  if (laatste) BD.last = [laatste.m.from, laatste.m.to];
-  BD.check = inCheck(session.S) ? session.S.kings[session.S.turn] : null;
+  nieuweStand(session.S);
   renderBoard();
   /* een hervat potje staat al precies zo bewaard; een nieuw potje haalt een oud record weg */
   if (bewaard) { session.laatstBewaard = JSON.stringify(potjeInhoud()); toonBewaard(true); } else {
@@ -8348,7 +8361,8 @@ function startGame(level, bewaard) {
     bewaarPotje();
   }
   if (session.S.turn === 'w') kidTurn(); else { BD.mode = 'off'; turboTurn(); }
-  if (bewaard) say('Welkom terug! Je potje staat nog precies zo. ' +
+  /* terug in het potje en aan zet: een regel over herhaling gaat voor het welkom, want de volgende zet kan de derde keer zijn */
+  if (bewaard) say((session.S.turn === 'w' && !inCheck(session.S) && herhaalRegel(session.S, true)) || 'Welkom terug! Je potje staat nog precies zo. ' +
     (session.S.turn !== 'w' ? 'Ik ben aan zet.' : inCheck(session.S) ? 'Je staat schaak!' : 'Jij bent aan zet.'));
 }
 
@@ -8516,11 +8530,9 @@ function mpOnOpgave(m) {
 /* ---------- denkwolk: vrij vooruitdenken op een droomkopie van het bord ---------- */
 function enterCloud() {
   if (!session || session.kind !== 'game' || session.over || BD.mode !== 'move') return;
-  session.cloud = { realS: session.S, realLast: BD.last, over: false, counted: false };
+  session.cloud = { realS: session.S, over: false, counted: false };
   session.S = parseFEN(toFEN(session.S));
-  clearSel();
-  BD.spy.clear();
-  BD.last = null;
+  nieuweStand(session.S);
   BD.mode = 'cloud';
   const frame = document.querySelector('.board-frame');
   if (frame) frame.classList.add('cloud');
@@ -8578,9 +8590,7 @@ function cloudTurbo() {
 function cloudUndo() {
   if (!session || !session.cloud || !session.S.hist.length) return;
   unmakeMove(session.S);
-  clearSel();
-  BD.last = null;
-  BD.check = inCheck(session.S) ? session.S.kings[session.S.turn] : null;
+  nieuweStand(session.S);
   session.cloud.over = false;
   BD.mode = 'cloud';
   renderBoard();
@@ -8590,10 +8600,8 @@ function cloudUndo() {
 function exitCloud() {
   if (!session || !session.cloud) return;
   session.S = session.cloud.realS;
-  BD.last = session.cloud.realLast;
   session.cloud = null;
-  clearSel();
-  BD.check = inCheck(session.S) ? session.S.kings[session.S.turn] : null;
+  nieuweStand(session.S);
   BD.mode = 'move';
   const frame = document.querySelector('.board-frame');
   if (frame) frame.classList.remove('cloud');
@@ -8751,10 +8759,9 @@ function trySelect(sq) {
   renderBoard();
 }
 
-/* Het blunderalarm noemt wat in gevaar is, nooit de betere zet: het stuk
-   voor een kind dat begint of speelt, onder Super Turbo; daarna alleen dat er iets kan */
-/* tegen Slaapkop Turbo en Turbo noemt het alarm het stuk en licht "Ik kijk nog even" het op; tegen Super Turbo of voor een
-   kind dat al sterk is, is dat zoeken de oefening, en zegt het alarm waar het kind moet kijken */
+/* Het blunderalarm noemt wat in gevaar is, nooit de betere zet. Tegen Slaapkop Turbo en Turbo noemt het het stuk en licht
+   "Ik kijk nog even" het op; tegen Super Turbo of voor een kind dat al sterk is, is dat zoeken de oefening, en zegt het
+   alarm waar het kind moet kijken */
 function alarmZin(S, m, bl) {
   if (bl.mate) return { tekst: 'Na deze zet kan Turbo je schaakmat zetten.', veld: null };
   if (session.level < 3 && stadium(P) !== 'sterk' && bl.take) {
@@ -8798,13 +8805,29 @@ function potjeStatus(S) {
    de stelling die er staat, dus wie dan schaak staat hoort eerst "Schaak!" en de regel pas bij een volgende tweede keer */
 const HERHAAL_ZIN = 'Deze stelling stond er al eens. Bij de derde keer is het remise. Wil je dat niet? Kies een andere zet.';
 function tweedeKeer(S) { return repetitions(S) === 1; }
-/* stond een stelling er voor de tweede keer terwijl iets anders de strook had, dan komt deze regel bij de eerstvolgende
-   vrije strook: hij is waar op elk bord */
+/* Stond een stelling er voor de tweede keer terwijl iets anders de strook had, dan is deze regel beloofd: hij is waar op
+   elk bord. Of hij beloofd is, volgt uit de zetten van het potje; het potje onthoudt alleen bij welke halve zet de regel
+   er het laatst stond (herhaalGezegd), zodat een herlading de belofte houdt en Zet terug haar met de zetten meeneemt. */
 const HERHAAL_SCHULD = 'Een stelling stond er net voor de tweede keer. De derde keer is het remise. Liever niet? Speel anders.';
-/* de regel over herhaling op een vrije strook: over het bord als dat er voor de tweede keer staat, anders de schuld */
-function herhaalRegel(S) {
-  const r = tweedeKeer(S) ? HERHAAL_ZIN : session.herhaalSchuld ? HERHAAL_SCHULD : null;
-  if (r) session.herhaalSchuld = false;
+/* bij welke halve zet een stelling er het laatst voor de tweede keer stond, in het potje zoals het nu is (0: nooit) */
+function laatsteTweedeKeer(S) {
+  const zetten = S.hist.map(u => u.m), tel = {};
+  for (let i = 0; i < zetten.length; i++) unmakeMove(S);
+  let p = 0;
+  const kijk = i => { const k = positionKey(S); tel[k] = (tel[k] || 0) + 1; if (tel[k] === 2) p = i; };
+  kijk(0);
+  zetten.forEach((m, i) => { makeMove(S, m); kijk(i + 1); });
+  return p;
+}
+/* De regel over herhaling op een vrije strook: over het bord als dat er voor de tweede keer staat, en anders de beloofde
+   regel; die raadt de volgende keuze van het kind aan, dus hij komt alleen als het kind aan zet is. */
+function herhaalRegel(S, kindAanZet) {
+  const plek = session.online ? MP : session;
+  const r = tweedeKeer(S) ? HERHAAL_ZIN : kindAanZet && laatsteTweedeKeer(S) > (plek.herhaalGezegd || 0) ? HERHAAL_SCHULD : null;
+  if (r) {
+    plek.herhaalGezegd = S.hist.length;
+    if (session.online) bewaarSamen(); else bewaarPotje();
+  }
   return r;
 }
 function commitKid(m) {
@@ -8818,7 +8841,6 @@ function commitKid(m) {
   }
   const S = session.S;
   const co = session.online ? null : patternCallout(S, m);
-  let herhaling = null;
   playMove(m, () => {
     if (!session || session.kind !== 'game') return;
     updateTrays();
@@ -8838,9 +8860,10 @@ function commitKid(m) {
       /* zonder verbinding geen belofte dat de ander de zet al ziet */
       say(!session.samenBewaard ? SAMEN_NIET_BEWAARD :
         MP && MP.zetZonderNet ? 'Je zet is bewaard. Er is nu geen verbinding, dus ' + mpNaam() + ' ziet hem nog niet.' :
-        MP && MP.peerWeg ? anderWeg() : herhaalRegel(S) || 'Nu ' + mpNaam() + '… 💭');
+        MP && MP.peerWeg ? anderWeg() : herhaalRegel(S, false) || 'Nu ' + mpNaam() + '… 💭');
       return;
     }
+    const herhaling = co ? null : herhaalRegel(S, false);
     if (co) {
       countPattern(co.key);
       if ((session.patXP || 0) < 3) {
@@ -8850,9 +8873,8 @@ function commitKid(m) {
       }
       say('Dat is een ' + co.what + ' Goed gezien!');
       trucRandjes(co.squares);
-      if (tweedeKeer(S)) session.herhaalSchuld = true;
       later(turboTurn, 1100);
-    } else if ((herhaling = herhaalRegel(S))) {
+    } else if (herhaling) {
       say(herhaling);
       later(turboTurn, 1100);
     } else {
@@ -9015,8 +9037,7 @@ function doTurboMove(m, na) {
     const st = potjeStatus(S);
     if (st.over) { endGame(st); return; }
     if (co) { countPattern(co.key); trucRandjes(co.squares); }
-    if ((inCheck(S) || co) && tweedeKeer(S)) session.herhaalSchuld = true;
-    const regel = inCheck(S) ? SCHAAK_ZIN : co ? 'Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢' : herhaalRegel(S) || zin;
+    const regel = inCheck(S) ? SCHAAK_ZIN : co ? 'Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢' : herhaalRegel(S, true) || zin;
     /* Turbo's zin is de uitleg en wordt nooit ingekort: past de lof er niet bij, dan gaat de lof (de XP-melding zei het al) */
     const voor = na === 'goed' ? 'Goed voorspeld! ' : na === 'fout' ? 'Het was mijn ' + stukTurbo + '. ' : '';
     if (regel) say(voor && Array.from(voor + regel).length <= STROOK_TEKENS ? voor + regel : regel);
@@ -9054,11 +9075,9 @@ function undoMove() {
   session.laatsteVraag = null;
   /* een moment hoort bij een zet in de geschiedenis: een teruggenomen zet neemt zijn moment mee */
   for (const k in session.momenten || {}) if (+k >= S.hist.length) delete session.momenten[k];
+  session.herhaalGezegd = Math.min(session.herhaalGezegd || 0, S.hist.length);
   bewaarPotje();
-  clearSel();
-  BD.spy.clear();
-  BD.last = null;
-  BD.check = inCheck(S) ? S.kings[S.turn] : null;
+  nieuweStand(S);
   renderBoard();
   updateTrays();
   say('Oké! Kijk nog eens goed. Wat is hier slim? 🐢');

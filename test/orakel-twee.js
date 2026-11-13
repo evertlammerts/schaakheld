@@ -3560,20 +3560,38 @@ async function orakelTwee() {
     for (const x of [op, ander]) check('de tweede keer bij ' + x.naam + ' (' + tekstVan(x, 'bubble') + ')', zegtHerhaling(x));
   });
 
-  await regel('[5.6] een vriendenpotje: wie bij de tweede keer schaak staat, hoort eerst "Schaak!" en de regel bij de volgende vrije strook', async function (check) {
-    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
-    await samenSpelen(a, b);
-    for (const z of ['e2e4', 'd7d5', 'f1b5', 'c8d7', 'b5f1', 'd7c8', 'f1b5']) await speel(a, b, z);
-    await wacht(3000);
-    const wit = a.get('MP.myColor') === 'w' ? a : b, zwart = wit === a ? b : a;
-    check('wit hoort de regel (' + tekstVan(wit, 'bubble') + ')', zegtHerhaling(wit));
-    check('zwart hoort eerst Schaak! (' + tekstVan(zwart, 'bubble') + ')', /^Schaak!/.test(tekstVan(zwart, 'bubble')));
-    await speel(a, b, 'b8c6');
-    await wacht(3000);
-    check('zwart hoort na zijn zet de regel die nog open stond (' + tekstVan(zwart, 'bubble') + ')',
-      tekstVan(zwart, 'bubble').indexOf('Een stelling stond er net voor de tweede keer.') >= 0);
-    check('wit hoort dat hij aan zet is (' + tekstVan(wit, 'bubble') + ')', /Jij weer!/.test(tekstVan(wit, 'bubble')));
-  });
+  const beloofd = function (x) { return tekstVan(x, 'bubble').indexOf('Een stelling stond er net voor de tweede keer.') >= 0; };
+  for (const herladen of [false, true]) {
+    await regel('[5.6] een vriendenpotje: wie bij de tweede keer schaak staat, hoort eerst "Schaak!" en de regel als hij weer aan zet is, één keer' + (herladen ? ', ook als hij daarna herlaadt' : ''), async function (check) {
+      const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+      await samenSpelen(a, b);
+      for (const z of ['e2e4', 'd7d5', 'f1b5', 'c8d7', 'b5f1', 'd7c8', 'f1b5']) await speel(a, b, z);
+      await wacht(3000);
+      const wit = a.get('MP.myColor') === 'w' ? a : b;
+      let zwart = wit === a ? b : a;
+      check('wit hoort de regel (' + tekstVan(wit, 'bubble') + ')', zegtHerhaling(wit));
+      check('zwart hoort eerst Schaak! (' + tekstVan(zwart, 'bubble') + ')', /^Schaak!/.test(tekstVan(zwart, 'bubble')));
+      zet(zwart, 'b8c6');
+      await wacht(3000);
+      check('zwart hoort de regel niet na zijn eigen zet: dan is wit aan zet (' + tekstVan(zwart, 'bubble') + ')', !beloofd(zwart));
+      check('wit hoort dat hij aan zet is (' + tekstVan(wit, 'bubble') + ')', /Jij weer!/.test(tekstVan(wit, 'bubble')));
+      zet(wit, 'g1f3');
+      await wacht(3000);
+      check('zwart hoort de regel als hij weer aan zet is (' + tekstVan(zwart, 'bubble') + ')', beloofd(zwart));
+      check('wit hoort hem niet (' + tekstVan(wit, 'bubble') + ')', !beloofd(wit));
+      if (herladen) {
+        zwart = await terugInPotje(zwart);
+        check('testopzet: zwart is terug in het potje', zwart.get('!!(session && session.online && !session.over)'));
+        check('na een herlading niet nog eens (' + tekstVan(zwart, 'bubble') + ')', !beloofd(zwart) && !zegtHerhaling(zwart));
+      } else {
+        zet(zwart, 'g8f6');
+        await wacht(3000);
+        zet(wit, 'b1c3');
+        await wacht(3000);
+        check('na de volgende zetten niet nog eens (' + tekstVan(zwart, 'bubble') + ')', !beloofd(zwart));
+      }
+    });
+  }
 
   /* zelfde grenzen als de Go-test van 4.10: na 9,5 minuten nog wel, na 10,5 niet meer */
   await regel('[4.10] de nep-server: een koppelcode werkt tien minuten, daarna niet meer', async function (check) {

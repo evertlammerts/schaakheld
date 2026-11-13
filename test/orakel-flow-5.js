@@ -1625,11 +1625,32 @@ async function orakelFlow5() {
   await regel('[5.5] Red je stuk: een redding die later toch iets kost en Turbo rustig speelt: "Turbo speelt {zet}. Een paar zetten later verlies je toch iets."', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'koning');
+    stukUitVoorraad5(a, 'r1bqkb1r/1pp2pp1/p3p2p/4n3/2NpP3/3Q4/PPPP1PPP/R1B1K2R w');
+    check('testopzet: De2 zet de dame weg en is geen zet die ook goed is', !a.get('session.task.ook.some(function (o) { return moveKey(o.m) === "d3e2"; })') &&
+      a.get('saveKind(session.S, legalMoves(session.S).find(function (x) { return moveKey(x) === "d3e2"; }), session.task.hang.sq).kind') === 'weg');
+    zet(a, 'd3e2');
+    await wacht(5000);
+    check('de zin (' + onder5(a) + ')', /^Turbo speelt .+\. Een paar zetten later verlies je toch iets\. Probeer nog een zet\.$/.test(onder5(a)));
+  });
+  /* de zin volgt uit het bord na Turbo's antwoord: valt Turbo het weggezette stuk weer aan, dan is het nog niet veilig */
+  await regel('[5.5] Red je stuk: een redding waarna Turbo het stuk weer aanvalt: "Je {stuk} op {veld} is nog niet veilig."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
     stukUitVoorraad5(a, '3rkb1r/pppqppp1/2n2n1p/3p4/3P2b1/3BPQ1N/PPPN1PPP/R1B2K1R w');
     check('testopzet: Df4 is geen zet die ook goed is', !a.get('session.task.ook.some(function (o) { return moveKey(o.m) === "f3f4"; })'));
     zet(a, 'f3f4');
     await wacht(5000);
-    check('de zin (' + onder5(a) + ')', /^Turbo speelt .+\. Een paar zetten later verlies je toch iets\. Probeer nog een zet\.$/.test(onder5(a)));
+    check('de zin (' + onder5(a) + ')', /^Turbo speelt Paard f6 → h5\. Je dame op f4 is nog niet veilig\. Probeer nog een zet\.$/.test(onder5(a)));
+  });
+  /* niet geslagen, niet meer aangevallen, en geen redding: de zin zegt dat er een betere zet is, nooit dat het stuk nog
+     aangevallen staat (Turbo trok hier zijn paard weg met schaak) */
+  await regel('[5.5] Red je stuk: een tegenaanval waarna het stuk niet meer aangevallen staat: "Turbo speelt {zet}. Er is een betere zet om je {stuk} te redden."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'koning');
+    stukUitVoorraad5(a, 'r1bq3r/ppppk1pp/2n5/4p2B/1b6/3PPN2/PPPn1PPP/R2QK2R w');
+    zet(a, 'd1c1');
+    await wacht(5000);
+    check('de zin (' + onder5(a) + ')', /^Turbo speelt Paard d2 → b3.*\. Er is een betere zet om je paard te redden\. Probeer nog een zet\.$/.test(onder5(a)));
   });
 
   /* De Beste Zet: de lijnen worden op een kopie van de stelling uitgerekend; een snel antwoord zet een andere zet op
@@ -1675,15 +1696,33 @@ async function orakelFlow5() {
     check('de zin (' + strook5(a) + ')', strook5(a) === 'Niet de beste. Kies een andere.');
     check('alleen jouw keuze in geel', a.get('BD.arrows.length === 1 && BD.arrows[0].cls === "a-sun" && moveKey(BD.arrows[0]) === "a2a3"'));
   });
+  /* Turbo's antwoord is het laten zien waard als het slaat, ook als de ruil gelijk opgaat, en als het schaak geeft, ook als
+     dat niets kost */
+  for (const [wat, fen, zetten, antwoord] of [
+    ['een slag in een gelijke ruil', 'rnb2k1r/1pppqpp1/p2bp2p/4Nn2/3PN3/3BP3/PPP1QPPP/R1B2RK1 w - - 0 11', ['e4d6', 'e2f3', 'a2a3'], 'c7d6'],
+    ['een schaak dat niets kost', 'r1b1kbnr/ppp2ppp/8/4p3/3qp3/3P3N/PPP2PPP/R1BQKB1R w KQkq - 0 7', ['c1e3', 'c2c3', 'a2a3'], 'f8b4']]) {
+    await regel('[5.5] De Beste Zet, een foute keuze waarop Turbo antwoordt met ' + wat + ': "kijk wat Turbo dan doet" en beide pijlen', async function (check) {
+      const a = nieuwKind();
+      await startOefening(a, 'best3');
+      a.ev('(function () { var S = parseFEN(' + JSON.stringify(fen) + ');' +
+        ' var opts = ' + JSON.stringify(zetten) + '.map(function (k) { return { m: legalMoves(S).find(function (x) { return moveKey(x) === k; }), deep: 0 }; });' +
+        ' session.task = { S: S, options: opts, best: opts[1] }; session.S = S; session.phase = "choose"; session.tries = 0; session.picked = null; session.keuzeOpen = true; renderBoard();' +
+        ' pickOption(0); best3Confirm(); })()');
+      await wacht(6000);
+      check('de zin (' + strook5(a) + ')', strook5(a) === 'Niet de beste: kijk wat Turbo dan doet. Kies een andere.');
+      check('jouw keuze in geel en Turbo\'s antwoord ' + antwoord + ' in koraal', a.get('BD.arrows.length === 2 && BD.arrows[0].cls === "a-sun" && moveKey(BD.arrows[0]) === ' + JSON.stringify(zetten[0]) +
+        ' && BD.arrows[1].cls === "a-coral" && moveKey(BD.arrows[1]) === ' + JSON.stringify(antwoord)));
+    });
+  }
 
   /* de waarschuwing voor remise door herhaling is beloofd: had iets anders de strook toen een stelling er voor de tweede
      keer stond, dan komt bij de volgende vrije strook een regel die op elk bord waar is */
   const HERHAAL_SCHULD5 = 'Een stelling stond er net voor de tweede keer. De derde keer is het remise. Liever niet? Speel anders.';
   for (const [wat, fen, turbo, kind, eerste, na] of [
-    ['schaak', '3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30', { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4d3', 8: 'd3d4' }, ['g1h1', 'h1g1', 'g1f1'], null, 'Je staat schaak! Red je koning! 👑'],
-    ['een truc van Turbo', '7k/8/8/8/6n1/8/8/3Q1RK1 b - - 0 30', { 0: 'g4e3', 2: 'e3g4', 4: 'g4e3' }, ['g1h2', 'h2g1', 'g1h1'], null, null],
+    ['schaak', '3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30', { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4d5' }, ['g1h1', 'h1g1', 'g1f1'], null, 'Je staat schaak! Red je koning! 👑'],
+    ['een truc van Turbo', '7k/8/8/8/6n1/8/8/3Q1RK1 b - - 0 30', { 0: 'g4e3', 2: 'e3g4', 4: 'g4e3', 6: 'e3c4' }, ['g1h2', 'h2g1', 'g1h1'], null, null],
     ['een truc van het kind', '3q1r1k/8/8/6N1/8/8/8/6K1 w - - 0 30', { 1: 'h8g8', 3: 'g8h8', 5: 'd8d7' }, ['g5e6', 'e6g5', 'g5e6'], true, null]]) {
-    await regel('[5.6] had ' + wat + ' de strook toen een stelling er voor de tweede keer stond, dan komt daarna "Een stelling stond er net voor de tweede keer. ..."', async function (check) {
+    await regel('[5.6] had ' + wat + ' de strook toen een stelling er voor de tweede keer stond, dan komt "Een stelling stond er net voor de tweede keer. ..." als het kind weer aan zet is', async function (check) {
       const echt = pickMove;
       pickMove = function (S) { const k = turbo[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
       try {
@@ -1704,11 +1743,206 @@ async function orakelFlow5() {
           check('na Turbo\'s volgende zet de regel (' + stroken[5] + ')', stroken[5] === HERHAAL_SCHULD5);
         } else {
           check('testopzet: bij de tweede keer stond ' + wat + ' in de strook (' + stroken[3] + ')', na ? stroken[3] === na : /^Kijk uit, een /.test(stroken[3] || ''));
-          check('na de volgende zet van het kind de regel (' + stroken[4] + ')', stroken[4] === HERHAAL_SCHULD5);
+          check('na de volgende zet van het kind nog niet: Turbo is aan zet (' + stroken[4] + ')', stroken[4] !== HERHAAL_SCHULD5);
+          check('na Turbo\'s volgende zet de regel (' + stroken[5] + ')', stroken[5] === HERHAAL_SCHULD5);
         }
       } finally { pickMove = echt; }
     });
   }
+
+  /* of de waarschuwing voor herhaling nog moet komen, volgt uit de zetten van het potje: hij is beloofd als een stelling er
+     voor de tweede keer stond en de regel sindsdien niet in de strook stond; het potje onthoudt alleen bij welke halve
+     zet de regel er het laatst stond. De beloofde regel komt als het kind aan zet is en blijft tot het kind zet. */
+  const HERHAAL_R = { 1: 'e7e6', 3: 'd8g5', 5: 'g5a5', 7: 'a5b6', 9: 'b6a5', 11: 'a5a6', 13: 'a6a5' };
+  for (const herladen of [false, true]) {
+    await regel('[5.6] had schaak de strook bij de tweede keer' + (herladen ? ' en laadt de app daarna opnieuw' : '') + ': de regel komt na Turbo\'s volgende zet en blijft tot het kind zet, en dan is het de derde keer remise', async function (check) {
+      const echt = pickMove;
+      pickMove = function (S) { const k = HERHAAL_R[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt.apply(null, arguments); };
+      try {
+        let a = nieuwKind();
+        await startPotje(a, 2);
+        for (const k of ['d2d4', 'e1d2', 'd2e1', 'c1d2', 'd2c1']) { zet(a, k); await wacht(3000); }
+        check('testopzet: de tweede keer, met het kind in schaak (' + strook5(a) + ')', a.get('session.S.hist.length') === 10 && a.get('repetitions(session.S)') === 1 && strook5(a) === 'Je staat schaak! Red je koning! 👑');
+        if (herladen) {
+          a = herlaad(a);
+          await wacht(1000);
+          a.tik('verderKaart');
+          await wacht(1500);
+          check('testopzet: het potje is terug, en de strook zegt eerst het schaak (' + strook5(a) + ')', a.get('!!session && session.kind === "game" && session.S.hist.length === 10') && /Je staat schaak!$/.test(strook5(a)));
+        }
+        zet(a, 'b1c3');
+        check('na de zet van het kind nog niet: Turbo is aan zet (' + strook5(a) + ')', strook5(a) !== HERHAAL_SCHULD5);
+        await wacht(3000);
+        check('na Turbo\'s zet de regel (' + strook5(a) + ')', strook5(a) === HERHAAL_SCHULD5);
+        await wacht(30000);
+        check('de regel blijft staan tot het kind zet (' + strook5(a) + ')', strook5(a) === HERHAAL_SCHULD5);
+        zet(a, 'c3b1');
+        await wacht(3000);
+        check('de derde keer is remise', a.get('session.over') === true && norm5(tekstVan(a, 'eindkaart')).indexOf('Remise: drie keer dezelfde stelling.') >= 0);
+      } finally { pickMove = echt; }
+    });
+  }
+
+  /* Zet terug neemt de tweede keer mee: staat er in het potje zoals het nu is geen stelling twee keer, dan is er niets beloofd */
+  await regel('[5.6] Zet terug neemt de tweede keer terug: daarna zegt de strook niets over herhaling', async function (check) {
+    const echt = pickMove, TURBO = { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4' };
+    pickMove = function (S) { const k = TURBO[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
+    try {
+      const a = nieuwKind();
+      await startPotje(a, 2);
+      a.ev('session.S = parseFEN("3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30"); BD.mode = "off"; renderBoard(); turboTurn()');
+      await wacht(3000);
+      for (const k of ['g1h1', 'h1g1']) { zet(a, k); await wacht(3000); }
+      check('testopzet: de tweede keer, met schaak (' + strook5(a) + ')', a.get('repetitions(session.S)') === 1 && strook5(a) === 'Je staat schaak! Red je koning! 👑');
+      tikTekst(a, 'Zet terug');
+      await wacht();
+      check('testopzet: twee halve zetten terug', a.get('session.S.hist.length') === 3);
+      zet(a, 'h1h2');
+      const naKind = strook5(a);
+      await wacht(3000);
+      check('testopzet: Turbo zette', a.get('session.S.hist.length') === 5);
+      check('geen regel over herhaling na de zet van het kind (' + naKind + ') en na die van Turbo (' + strook5(a) + ')',
+        [naKind, strook5(a)].every(function (z) { return z !== HERHAAL_SCHULD5 && z !== HERHAAL_ZIN5; }));
+    } finally { pickMove = echt; }
+  });
+
+  /* de beloofde regel komt één keer, en het bewaarde potje weet bij welke halve zet hij er stond */
+  await regel('[5.6] de beloofde regel komt één keer, en het bewaarde potje houdt bij welke halve zet hij er stond, nooit voorbij zijn lengte', async function (check) {
+    const echt = pickMove, TURBO = { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4e4', 8: 'e4e5' };
+    pickMove = function (S) { const k = TURBO[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
+    try {
+      let a = nieuwKind();
+      await startPotje(a, 2);
+      a.ev('session.S = parseFEN("3q2k1/8/8/P7/8/8/8/6K1 b - - 0 30"); BD.mode = "off"; renderBoard(); turboTurn()');
+      await wacht(3000);
+      for (const k of ['g1h1', 'h1g1', 'g1f1']) { zet(a, k); await wacht(3000); }
+      check('testopzet: na Turbo\'s zet de beloofde regel (' + strook5(a) + ')', strook5(a) === HERHAAL_SCHULD5);
+      zet(a, 'f1g1');
+      await wacht(3000);
+      check('na de volgende zetten niet nog eens (' + strook5(a) + ')', a.get('session.S.hist.length') === 9 && strook5(a) !== HERHAAL_SCHULD5);
+      const bewaard = JSON.parse(a.opslag.getItem(POTJE));
+      check('het potje bewaart bij welke halve zet de regel er stond (' + JSON.stringify(bewaard.games[2].herhaalGezegd) + ')', bewaard.games[2].herhaalGezegd === 7);
+      tikTekst(a, 'Zet terug');
+      await wacht();
+      tikTekst(a, 'Zet terug');
+      await wacht();
+      const terug = JSON.parse(a.opslag.getItem(POTJE)).games[2];
+      check('na Zet terug ligt het getal nooit voorbij het potje (' + terug.herhaalGezegd + ' bij ' + terug.moves.length + ' halve zetten)', terug.moves.length === 5 && terug.herhaalGezegd === 5);
+    } finally { pickMove = echt; }
+  });
+
+  /* een bewaard potje met een stelling die er al twee keer stond: wat het potje onthoudt, beslist of de regel nog komt;
+     een potje zonder dat getal (van een eerdere versie) of met een getal voorbij zijn lengte krijgt de regel */
+  for (const [wat, extra, zin] of [['zonder het getal, van een eerdere versie', {}, true], ['met het getal van de halve zet waarop de regel er stond', { herhaalGezegd: 5 }, false],
+    ['met een getal voorbij het potje', { herhaalGezegd: 99 }, true]]) {
+    await regel('[5.6] een bewaard potje ' + wat + ': ' + (zin ? 'terug in het potje staat de beloofde regel in de strook' : 'geen regel, maar het welkom'), async function (check) {
+      const a = nieuwKind({ opslag: opslagMetPotje(2, ['e2e3', 'b8c6', 'g1f3', 'c6b8', 'f3g1', 'g7g6'], extra) });
+      a.tik('verderKaart');
+      await wacht(1500);
+      check('testopzet: het potje is terug en het kind is aan zet', a.get('!!session && session.kind === "game" && session.S.hist.length === 6 && session.S.turn === "w"'));
+      check('de strook (' + strook5(a) + ')', zin ? strook5(a) === HERHAAL_SCHULD5 : /^Welkom terug!/.test(strook5(a)));
+    });
+  }
+  await regel('[5.6] een bewaard potje waarvan de stelling er nu voor de tweede keer staat: terug in het potje staat de regel over het bord', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(2, HERHAAL_KIND) });
+    a.tik('verderKaart');
+    await wacht(1500);
+    check('de strook (' + strook5(a) + ')', a.get('session.S.hist.length') === 8 && strook5(a) === HERHAAL_ZIN5);
+  });
+
+  /* wat bij een stelling hoort, gaat weg als de stelling verandert: het licht van "Ik kijk nog even" staat op het stuk dat
+     het alarm noemt, en gaat uit bij Zet terug, bij een nieuw alarm en na een herlading */
+  async function alarmPotje5(niveau) {
+    const a = nieuwKind({ opslag: opslagMetPotje(niveau, ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f3e5', 'a7a6']) });
+    a.ev('setPref("guard", true)');
+    a.tik('verderKaart');
+    await wacht();
+    zet(a, 'd2d3');
+    await wacht(500);
+    return a;
+  }
+  const opgelicht5 = function (a) { return a.get('Array.from(BD.glow).map(alg).sort().join(",")'); };
+  for (const niveau of [1, 2]) {
+    await regel('[5.4] niveau ' + niveau + ': "Ik kijk nog even" licht het stuk op dat het alarm noemt, ook als het kind een ander stuk zette, en Zet terug doet het licht uit', async function (check) {
+      const a = await alarmPotje5(niveau);
+      check('testopzet: het alarm noemt het paard op e5 (' + a.scherm().slice(0, 80) + ')', a.open() && a.ziet('Na deze zet kan Turbo je paard op e5 pakken.'));
+      a.tik('gLook');
+      check('opgelicht: het paard op e5, niet de pion die het kind zette (' + opgelicht5(a) + ')', opgelicht5(a) === 'e5');
+      tikTekst(a, 'Zet terug');
+      await wacht(500);
+      check('testopzet: twee halve zetten terug', a.get('session.S.hist.length') === 4);
+      check('na Zet terug is niets opgelicht (' + opgelicht5(a) + ')', opgelicht5(a) === '' &&
+        !a.get('Object.keys(cellEls).some(function (k) { return cellEls[k] && /hero-pc/.test(cellEls[k].className); })'));
+    });
+  }
+  await regel('[5.4] na een herlading is niets opgelicht van een alarm van voor de herlading', async function (check) {
+    let a = await alarmPotje5(2);
+    a.tik('gLook');
+    check('testopzet: e5 is opgelicht', opgelicht5(a) === 'e5');
+    a = herlaad(a);
+    await wacht();
+    a.tik('verderKaart');
+    await wacht();
+    check('na een herlading is niets opgelicht (' + opgelicht5(a) + ')', a.get('!!session && session.kind === "game"') && opgelicht5(a) === '');
+  });
+  await regel('[5.4] een nieuw alarm doet het licht van het vorige uit', async function (check) {
+    const a = nieuwKind();
+    a.ev('setPref("guard", true)');
+    await startPotje(a, 2);
+    a.ev('session.S = parseFEN("6k1/8/1p2n3/8/8/1N6/8/3Q2K1 w - - 0 1"); BD.mode = "move"; renderBoard()');
+    zet(a, 'd1d4');
+    await wacht(500);
+    check('testopzet: het eerste alarm noemt de dame (' + a.scherm().slice(0, 80) + ')', a.open() && a.ziet('Na deze zet kan Turbo je dame op d4 pakken.'));
+    a.tik('gLook');
+    check('testopzet: d1 is opgelicht', opgelicht5(a) === 'd1');
+    zet(a, 'b3c5');
+    await wacht(500);
+    check('testopzet: het tweede alarm noemt het paard (' + a.scherm().slice(0, 80) + ')', a.open() && a.ziet('Na deze zet kan Turbo je paard op c5 pakken.'));
+    a.tik('gLook');
+    check('alleen het stuk van het tweede alarm is opgelicht (' + opgelicht5(a) + ')', opgelicht5(a) === 'b3');
+  });
+
+  /* Turbo's zin bij een slag: terugpakken is alleen slaan op het veld waar het kind net sloeg, een dame uit een promotie
+     telt als de pion die ze was, en een kind dat al sterk is hoort niet dat het kan terugpakken */
+  for (const [wat, fen, kind, turbo, zin, sterk] of [
+    ['Turbo slaat ergens anders na een slag van het kind', '6k1/8/4p3/3n4/8/b1N5/1R6/6K1 w - - 0 1', 'c3d5', 'a3b2', 'Ik pak je toren op b2 (5 punten). Niemand kan terugpakken.', false],
+    ['Turbo pakt een dame terug die net uit een promotie kwam', '3r1rk1/2P5/8/8/8/8/8/6K1 w - - 0 1', 'c7d8q', 'f8d8', 'Ik pak terug op d8: jij nam mijn toren, ik jouw dame. Winst voor jou: 4 punten.', false],
+    ['een kind dat al sterk is, tegen Turbo, en het kan terugpakken', '6k1/8/8/3n4/8/8/5P2/3N2K1 w - - 0 1', 'd1e3', 'd5e3', 'Ik pak je paard op e3 (3 punten).', true]]) {
+    await regel('[5.8] ' + wat + ': "' + zin + '"', async function (check) {
+      const echt = pickMove;
+      pickMove = function (S) { return legalMoves(S).find(function (m) { return moveKey(m) === turbo; }) || echt(S, 2); };
+      try {
+        const a = nieuwKind();
+        if (sterk) a.ev('setPref("start", "sterk")');
+        await startPotje(a, 2);
+        a.ev('session.S = parseFEN(' + JSON.stringify(fen) + '); BD.mode = "move"; renderBoard()');
+        zet(a, kind);
+        await wacht(3000);
+        check('testopzet: Turbo speelde ' + turbo, a.get('moveKey(session.S.hist[session.S.hist.length - 1].m)') === turbo);
+        check('de strook (' + strook5(a) + ')', strook5(a) === zin);
+      } finally { pickMove = echt; }
+    });
+  }
+
+  /* na een verkeerde voorspelling zonder zin van Turbo blijft "Goede gok" niet staan: het kind hoort wat het nu kan doen */
+  await regel('[5.11] een verkeerde voorspelling en Turbo heeft geen zin: daarna staat "Goede gok!" niet meer in de strook', async function (check) {
+    const a = nieuwKind();
+    await startPotje(a, 2);
+    a.ev('session.S = parseFEN("r1bqkbnr/pppppppp/2n5/8/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 2 2"); BD.mode = "off"; renderBoard();' +
+      ' askPredict(legalMoves(session.S).find(function (m) { return moveKey(m) === "g8f6"; }))');
+    tikVeld(a, a.get('sqFromAlg("a7")'));
+    await wacht(3000);
+    check('testopzet: de voorspelling was fout en Turbo speelde Pg8-f6', a.get('P.c.predictHits || 0') === 0 &&
+      a.get('moveKey(session.S.hist[session.S.hist.length - 1].m)') === 'g8f6' && a.get('BD.mode') === 'move');
+    check('daarna niet meer "Goede gok!" (' + strook5(a) + ')', !/Goede gok/.test(strook5(a)));
+  });
+
+  /* Koning ontsnapt: "gaat wel verloren" alleen bij een verlies van twee en een half punt of meer, niet bij een pion */
+  await regel('[5.5] Koning ontsnapt: een redding die een pion kost, zegt niet dat er iets verloren gaat', async function (check) {
+    const a = nieuwKind();
+    const r = a.get('(function () { var S = parseFEN("r4rk1/2p3pp/2p1p3/p1P5/2N1p1q1/2R1Q3/6PP/5K1R w - - 0 1"); return koningRedenen(S, { type: "schaak" }, legalMoves(S).find(function (x) { return moveKey(x) === "f1e1"; })); })()');
+    check('de redenen (' + r.join(' / ') + ')', r.length > 0 && !r.some(function (z) { return /gaat wel verloren/.test(z); }));
+  });
 
   /* Turbo pakt terug op het veld waar het kind net sloeg: de zin noemt de ruil van twee kanten */
   for (const [wat, fen, kind, turbo, zin] of [
@@ -1893,9 +2127,13 @@ async function orakelFlow5() {
     } else if (isCapture(S, m)) {
       check('Turbo slaat iets anders (' + onder5(a) + ')', onder5(a) === 'Turbo speelt ' + naam + '. Probeer nog een zet.');
     } else {
+      /* de volgorde van de schaakcoach: nog aangevallen en niet veilig, anders een echte redding, anders een betere zet */
       const k = saveKind(parseFEN(fen), legalMoves(parseFEN(fen)).find(function (x) { return moveKey(x) === 'b1a1'; }), hing);
-      const zin = k.kind === 'anders' || k.kind === 'ruil' ? 'Je ' + NAME_NL[parseFEN(fen).board[hing].toLowerCase()] + ' op ' + k.sq + ' is nog niet veilig.' :
-        'Een paar zetten later verlies je toch iets.';
+      const stuk = NAME_NL[parseFEN(fen).board[hing].toLowerCase()], at = sqFromAlg(k.sq);
+      makeMove(S, m);
+      const aangevallen = attacked(S, at, 'b') && (inCheck(S) || seeSquare(nullMoved(S), at) > 0);
+      const zin = aangevallen ? 'Je ' + stuk + ' op ' + k.sq + ' is nog niet veilig.' :
+        ['anders', 'ruil', 'tegenaanval', 'schaak'].indexOf(k.kind) < 0 ? 'Een paar zetten later verlies je toch iets.' : 'Er is een betere zet om je ' + stuk + ' te redden.';
       check('Turbo slaat niets (' + onder5(a) + ')', onder5(a) === 'Turbo speelt ' + naam + '. ' + zin + ' Probeer nog een zet.');
     }
   });
