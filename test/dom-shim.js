@@ -418,6 +418,12 @@ function __bytesUit(h, n) {
   }
   return out;
 }
+function __nepDigest(bytes) {
+  bytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let h = 2166136261;
+  for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 16777619) >>> 0;
+  return __bytesUit(h, 32);
+}
 var crypto = {
   getRandomValues(arr) {
     for (let i = 0; i < arr.length; i++) {
@@ -428,10 +434,7 @@ var crypto = {
   },
   subtle: {
     digest(alg, bytes) {
-      bytes = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-      let h = 2166136261;
-      for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 16777619) >>> 0;
-      return Promise.resolve(__bytesUit(h, 32).buffer);
+      return Promise.resolve(__nepDigest(bytes).buffer);
     },
     importKey(fmt, keyBytes, alg) {
       if (alg && alg.name === 'ECDH') return Promise.resolve({ ecdhPub: Array.from(keyBytes) });
@@ -496,13 +499,19 @@ function __veegBussen() {
 function __veegPotjes() {
   for (var id in __server.potjes) if (__server.potjes[id].tot <= __busNu()) delete __server.potjes[id];
 }
+function __hexVan(bytes) {
+  var hex = '';
+  for (var i = 0; i < bytes.length; i++) hex += (bytes[i] >> 4).toString(16) + (bytes[i] & 15).toString(16);
+  return hex;
+}
 function __sha256hex(tekst) {
   return crypto.subtle.digest('SHA-256', new TextEncoder().encode(tekst)).then(function (d) {
-    var hex = '', bytes = new Uint8Array(d);
-    for (var i = 0; i < 32; i++) hex += (bytes[i] >> 4).toString(16) + (bytes[i] & 15).toString(16);
-    return hex;
+    return __hexVan(new Uint8Array(d));
   });
 }
+/* zoals versie in bus.go, maar zonder belofte: vergelijken en opslaan horen in
+   een stap, anders kan een tweede schrijver ertussen en winnen ze allebei */
+function __versie(blob) { return __hexVan(__nepDigest(new TextEncoder().encode(blob))); }
 /* zoals busGeldig na readJSON: de velden zijn tekst (null of weg telt als
    leeg) en de grens telt bytes, zoals len in Go */
 function __busGeldig(body, hex) {
@@ -512,7 +521,7 @@ function __busGeldig(body, hex) {
     new TextEncoder().encode(body.blob == null ? '' : body.blob).length <= MAX_BUS_BLOB;
 }
 /* een herstart van de server: alles wat alleen in het geheugen staat is weg
-   en elke open lijn breekt; de profielen op schijf blijven */
+   en elke open lijn breekt; de profielen en potjesbussen op schijf blijven */
 function __herstartServer() {
   for (const id in __server.wsrooms) {
     const rm = __server.wsrooms[id];
@@ -522,8 +531,14 @@ function __herstartServer() {
   __server.wsrooms = {};
   __server.pending = {};
   __server.buses = {};
-  __server.potjes = {};
+  /* de potjesbussen staan op schijf, zoals in bus.go: ze blijven, en hun
+     ongewijzigd telt vanaf de start, want alleen tot staat op schijf */
+  __veegPotjes();
+  for (const id in __server.potjes) __server.potjes[id].veranderd = __busNu();
 }
+/* alleen de potjesbussen kwijt, zoals een verloren map potjes: voor een
+   apparaat dat zijn staat terug moet schrijven */
+function __potjesKwijt() { __server.potjes = {}; }
 /* zoals room.go: een kamer heeft een potje zodra beide stoeltjes ooit
    verbonden waren; stil is pas stil als er niemand verbonden is */
 function __heeftPotje(rm) { return rm.order.every(tok => rm.joined[tok]); }
@@ -604,16 +619,20 @@ var fetch = function (url, opts) {
     else if (m === 'POST' && path === '/v1/potje') {
       /* zoals handlePotjePost: de regels van een bus, maar dertig dagen na het
          laatste schrijven, een volle tabel laat de langst niet geschreven bus
-         plaatsmaken, dezelfde bytes verlengen alleen, en alleen bus, bewijs
-         en blob mogen erin staan */
+         plaatsmaken, dezelfde bytes verlengen alleen, en alleen bus, bewijs,
+         blob en als mogen erin staan; als moet de versie zijn van wat er
+         staat ('' voor niets), anders verandert er niets en komt er 409 met
+         wat er staat; een leeg briefje is 400, want geen schrijven haalt een
+         staat weg */
       if (!body || typeof body !== 'object' ||
-        Object.keys(body).some(function (k) { return ['bus', 'bewijs', 'blob'].indexOf(k) < 0; })) { res(400); return; }
+        Object.keys(body).some(function (k) { return ['bus', 'bewijs', 'blob', 'als'].indexOf(k) < 0; })) { res(400); return; }
       __sha256hex(body.bewijs).then(function (hex) {
-        if (!__busGeldig(body, hex)) { res(400); return; }
+        if (!__busGeldig(body, hex) || body.blob == null || body.blob === '' || typeof body.als !== 'string' ||
+          !(body.als === '' || /^[a-f0-9]{64}$/.test(body.als))) { res(400); return; }
         __veegPotjes();
-        const blob = body.blob == null ? '' : String(body.blob), nu = __busNu();
-        if (blob === '') { delete __server.potjes[body.bus]; res(204); return; }
+        const blob = body.blob, nu = __busNu();
         const oud = __server.potjes[body.bus];
+        if (body.als !== (oud ? __versie(oud.blob) : '')) { res(409, { blob: oud ? oud.blob : '' }); return; }
         if (!oud && Object.keys(__server.potjes).length >= MAX_POTJES) {
           let weg = null;
           for (const id in __server.potjes) if (weg === null || __server.potjes[id].tot < __server.potjes[weg].tot) weg = id;
@@ -637,7 +656,7 @@ var fetch = function (url, opts) {
           ongewijzigd[id] = Math.floor((nuC - __server.potjes[id].veranderd) / 1000);
         }
       });
-      res(200, { blobs: blobs, ongewijzigd: ongewijzigd });
+      res(200, { blobs: blobs, ongewijzigd: ongewijzigd, nu: Math.floor(nuC / 1000) });
     }
     else if (m === 'POST' && path === '/v1/room') {
       const k = __nieuweKamer();
