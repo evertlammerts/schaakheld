@@ -186,6 +186,58 @@ async function orakelFlow6() {
     check('geen wachtscherm', !/Wachten op/.test(a.scherm()));
   });
 
+  /* ================= de kaart en het blad: wat de recensent van stap 8 nog ongetest vond ================= */
+
+  const fien = { fid: 'vriendfien1', naam: 'Fien' }, sem = { fid: 'vriendsem01', naam: 'Sem' };
+  await regel('[6.8] een potje waarin het kind zelf aan zet is, heet nooit stil, ook na tien dagen; na vijftien dagen zonder zet van de vriend heet het twee weken', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const a = await kind(opslagMetPotjes([fien], [{ gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien', moves: ['d2d4', 'd7d5'], beurtT: Date.now() - 10 * DAG }]));
+    check('de eigen beurt', /Fien heeft gezet\. Jij bent aan zet\./.test(tekstVan(a, 'verder')) && !/niet gezet/.test(tekstVan(a, 'verder')));
+    const b = await kind(opslagMetPotjes([fien], [{ gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien', moves: ['d2d4', 'd7d5', 'c2c4'], beurtT: Date.now() - 15 * DAG }]));
+    check('twee weken', /Fien heeft al twee weken niet gezet\./.test(tekstVan(b, 'verder')));
+  });
+
+  await regel('[6.9] een remise-aanbod van een vriend hoort bij de potjes waarin het kind aan zet is: het gaat voor een potje tegen Turbo', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const a = await kind(opslagMetPotjes([fien, sem], [
+      { gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien', moves: ['d2d4', 'd7d5'], offer: { by: 'b', ply: 2, answer: null, t: Date.now() - DAG } },
+      { gameId: 'potjevansem01', fid: 'vriendsem01', peerName: 'Sem', moves: ['c2c4'] }]));
+    a.opslag.setItem('schaakheld-potje', turboPotjes({ 1: [['e2e4', 'e7e5'], Date.now() - 10 * 60000] }));
+    const b = await kind(a.opslag);
+    check('de kaart is het aanbod van Fien', /Fien biedt remise aan/.test(tekstVan(b, 'verderKaart')));
+  });
+
+  await regel('[6.9] een uitdaging in het blad vraagt eerst Ja of Nu niet; een eigen uitdaging in het blad brengt naar Vrienden, zonder die vraag', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const a = await kind(opslagMetPotjes([fien, sem], [
+      { gameId: 'potjevansem01', fid: 'vriendsem01', peerName: 'Sem', moves: ['c2c4', 'e7e5'] },
+      { gameId: 'uitdvanfien1x', fid: 'vriendfien1', peerName: 'Fien', state: 'uitdaging', host: false },
+      { gameId: 'uitdaansem01x', fid: 'vriendsem01', peerName: 'Sem', state: 'uitdaging', mijnUitdaging: true }]));
+    tikTekst(a, 'Ook nog');
+    await wacht();
+    tikTekst(a, 'Fien daagt je uit');
+    await wacht();
+    check('de vraag met Ja, spelen! en Nu niet', a.ziet('Fien daagt je uit') && kanTikken(a, 'Ja, spelen!') && kanTikken(a, 'Nu niet') && !opSpeelscherm(a));
+    a.ev('closeModal()');
+    await wacht();
+    tikTekst(a, 'Ook nog');
+    await wacht();
+    tikTekst(a, 'Je uitdaging aan Sem');
+    await wacht();
+    check('de eigen uitdaging brengt naar Vrienden, zonder vraag', zichtbaar(a, 'view-vrienden') && !a.open());
+  });
+
+  await regel('[6.9] de telregel noemt potjes, dan uitdagingen, dan het rondje; een uitnodiging telt als uitdaging', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const a = await kind(opslagMetPotjes([fien, sem], [
+      { gameId: 'potjevansem01', fid: 'vriendsem01', peerName: 'Sem', moves: ['c2c4', 'e7e5'] },
+      { gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien', moves: ['d2d4'] }]));
+    a.opslag.setItem('schaakheld-rondjes', JSON.stringify({ scan: { round: 2, earned: 6 } }));
+    const b = await kind(a.opslag);
+    b.ev('uitnodigingWacht = { fid: "vriendfien1", inv: { id: "uitnodiging1", room: "kamer12345678", seat: "stoel12345678", naam: "Fien", ts: Date.now() } }; renderVerder()');
+    check('Ook nog een potje, een uitdaging en je rondje', JSON.stringify(ookNogRegels(b)) === JSON.stringify(['Ook nog een potje, een uitdaging en je rondje']));
+  });
+
   await regel('[6.1] de zetten in de bus houden elke promotie: dame, toren, loper en paard', async function (check) {
     const a = await kind(opslagMetVrienden([]));
     const lijst = ['a2a4', 'b7b5', 'a4b5', 'a7a6', 'b5a6', 'c8b7', 'a6b7', 'b8c6', 'b7a8q'];

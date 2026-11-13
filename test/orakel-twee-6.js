@@ -2528,4 +2528,77 @@ async function orakelTwee6() {
     await tijd(5000);
     check('de uitnodiging is van de server', !(__server.buses[adres] && __server.buses[adres].blob));
   });
+
+  /* ================= deel F: een uitnodiging nooit alleen in een telling, en een zet gedateerd op wanneer hij gedaan is ================= */
+
+  await regel('[6.9] een uitnodiging die binnenkwam tijdens een potje tegen Turbo, en die niet de kaart is, gaat open als venster zodra Mees thuis is', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien'), kim = maakApparaat('Kim');
+    mees.ev('setPref("predict", false); setPref("guard", false)');
+    await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 4, mees);
+    stopApparaat(fien);
+    mees.tik('backBtn');
+    await wacht();
+    const fidK = await vriendErbij(mees, kim);
+    await startPotje(mees, 1);
+    await zetEnWacht(mees, 'e2e4');
+    tikInRij(kim, fidK, 'Uitnodigen');
+    await tijd(20000);
+    check('testopzet: Mees zit in zijn potje tegen Turbo', opSpeelscherm(mees));
+    mees.tik('backBtn');
+    await tijd(3000);
+    check('thuis gaat de uitnodiging open als venster', /Kim wil een potje spelen!/.test(mees.scherm()));
+  });
+
+  await regel('[6.9] twee zetten van vrienden die Mees in één keer leest, staan in de volgorde waarin ze gedaan zijn: de laatste eerst', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let mees = maakApparaat('Mees'), fien = maakApparaat('Fien'), sem = maakApparaat('Sem');
+    mees.ev('setPref("predict", false); setPref("guard", false)');
+    const fidF = await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 2, fien);
+    mees.tik('backBtn');
+    await wacht();
+    const fidS = await vriendErbij(mees, sem);
+    tikInRij(mees, fidS, 'Uitnodigen');
+    await wacht();
+    await sem.ev('friendPoll()');
+    await wacht();
+    sem.tik('invJa');
+    await wacht();
+    mees.tik('mpGo');
+    await wacht();
+    if (!magZetten(sem)) await zetUit(RUSTIG, mees, sem);
+    stopApparaat(mees);
+    await zetUit(RUSTIG, sem);
+    await tijd(10000);
+    stopApparaat(sem);
+    schuifKlok(3 * DAG);
+    await zetUit(RUSTIG, fien);
+    await tijd(10000);
+    stopApparaat(fien);
+    schuifKlok(UUR);
+    mees = await opent(mees);
+    check('de kaart: de zet van Fien van een uur geleden', /je potje met Fien/i.test(tekstVan(mees, 'verderKaart')) && /Fien heeft gezet/.test(tekstVan(mees, 'verderKaart')));
+  });
+
+  await regel('[6.8] de tablet en de telefoon zeggen dezelfde dag: Fien is aan zet sinds vijf dagen, ook op een tablet die het potje net leest', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    let tel = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await vriendenpotje(tel, fien);
+    await potjeTot(tel, fien, 4, fien);
+    stopApparaat(fien);
+    tel.tik('backBtn');
+    await wacht();
+    await tel.ev('ensureAccount(); syncNow()');
+    await tijd(10000);
+    stopApparaat(tel);
+    schuifKlok(5 * DAG);
+    tel = await opent(tel);
+    const tab = await tweedeApparaat(tel);
+    await tijd(40000);
+    for (const x of [tel, tab]) x.tik('tabVrienden');
+    check('de telefoon: 5 dagen geleden', /Fien is aan zet · 5 dagen geleden/.test(vriendRijTekst(tel, fid)));
+    check('de tablet ook', /Fien is aan zet · 5 dagen geleden/.test(vriendRijTekst(tab, fid)));
+  });
 }

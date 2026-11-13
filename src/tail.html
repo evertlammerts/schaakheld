@@ -2076,6 +2076,8 @@ async function potjesbusGelezen(fid, O, F, aO, aF, blobO) {
     if (!g[k].result && !g[k].nee && !g[k].ingetrokken) R = Object.assign({ state: 'potje' }, g[k]);
   }
   const voor = R ? JSON.stringify(R) : null, voorZetten = R ? R.moves.length : 0;
+  /* een zet is gedateerd op wanneer hij gedaan is: de server zegt hoe lang de bus waar hij vandaan kwam al zo staat */
+  let zetVan = null;
   /* een nieuw potje of een uitdaging: van de vriend, of van een ander apparaat van dit kind; een potje waarvan dit
      kind het einde zag, komt niet terug. Twee uitdagingen die elkaar kruisen: rol a houdt de zijne. Een nieuwe
      uitdaging van de vriend vervangt een oude die hier nog stond: die trok de vriend in. */
@@ -2090,7 +2092,8 @@ async function potjesbusGelezen(fid, O, F, aO, aF, blobO) {
     if (vervangt) ev.weg = R.gameId;
     R = { gameId: X.gameId, fid, room: null, seat: null, host: false, myColor: X.white === ik ? 'w' : 'b', gameNo: 1,
       moves: X.keys.slice(), peerName: f.naam, result: X.result || null, offer: null, shown: false, state: X.state,
-      mijnUitdaging: X === O && X.state === 'uitdaging', beurtT: nu, updated: nu };
+      mijnUitdaging: X === O && X.state === 'uitdaging', beurtT: nu - (X === F ? +aF || 0 : +aO || 0) * 1000, updated: nu };
+    zetVan = X === F ? 'hun' : 'eigen';
     if (R.result) {
       R.geleerd = nu;
       if (ev.weg) delete g[ev.weg];
@@ -2121,6 +2124,7 @@ async function potjesbusGelezen(fid, O, F, aO, aF, blobO) {
     if (!isPrefix(eigen.keys, R.moves)) {
       if (!isPrefix(R.moves, eigen.keys)) ev.andereApparaat = true;
       R.moves = eigen.keys.slice();
+      zetVan = 'eigen';
     }
     const u = eigen.result;
     /* het eigen remise-aanbod, gedaan op een ander apparaat van dit kind: het hoort bij de stand, en de server meet
@@ -2174,7 +2178,7 @@ async function potjesbusGelezen(fid, O, F, aO, aF, blobO) {
     ev.vanzelf = true;
   }
   if (R && hun && R.state === 'potje' && !R.result) {
-    if (hun.keys.length > R.moves.length && isPrefix(R.moves, hun.keys) && !R.claim) { R.moves = hun.keys.slice(); ev.zet = true; }
+    if (hun.keys.length > R.moves.length && isPrefix(R.moves, hun.keys) && !R.claim) { R.moves = hun.keys.slice(); ev.zet = true; zetVan = 'hun'; }
     const u = hun.result;
     const basis = u ? hun.keys.slice(0, u.ply) : null;
     if (u && UITSLAG_SOORT.includes(u.kind) && (isPrefix(basis, R.moves) || isPrefix(R.moves, basis))) {
@@ -2207,7 +2211,7 @@ async function potjesbusGelezen(fid, O, F, aO, aF, blobO) {
   if (ev.weg) delete g[ev.weg];
   if (R) {
     if (R.result && JSON.stringify(R) !== voor) { R.shown = false; R.bekend = !!(hun && hun.result); }
-    if (R.moves.length !== voorZetten) R.beurtT = nu;
+    if (R.moves.length !== voorZetten) R.beurtT = zetVan === 'hun' ? nu - (+aF || 0) * 1000 : zetVan === 'eigen' ? nu - (+aO || 0) * 1000 : nu;
     if (JSON.stringify(R) !== voor) R.updated = nu;
     g[R.gameId] = R;
   }
@@ -4113,6 +4117,11 @@ function renderVerder() {
     $('verderNee').addEventListener('click', () => doeActie(eerste.nee));
   } else $('verderKaart').addEventListener('click', () => doeActie(eerste.action));
   if (ook.length) $('ookNog').addEventListener('click', () => { if (ook.length === 1) doeActie(ook[0].vraag || ook[0].action); else bezigBlad(bezig); });
+  /* een uitnodiging die niet de kaart is, staat nooit alleen in een telling: thuis gaat ze open als venster */
+  if (!kapotKey && uitnodigingWacht && eerste.rule !== 'R1i' && !session && !modalOpen) {
+    const w = uitnodigingWacht;
+    setTimeout(() => { if (uitnodigingWacht === w && !session && !modalOpen) showInvite(w.fid, w.inv); }, 0);
+  }
 }
 /* elk potje tegen Turbo dat bewaard staat, één per niveau, met het laatst gespeelde eerst */
 function turboItems() {
