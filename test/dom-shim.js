@@ -485,14 +485,16 @@ var crypto = {
    flows end-to-end testbaar zijn. */
 var __server = { links: {}, profiles: {}, wsrooms: {}, pending: {}, buses: {}, potjes: {}, klok: 0, teller: 0 };
 /* grenzen en TTL uit bus.go, room.go en server.go. De nep-server meet tijd op
-   de klok van de wereld, de virtuele klok van de timers, zoals de Go-server
-   op die van zijn eigen machine; __server.klok schuift hem vooruit zodat een
-   test een bus, een kamer of een koppelcode kan laten verlopen */
+   de klok van de wereld, zoals de Go-server op die van zijn eigen machine: de
+   datum van de test als die vastgezet is (die loopt met de virtuele klok mee en
+   kan dagen verspringen), anders de virtuele klok van de timers; __server.klok
+   schuift hem vooruit zodat een test een bus, een kamer of een koppelcode kan
+   laten verlopen */
 var BUS_TTL = 10 * 60000, MAX_BUSES = 512, MAX_BUS_BLOB = 4 << 10, MAX_BUS_CHECK = 64;
 var POTJE_TTL = 30 * 24 * 3600000, MAX_POTJES = 1024;
 var LINK_TTL = 10 * 60000, MAX_LINKS = 8192;
 var KAMER_STIL = 15 * 60000, KAMER_MAX = 3 * 3600000, POTJE_STIL = 12 * 3600000, POTJE_MAX = 48 * 3600000, MAX_KAMERS = 64, KAMER_RUST = 3000;
-function __busNu() { return __klok + __server.klok; }
+function __busNu() { return (typeof __datumBasis !== 'undefined' && __datumBasis !== null ? Date.now() : __klok) + __server.klok; }
 function __veegBussen() {
   for (var id in __server.buses) if (__server.buses[id].tot <= __busNu()) delete __server.buses[id];
 }
@@ -531,10 +533,9 @@ function __herstartServer() {
   __server.wsrooms = {};
   __server.pending = {};
   __server.buses = {};
-  /* de potjesbussen staan op schijf, zoals in bus.go: ze blijven, en hun
-     ongewijzigd telt vanaf de start, want alleen tot staat op schijf */
+  /* de potjesbussen staan op schijf, zoals in bus.go: wat niet verlopen is
+     blijft */
   __veegPotjes();
-  for (const id in __server.potjes) __server.potjes[id].veranderd = __busNu();
 }
 /* alleen de potjesbussen kwijt, zoals een verloren map potjes: voor een
    apparaat dat zijn staat terug moet schrijven */
@@ -638,7 +639,7 @@ var fetch = function (url, opts) {
           for (const id in __server.potjes) if (weg === null || __server.potjes[id].tot < __server.potjes[weg].tot) weg = id;
           delete __server.potjes[weg];
         }
-        __server.potjes[body.bus] = { blob: blob, tot: nu + POTJE_TTL, veranderd: oud && oud.blob === blob ? oud.veranderd : nu };
+        __server.potjes[body.bus] = { blob: blob, tot: nu + POTJE_TTL };
         res(204);
       });
     }
@@ -647,16 +648,13 @@ var fetch = function (url, opts) {
       if (vraag.length > MAX_BUS_CHECK) { res(400); return; }
       __veegBussen();
       __veegPotjes();
-      var blobs = {}, ongewijzigd = {}, nuC = __busNu();
+      var blobs = {}, nuC = __busNu();
       vraag.forEach(function (id) {
         if (!/^[a-f0-9]{64}$/.test(id)) return;
         if (id in __server.buses) blobs[id] = __server.buses[id].blob;
-        if (id in __server.potjes) {
-          blobs[id] = __server.potjes[id].blob;
-          ongewijzigd[id] = Math.floor((nuC - __server.potjes[id].veranderd) / 1000);
-        }
+        if (id in __server.potjes) blobs[id] = __server.potjes[id].blob;
       });
-      res(200, { blobs: blobs, ongewijzigd: ongewijzigd, nu: Math.floor(nuC / 1000) });
+      res(200, { blobs: blobs, nu: Math.floor(nuC / 1000) });
     }
     else if (m === 'POST' && path === '/v1/room') {
       const k = __nieuweKamer();
@@ -699,6 +697,8 @@ var fetch = function (url, opts) {
       const id = path.slice('/v1/profile/'.length);
       const prof = __server.profiles[id];
       if (m === 'PUT') {
+        /* zoals maxBlob in server.go: een profiel boven 64 KB krijgt 413 */
+        if ((body == null ? 0 : body.byteLength != null ? body.byteLength : body.length) > 65536) return res(413);
         if (prof && prof.secret !== secret) return res(404);
         __server.profiles[id] = { secret, blob: new Uint8Array(body) };
         res(204);
@@ -719,7 +719,9 @@ var scrollTo = function (x, y) {
 };
 var addEventListener = function () {};
 var matchMedia = function () { return { matches: true }; };
-var performance = { now: () => Date.now() };
+/* de looptijd van het apparaat loopt met de klok van de timers en niet met de datum: schuifKlok laat de datum
+   springen terwijl de looptijd stilstaat, zoals een telefoon die sliep met de app open */
+var performance = { now: () => __klok };
 var requestAnimationFrame = function () { return 0; };
 var cancelAnimationFrame = function () {};
 

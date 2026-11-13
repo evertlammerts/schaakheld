@@ -7,7 +7,7 @@
     --sun: #FFC53D; --sun-deep: #E8930C; --sun-soft: #FFEDB8;
     --leaf: #46B466; --leaf-deep: #267A41; --leaf-soft: #DFF3E3;
     --coral: #FF6F59; --coral-deep: #B83C2A; --coral-soft: #FFE3DD;
-    --violet: #9B6FE8; --violet-soft: #EFE3FF; --cloud: #9DB4E8; --cloud-soft: #EAF0FF;
+    --violet: #9B6FE8; --violet-soft: #EFE3FF; --cloud: #9DB4E8; --cloud-soft: #EAF0FF; --rose-soft: #FFE9F2;
     --cream: #FFF9EC; --white: #FFFFFF; --track: #E4EEF6; --accent-text: #9A5B00; --pc-green: #12402C;
     --board-light: #FFF3D0; --board-dark: #58B7A6;
     --surface: var(--white); --surface-quiet: var(--cream); --surface-sunk: var(--track);
@@ -156,7 +156,7 @@
   .mc-best { background: #E0F1FD; }
   .mc-trucs { background: #F1E7FF; }
   .mc-game { background: var(--leaf-soft); }
-  .mc-online { background: #FFE9F2; }
+  .mc-online { background: var(--rose-soft); }
   /* zwart speelt met het bord omgedraaid: het raam roteert, de stukken
      roteren terug zodat ze rechtop blijven staan */
   .board-frame.flip { transform: rotate(180deg); }
@@ -338,6 +338,7 @@
   .friend.wait { background: var(--leaf-soft); }
   .friend.beurt { background: linear-gradient(90deg, var(--sun-soft), var(--cream)); }
   .friend.beurt .f-sub { color: var(--leaf-deep); font-weight: bold; }
+  .friend.stil .f-naam { font-weight: normal; }
   .btn.gevaar { color: var(--danger); }
 
   /* openingsschool: drie meters op een rij */
@@ -383,6 +384,22 @@
   }
   .verder-ook .vo-pijl { font-size: 18px; }
   .verder-bewaard { margin: 6px 16px 0; font-size: 13px; color: var(--ink); }
+  /* het blad Wat nog bezig is: per ding wat het is, de titel en waar het staat */
+  .lopend-lijst { margin-top: 4px; text-align: left; }
+  .lopend {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 6px 4px;
+    border: none; background: none; cursor: pointer; text-align: left;
+  }
+  .lopend + .lopend { border-top: var(--border); }
+  .lopend .l-art { flex: none; width: 40px; height: 40px; display: grid; place-items: center; font-size: 26px; line-height: 1; }
+  .lopend .l-art.trio { grid-template-columns: 1fr 1fr; font-size: 13px; border-radius: var(--r-sm); background: var(--rose-soft); }
+  .lopend .l-art.trio span:first-child { grid-column: 1 / -1; }
+  .lopend .l-txt { flex: 1; min-width: 0; }
+  .lopend .l-titel { display: block; font-size: var(--fs-md); font-weight: var(--fw-bold); line-height: var(--lh-display); }
+  .lopend .l-plek { display: block; margin-top: 2px; font-size: var(--fs-cap); line-height: 1.3; color: var(--text-quiet); }
+  .lopend .l-plek.beurt { color: var(--leaf-deep); font-weight: var(--fw-bold); }
+  .lopend.stil .l-titel { font-weight: var(--fw-regular); }
+  .lopend .l-pijl { flex: none; font-size: 20px; color: var(--text-quiet); }
 
 
   .cell {
@@ -664,6 +681,10 @@
   #ekVraag p { margin: 0; }
   .eindkaart .ek-turbo { width: 88px; height: 88px; display: grid; place-items: center; font-size: 56px; line-height: 1;
     background: var(--leaf-soft); border-radius: 50%; }
+  /* de drie plaatjes van de vriend, in plaats van Turbo, bij een potje dat afliep terwijl het kind weg was */
+  .eindkaart .ek-trio { font-size: 32px; line-height: 1; letter-spacing: .12em; padding: 8px 14px; background: var(--rose-soft);
+    border-radius: 999px; }
+  .eindkaart.klein .ek-trio { font-size: 24px; padding: 4px 10px; }
   .eindkaart h2 { margin: 0; font-size: var(--fs-xl); }
   .eindkaart p { margin: 0; font-size: var(--fs-sm); color: var(--text-quiet); }
   .eindkaart .ek-xp { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); color: var(--accent-text); }
@@ -836,8 +857,8 @@
     .modal.typt .m-emoji, .modal.typt .bij-typen-weg { display: none; }
     .modal.typt { margin-top: 0; }
   }
-  #mpWachtRegel.hidden, #ekWacht:empty { display: none; }
-  #ekWacht, #mpWachtRegel { margin: 0; font-size: var(--fs-sm); color: var(--text); }
+  #mpWachtRegel.hidden, #ekWacht:empty, #ekBezet:empty { display: none; }
+  #ekWacht, #ekBezet, #mpWachtRegel { margin: 0; font-size: var(--fs-sm); color: var(--text); }
   .w-sugg { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1.5px solid rgba(23, 69, 111, .25); background: var(--surface);
     font: inherit; color: var(--text); }
   .lvl-btn { display: flex; align-items: center; gap: 12px; text-align: left; }

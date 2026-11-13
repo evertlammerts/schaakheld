@@ -535,7 +535,8 @@ async function orakelFlow5() {
     check('het potje is uit na de zet van het kind, en Turbo zet niet meer', a.get('session.over') === true && a.get('session.S.hist.length') === 9);
     const kaart = norm5(tekstVan(a, 'eindkaart'));
     check('de eindkaart (' + kaart + ')', zichtbaar(a, 'eindkaart') && kaart.indexOf('Remise: drie keer dezelfde stelling. Niemand wint, niemand verliest.') >= 0);
-    check('remise telt als remise: 30 XP (' + (a.get('P.xp') - xp) + ')', a.get('P.xp') - xp === 30);
+    check('een einde dat de spelers kiezen, telt pas vanaf twintig halve zetten: geen XP (' + (a.get('P.xp') - xp) + ')', a.get('P.xp') - xp === 0 &&
+      kaart.indexOf('Dit potje telt niet mee: het was korter dan tien zetten.') >= 0);
     check('het potje staat niet meer bewaard', a.opslag.getItem(POTJE) === null);
   });
 
@@ -706,7 +707,7 @@ async function orakelFlow5() {
         ['na een vraag bij zijn vijfde zet', ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6', 'f3g5', 'd7d5', 'e4d5', 'f6d5', 'g5f7'], false],
         ['zonder vraag bij zijn vijfde zet', ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6', 'f3g5', 'd7d5', 'e4d5', 'a7a6', 'g5f7'], true]]) {
         const a = nieuwKind({ opslag: opslagMetPotje(2, zetten) });
-        a.ev('setPref("predict", true); hervatPotje()');
+        a.ev('setPref("predict", true); doeActie({ go: "game", level: 2 })');
         await wacht(1500);
         check(wat + ': ' + (vraag ? 'de vraag bij Kxf7' : 'geen vraag bij Kxf7'), (a.get('BD.mode') === 'predict') === vraag);
       }
@@ -717,7 +718,7 @@ async function orakelFlow5() {
     pickMove = function (S) { const ms = legalMoves(S); return ms.find(function (m) { return moveKey(m) === 'f6d5'; }) || ms.find(function (m) { return moveKey(m) === 'a7a6'; }) || ms[0]; };
     try {
       const a = nieuwKind({ opslag: opslagMetPotje(2, ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6', 'f3g5', 'd7d5', 'e4d5']) });
-      a.ev('setPref("predict", true); hervatPotje()');
+      a.ev('setPref("predict", true); doeActie({ go: "game", level: 2 })');
       await wacht(1500);
       if (!check('testopzet: de vraag bij Turbo\'s vijfde zet', a.get('BD.mode') === 'predict')) return;
       tikTekst(a, 'Speel maar');

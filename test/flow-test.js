@@ -1123,6 +1123,41 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
 /* ---------- woorden, QR en koppelen: end-to-end op de fake server ---------- */
 (async function () {
   closeModal(); /* het naamvenster uit de reset-flow */
+
+  /* ---------- compat: een profiel van de release van nu ---------- */
+  var releaseDoc = function () {
+    var d = { v: 2, epoch: 0,
+      cnt: { xp: { r1: 520 }, stars: { r1: 40 }, wins: { r1: 3 }, 'c.gamesPlayed': { r1: 9 }, 'c.winsOnline': { r1: 2 } },
+      set: { badges: { winst: true, potje: true } },
+      lww: { name: { v: 'Oscar', t: 1 }, theme: { v: 'oceaan', t: 1 } }, max: { best: 6, goal: {} }, log: {},
+      friends: { vriendevert1: { k: 'geheimvanoscarenevert-' + 'x'.repeat(20), naam: 'Evert', t: 5, weg: false, host: true, since: 1792324800351 } },
+      loc: { streak: 0, lastLevel: 2, weekSeen: curWeek() } };
+    d.cnt['wk.' + curWeek() + '.online'] = { r1: 1 };
+    return d;
+  };
+  await regel('[V5] compat: een profiel van de release van nu laadt met een lege lijst getelde vriendenpotjes en verliest niets', function (check) {
+    var d = normDoc(releaseDoc()), v = viewFromDoc(d);
+    check('punten, tellers, trofeeën, de week en de vriend blijven', v.xp === 520 && v.stars === 40 && v.wins === 3 && v.c.gamesPlayed === 9 &&
+      v.c.winsOnline === 2 && wkGet(curWeek(), 'online', v) === 1 && v.badges.winst === true && v.badges.potje === true &&
+      v.name === 'Oscar' && v.theme === 'oceaan' && v.friends.vriendevert1.naam === 'Evert');
+    check('een lege lijst', !!d.loc.geteld && typeof d.loc.geteld === 'object' && !Array.isArray(d.loc.geteld) && Object.keys(d.loc.geteld).length === 0);
+  });
+  await regel('[V5] de lijst getelde vriendenpotjes: per vriend de laatste acht echte potje-ids, alleen van dit apparaat, en mee door bewaren en laden', function (check) {
+    var raw = releaseDoc(), tien = [];
+    for (var i = 0; i < 10; i++) tien.push('potjenummer' + (10 + i));
+    raw.loc.geteld = { vriendevert1: tien, vriendanna01: ['kort', 'abcdefghijkl', 5, 'abcdefghijkl'], '<b>x</b>xxx': ['abcdefghijkl'], vriendleeg01: [] };
+    var d = normDoc(raw);
+    check('de laatste acht bij Evert', JSON.stringify(d.loc.geteld.vriendevert1) === JSON.stringify(tien.slice(2)));
+    check('alleen echte ids, elk één keer, en geen vreemde of lege vriend', JSON.stringify(d.loc.geteld.vriendanna01) === '["abcdefghijkl"]' &&
+      JSON.stringify(Object.keys(d.loc.geteld).sort()) === '["vriendanna01","vriendevert1"]');
+    var ander = normDoc(releaseDoc());
+    check('samenvoegen houdt de eigen lijst en neemt die van een ander apparaat niet over',
+      JSON.stringify(mergeDoc(d, ander).loc.geteld) === JSON.stringify(d.loc.geteld) && Object.keys(mergeDoc(ander, d).loc.geteld).length === 0);
+    var a = maakApparaat('Oscar');
+    a.ev('DOC.loc.geteld = ' + JSON.stringify({ vriendevert1: ['abcdefghijkl'] }) + '; saveP()');
+    var b = herlaad(a);
+    check('na bewaren en laden staat de lijst er nog', b.get('JSON.stringify(DOC.loc.geteld)') === '{"vriendevert1":["abcdefghijkl"]}');
+  });
   ok('woorden: 1024 uniek geladen', WOORDEN.length === 1024 && new Set(WOORDEN).size === 1024);
   var qm = QR.qrMatrix('test');
   ok('qr: matrix met zoek- en timingpatronen', qm.length === 21 && qm[0][0] === 1 &&
@@ -1404,7 +1439,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await tikje();
   hostSock.send(JSON.stringify({ t: 'hallo', naam: 'Mo' }));
   await tikje();
-  ok('[4.7] mp gast: wachten tot de host start, en de kaart zegt wie', __els.modalBox.innerHTML.indexOf('Mo start het potje. Even wachten.') >= 0);
+  ok('[4.7] mp gast: wachten tot de host start, en de kaart zegt wie', __els.modalBox.innerHTML.indexOf('Wacht tot Mo op Spelen tikt. Dan loot de app wie met wit begint.') >= 0);
   hostSock.send(JSON.stringify({ t: 'start', jij: 'b', n: 1 }));
   await tikje();
   ok('mp gast: potje als zwart, wit is aan zet', !!session && session.online === true &&
@@ -1600,7 +1635,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   resignNow();
   await tikje();
   /* de uitslag blijft bewaard tot de ander hem kent; hier is er geen ander die antwoordt */
-  var naOpgave = leesSamen();
+  var naOpgave = leesSamenAlles().find(function (b) { return b.r.gameId === 'potje-test-1'; });
   ok('mp: na opgeven is het potje over, en de uitslag staat bewaard tot de ander hem kent', session.over === true &&
     !!naOpgave && !naOpgave.kapot && naOpgave.r.result.kind === 'opgave' && naOpgave.r.shown === true);
   closeModal();
@@ -1615,7 +1650,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var mpVoor = MP;
   await mpHostQR();
   ok('[4.1] mp: met een bewaard vriendenpotje geen nieuw potje erover heen', MP === mpVoor &&
-    !!leesSamen() && leesSamen().r.gameId === 'potje-test-2' && /Je potje met Fien loopt nog/.test(__els.toast.textContent));
+    leesSamenAlles().some(function (b) { return b.r.gameId === 'potje-test-2' && !b.r.result; }) && /Je potje met Fien loopt nog/.test(__els.toast.textContent));
   mpStop(true);
   opslag(SAMEN_KEY, null);
   /* terug in de kamer na een herlading: de sessie is een hoger dan bewaard, en dat staat meteen bewaard */
@@ -1924,7 +1959,9 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('vriend: lijst toont Mila met uitnodigen', __els.friendList.innerHTML.indexOf('Mila') >= 0 &&
     __els.friendList.innerHTML.indexOf('data-invite="' + fid + '"') >= 0 && __els.friendList.innerHTML.indexOf(fid2) < 0);
 
-  /* uitnodigen: briefje in de bus van Mila, kamer als host, wachten */
+  /* uitnodigen: briefje in de bus van Mila, kamer als host, wachten. De rol kwam uit de volgorde van twee willekeurige
+     sleutels; hier zijn wij a, zodat de kant van Mila hieronder rol b is. */
+  setFriend(fid, Object.assign({}, P.friends[fid], { host: true }));
   await inviteFriend(fid);
   for (i = 0; i < 20; i++) await null;
   var bussen = Object.keys(__server.buses);
@@ -2272,7 +2309,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('potje: zonder als, of met een als die geen versie is, weigert de server',
     aZ.every(function (st) { return st === 400; }) && (await pLees([pb.bus])).blobs[pb.bus] === 'staat-b');
   __server.potjes = {};
-  for (j = 0; j < 1024; j++) __server.potjes['f' + j.toString(16).padStart(63, '0')] = { blob: 'x', tot: __busNu() + POTJE_TTL + j, veranderd: __busNu() };
+  for (j = 0; j < 1024; j++) __server.potjes['f' + j.toString(16).padStart(63, '0')] = { blob: 'x', tot: __busNu() + POTJE_TTL + j };
   var aVol = await pAls(pa, 'x', await __sha256hex('x'));
   ok('potje: een geweigerd schrijven bij een volle tabel duwt niemand weg',
     aVol.status === 409 && Object.keys(__server.potjes).length === 1024 && ('f' + '0'.repeat(63)) in __server.potjes);
@@ -2286,6 +2323,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     ok('bus check: nu is de klok van de server in hele seconden, ook bij een lege vraag',
       lN0.nu === Math.floor(b0 / 1000) && lN1.nu === Math.floor((b0 + 90500) / 1000));
   } finally { Date.now = echtNuP; }
+  ok('bus check: het antwoord heeft alleen blobs en nu', Object.keys(await pLees([pa.bus])).sort().join(',') === 'blobs,nu');
 
   __server.potjes = {};
   await pSchrijf(pa, 'x');
@@ -2307,25 +2345,11 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
 
   __server.potjes = {};
   await pSchrijf(pa, 'zet-1');
-  __server.klok += 2 * 3600000;
-  await pSchrijf(pa, 'zet-1');
-  var oZelfde = (await pLees([pa.bus])).ongewijzigd[pa.bus];
-  await pSchrijf(pa, 'zet-2');
-  var oAnders = (await pLees([pa.bus])).ongewijzigd[pa.bus];
-  __server.klok += 1800000;
-  var oHalf = (await pLees([pa.bus])).ongewijzigd[pa.bus];
-  ok('potje: ongewijzigd loopt door bij dezelfde bytes en begint opnieuw bij andere bytes',
-    oZelfde === 7200 && oAnders === 0 && oHalf === 1800);
-  __server.klok = klokP;
-  __server.potjes = {};
-  await pSchrijf(pa, 'zet-1');
   /* geen check tussendoor: die veegt ook, en verbergt dan een schrijven dat niet veegt */
   __server.klok += 30 * 24 * 3600000 + 3600000;
-  await pSchrijf(pa, 'zet-1');
-  __server.klok += 5000;
-  var oTerug = await pLees([pa.bus]);
-  ok('potje: verlopen en met dezelfde bytes terug, dan begint ongewijzigd opnieuw',
-    oTerug.blobs[pa.bus] === 'zet-1' && oTerug.ongewijzigd[pa.bus] === 5);
+  var aVerlopen = await pAls(pa, 'zet-2', await __sha256hex('zet-1'));
+  ok('potje: verlopen, dan telt de oude versie niet meer: 409 met een leeg briefje',
+    aVerlopen.status === 409 && aVerlopen.blob === '' && (await pAls(pa, 'zet-2', '')).status === 204);
   __server.klok = klokP;
 
   __server.potjes = {};
@@ -2351,14 +2375,10 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   __server.buses = {};
   for (j = 0; j < MAX_BUSES; j++) __server.buses[j.toString(16).padStart(64, '0')] = { blob: 'x', tot: __busNu() + BUS_TTL };
   ok('potje: een volle tabel met uitnodigingen houdt een potje niet tegen', await pSchrijf(pa, 'x') === 204);
-  var uId = (0).toString(16).padStart(64, '0'), lUP = await pLees([uId, pa.bus]);
-  ok('potje: alleen een potjesbus krijgt een ongewijzigd, een uitnodiging niet',
-    lUP.blobs[uId] === 'x' && (pa.bus in lUP.ongewijzigd) && !(uId in lUP.ongewijzigd));
-  for (j = 1; j < 1023; j++) __server.potjes['f' + j.toString(16).padStart(63, '0')] = { blob: 'x', tot: __busNu() + POTJE_TTL, veranderd: __busNu() };
+  for (j = 1; j < 1023; j++) __server.potjes['f' + j.toString(16).padStart(63, '0')] = { blob: 'x', tot: __busNu() + POTJE_TTL };
   ok('potje: de uitnodigingen tellen niet mee voor de 1024 potjesbussen',
     await pSchrijf(pb, 'x') === 204 && Object.keys(__server.potjes).length === 1024 && (pa.bus in __server.potjes));
 
-  __server.klok += 2 * 3600000;
   __server.links = { 'een-code': { payload: 'x', tot: __busNu() + LINK_TTL } };
   __server.wsrooms = {};
   __server.pending = { 'a|b': { dirA: 'a' } };
@@ -2373,8 +2393,6 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     (await pLees([pa.bus])).blobs[pa.bus] === 'x' && Object.keys(__server.buses).length === 0 &&
     Object.keys(__server.links).length === 0 && Object.keys(__server.wsrooms).length === 0 &&
     Object.keys(__server.pending).length === 0 && wsHDicht === 1006 && !!__server.profiles.herstartproef);
-  __server.klok += 3600000;
-  ok('potje: na een herstart telt ongewijzigd vanaf de herstart, zoals bij het laden van schijf', (await pLees([pa.bus])).ongewijzigd[pa.bus] === 3600);
   __potjesKwijt();
   ok('potje: zijn de potjes kwijt, dan staat er niets meer en blijven de profielen',
     !(pa.bus in (await pLees([pa.bus])).blobs) && !!__server.profiles.herstartproef && await pSchrijf(pa, 'terug') === 204);
@@ -2431,7 +2449,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await nuNiet();
   for (i = 0; i < 20; i++) await null;
   ok('twee kanten: een verlopen uitnodiging stopt met wachten en zegt het',
-    INV === null && MP === null && __els.modalBox.innerHTML.indexOf('heeft niet gekeken') >= 0);
+    INV === null && MP === null && __els.modalBox.innerHTML.indexOf('is er nu niet') >= 0 && __els.modalBox.innerHTML.indexOf('Daag ') >= 0);
   fire(__els.meldOk, 'click');
   for (i = 0; i < 20; i++) await null;
 
@@ -2601,6 +2619,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await orakelZelftest();
   await orakelFlow();
   await orakelFlow5();
+  await orakelFlow6();
+  await orakelVersies();
   print('\norakel: ' + ORAKEL.nogNiet + ' nog niet gebouwd, ' + ORAKEL.gebouwd + ' gebouwd');
   print(fails === 0 ? '\nALL FLOW TESTS PASSED' : '\n' + fails + ' FLOW FAILURES');
 })().catch(function (e) { print('ASYNC EXCEPTION: ' + e + '\n' + (e && e.stack)); print('\nFLOW SUITE ABORTED'); });

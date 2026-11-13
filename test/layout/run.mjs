@@ -20,6 +20,8 @@ const POORT = Number(process.env.LAYOUT_POORT || 8719);
 const URL = 'http://127.0.0.1:' + POORT + '/';
 const DEV = process.env.DEV_SH || path.join(ROOT, 'tools', 'dev.sh');
 const SESSIE = 'fd-layout-' + POORT;
+/* desgewenst: alleen de regels die hierop passen, en een map voor foto's van de schermen die een geval meet */
+const ALLEEN = process.env.LAYOUT_ALLEEN ? new RegExp(process.env.LAYOUT_ALLEEN) : null, FOTOS = process.env.LAYOUT_FOTOS || '';
 
 /* een kind met een naam en verder niets: geen naamvraag, geen weekkaart */
 const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'Mees', t: 1 } },
@@ -27,11 +29,11 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '5.5', '5.11']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '5.5', '5.6', '5.11', '6.3', '6.4', '6.5', '6.8', '6.9', 'V2', 'V9']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
-  const nr = (regel.match(/^\[([\d.]+)\]/) || [])[1];
+  const nr = (regel.match(/^\[([\dV.]+)\]/) || [])[1];
   if (gebouwd.has(nr)) return fouten.length ? 'FAIL' : 'PASS';
   return fouten.length ? 'NOG NIET GEBOUWD' : 'FAIL';
 }
@@ -57,6 +59,19 @@ const HELPERS = `
     await page.goto(URL);
     await page.evaluate(([d, x]) => { localStorage.clear(); localStorage.setItem('schaakheld1', d);
       for (const k in x) localStorage.setItem(k, x[k]); }, [DOC, extra || {}]);
+    /* de staten van een paar verzegeld zoals een apparaat ze bewaart, met de functies van de app op de pagina */
+    await page.evaluate(async () => {
+      const t = localStorage.getItem('schaakheld-paar');
+      if (!t) return;
+      const paren = JSON.parse(t), vrienden = JSON.parse(localStorage.getItem('schaakheld1')).friends || {};
+      for (const fid in paren) {
+        const p = paren[fid];
+        if (!p.staat || p.blob || !vrienden[fid]) continue;
+        p.blob = await staatNaarBlob(vrienden[fid].k, p.staat);
+        p.versie = await versieVan(p.blob);
+      }
+      localStorage.setItem('schaakheld-paar', JSON.stringify(paren));
+    });
     await page.reload();
     await page.waitForTimeout(300);
   };
@@ -88,6 +103,7 @@ const HELPERS = `
       tips: 3, drawAsked: null, started: Date.now() - 600000, updated: Date.now() - 60000 }) });
     await klik('#verderKaart'); await page.waitForTimeout(500);
   };
+  const foto = async (naam) => { if (${JSON.stringify(FOTOS)}) await page.screenshot({ path: ${JSON.stringify(FOTOS)} + '/' + naam + '.png' }); };
   const pagina = () => page.evaluate(() => ({ sh: document.documentElement.scrollHeight, sw: document.documentElement.scrollWidth,
     H: innerHeight, W: innerWidth }));
   const laatsteOnder = () => page.evaluate(() => { const o = document.getElementById('onder'); if (!o) return null;
@@ -1018,6 +1034,30 @@ for (const [W, H, uitslag, vol] of [[360, 640, 'w'], [375, 553, 'w'], [375, 647,
       check(n, 'geen knop onder de rand van de kaart (' + Math.round(k.onder) + ' px)', k.onder <= 1);` });
 }
 
+/* regel V9: de eindkaart van een potje tussen vrienden dat met de 500e halve zet remise werd, met de zin over de marathon */
+for (const [W, H] of [[360, 640], [375, 553], [390, 844], [768, 1004]]) {
+  const n = '[V9] ' + W + 'x' + H + ': de eindkaart van de remise na 250 zetten: de zin over de marathon staat erop, alles past, en geen knop valt eronder';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      const k = await page.evaluate(async () => {
+        MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false, revTheirs: false,
+          peerName: 'Maximiliaantje', open: true, weg: false, gameId: 'potje-test-1', peerOn: true };
+        mpBeginGame();
+        await new Promise(r => setTimeout(r, 300));
+        const S = session.S;
+        for (let i = 0; i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
+        endGame({ over: true, result: 'd', reason: 'lang' });
+        await new Promise(r => setTimeout(r, 1200));
+        const e = document.getElementById('eindkaart'), er = e.getBoundingClientRect();
+        const knoppen = [...e.querySelectorAll('button')].filter(b => b.getClientRects().length);
+        return { sh: e.scrollHeight, ch: e.clientHeight, tekst: e.innerText, onder: Math.max(...knoppen.map(b => b.getBoundingClientRect().bottom)) - er.bottom };
+      });
+      check(n, 'de zin over de marathon', /Remise: dit potje duurde 250 zetten, en langer kan niet\. Wat een marathon!/.test(k.tekst) && /Gelijkspel!/.test(k.tekst));
+      check(n, 'alles past in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
+      check(n, 'geen knop onder de rand van de kaart (' + Math.round(k.onder) + ' px)', k.onder <= 1);` });
+}
+
 /* in een kleine eindkaart krimpen de knoppen niet: elke knop is minstens 44 hoog */
 for (const [W, H] of KLEIN) {
   const n = '[2.5] ' + W + 'x' + H + ': elke knop van de eindkaart is minstens 44 hoog, ook met trofeeën of een vriendschapsvraag';
@@ -1159,7 +1199,7 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
           knoppen: [...r.querySelectorAll('button')].map(k => { const x = k.getBoundingClientRect(); return { left: x.left, right: x.right, top: x.top, bottom: x.bottom, h: x.height }; }) };
       }));
       check(n, 'drie rijen', rijen.length === 3);
-      check(n, 'de rij van Fien zegt dat Mees aan zet is', rijen.some(r => /Fien/.test(r.tekst) && /Jij bent aan zet/.test(r.tekst) && /Speel verder/.test(r.tekst)));
+      check(n, 'de rij van Fien zegt dat Mees aan zet is, met de knop die het potje opent', rijen.some(r => /Fien/.test(r.tekst) && /Jij bent aan zet\. *Jij bent aan zet/.test(r.tekst)));
       check(n, 'elke rij heeft ⋯ en één knop, en geen kruisje', rijen.every(r => r.knoppen.length === 2 && !/✕/.test(r.tekst)));
       check(n, 'elke knop binnen zijn rij en het scherm', rijen.every(r => r.knoppen.every(k => k.left >= r.rij.left - 0.5 && k.right <= r.rij.right + 0.5 &&
         k.top >= r.rij.top - 0.5 && k.bottom <= r.rij.bottom + 0.5 && k.left >= 0 && k.right <= ${W} + 0.5)));
@@ -1246,6 +1286,290 @@ GEVALLEN.push({ regels: ['[3.5] 390x844: Ik begint met het level, dan bewaard, t
       for (const s of ids) { const r = await rect(s); check(n, s + ' staat er', !!r); tops.push(r ? r.top : NaN); }
       check(n, 'in deze volgorde', tops.every((t, i) => i === 0 || t > tops[i - 1]));` });
 
+/* plan.md 6.9: Spelen met vier dingen bezig, het eerste een remise-aanbod van een vriend met een lange naam, en Spelen
+   met een regel "Ook nog" die twee regels neemt: de kaart, één regel eronder, de weekregel en beide spelknoppen
+   staan boven de tabbalk. Een vriendenpotje staat in de staat van het paar zoals dit apparaat die bewaart; de vriend
+   is host, dus het kind heeft rol a. Elke stand heeft eigen geheimen: de server houdt wat eerdere gevallen schreven. */
+const profielMet = (stand, vrienden) => JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: { name: { v: 'Mees', t: 1 } },
+  max: { best: 0, goal: {} }, loc: {}, friends: Object.fromEntries(vrienden.map(([fid, naam], i) => [fid,
+    { k: ('sleutel' + stand + fid).padEnd(36, 'x').slice(0, 36), naam, t: 1, since: 1792000000000 + i * 100000000, host: true, weg: false }])) });
+const paarStaat = (id, r) => {
+  const kleur = r.kleur || 'w', rolVan = c => c === kleur ? 'a' : 'b', t = Math.floor((r.t || 1794700000000) / 1000), zetten = r.zetten || [];
+  return { staat: { v: 2, seq: 3, vorige: [], spel: { id, wit: rolVan('w'), door: r.uitdaging ? 'b' : 'a',
+    fase: r.uitdaging ? 'uitdaging' : r.uitslag ? 'klaar' : 'potje', zetten, bod: r.aanbod ? { door: 'b', ply: zetten.length, t } : null,
+    uitslag: r.uitslag || null, weet: r.weet || { a: null, b: null }, bekeken: r.bekeken || { a: false, b: false }, t } },
+    hoogste: 3, merk: 'merkvandittoest1', rij: [] };
+};
+const MAXI_BIEDT = { zetten: ['d2d4', 'd7d5'], aanbod: true };
+const VIER_BEZIG = { schaakheld1: profielMet('vier', [['vriendmaxi01', 'Maximiliaantje'], ['vriendsem001', 'Sem']]),
+  'schaakheld-paar': JSON.stringify({ vriendmaxi01: paarStaat('potjemaxi001', MAXI_BIEDT), vriendsem001: paarStaat('potjesem0001', { zetten: ['c2c4'] }) }),
+  'schaakheld-potje': JSON.stringify({ v: 2, games: { 1: { level: 1, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null, started: 1, updated: 1, patXP: 0 } } }),
+  'schaakheld-rondjes': JSON.stringify({ scan: { round: 2, earned: 6 } }) };
+const OOK_LANG = { schaakheld1: profielMet('vier', [['vriendmaxi01', 'Maximiliaantje']]),
+  'schaakheld-paar': JSON.stringify({ vriendmaxi01: paarStaat('potjemaxi001', MAXI_BIEDT) }),
+  'schaakheld-rondjes': JSON.stringify({ trucs: { round: 2, earned: 6 } }) };
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[6.9] ' + W + 'x' + H + ': met vier dingen bezig en met een regel Ook nog van twee regels staan de kaart (een remise-aanbod), één regel, de weekregel en beide spelknoppen boven de tabbalk';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      for (const [soort, extra] of [['vier dingen bezig', ${JSON.stringify(VIER_BEZIG)}], ['Ook nog in twee regels', ${JSON.stringify(OOK_LANG)}]]) {
+        await vers(${W}, ${H}, extra);
+        await page.waitForTimeout(2500);
+        const tab = await rect('.tabbar');
+        for (const s of ['#verder', '#weekStrip', '#spelTurbo', '#spelVriend']) {
+          const r = await rect(s);
+          check(n, soort + ': ' + s + ' boven de tabbalk', !!r && !!tab && r.top >= 0 && r.bottom <= tab.top + 0.5);
+        }
+        const v = await page.evaluate(() => { const e = document.getElementById('verder'); return {
+          tekst: e ? e.textContent : '', ook: e ? [...e.querySelectorAll('button')].filter(b => /^\\s*Ook nog/.test(b.textContent))
+            .map(b => b.getBoundingClientRect().height) : [] }; });
+        check(n, soort + ': de kaart is het remise-aanbod van Maximiliaantje', /Maximiliaantje biedt remise aan/.test(v.tekst));
+        check(n, soort + ': precies één regel Ook nog', v.ook.length === 1);
+        if (soort === 'Ook nog in twee regels') check(n, 'testopzet: de regel Ook nog neemt twee regels', v.ook.length === 1 && v.ook[0] > 46);
+      }` });
+}
+
+/* plan.md 6.8: een stil potje als kaart, met de uitweg eronder, en een tweede stil potje in de regel Ook nog */
+const STIL_LANG = { schaakheld1: profielMet('stil', [['vriendmaxi01', 'Maximiliaantje'], ['vriendsem001', 'Sem']]),
+  'schaakheld-paar': JSON.stringify({ vriendmaxi01: paarStaat('potjemaxi001', { zetten: ['d2d4', 'd7d5', 'c2c4'], t: Date.now() - 8 * 86400000 }),
+    vriendsem001: paarStaat('potjesem0001', { zetten: ['c2c4', 'e7e5', 'g1f3'], t: Date.now() - 12 * 86400000 }) }) };
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[6.8] ' + W + 'x' + H + ': twee stille potjes, de kaart met de uitweg eronder en een regel Ook nog: de kaart, de regels, de weekregel en beide spelknoppen boven de tabbalk';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(STIL_LANG)});
+      await page.waitForTimeout(2500);
+      const tab = await rect('.tabbar');
+      for (const s of ['#verder', '#weekStrip', '#spelTurbo', '#spelVriend']) {
+        const r = await rect(s);
+        check(n, s + ' boven de tabbalk', !!r && !!tab && r.top >= 0 && r.bottom <= tab.top + 0.5);
+      }
+      const v = await page.evaluate(() => (document.getElementById('verder') || {}).textContent || '');
+      check(n, 'de kaart is het stille potje met de uitweg', /heeft al een week niet gezet/.test(v) && /Klaar met wachten/.test(v));` });
+}
+
+/* plan.md 6.4: het venster als het paar bezet is: het plaatje bovenaan, de zin eronder, één Oké en geen kruisje */
+const BEZET = { schaakheld1: profielMet('bezet', [['vriendmaxi01', 'Maximiliaantje']]),
+  'schaakheld-paar': JSON.stringify({ vriendmaxi01: paarStaat('potjemaxi001', { zetten: ['d2d4', 'd7d5'], uitslag: { soort: 'opgave', door: 'a', ply: 2 },
+    weet: { a: 'merkvandittoest1', b: null }, bekeken: { a: true, b: false } }) }) };
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[6.4] ' + W + 'x' + H + ': het venster als het paar bezet is: het plaatje boven de zin, één Oké, geen kruisje, en alles in beeld';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(BEZET)});
+      await page.waitForTimeout(1500);
+      await page.evaluate(() => inviteFriend('vriendmaxi01'));
+      await page.waitForTimeout(500);
+      const plaatje = await rect('#modalBox .m-emoji'), zin = await rect('#modalBox p'), doos = await rect('#modalBox'), ok = await rect('#bezetOk');
+      check(n, 'het venster met de zin', !!zin && /weet nog niet hoe jullie potje afliep/.test(await page.evaluate(() => document.getElementById('modalBox').textContent)));
+      check(n, 'het plaatje boven de zin', !!plaatje && !!zin && plaatje.bottom <= zin.top + 0.5);
+      check(n, 'geen kruisje', !(await rect('#mClose')));
+      check(n, 'de doos en Oké in beeld', binnen(doos, ${W}, ${H}) && binnen(ok, ${W}, ${H}));` });
+}
+
+/* plan.md 6.9 met het blad: elke rij is minstens 56 hoog, de titel staat boven waar het ding staat, en niets is breder dan het scherm */
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[6.9] ' + W + 'x' + H + ': het blad Wat nog bezig is heeft per ding een rij van minstens 56 hoog, met de titel boven de plek';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(VIER_BEZIG)});
+      await page.waitForTimeout(2500);
+      await klik('#ookNog');
+      await page.waitForTimeout(500);
+      const rijen = await page.evaluate(() => [...document.querySelectorAll('.lopend')].map(r => {
+        const b = r.getBoundingClientRect(), t = r.querySelector('.l-titel'), p = r.querySelector('.l-plek');
+        const tr = t && t.getBoundingClientRect(), pr = p && p.getBoundingClientRect();
+        return { h: b.height, left: b.left, right: b.right, titel: t ? t.textContent : '', onder: !!tr && !!pr && pr.top >= tr.bottom - 0.5 };
+      }));
+      check(n, 'vier rijen: Maximiliaantje, Sem, Turbo en het rondje', rijen.length === 4);
+      check(n, 'elke rij minstens 56 hoog', rijen.length > 0 && rijen.every(r => r.h >= 55.5));
+      check(n, 'de plek staat onder de titel', rijen.length > 0 && rijen.every(r => r.titel && r.onder));
+      check(n, 'binnen het scherm', rijen.every(r => r.left >= -0.5 && r.right <= ${W} + 0.5));
+      check(n, 'geen zijwaarts scrollen', (await pagina()).sw <= ${W});` });
+}
+
+/* plan.md 6.9: een uitdaging van een vriend met een lange naam: de rij op Vrienden noemt onder de naam alleen dat hij
+   uitdaagt en welke kleur het kind heeft, in hoogstens twee regels; de kaart houdt de hele zin en blijft binnen het scherm */
+const UITDAGING = { schaakheld1: profielMet('uitdaging', [['vriendmaxi02', 'Maximiliaantje']]),
+  'schaakheld-paar': JSON.stringify({ vriendmaxi02: paarStaat('potjemaxi002', { kleur: 'b', uitdaging: true, t: Date.now() }) }) };
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[6.9] ' + W + 'x' + H + ': een uitdaging van een vriend met een lange naam: de rij zegt in hoogstens twee regels dat hij uitdaagt en welke kleur het kind heeft, en de kaart past';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(UITDAGING)});
+      await page.waitForTimeout(1500);
+      const kaart = await rect('#verder'), ja = await rect('#verderJa'), nee = await rect('#verderNee');
+      const kaartTekst = await page.evaluate(() => (document.getElementById('verder') || {}).textContent || '');
+      check(n, 'de kaart houdt de hele zin', /Maximiliaantje daagt je uit/.test(kaartTekst) && /Jij speelt met zwart: Maximiliaantje begint\./.test(kaartTekst));
+      check(n, 'de kaart en haar knoppen binnen het scherm', binnen(kaart, ${W}, ${H}) && binnen(ja, ${W}, ${H}) && binnen(nee, ${W}, ${H}));
+      await klik('#tabVrienden');
+      await page.waitForTimeout(500);
+      const rij = await page.evaluate(() => {
+        const r = document.querySelector('.friend[data-fid="vriendmaxi02"]'), s = r && r.querySelector('.f-sub');
+        if (!s) return null;
+        const z = document.createRange(); z.selectNodeContents(s);
+        const b = r.getBoundingClientRect();
+        return { tekst: s.textContent, regels: new Set([...z.getClientRects()].filter(x => x.width > 0).map(x => Math.round(x.top))).size, left: b.left, right: b.right };
+      });
+      check(n, 'de rij: Daagt je uit · Jij hebt zwart.', !!rij && rij.tekst === 'Daagt je uit · Jij hebt zwart.');
+      check(n, 'in hoogstens twee regels', !!rij && rij.regels <= 2);
+      check(n, 'de rij binnen het scherm', !!rij && rij.left >= -0.5 && rij.right <= ${W} + 0.5);
+      check(n, 'geen zijwaarts scrollen', (await pagina()).sw <= ${W});` });
+}
+
+/* De zinnen die na de foto's van de steekproef kwamen, op de kleinste maten en een tablet, met de langste naam die de
+   app toelaat (veertien tekens). Een potje met een vriend staat in de staat van het paar zoals dit apparaat die bewaart;
+   het kind heeft rol a en wit. */
+const LANG = 'Maximiliaantje', MAXI = 'vriendmaxi01';
+const metPaar = (stand, staat, extra) => Object.assign({ schaakheld1: profielMet(stand, [[MAXI, LANG]]),
+  'schaakheld-paar': JSON.stringify(staat ? { [MAXI]: staat } : {}) }, extra || {});
+const AF_MATEN = [[360, 640], [375, 553], [768, 1004]];
+/* het vak van de strook: past de zin, zonder scrollen, en in hoeveel regels */
+const STROOK = `(() => { const st = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble');
+  const lh = parseFloat(getComputedStyle(b).lineHeight) || 20;
+  return { tekst: b.innerText, past: getComputedStyle(st).overflowY === 'hidden' && st.scrollHeight <= st.clientHeight + 1 &&
+    b.getBoundingClientRect().bottom <= st.getBoundingClientRect().bottom + 0.5, regels: Math.round(b.getBoundingClientRect().height / lh) }; })()`;
+/* de eindkaart: alles in de kaart, elke knop in de kaart en minstens 44 hoog */
+const EINDKAART = `(() => { const e = document.getElementById('eindkaart'), er = e.getBoundingClientRect();
+  const knoppen = [...e.querySelectorAll('button')].filter(b => b.getClientRects().length).map(b => b.getBoundingClientRect());
+  return { tekst: e.innerText, sh: e.scrollHeight, ch: e.clientHeight, onder: Math.max(...knoppen.map(r => r.bottom)) - er.bottom,
+    laag: knoppen.filter(r => r.height < 43.5).length, knoppen: knoppen.length }; })()`;
+for (const [W, H] of AF_MATEN) {
+  const n = '[6.3] ' + W + 'x' + H + ': de vraag bij opgeven in een potje op de staat, met dat wachten mag: beide knoppen in beeld, niets scrolt';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(metPaar('opgeven', paarStaat('potjemaxi001', { zetten: ['d2d4', 'd7d5'] })))});
+      await klik('#verderKaart');
+      await page.waitForTimeout(1500);
+      await page.evaluate(() => resignAsk());
+      await page.waitForTimeout(400);
+      const v = await page.evaluate(() => { const box = document.getElementById('modalBox'), r = id => { const e = document.getElementById(id);
+        if (!e) return null; const x = e.getBoundingClientRect(); return { top: x.top, bottom: x.bottom, left: x.left, right: x.right, w: x.width, h: x.height }; };
+        return { tekst: box.innerText, sh: box.scrollHeight, ch: box.clientHeight, nee: r('rsNee'), ja: r('rsJa'), psh: document.documentElement.scrollHeight }; });
+      check(n, 'testopzet: de vraag met de zin', /Opgeven\\?/.test(v.tekst) && /Je mag ook gewoon wachten: dit potje stopt nooit vanzelf\\./.test(v.tekst) && /${LANG}/.test(v.tekst));
+      check(n, 'beide knoppen in beeld', binnen(v.nee, ${W}, ${H}) && binnen(v.ja, ${W}, ${H}));
+      check(n, 'het venster scrolt niet (' + v.sh + ' in ' + v.ch + ')', v.sh <= v.ch + 1);
+      check(n, 'de pagina scrolt niet', v.psh <= ${H} + 1);
+      await foto('af-opgeven-vraag-${W}x${H}');` });
+}
+for (const [W, H] of AF_MATEN) {
+  const n = '[6.5] ' + W + 'x' + H + ': een begin zonder antwoord: na de zet de strook dat de zet klaarstaat, geen bewaard, en het bord blijft staan; naar huis de melding boven de tabbalk, niet over de knop van de kaart';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(metPaar('begin', null, { 'schaakheld-potje': JSON.stringify({ v: 2, games: { 1: { level: 1, moves: ['e2e4', 'e7e5'], tips: 3, drawAsked: null, started: 1, updated: 1, patXP: 0 } } }) }))});
+      await page.evaluate(() => {
+        MP = { room: 'kamer-test-1', seat: 'stoel-test-1', host: true, myColor: 'w', gameNo: 1, revMine: false, revTheirs: false,
+          peerName: ${JSON.stringify(LANG)}, open: true, weg: false, gameId: 'potjebegin01', peerOn: false, paar: ${JSON.stringify(MAXI)},
+          viaFriend: ${JSON.stringify(MAXI)} };
+        Object.assign(MP, vrBegin(1));
+        MP.startBericht = { t: 'start', id: 'potjebegin01' };
+        mpBeginGame();
+      });
+      await page.waitForTimeout(500);
+      const voor = await rect('#board');
+      await zet('e2e4');
+      await page.waitForTimeout(800);
+      const st = await page.evaluate(${JSON.stringify(STROOK)});
+      check(n, 'testopzet: het begin heeft geen antwoord', await page.evaluate(() => !potjeOpStaat()));
+      check(n, 'de strook: de zet staat klaar (' + st.tekst + ')', /Je zet staat klaar\\. Het potje begint als ${LANG} meedoet\\./.test(st.tekst) && st.past);
+      check(n, 'geen bewaard', await page.evaluate(() => { const b = document.getElementById('bewaard'); return !b.getClientRects().length || !/bewaard/.test(b.textContent); }));
+      check(n, 'het bord bleef staan', gelijk(voor, await rect('#board')));
+      await foto('af-zet-staat-klaar-${W}x${H}');
+      await klik('#backBtn');
+      await page.waitForTimeout(500);
+      const t = await rect('#toast'), tab = await rect('.tabbar'), knop = await rect('#verderKaart .vk-knop');
+      check(n, 'de melding (' + await page.evaluate(() => document.getElementById('toast').textContent) + ')',
+        await page.evaluate(() => /Het potje is niet begonnen: Maximiliaantje deed nog niet mee\\./.test(document.getElementById('toast').textContent)) && !!t);
+      check(n, 'boven de tabbalk', !!t && !!tab && t.bottom <= tab.top + 0.5);
+      check(n, 'niet over de knop van de kaart', !!t && !!knop && (t.top >= knop.bottom || t.bottom <= knop.top));
+      check(n, 'testopzet: de kaart is het potje tegen Turbo, niet het begin', await page.evaluate(() => !/je potje met Maximiliaantje/i.test(document.getElementById('verder').textContent)));
+      await foto('af-niet-begonnen-${W}x${H}');` });
+}
+/* stelling na vier halve zetten: de beginstelling voor de tweede keer, het kind aan zet */
+const TWEEDE_KEER = ['g1f3', 'g8f6', 'f3g1', 'f6g8'];
+for (const [W, H] of AF_MATEN) {
+  const n = '[5.6] ' + W + 'x' + H + ': in een potje op de staat de regel over herhaling op de beurt van het kind: hoogstens drie regels, en het bord blijft staan';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(metPaar('herhaal', paarStaat('potjemaxi001', { zetten: TWEEDE_KEER })))});
+      await klik('#verderKaart');
+      await page.waitForTimeout(1500);
+      const st = await page.evaluate(${JSON.stringify(STROOK)});
+      check(n, 'de regel (' + st.tekst + ')', /Deze stelling stond er al eens\\. Bij de derde keer is het remise\\./.test(st.tekst));
+      check(n, 'past, in hoogstens drie regels (' + st.regels + ')', st.past && st.regels <= 3);
+      const met = await rect('#board');
+      await page.evaluate(() => say('Jij bent aan zet! 💭'));
+      await page.waitForTimeout(200);
+      check(n, 'het bord staat waar het met een korte zin staat', gelijk(met, await rect('#board')));
+      await page.evaluate(() => zegInPotje(''));
+      await page.waitForTimeout(200);
+      await foto('af-herhaling-strook-${W}x${H}');` });
+}
+for (const [W, H] of AF_MATEN) for (const [soort, telt] of [['geteld', true], ['te kort', false]]) {
+  const n = '[5.6] ' + W + 'x' + H + ': de eindkaart van remise door drie keer dezelfde stelling op de staat, ' + soort + ': de zin, ' +
+    (telt ? 'de XP' : 'dat het niet meetelt') + ', alles past en geen knop valt eronder';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(metPaar(telt ? 'drieja' : 'driekort', paarStaat('potjemaxi001', { zetten: ['d2d4', 'd7d5'] })))});
+      await klik('#verderKaart');
+      await page.waitForTimeout(1500);
+      await page.evaluate((telt) => {
+        const p = paarVan(${JSON.stringify(MAXI)});
+        p.telKaart = { [MP.gameId]: { xp: telt ? 30 : 0, doelGehaald: false, uitslag: { soort: 'herhaling', door: 'a' } } };
+        bewaarPaar(${JSON.stringify(MAXI)}, p);
+        endGame({ over: true, result: 'd', reason: 'herhaling' });
+      }, ${telt});
+      await page.waitForTimeout(1200);
+      const k = await page.evaluate(${JSON.stringify(EINDKAART)});
+      check(n, 'de zin', /Remise: drie keer dezelfde stelling\\. Niemand wint, niemand verliest\\./.test(k.tekst));
+      check(n, ${JSON.stringify(telt ? 'de XP' : 'dat het niet meetelt')}, ${telt ? "/\\+30\\s*XP/.test(k.tekst)" : "/Dit potje telt niet mee: het was korter dan tien zetten\\./.test(k.tekst)"});
+      check(n, 'alles past in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
+      check(n, 'geen knop onder de rand (' + Math.round(k.onder) + ' px), en elke knop 44 hoog', k.knoppen >= 1 && k.onder <= 1 && k.laag === 0);
+      await foto('af-herhaling-eindkaart-${telt ? 'geteld' : 'kort'}-${W}x${H}');` });
+}
+for (const [W, H] of AF_MATEN) {
+  const n = '[6.3] ' + W + 'x' + H + ': de eindkaart van een potje dat afliep terwijl het kind weg was, met de XP uit het paar na een herlading: alles past en geen knop valt eronder';
+  const staat = paarStaat('potjemaxi001', { zetten: ['d2d4', 'd7d5', 'c2c4', 'e7e6'], uitslag: { soort: 'opgave', door: 'b', ply: 4 },
+    weet: { a: 'merkvandittoest1', b: 'merk-b----------' } });
+  staat.telKaart = { potjemaxi001: { xp: 30, doelGehaald: false, uitslag: { soort: 'opgave', door: 'b' } } };
+  const profiel = JSON.parse(profielMet('weg', [[MAXI, LANG]]));
+  profiel.loc.geteld = { [MAXI]: ['potjemaxi001'] };
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify({ schaakheld1: JSON.stringify(profiel), 'schaakheld-paar': JSON.stringify({ [MAXI]: staat }) })});
+      await page.waitForTimeout(1000);
+      check(n, 'testopzet: de kaart noemt het einde', await page.evaluate(() => /Maximiliaantje gaf op/.test(document.getElementById('verder').textContent)));
+      await klik('#verderKaart');
+      await page.waitForTimeout(1500);
+      const k = await page.evaluate(${JSON.stringify(EINDKAART)});
+      check(n, 'de kaart: Jij wint, met de XP (' + k.tekst.replace(/\\s+/g, ' ').slice(0, 80) + ')', /Jij wint dit potje!/.test(k.tekst) && /\\+30\\s*XP/.test(k.tekst));
+      check(n, 'alles past in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
+      check(n, 'geen knop onder de rand (' + Math.round(k.onder) + ' px), en elke knop 44 hoog', k.knoppen >= 2 && k.onder <= 1 && k.laag === 0);
+      await foto('af-weg-eindkaart-xp-${W}x${H}');` });
+}
+
+/* In een echte browser is de versie een echte SHA-256: alleen hier moet de versie die de app uitrekent, die van de echte
+   server zijn. De app schrijft een staat en dan nog een die de eerste versie noemt. */
+const versieRegel = '[V2] de app schrijft een staat en dan nog een met de versie die zij zelf uitrekende, en de echte server neemt allebei aan';
+GEVALLEN.push({ regels: [versieRegel], code: `
+    const n = ${JSON.stringify(versieRegel)};
+    await vers(360, 640);
+    const uit = await page.evaluate(async () => {
+      const fid = 'vriendversie1';
+      setFriend(fid, { k: 'geheimvoordeversietest-' + Math.random().toString(36).slice(2) + '-xxxxxxxxxx', naam: 'Fien', t: Date.now(), weg: false,
+        host: true, since: Date.now() });
+      await pasToe(fid, { soort: 'uitdaging', id: 'potjeeen0001', wit: 'a', op: null });
+      const p1 = paarVan(fid);
+      await pasToe(fid, { soort: 'intrekken', id: 'potjeeen0001' });
+      const p2 = paarVan(fid);
+      return { eerste: p1.versie, toont1: p1.toont, seq1: p1.staat && p1.staat.seq, tweede: p2.versie, toont2: p2.toont, rij: p2.rij.length,
+        seq2: p2.staat && p2.staat.seq, spel: p2.staat ? p2.staat.spel : 'geen', onbekend: versiesOnbekend };
+    });
+    check(n, 'de server kent versies', uit.onbekend === false);
+    check(n, 'de eerste staat erop, met de versie van de app', /^[0-9a-f]{64}$/.test(uit.eerste) && uit.toont1 === uit.eerste && uit.seq1 === 1);
+    check(n, 'de tweede noemde die versie en staat er ook: seq 2, en niets wacht', uit.seq2 === 2 && uit.rij === 0 && uit.toont2 === uit.tweede &&
+      uit.spel === null);` });
+
 function draai(geval) {
   const code = 'async page => {' + HELPERS + '\ntry {' + geval.code + '\n} catch (e) { for (const r of ' +
     JSON.stringify(geval.regels) + ') check(r, "uitzondering: " + (e && e.message ? e.message.split("\\n")[0] : e), false); }\n' +
@@ -1285,6 +1609,7 @@ function main() {
     const open = pw('open', URL);
     if (open.status !== 0) throw new Error('playwright-cli open lukte niet: ' + open.stderr);
     for (const geval of GEVALLEN) {
+      if (ALLEEN && !geval.regels.some(r => ALLEEN.test(r))) continue;
       const { fouten, kapot } = draai(geval);
       for (const regel of geval.regels) {
         if (kapot[regel]) { fails++; console.log('FAIL  ' + regel + '  (meting mislukt: ' + kapot[regel] + ')'); continue; }

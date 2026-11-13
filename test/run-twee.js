@@ -17,4 +17,6 @@ load('src/jsqr.js');
 var __APP_SRC = readFile('.tmp-ui.js');
 load('test/harnas.js');
 load('test/orakel-twee.js');
+load('test/orakel-twee-6.js');
+load('test/orakel-paar.js');
 load('test/twee-apparaten.js');

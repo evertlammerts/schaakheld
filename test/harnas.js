@@ -28,17 +28,34 @@ function maakApparaat(naam, opties) {
     leven.sockets.push(s);
     return s;
   };
+  /* netwerk.haak(url, o, fetch) laat een test de verzoeken van alleen dit apparaat sturen */
   const eigenFetch = function (url, o) {
-    return netwerk.uit ? Promise.reject(new TypeError('Load failed')) : fetch(url, o);
+    return netwerk.uit ? Promise.reject(new TypeError('Load failed')) : netwerk.haak ? netwerk.haak(url, o, fetch) : fetch(url, o);
   };
+  /* een klok die scheef staat: dit apparaat leest de tijd van de wereld plus klokAf ms */
+  const klokAf = opties.klokAf || 0;
   /* de shim vraagt minder beweging, zodat een zet meteen staat; een test die midden in een schuivend stuk
      tikt, zet beweging aan */
   const beweging = opties.beweging ? function () { return { matches: false }; } : matchMedia;
-  const maak = new Function('document', 'localStorage', 'location', 'history', '__els', 'setTimeout', 'WebSocket', 'fetch', 'matchMedia',
-    __APP_SRC + '\n;return function (code) { return eval(code); };');
-  const ev = maak(doc, opslag, loc, loc.__history, doc.__els, eigenTimer, EigenSocket, eigenFetch, beweging);
+  const namen = ['document', 'localStorage', 'location', 'history', '__els', 'setTimeout', 'WebSocket', 'fetch', 'matchMedia'];
+  const waarden = [doc, opslag, loc, loc.__history, doc.__els, eigenTimer, EigenSocket, eigenFetch, beweging];
+  if (klokAf) {
+    const ScheveDate = function (...a) {
+      const W = Date;
+      if (!(this instanceof ScheveDate)) return new W(W.now() + klokAf).toString();
+      return a.length ? new W(...a) : new W(W.now() + klokAf);
+    };
+    ScheveDate.now = function () { return Date.now() + klokAf; };
+    ScheveDate.UTC = function (...a) { return Date.UTC(...a); };
+    ScheveDate.parse = function (t) { return Date.parse(t); };
+    ScheveDate.prototype = Date.prototype;
+    namen.push('Date');
+    waarden.push(ScheveDate);
+  }
+  const maak = new Function(...namen, __APP_SRC + '\n;return function (code) { return eval(code); };');
+  const ev = maak(...waarden);
   const app = {
-    naam, doc, els: doc.__els, opslag, location: loc, ev, leven, netwerk,
+    naam, doc, els: doc.__els, opslag, location: loc, ev, leven, netwerk, klokAf,
     get(expr) { return ev('(' + expr + ')'); },
     el(id) { return doc.getElementById(id); },
     modal() { return doc.getElementById('modalBox').innerHTML; },
@@ -57,6 +74,22 @@ function maakApparaat(naam, opties) {
   return app;
 }
 
+/* De staten van een paar die een test in de opslag zet, verzegeld zoals een apparaat ze bewaart: als tekst, met de
+   versie. Voor de flowsuite, waar de app in de globale scope staat. */
+async function verzegelParen(o) {
+  const t = o.getItem('schaakheld-paar');
+  if (!t) return o;
+  const paren = JSON.parse(t), doc = JSON.parse(o.getItem('schaakheld1') || '{}'), vrienden = doc.friends || {};
+  for (const fid in paren) {
+    const p = paren[fid];
+    if (!p.staat || p.blob || !vrienden[fid]) continue;
+    p.blob = await staatNaarBlob(vrienden[fid].k, p.staat);
+    p.versie = await versieVan(p.blob);
+  }
+  o.setItem('schaakheld-paar', JSON.stringify(paren));
+  return o;
+}
+
 function stopApparaat(app) {
   if (app.leven.dood) return;
   app.leven.dood = true;
@@ -65,7 +98,7 @@ function stopApparaat(app) {
 
 function herlaad(app) {
   stopApparaat(app);
-  return maakApparaat(app.naam, { opslag: app.opslag, locatie: app.location, netwerk: app.netwerk, herstart: true });
+  return maakApparaat(app.naam, { opslag: app.opslag, locatie: app.location, netwerk: app.netwerk, herstart: true, klokAf: app.klokAf });
 }
 
 /* het netwerk van dit apparaat valt weg: open lijnen breken zonder
@@ -244,11 +277,40 @@ function opgeslagen(app, sleutel) {
   try { return JSON.parse(v); } catch (e) { return v; }
 }
 
-/* het ene bewaarde vriendenpotje: schaakheld-samen is een kaart van potjes per potje-id */
+/* het ene potje met een ander kind zoals het apparaat het kent: de bewaarde potjes, met die van vrienden uit de staat
+   van hun paar */
 function samenPotje(app) {
-  const r = opgeslagen(app, 'schaakheld-samen');
-  const ids = r && r.games && typeof r.games === 'object' ? Object.keys(r.games) : [];
-  return ids.length === 1 ? r.games[ids[0]] : null;
+  const g = app.get('samenRauw() || {}'), ids = Object.keys(g);
+  return ids.length === 1 ? g[ids[0]] : null;
+}
+
+/* het lopende potje of de uitdaging met deze vriend, ook als er meer potjes zijn */
+function vriendenpotjeMet(app, fid) {
+  const g = app.get('samenRauw() || {}');
+  return Object.keys(g).map(function (k) { return g[k]; }).filter(function (x) { return !!x && x.fid === fid && !x.result && !x.ingetrokken; })[0] || null;
+}
+
+/* de regels "Ook nog" onder de Verder-kaart, zoals een kind ze leest */
+function ookNogRegels(app) {
+  return app.el('verder').querySelectorAll('button').map(function (b) { return app.doc.__tekst(b).replace(/\s*›\s*$/, '').trim(); })
+    .filter(function (t) { return /^Ook nog/.test(t); });
+}
+
+/* de rij van een vriend op Vrienden */
+function vriendRij(app, fid) {
+  return app.el('friendList').querySelectorAll('[data-fid="' + fid + '"]')[0] || null;
+}
+function vriendRijTekst(app, fid) {
+  const r = vriendRij(app, fid);
+  return r ? app.doc.__tekst(r) : '';
+}
+
+/* een knop in de rij van een vriend aantikken op wat erop staat */
+function tikInRij(app, fid, tekst) {
+  if (!zichtbaar(app, 'view-vrienden')) app.tik('tabVrienden');
+  const r = vriendRij(app, fid);
+  const k = r ? r.querySelectorAll('button, [data-tik]').filter(function (b) { return knopTekst(app, b).indexOf(tekst) >= 0; })[0] : null;
+  return tikEl(app, k, '"' + tekst + '" bij ' + fid);
 }
 
 /* het bewaarde potje tegen Turbo op een niveau: schaakheld-potje is een kaart van potjes per niveau */
@@ -297,6 +359,42 @@ async function zetEnWacht(app, key) {
   return gelukt;
 }
 
+/* Een rustig potje van n halve zetten zonder slaan en zonder schaak, waarin geen stelling een tweede keer staat: steeds de
+   eerste zet die naar een nieuwe stelling gaat, en loopt dat vast, dan een stap terug. Met pionnen doet elke kant om de
+   98 halve zetten een pionzet, zodat de vijftigzettenregel het niet beëindigt; zonder pionnen mag de laatste halve zet
+   het potje met die regel beëindigen. */
+function rustigePartij(n, metPionnen) {
+  const S = newGame(), uit = [], gezien = new Set([positionKey(S)]);
+  const opties = function () {
+    const i = uit.length % 98, pion = !!metPionnen && (i === 96 || i === 97), laatste = uit.length === n - 1;
+    return legalMoves(S).filter(function (m) {
+      if (isCapture(S, m) || (S.board[m.from].toLowerCase() === 'p') !== pion) return false;
+      makeMove(S, m);
+      const st = gameStatus(S), goed = !gezien.has(positionKey(S)) && !inCheck(S) && (!st.over || (laatste && !metPionnen && st.reason === '50'));
+      unmakeMove(S);
+      return goed;
+    });
+  };
+  const stapel = [opties()];
+  while (uit.length < n) {
+    const kandidaten = stapel[stapel.length - 1];
+    if (!kandidaten.length) {
+      stapel.pop();
+      if (!uit.length) throw new Error('testopzet: geen rustig potje van ' + n + ' halve zetten');
+      gezien.delete(positionKey(S));
+      unmakeMove(S);
+      uit.pop();
+      continue;
+    }
+    const m = kandidaten.shift();
+    makeMove(S, m);
+    gezien.add(positionKey(S));
+    uit.push(moveKey(m));
+    if (uit.length < n) stapel.push(opties());
+  }
+  return uit;
+}
+
 /* opgeven zoals een kind: de knop Opgeven (in de rij of achter ⋯), dan ja */
 async function geefOp(app) {
   if (!kanTikken(app, 'Opgeven')) { app.tik('meerBtn'); await wacht(); }
@@ -324,6 +422,9 @@ async function orakelBlok(naam, blok, gebouwd) {
     fouten.push('uitzondering: ' + (e && e.message ? e.message : e));
   } finally {
     ORAKEL.apps.splice(voor).forEach(stopApparaat);
+    /* Een kamer waar na de regel niemand meer in zit, gaat met haar apparaten weg. Een regel zet de klok vaak in de
+       toekomst, en dan wijkt geen kamer meer voor een nieuwe: na vierenzestig is de nep-server vol. */
+    if (typeof __server !== 'undefined') for (const id in __server.wsrooms) if (!__kamerBezet(__server.wsrooms[id])) delete __server.wsrooms[id];
     echteDatum();
     Math.random = __echteRandom;
   }

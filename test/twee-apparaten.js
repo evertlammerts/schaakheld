@@ -155,6 +155,8 @@ async function alles() {
     oscar.get('!!session && session.online') && evert.fen() === oscar.fen());
   const eersteZet = await speel(evert, oscar, 'e2e4');
   ok('uitnodigen: de eerste zet komt aan bij de ander', !!eersteZet && evert.fen() === oscar.fen());
+  /* een potje tussen vrienden blijft staan tot het uit is: dit eindigt met opgeven, zodat het paar vrij is */
+  await geefOp(aanZet(evert, oscar));
   evert.ev('mpVerlaat()');
   oscar.ev('mpVerlaat()');
   await tik();
@@ -164,15 +166,11 @@ async function alles() {
   await samenSpelen(evert, oscar);
   ok('herkennen: allebei herkennen ze elkaar aan het bewijs in het hallo',
     evert.get('MP.viaFriend') === fid && oscar.get('MP.viaFriend') === fid);
-  evert.ev('session.S = MP.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
-  oscar.ev('session.S = MP.S = parseFEN("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"); renderBoard()');
-  const witNu = evert.get('MP.myColor') === 'w' ? evert : oscar;
-  witNu.ev('BD.mode = "move"');
-  await speel(evert, oscar, 'a1a8');
+  /* een potje tussen vrienden staat in hun staat, zet voor zet vanaf het begin: een snel mat */
+  for (const k of MAT_WIT) await speel(evert, oscar, k);
   ok('herkennen: het eindscherm biedt geen tweede vriendschap aan',
     eindziet(evert, 'Revanche') && eindziet(oscar, 'Revanche') && !eindziet(evert, 'Vrienden worden') && !eindziet(oscar, 'Vrienden worden') &&
     evert.get('Object.keys(P.friends).length') === 1 && oscar.get('Object.keys(P.friends).length') === 1);
-  /* een potje vanaf een FEN heeft geen zettenlijst vanaf de start: de uitslag kan niet over en weer, dus allebei gewoon weg */
   evert.ev('mpStop(); goHome()');
   oscar.ev('mpStop(); goHome()');
   await tik();
@@ -205,6 +203,7 @@ async function alles() {
     await tik();
     ok('gekruist: en dan gewoon spelen', vraagt.get('!!session && session.online') &&
       ander.get('!!session && session.online') && vraagt.fen() === ander.fen());
+    await geefOp(aanZet(evert, oscar));
     evert.ev('mpVerlaat()');
     oscar.ev('mpVerlaat()');
     await tik();
@@ -257,21 +256,18 @@ async function alles() {
   const revZet = await speel(evert, oscar, 'd2d4');
   ok('revanche: en de eerste zet komt aan', !!revZet && evert.fen() === oscar.fen());
 
-  /* ---------- 9. remise aanbieden, afwijzen en aannemen ---------- */
+  /* ---------- 9. remise aanbieden tussen vrienden: met de eigen zet, een zet wijst af, en aannemen ---------- */
   const bieder = evert.get('BD.mode') === 'move' ? evert : oscar;
   const krijger = bieder === evert ? oscar : evert;
   bieder.ev('offerDraw()');
-  await tik();
-  ok('remise: de ander krijgt de vraag, onder het bord', /biedt remise aan/.test(tekstVan(krijger, 'bubble')) && kanTikken(krijger, 'Remise aannemen') && !krijger.open());
-  tikTekst(krijger, 'Nee, doorspelen');
-  await tik();
-  ok('remise: nee = doorspelen, allebei nog in het potje',
-    evert.get('session.over') === false && oscar.get('session.over') === false && !krijger.open());
+  await speel(evert, oscar, 'd7d5');
+  ok('remise: het aanbod gaat mee met de zet; de ander krijgt de vraag onder het bord, zonder Nee',
+    /biedt remise aan/.test(tekstVan(krijger, 'bubble')) && kanTikken(krijger, 'Remise aannemen') && !kanTikken(krijger, 'Nee') && !krijger.open());
+  await speel(evert, oscar, 'c2c4');
+  ok('remise: een zet wijst het af, allebei nog in het potje',
+    evert.get('session.over') === false && oscar.get('session.over') === false && !kanTikken(krijger, 'Remise aannemen'));
+  await speel(evert, oscar, 'e7e6');
   bieder.ev('offerDraw()');
-  await tik();
-  ok('remise: te snel opnieuw vragen mag niet, en de vrager hoort waarom',
-    !krijger.open() && !kanTikken(krijger, 'Remise aannemen') && bieder.el('bubble').innerHTML.indexOf('net al remise') >= 0);
-  bieder.ev('session.drawAsked = null; offerDraw()');
   await tik();
   tikTekst(krijger, 'Remise aannemen');
   await tik();
@@ -350,6 +346,11 @@ async function alles() {
 
   /* ---------- 12. Oscar nodigt uit; Evert heeft twee apparaten ---------- */
   __server.buses = {};
+  /* de potjes van hierboven zijn met mpVerlaat() verlaten en staan nog als lopend potje met een vriend, in de staat
+     van het paar; met een vriend loopt hoogstens één potje, en uitnodigen opent dat. Deze vraag gaat over een nieuwe
+     uitnodiging. */
+  __server.potjes = {};
+  for (const x of [evert, ipad, oscar]) x.ev('if (MP) mpStop(true); localStorage.removeItem(SAMEN_KEY); localStorage.removeItem(PAAR_KEY); parenGelezen = null');
   evert.ev('seenInv = []; INV = null; session = null');
   ipad.ev('seenInv = []; INV = null; session = null');
   const oFid = oscar.get('Object.keys(P.friends)[0]');
@@ -417,6 +418,10 @@ async function alles() {
   await tik();
 
   /* ---------- 15. vriend weghalen: herkennen stopt ---------- */
+  /* het potje van hierboven is met mpVerlaat() verlaten en staat nog als lopend potje met een vriend, in de staat van
+     het paar; dan vraagt weghalen eerst om op te geven. Hier gaat het om weghalen zonder potje. */
+  __server.potjes = {};
+  evert.ev('localStorage.removeItem(SAMEN_KEY); localStorage.removeItem(PAAR_KEY); parenGelezen = null');
   evert.ev('showHomeTab("vrienden")');
   fire(evert.el('friendList'), 'click', { target: { dataset: { meer: fid } } });
   evert.tik('vrWeg');
@@ -526,6 +531,8 @@ async function alles() {
   }
 
   await orakelTwee();
+  await orakelTwee6();
+  await orakelPaar();
   print('');
   print('orakel: ' + ORAKEL.nogNiet + ' nog niet gebouwd, ' + ORAKEL.gebouwd + ' gebouwd');
   print(fails === 0 ? 'ALL TWO-DEVICE TESTS PASSED' : (fails + ' TWO-DEVICE TESTS FAILED'));
