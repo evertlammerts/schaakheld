@@ -688,7 +688,7 @@ function pickMove(S, level, rng, budgetMs) {
    move that ends the game in a draw is never counted as better. */
 function lossAfter(S, x, now, sign) {
   makeMove(S, x);
-  const st = gameStatus(S);
+  const st = gameEnd(S);
   const l = st.over ? (st.reason === 'mat' ? -Infinity : Infinity) : mateReply(S) ? MATE : now - forcedMaterial(S) * sign;
   unmakeMove(S);
   return l;
@@ -716,7 +716,7 @@ function blunderCheck(S, m, grens) {
 function blunderCheckZonderGrens(S, m) {
   const sign = S.turn === 'w' ? 1 : -1, now = material(S) * sign, pointsNow = pointsOf(S) * sign;
   makeMove(S, m);
-  const over = gameStatus(S).over, mate = over ? null : mateReply(S);
+  const over = gameEnd(S).over, mate = over ? null : mateReply(S);
   const loss = over ? 0 : mate ? MATE : now - forcedMaterial(S) * sign;
   unmakeMove(S);
   if (loss < 150) return null;
@@ -775,6 +775,13 @@ function gameStatus(S) {
   if (pieces.length === 0 || (pieces.length === 1 && (pieces[0] === 'n' || pieces[0] === 'b')))
     return { over: true, result: 'd', reason: 'materiaal' };
   return { over: false };
+}
+/* How a game stands after its last move: gameStatus looks only at the board, and a game also ends in a draw when the
+   same position stands for the third time. The board of a game and the blunder alarm both ask this, so the alarm never
+   judges a move after which the game is already over. */
+function gameEnd(S) {
+  const st = gameStatus(S);
+  return st.over || repetitions(S) < 2 ? st : { over: true, result: 'd', reason: 'herhaling' };
 }
 
 /* --- random position generator: noisy self-play from the start position --- */
@@ -1797,7 +1804,7 @@ if (typeof module !== 'undefined') {
   module.exports = { START_FEN, VAL, MATE, GLYPH, NAME_NL, parseFEN, toFEN, newGame, alg, sqFromAlg,
     colorOf, isWhitePiece, other, attacked, pseudoMoves, legalMoves, makeMove, unmakeMove,
     inCheck, isCapture, perft, material, evalWhite, search, rootScores, forcedMaterial, pickMove,
-    blunderCheck, gameStatus, randomPosition, piecesOf, attackedPieces, captureTargets,
+    blunderCheck, gameStatus, gameEnd, randomPosition, piecesOf, attackedPieces, captureTargets,
     freePieces, freePiecesEx, seeSquare, pieceAttacksSq, findAttacker, genScanTask,
     genSafeTask, genBest3, moveNameNL, forkTargets, raysPinSkewer, discoveredFrom,
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,

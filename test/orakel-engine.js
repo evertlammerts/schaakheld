@@ -148,6 +148,23 @@
   });
 
   /* Turbo's beste zet slaat niets: de slag die het verlies begint is de grootste van zijn slagen */
+  /* de dame op a1 staat in de lijn van de toren op a8; de koningen lopen heen en weer. Na 1... Kg8 2. Kh2 Kf8 3. Kg1 Kg8
+     4. Kh2 Kf8 zet 5. Kg1 de stelling voor de derde keer neer: dan is het meteen remise, en kost de dame niets. Een zet
+     eerder staat 4. Kh2 geen stelling voor de derde keer neer, en laat hij de dame echt staan */
+  regel('[5.4] het alarm kent remise door herhaling: geen alarm voor een zet die een stelling voor de derde keer neerzet, wel voor een zet eerder die de dame laat staan', function (check) {
+    const FEN = 'r4k2/8/8/8/8/8/8/Q5K1 b - - 0 1';
+    const S = speel(E.parseFEN(FEN), ['f8g8', 'g1h2', 'g8f8', 'h2g1', 'f8g8', 'g1h2', 'g8f8']);
+    const remise = zet(S, 'h2g1');
+    E.makeMove(S, remise);
+    const st = E.gameEnd(S);
+    E.unmakeMove(S);
+    check('testopzet: na 5. Kg1 is het remise door herhaling (' + JSON.stringify(st) + ')', st.over && st.result === 'd' && st.reason === 'herhaling');
+    check('geen alarm voor 5. Kg1', E.blunderCheck(S, remise) === null);
+    const T = speel(E.parseFEN(FEN), ['f8g8', 'g1h2', 'g8f8', 'h2g1', 'f8g8']);
+    const bl = E.blunderCheck(T, zet(T, 'g1h2'));
+    check('wel alarm voor 4. Kh2: de toren pakt de dame (' + (bl && E.moveKey(bl.take || {})) + ')', !!bl && bl.points >= 9 && !!bl.take && E.moveKey(bl.take) === 'a8a1');
+  });
+
   regel('[5.4] het alarm noemt van twee slagen die winnen de grootste', function (check) {
     const S = E.parseFEN('6k1/1b6/8/8/8/2n2N2/R7/6K1 b - - 0 1');
     const t = E.lossStart(S, zet(S, 'g8f7'));

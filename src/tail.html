@@ -1218,7 +1218,7 @@ function openSamen(gameId) {
   if (MP.viaFriend && (samenRauw() || {})[MP.gameId]) toonBewaard(true);
   /* een einde dat binnenkwam terwijl het kind weg was: nu de eindkaart, en dan telt het */
   if (MP.result && !MP.shown) { session.eerderAfgelopen = true; endGame(stVanUitslag(MP.result)); return; }
-  const st = opStaat() ? statusOpStaat(MP.S) : potjeStatus(MP.S);
+  const st = opStaat() ? statusOpStaat(MP.S) : gameEnd(MP.S);
   if (st.over) { endGame(st); return; }
   BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off';
   if (remiseVraagOpen()) { toonRemiseVraag(); return; }
@@ -1753,7 +1753,7 @@ function mpOnZet(m) {
     nieuweStand(S);
     renderBoard();
     updateTrays();
-    const st = potjeStatus(S);
+    const st = gameEnd(S);
     if (st.over) { endGame(st); return; }
     BD.mode = 'move';
     remiseRij();
@@ -1846,7 +1846,7 @@ function mpOnSync(m) {
   if (session.over) return;
   if (einde) { closeModal(); BD.mode = 'off'; endGame(stVanUitslag(MP.result)); return; }
   /* de stand kan al uit zijn (mat tijdens het gat): dan meteen het eindscherm */
-  const st = potjeStatus(MP.S);
+  const st = gameEnd(MP.S);
   if (st.over) { BD.mode = 'off'; endGame(st); return; }
   if (bord) { BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off'; remiseRij(); zegBeurt(); }
   if (vraag) toonRemiseVraag();
@@ -1870,7 +1870,7 @@ function toonAllebeiOp() {
 function uitslagVanAnder(u) {
   if (u.kind === 'opgave') return u.by === other(MP.myColor);
   if (u.kind === 'remise') return !!MP.offer && MP.offer.by === MP.myColor && MP.offer.ply === u.ply && !MP.offer.answer;
-  const st = potjeStatus(MP.S);
+  const st = gameEnd(MP.S);
   return st.over && st.reason === u.kind;
 }
 /* een uitslag die van de ander kwam, kent de ander al; een remise na veertien dagen schreef dit kind zelf */
@@ -2327,7 +2327,7 @@ function rolAanZet(spel) { return (spel.zetten.length % 2 === 0) === (spel.wit =
 /* een potje tussen vrienden eindigt zoals elk potje met een ander kind, en ook met zijn langste lengte, als remise: de
    staat heeft één vaste grootte */
 function statusOpStaat(S) {
-  const st = potjeStatus(S);
+  const st = gameEnd(S);
   return st.over || S.hist.length < LANGSTE_POTJE ? st : { over: true, result: 'd', reason: 'lang' };
 }
 function standVanZetten(zetten) {
@@ -7175,12 +7175,6 @@ function onKidMove(m) {
   commitKid(m);
 }
 
-/* de derde keer dezelfde stelling is remise, tegen Turbo en in een vriendenpotje; beide apparaten van een vriendenpotje
-   spelen de hele zettenlijst na, dus ze zien de herhaling allebei */
-function potjeStatus(S) {
-  const st = gameStatus(S);
-  return st.over || repetitions(S) < 2 ? st : { over: true, result: 'd', reason: 'herhaling' };
-}
 /* de tweede keer dezelfde stelling: de derde keer is remise, en dat hoort het kind voor het gebeurt */
 const HERHAAL_ZIN = 'Deze stelling stond er al eens. Bij de derde keer is het remise. Wil je dat niet? Kies een andere zet.';
 function tweedeKeer(S) { return repetitions(S) === 1; }
@@ -7254,7 +7248,7 @@ function commitKid(m) {
       if (bodMee) mpSend({ t: 'remise?', gameNo: MP.gameNo, ply: S.hist.length });
       if (MP && MP.room && !MP.open) MP.zetZonderNet = true;
     }
-    const st = session.online && opStaat() ? statusOpStaat(S) : potjeStatus(S);
+    const st = session.online && opStaat() ? statusOpStaat(S) : gameEnd(S);
     if (st.over) { endGame(st); return; }
     if (inCheck(S)) snd.check();
     if (session.online) {
@@ -7437,7 +7431,7 @@ function doTurboMove(m, na) {
   playMove(m, () => {
     if (!session || session.kind !== 'game') return;
     updateTrays();
-    const st = potjeStatus(S);
+    const st = gameEnd(S);
     if (st.over) { endGame(st); return; }
     if (co) { countPattern(co.key); trucRandjes(co.squares); }
     const regel = herhaalOpBeurt(S) || (inCheck(S) ? SCHAAK_ZIN : co ? 'Kijk uit, een ' + co.what + ' Wat doe je hiertegen? 🐢' : zin);
