@@ -1155,8 +1155,8 @@ function vriendHandeling(actie) {
   const fid = MP.paar, gameId = MP.gameId;
   return pasToe(fid, Object.assign({ id: gameId }, actie)).then(a => {
     /* de zet of het aanbod wacht op het apparaat: de strook zegt dat het gaat zodra er verbinding is */
-    if (a.afloop === 'wacht' && samenInBeeld() && MP.gameId === gameId && !session.over && MP.S.turn !== MP.myColor &&
-      (actie.soort === 'zet' || actie.soort === 'bod')) say(actie.bod || actie.soort === 'bod' ? zinBodZonderNet() : zinZonderNet());
+    if (a.afloop === 'wacht' && a.waarom === 'net' && samenInBeeld() && MP.gameId === gameId && !session.over && MP.S.turn !== MP.myColor &&
+      (actie.soort === 'zet' || actie.soort === 'bod')) { say(actie.bod || actie.soort === 'bod' ? zinBodZonderNet() : zinZonderNet()); MP.zinNet = true; }
     return a;
   });
 }
@@ -1441,6 +1441,8 @@ function mpMsg(m) {
       MP.peerWeg = false;
       /* elke groet zegt of de app vrienden worden als toestand kent, met het nummer van zijn sessie */
       MP.anderKent = Number.isInteger(m.sessie);
+      /* een app die potjes op de staat van een paar kent, zegt het in elke groet */
+      MP.anderStaten = m.staten === true;
       naEindeOpnieuw();
       if (samenLoopt()) bewaarSamen();
       {
@@ -1541,13 +1543,19 @@ function mpHostStart() {
   MP.gameId = b64url(randBytes(9));
   mpStuurStart();
 }
-/* De gastheer zegt bij de start of het potje op de staat van het paar gaat: alleen als hij de vriend heeft en een
-   groet van de gast in deze sessie bewees dat die hem ook heeft. Het bewijs gaat mee, zodat de gast weet welke vriend;
-   in de staat komt het potje pas als de gast zegt dat hij volgt (startGevolgd). */
+/* De gastheer zegt bij de start of het potje op de staat van het paar gaat: alleen als hij de vriend heeft, een groet
+   van de gast in deze sessie bewees dat die hem ook heeft en zei dat zijn app potjes op de staat kent, en een lezing in
+   deze run liet zien dat de server staten met een versie kent. Anders is het voor allebei een potje in de kamer. Het
+   bewijs gaat mee, zodat de gast weet welke vriend; in de staat komt het potje pas als de gast zegt dat hij volgt
+   (startGevolgd). */
 async function mpStuurStart() {
   const mp = MP, fid = mp.bewezen, f = fid && P.friends[fid];
   let bewijs = null;
-  if (f && !f.weg && vriendOpStaat(fid)) for (const [b, id] of await mpBewijzen()) if (id === fid) bewijs = b;
+  if (f && !f.weg && mp.anderStaten && vriendOpStaat(fid)) {
+    /* of de server staten met een versie kent, zegt een lezing in deze run */
+    if (!versiesGezien) await leesPaar(fid);
+    if (versiesGezien && !versiesOnbekend) for (const [b, id] of await mpBewijzen()) if (id === fid) bewijs = b;
+  }
   if (MP !== mp) return;
   mp.paar = bewijs ? fid : null;
   mp.startBericht = { t: 'start', jij: mp.myColor === 'w' ? 'b' : 'w', n: mp.gameNo, id: mp.gameId, paar: bewijs };
@@ -2143,7 +2151,7 @@ async function mpHallo() {
     const j = randBytes(1)[0] % (i + 1);
     const t = lijst[i]; lijst[i] = lijst[j]; lijst[j] = t;
   }
-  mpSend({ t: 'hallo', naam: P.name || 'kampioen', bewijzen: lijst, sessie: mp.vr.sessie, vr: vrStaat(), naEinde: naEindeStaat() });
+  mpSend({ t: 'hallo', naam: P.name || 'kampioen', bewijzen: lijst, sessie: mp.vr.sessie, vr: vrStaat(), naEinde: naEindeStaat(), staten: true });
 }
 /* of de twee al vrienden zijn, bewijst elke groet opnieuw */
 async function mpHerkenVriend(bewijzen) {
@@ -2263,8 +2271,8 @@ function staatNa(staat, actie, rol, nu) {
     return staatNa(staat, { soort: als, id: s.id, ply: s.zetten.length, eigen: eigenZetten(s, rol), merk: actie.merk, gezien: true }, rol, nu);
   }
   if (actie.soort === 'uitdaging' || actie.soort === 'start') {
-    if (!paarVrij(staat)) return nee(s.fase === 'uitdaging' ? 'er staat al een uitdaging' : s.fase === 'potje' ? 'er loopt een potje' :
-      'de vriend weet het einde of het antwoord nog niet');
+    if (!paarVrij(staat)) return s.fase === 'uitdaging' ? nee('er staat al een uitdaging') : s.fase === 'potje' ? nee('er loopt een potje') :
+      Object.assign(nee('de vriend weet het einde of het antwoord nog niet'), { vriendWeetNiet: true });
     if ((actie.op == null ? null : actie.op) !== (s ? s.id : null)) return nee('er staat iets anders dan toen');
     if (typeof actie.id !== 'string' || !POTJE_ID_RE.test(actie.id) || (actie.wit !== 'a' && actie.wit !== 'b')) return nee('geen goed potje');
     /* een afgelopen potje gaat zonder zetten vooraan in vorige; de twee daarvoor houden id en merken */
@@ -2417,7 +2425,14 @@ async function blobNaarStaat(k, blob) {
    van de laatste potjes de kleuren en de zetten; en na het weghalen van de vriend het geheim, tot de laatste handeling
    bezorgd is. Welke potjes het telde, staat in het profielitem (DOC.loc.geteld), bij de tellers. */
 const PAAR_KEY = 'schaakheld-paar';
-let versiesOnbekend = false;
+let versiesOnbekend = false, versiesGezien = false;
+/* een server zonder staten met een versie: potjes met vrienden gaan door de kamer, en wat zo bewaard is, staat meteen
+   weer op de kaart */
+function oudeServerGezien() {
+  if (versiesOnbekend) return;
+  versiesOnbekend = true;
+  thuisVerversen();
+}
 /* De klok van de server staat alleen in het geheugen: wat een lezing in deze run zei, verder geteld met de looptijd
    van het apparaat. Een klok uit de opslag kan dagen oud zijn: een remise-aanbod kreeg er een stempel van dagen terug
    mee, en een minuut later was het vanzelf remise. Een lezing van meer dan een minuut geleden telt niet, gemeten
@@ -2635,10 +2650,11 @@ async function leesPaarNu(fid) {
   try {
     const r = await fetch(SYNC_URL + '/v1/bus/check', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bussen: [to.bus] }) });
-    if (r.status !== 200) return false;
+    if (r.status !== 200) { wachtOm[fid] = 'server'; return false; }
     d = await r.json();
-  } catch (e) { return false; }
-  if (!d || !Number.isFinite(d.nu)) { versiesOnbekend = true; return false; }
+  } catch (e) { wachtOm[fid] = 'net'; return false; }
+  if (!d || !Number.isFinite(d.nu)) { oudeServerGezien(); return false; }
+  versiesGezien = true;
   zetKlok(fid, d.nu);
   zetVerschil(fid, d.nu);
   return verwerkPaar(fid, d.blobs && typeof d.blobs[to.bus] === 'string' ? d.blobs[to.bus] : null);
@@ -2665,25 +2681,25 @@ async function werkRijAf(fid) {
     if (!paarVan(fid).rij.length) { vergeetAlsBezorgd(fid); return; }
     /* zonder lezing in deze run, of een van meer dan een minuut geleden, eerst lezen: een schrijfactie dateert met nu */
     if (klokNu(fid) == null) {
-      if (!(await leesPaarNu(fid))) { if (versiesOnbekend) await werkRijAf(fid); return; }
+      if (!(await leesPaarNu(fid))) { if (versiesOnbekend) await werkRijAf(fid); else opnieuwProberen(fid); return; }
       continue;
     }
     const p = paarVan(fid), nu = klokNu(fid);
     const a = p.rij[0], basis = p.staat || { v: 2, seq: p.hoogste, spel: null, vorige: [] };
     /* een potje dat in de kamer begint, komt pas in de staat als de gast zegt dat hij volgt */
-    if (a.soort === 'start' && a.wachtOpGast) return;
+    if (a.soort === 'start' && a.wachtOpGast) { wachtOm[fid] = 'potje'; return; }
     const gedaan = alGedaan(basis, a, rol, p.merk), r = gedaan ? null : staatNa(basis, Object.assign({}, a, { merk: p.merk }), rol, nu);
     if (!gedaan && !r.past && a.nr && gelezenVoor !== a.nr && a.id && !(basis.spel && basis.spel.id === a.id) && !basis.vorige.some(v => v.id === a.id)) {
       gelezenVoor = a.nr;
-      if (!(await leesPaarNu(fid))) return;
+      if (!(await leesPaarNu(fid))) { opnieuwProberen(fid); return; }
       continue;
     }
     /* een handeling in het potje dat in de kamer loopt en dat de gastheer nog niet schreef, wacht daarop: zijn kijk
        na het schrijven leest het hier */
     if (!gedaan && !r.past && a.id && MP && MP.paar === fid && MP.gameId === a.id && !(basis.spel && basis.spel.id === a.id) &&
-      !basis.vorige.some(v => v.id === a.id)) return;
+      !basis.vorige.some(v => v.id === a.id)) { wachtOm[fid] = 'potje'; return; }
     /* een potje dat in de kamer begint, wacht tot de vriend het vorige einde kent: dat schrijft zijn apparaat zo */
-    if (!gedaan && !r.past && a.totVrij && r.waarom === 'de vriend weet het einde of het antwoord nog niet') return;
+    if (!gedaan && !r.past && a.totVrij && r.vriendWeetNiet) { wachtOm[fid] = 'potje'; return; }
     if (gedaan || !r.past) {
       if (a.nr) afloopVan[a.nr] = gedaan ? { afloop: 'gedaan', actie: a } : { afloop: 'vervallen', waarom: r.waarom, actie: a };
       p.rij.shift();
@@ -2706,7 +2722,8 @@ async function werkRijAf(fid) {
       if (!(await verwerkPaar(fid, ant.blob))) return;
       continue;
     }
-    if (ant.code !== 204) return;
+    if (ant.code !== 204) { wachtOm[fid] = ant.code === 0 ? 'net' : 'server'; opnieuwProberen(fid); return; }
+    opnieuwNa[fid] = 0;
     const q = paarVan(fid);
     Object.assign(q, { blob, staat: na, versie, toont: versie, hoogste: Math.max(q.hoogste, na.seq), vernieuwd: nu });
     onthoudPotje(q);
@@ -2721,18 +2738,63 @@ async function werkRijAf(fid) {
 }
 /* welke handeling van dit paar nu onderweg is: die kan niet meer terug */
 const schrijftNu = {};
+/* waarom de rij van een paar wacht: geen netwerk, de server (429 of een fout), of een potje dat nog moet beginnen */
+const wachtOm = {};
+/* In een potje dat live loopt, gaat een schrijfactie die niet lukte na ongeveer een seconde opnieuw, daarna steeds
+   later; anders pas bij de volgende lezing. */
+const opnieuwNa = {}, opnieuwTimer = {};
+function opnieuwProberen(fid) {
+  if (!(MP && MP.paar === fid && samenLoopt())) return;
+  opnieuwNa[fid] = Math.min(15000, Math.max(1000, (opnieuwNa[fid] || 500) * 2));
+  clearTimeout(opnieuwTimer[fid]);
+  opnieuwTimer[fid] = setTimeout(() => { if (paarVan(fid).rij.length) inPaarSlotMetScherm(fid, () => werkRijAf(fid)); }, opnieuwNa[fid]);
+}
+/* wat het kind leest als een tik toch niet telde */
+const ZET_TE_LAAT = 'Je laatste zet telt niet mee: het potje was toen al klaar.';
+const VERDER_GESPEELD = 'Je speelde al verder op je andere apparaat, dus het potje gaat door.';
+const ANDERS_GEWORDEN = 'Intussen veranderde er iets. Kijk hoe het nu staat.';
+const eerderOpgegeven = naam => escHtml(naam) + ' gaf net eerder op dan jij, dus jouw opgeven telt niet.';
+const nietBegonnen = naam => 'Het potje was bij ' + escHtml(naam) + ' nog niet begonnen. Doe je zet nog eens.';
+/* een handeling die het kind in deze run deed; wat al wachtte toen de app openging, vervalt zonder woord */
+const DEZE_RUN = b64url(randBytes(6));
 /* Na elke verandering van wat het kind van een paar ziet: het scherm volgt (de kaart, het open bord, een antwoord op
    een uitdaging). voor is wat het kind ervoor zag. */
 function paarVeranderd(fid, voor, uitkomsten) {
   const f = P.friends[fid], na = zichtVan(fid);
-  if (!f || f.weg || !na || JSON.stringify(voor) === JSON.stringify(na)) return;
-  const rol = myRole(f), ev = {}, vsp = voor && voor.spel, nsp = na.spel;
-  /* een eigen zet die niet meer paste: het potje was al afgelopen, of een ander apparaat van dit kind zette eerst */
-  for (const u of uitkomsten || []) {
-    if (u.afloop !== 'vervallen' || !u.actie || u.actie.soort !== 'zet' || !nsp || nsp.id !== u.actie.id) continue;
-    if (nsp.fase === 'klaar') ev.zetVervallen = true;
-    else if (nsp.zetten.length > u.actie.ply && nsp.zetten[u.actie.ply] !== u.actie.zet) ev.andereApparaat = true;
+  if (!f || f.weg || !na) return;
+  /* een zet die wachtte en nu geschreven is: wat de strook over de verbinding zei, klopt niet meer */
+  if (MP && MP.paar === fid && MP.zinNet && (uitkomsten || []).some(u => (u.afloop === 'geschreven' || u.afloop === 'gedaan') && u.actie &&
+    u.actie.id === MP.gameId)) {
+    MP.zinNet = false;
+    if (samenInBeeld() && !session.over) zegBeurt();
   }
+  if (JSON.stringify(voor) === JSON.stringify(na)) return;
+  const rol = myRole(f), ev = {}, vsp = voor && voor.spel, nsp = na.spel;
+  /* Een tik van het kind in deze run die toch niet telde: het scherm volgt de staat, en een regel zegt wat er
+     gebeurde. Een zet na het einde, of een zet die een ander apparaat van dit kind al deed, kent zijn eigen weg. */
+  for (const u of uitkomsten || []) {
+    const a = u.actie;
+    if (!a || a.zelf || a.run !== DEZE_RUN || (u.afloop !== 'vervallen' && !(u.afloop === 'gedaan' && anderEinde(na, a, rol)))) continue;
+    const hier = nsp && nsp.id === a.id ? nsp : null, af = hier ? spelAf(hier) : na.vorige.some(v => v.id === a.id);
+    const live = !!MP && MP.paar === fid && MP.gameId === a.id;
+    if (a.soort === 'zet') {
+      if (af) ev.zetVervallen = true;
+      else if (hier && hier.zetten.length > a.ply && hier.zetten[a.ply] !== a.zet) ev.andereApparaat = true;
+      else if (live) { ev.herstel = a.id; ev.regel = hier ? ANDERS_GEWORDEN : nietBegonnen(f.naam); }
+    } else if (a.soort === 'opgeven' || a.soort === 'aannemen') {
+      const uit = hier && hier.uitslag;
+      if (!live) ev.regel = ANDERS_GEWORDEN;
+      else if (hier && hier.fase === 'potje') { ev.herstel = a.id; ev.regel = a.soort === 'opgeven' ? VERDER_GESPEELD : ANDERS_GEWORDEN; }
+      else if (a.soort === 'opgeven' && uit && uit.soort === 'opgave' && uit.door !== rol) {
+        ev.herstel = a.id; ev.eindRegel = eerderOpgegeven(f.naam); ev.eindKop = 'Jij wint dit potje!';
+      } else { ev.herstel = a.id; ev.eindRegel = ANDERS_GEWORDEN; }
+    } else if (a.soort === 'bod') {
+      if (live) ev.herstel = a.id;
+      ev.regel = ANDERS_GEWORDEN;
+    } else if (a.soort === 'uitdaging' || a.soort === 'nee' || a.soort === 'intrekken') ev.regel = ANDERS_GEWORDEN;
+  }
+  /* het potje zoals de staat het heeft, ook als het kind het einde al bekeek */
+  if (ev.herstel) ev.herstelRec = paarRecords(fid, na, true).find(x => x.gameId === ev.herstel) || null;
   const recVoor = paarRecords(fid, voor), recNa = paarRecords(fid, na);
   /* de eigen uitdaging kreeg Nu niet: dat hoort het kind één keer, thuis */
   if (vsp && vsp.fase === 'uitdaging' && vsp.door === rol && nsp && nsp.id === vsp.id && nsp.fase === 'nee') ev.nee = true;
@@ -2749,6 +2811,14 @@ function paarVeranderd(fid, voor, uitkomsten) {
   /* de kaart en Vrienden tonen wat er nu staat */
   if (pollVerversen) { pollVerversen = false; thuisVerversen(); }
 }
+/* Een einde dat het kind tikte, heet gedaan zodra er een einde met het eigen merk staat (het nam het einde van de
+   vriend): wat het scherm toont, komt dan uit de staat, en is het een ander einde dan de tik, dan telde de tik niet. */
+function anderEinde(staat, a, rol) {
+  if (a.soort !== 'opgeven' && a.soort !== 'aannemen') return false;
+  const g = staat.spel && staat.spel.id === a.id ? staat.spel : staat.vorige.find(v => v.id === a.id), u = g && g.uitslag;
+  if (!u) return false;
+  return a.soort === 'opgeven' ? !(u.soort === 'opgave' && u.door === rol) : !(u.soort === 'remise' && !u.vanzelf);
+}
 function inPaarSlotMetScherm(fid, fn) {
   return inPaarSlot(fid, async () => {
     const voor = zichtVan(fid), al = new Set(Object.keys(afloopVan));
@@ -2760,12 +2830,13 @@ function inPaarSlotMetScherm(fid, fn) {
    reden; oud als de server geen staten met een versie kent. */
 function pasToe(fid, actie) {
   const p = paarVan(fid), nr = actie.nr || b64url(randBytes(6));
-  p.rij.push(Object.assign({}, actie, { nr }));
+  p.rij.push(Object.assign({}, actie, { nr, run: DEZE_RUN }));
   bewaarPaar(fid, p);
+  wachtOm[fid] = null;
   return inPaarSlotMetScherm(fid, () => werkRijAf(fid)).then(() => {
     const a = afloopVan[nr];
     delete afloopVan[nr];
-    return a || { afloop: 'wacht' };
+    return a || { afloop: 'wacht', waarom: wachtOm[fid] };
   });
 }
 /* na een lezing van een check die ook andere bussen las: de klok van die lezing, dan verwerken en de rij */
@@ -2821,7 +2892,7 @@ function vriendOpStaat(fid) {
   return !!f && !versiesOnbekend && !!f.k;
 }
 /* de potjes die het kind van deze vriend ziet: het potje of de uitdaging van nu, en een einde dat het nog niet bekeek */
-function paarRecords(fid, staat) {
+function paarRecords(fid, staat, ookBekeken) {
   const f = P.friends[fid];
   if (!vriendOpStaat(fid) || f.weg) return [];
   const p = paarVan(fid), s = staat || zichtVan(fid), rol = myRole(f), ander = andereRol(rol), uit = [];
@@ -2837,11 +2908,11 @@ function paarRecords(fid, staat) {
       state: g.fase === 'uitdaging' ? 'uitdaging' : 'potje', mijnUitdaging: door === rol, paar: fid };
   };
   const sp = s.spel;
-  if (sp && (sp.fase === 'uitdaging' || sp.fase === 'potje' || (sp.fase === 'klaar' && !sp.bekeken[rol]))) {
+  if (sp && (sp.fase === 'uitdaging' || sp.fase === 'potje' || (sp.fase === 'klaar' && (ookBekeken || !sp.bekeken[rol])))) {
     uit.push(record(sp.id, sp.wit, sp.door, sp.zetten.slice(), sp.t, sp));
   }
   const v0 = s.vorige[0];
-  if (v0 && v0.uitslag && !v0.bekeken[rol]) {
+  if (v0 && v0.uitslag && (ookBekeken || !v0.bekeken[rol])) {
     const o = (p.potjes || {})[v0.id] || { wit: rol, door: rol, zetten: [], t: null };
     uit.push(record(v0.id, o.wit, o.door, o.zetten, o.t, Object.assign({ fase: 'klaar', bod: null }, v0)));
   }
@@ -2852,7 +2923,8 @@ const potjeStand = r => r ? JSON.stringify([r.moves, r.result, r.offer, r.state]
 /* Wat het kind ziet van wat de staat bracht. Een afgewezen uitdaging hoort het één keer, thuis. */
 let afgewezenUitdagingen = [], pollVerversen = false; /* thuis opnieuw tekenen, één keer na het lezen van alle staten */
 function vriendPotjeVerder(fid, R, voor, ev) {
-  if (MP && MP.paar === fid && MP.gameId) {
+  if (MP && MP.paar === fid && MP.gameId === ev.herstel && ev.herstelRec && samenInBeeld()) schermVolgtStaat(ev.herstelRec, ev);
+  else if (MP && MP.paar === fid && MP.gameId) {
     if (MP.gameId === ev.stil) { const inBeeld = samenInBeeld(); mpStop(true); if (inBeeld) goHome(); }
     else if (R && MP.gameId === R.gameId && potjeStand(R) !== potjeStand(voor && JSON.parse(voor))) mpVolgtRecord(R, ev);
     else if (MP.gameId === ev.klaar) { Object.assign(MP, { bekend: true, vriendWeet: true }); samenKlaar(); }
@@ -2860,6 +2932,7 @@ function vriendPotjeVerder(fid, R, voor, ev) {
     /* het potje uit de kamer kon niet in de staat: er stond al een potje of een uitdaging, en dat staat nu op de kaart */
     else if (MP.gameId === ev.geweigerd) { mpStop(true); goHome(); }
   } else if (ev.andereApparaat) showToast('Je zet op je andere apparaat telde al.');
+  if (ev.regel && !ev.herstel) showToast(ev.regel);
   if (ev.nee && P.friends[fid]) afgewezenUitdagingen.push(P.friends[fid].naam);
   pollVerversen = true;
 }
@@ -2868,6 +2941,28 @@ function meldUitdagingNee() {
   const naam = escHtml(afgewezenUitdagingen.shift());
   meldInPlaats('<div class="m-emoji">🙂</div><h2>' + naam + ' kan nu even niet</h2><p>Daag ' + naam + ' later gerust nog eens uit.</p>' +
     '<div class="m-btns"><button class="btn sun" id="meldOk">Oké</button></div>', () => $('meldOk').addEventListener('click', closeModal));
+}
+/* Wat het kind op het bord zag, ging niet door: het bord en de kaart volgen de staat. Loopt het potje, dan gaat een
+   eindkaart die het kind al zag weer dicht; is het afgelopen met een ander einde, dan komt de kaart van dat einde. */
+function schermVolgtStaat(r, ev) {
+  const S = newGame();
+  for (const z of r.moves) makeMove(S, legalMoves(S).find(x => moveKey(x) === z));
+  const result = r.result ? geldigeUitslag(r.result) : null;
+  MP.S = S;
+  MP.offer = r.offer ? Object.assign({}, r.offer) : null;
+  if (session.over) { sluitEindkaart(); session.over = false; }
+  toonStand(MP.S);
+  updateTrays();
+  if (!result) {
+    Object.assign(MP, { over: false, result: null, shown: false });
+    BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off';
+    remiseRij();
+    say(ev.regel || ANDERS_GEWORDEN);
+    return;
+  }
+  Object.assign(MP, { result, over: true, eindRegel: ev.eindRegel || ANDERS_GEWORDEN, eindKop: ev.eindKop || null });
+  BD.mode = 'off';
+  endGame(stVanUitslag(result), true);
 }
 /* het potje van de verbinding volgt wat de staat bracht, en het scherm laat het zien */
 function mpVolgtRecord(r, ev) {
@@ -3370,7 +3465,14 @@ function geldigeUitnodiging(inv) {
 async function friendPoll() {
   friendPollTimer = 0;
   const wachtend = !!INV;
-  if (!netAvailable() || (modalOpen && !wachtend && !jaWacht)) { friendPollSoon(); return; }
+  if (!netAvailable()) { friendPollSoon(); return; }
+  /* met een venster open komt er geen uitnodiging; de laatste handeling van een weggehaalde vriend of van voor Alles
+     wissen gaat wel, want daar wacht een ander kind op */
+  if (modalOpen && !wachtend && !jaWacht) {
+    for (const id of Object.keys(paren())) if ((!P.friends[id] || P.friends[id].weg) && teBezorgen(id)) leesPaar(id);
+    friendPollSoon();
+    return;
+  }
   /* in een potje of rondje komt een uitnodiging niet als venster: ze wacht op de Verder-kaart */
   const bezig = !!session || (mpBezig() && !wachtend);
   /* een weggehaalde vriend die niets meer hoeft te horen, wordt helemaal vergeten */
@@ -3400,7 +3502,7 @@ async function friendPoll() {
         Object.assign(blobs, (data && data.blobs) || {});
         deel.forEach(b => gelezen.add(b));
         /* een server zonder staten met een versie zegt geen tijd: dan zijn potjes met vrienden alleen live */
-        if (data && Number.isFinite(data.nu)) nu = data.nu; else if (Object.keys(paarAdres).length) versiesOnbekend = true;
+        if (data && Number.isFinite(data.nu)) { nu = data.nu; versiesGezien = true; } else if (Object.keys(paarAdres).length) oudeServerGezien();
       }
     }
     /* een uitnodiging die de vriend terugnam: haar briefje is weg uit de bus, dus ook van de kaart */
@@ -3575,7 +3677,7 @@ function laatstePaarHandeling(fid) {
   const f = P.friends[fid];
   if (!vriendOpStaat(fid)) return;
   const p = paarVan(fid);
-  p.vriend = { k: f.k, host: !!f.host, naam: f.naam, sinds: Date.now() };
+  p.vriend = { k: f.k, host: !!f.host, sinds: Date.now() };
   bewaarPaar(fid, p);
   pasToe(fid, { soort: 'weghalen' });
 }
@@ -6735,8 +6837,11 @@ function endGameOnline(st, drawTxt, nieuw, xp, telRegel) {
     p = (drawTxt[st.reason] || 'Remise!') + '<br>Goed gespeeld, allebei!';
     snd.star();
   } else if (st.result === ik) {
-    h = 'JIJ WINT!';
-    p = st.reason === 'opgave' ? escHtml(naam) + (session.eerderAfgelopen ? ' gaf op.' : ' geeft op.') + ' Goed gespeeld!' : 'Schaakmat! Wat een partij.';
+    h = !oud && MP && MP.eindKop ? MP.eindKop : 'JIJ WINT!';
+    /* met een eigen kop zegt de regel eronder wat er gebeurde */
+    p = h !== 'JIJ WINT!' ? '' : st.reason === 'opgave' ? escHtml(naam) + (session.eerderAfgelopen ? ' gaf op.' : ' geeft op.') + ' Goed gespeeld!' :
+      'Schaakmat! Wat een partij.';
+    if (!oud && MP) MP.eindKop = null;
     /* alleen een eigen online-teller: NIET de gedeelde 'wins' of de
        dag-'wins', want die geven via de dagmissies en de "versla Turbo"-
        trofee XP, en twee kinderen op een bank zouden dat zo farmen. Online
@@ -6750,14 +6855,15 @@ function endGameOnline(st, drawTxt, nieuw, xp, telRegel) {
     snd.bad();
   }
   checkBadges();
-  const vervallen = !oud && MP && MP.zetVervallen ?
-    '<p>Je laatste zet telt niet mee: het potje was al klaar voor je hem deed. Dat kon je niet zien, want er was geen verbinding.</p>' : '';
-  if (vervallen) MP.zetVervallen = false;
+  /* een tik die toch niet telde: de regel staat op de kaart en in de strook */
+  const regel = oud || !MP ? '' : MP.eindRegel || (MP.zetVervallen ? ZET_TE_LAAT : '');
+  const vervallen = regel ? '<p>' + regel + '</p>' : '';
+  if (MP && !oud) { MP.zetVervallen = false; MP.eindRegel = null; }
   const vriendKnop = !oud && MP && !MP.bewezen ? '<button class="btn plain" id="mpVriend">🤝 Vrienden worden</button>' : '';
   const week = '<div id="ekTel">' + telRegel + '</div>';
   /* waarom vandaag minder XP: in de strook, waar anders de titel van de kaart herhaald wordt; de kaart houdt de uitslag,
      wat verdiend is en wat het kind nu kan doen */
-  session.eindZin = vervallen ? 'Je laatste zet telt niet mee: het potje was al klaar.' :
+  session.eindZin = regel ? regel :
     xp === TIRED_XP ? 'Jullie speelden vandaag al veel samen! Nu krijg je voor potjes met ' + escHtml(naam) + ' nog ' + TIRED_XP + ' XP per potje.' : h;
   say(session.eindZin);
   toonEindkaart('<div class="ek-turbo">🐢</div><h2 id="ekKop">' + h + '</h2><p id="ekZin">' + p + '</p>' + vervallen + week + '<!--trofeeen-->' +
@@ -7438,7 +7544,12 @@ function confirmReset() {
       $('rstGo').addEventListener('click', () => {
         /* zonder ander apparaat: elk potje en elke uitdaging met een vriend krijgt nog zijn laatste handeling, met het
            geheim van nu; met een ander apparaat speelt het kind daar verder en vergeet dit apparaat alleen */
-        for (const fid of Object.keys(P.friends || {})) if (!ander && !P.friends[fid].weg) laatstePaarHandeling(fid); else vergeetPaar(fid);
+        for (const fid of Object.keys(P.friends || {})) {
+          if (ander) vergeetPaar(fid);
+          else if (!P.friends[fid].weg) laatstePaarHandeling(fid);
+          /* een vriend die al weg was: zijn laatste handeling wacht misschien nog, en die blijft tot ze bezorgd is */
+          else if (!teBezorgen(fid)) vergeetPaar(fid);
+        }
         try { localStorage.removeItem('schaakheld1'); } catch (e) {}
         opslag(POTJE_KEY, null);
         opslag(RONDJES_KEY, null);

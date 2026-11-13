@@ -1945,7 +1945,9 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   ok('vriend: lijst toont Mila met uitnodigen', __els.friendList.innerHTML.indexOf('Mila') >= 0 &&
     __els.friendList.innerHTML.indexOf('data-invite="' + fid + '"') >= 0 && __els.friendList.innerHTML.indexOf(fid2) < 0);
 
-  /* uitnodigen: briefje in de bus van Mila, kamer als host, wachten */
+  /* uitnodigen: briefje in de bus van Mila, kamer als host, wachten. De rol kwam uit de volgorde van twee willekeurige
+     sleutels; hier zijn wij a, zodat de kant van Mila hieronder rol b is. */
+  setFriend(fid, Object.assign({}, P.friends[fid], { host: true }));
   await inviteFriend(fid);
   for (i = 0; i < 20; i++) await null;
   var bussen = Object.keys(__server.buses);

@@ -400,8 +400,8 @@ async function orakelTwee() {
     await wacht(60000);
     check('daarna gaat er geen stand meer heen en weer (' + standen(a) + ' en ' + standen(b) + ')', standen(a) === 0 && standen(b) === 0);
   }
-  const VERVALLEN = /Je laatste zet telt niet mee: het potje was al klaar voor je hem deed\. Dat kon je niet zien, want er was geen verbinding\./;
-  const vervallenGezegd = function (x) { return VERVALLEN.test(tekstVan(x, 'eindkaart')) && /Je laatste zet telt niet mee: het potje was al klaar\./.test(tekstVan(x, 'bubble')); };
+  const VERVALLEN = /Je laatste zet telt niet mee: het potje was toen al klaar\./;
+  const vervallenGezegd = function (x) { return VERVALLEN.test(tekstVan(x, 'eindkaart')) && VERVALLEN.test(tekstVan(x, 'bubble')); };
   for (const hoe of ['allebei verbonden', 'wie opgeeft heeft even geen lijn']) {
     await regel('[4.1] opgeven en een zet kruisen elkaar (' + hoe + '): beide kanten hetzelfde einde, en dan is het stil', async function (check) {
       const { op: zetter, ander: opgever } = await langPotje();

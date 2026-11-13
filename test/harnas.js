@@ -28,8 +28,9 @@ function maakApparaat(naam, opties) {
     leven.sockets.push(s);
     return s;
   };
+  /* netwerk.haak(url, o, fetch) laat een test de verzoeken van alleen dit apparaat sturen */
   const eigenFetch = function (url, o) {
-    return netwerk.uit ? Promise.reject(new TypeError('Load failed')) : fetch(url, o);
+    return netwerk.uit ? Promise.reject(new TypeError('Load failed')) : netwerk.haak ? netwerk.haak(url, o, fetch) : fetch(url, o);
   };
   /* een klok die scheef staat: dit apparaat leest de tijd van de wereld plus klokAf ms */
   const klokAf = opties.klokAf || 0;
