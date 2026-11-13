@@ -2055,7 +2055,7 @@ function genScanTask(type, rng) {
 const CHECK_NODES = 25000;
 /* White's move m in S played out: Black's best reply and White's best reply
    at the budget, then the captures resolved. white is White's score after m
-   (the value V of the chess coach's measures), material what White has won
+   (the value V), material what White has won
    or lost along that line (L; a fork or a pin shows here, positional points
    do not), reply Black's reply, mateNext whether Black mates at once. */
 function lineAfter(S, m, nodes) {
@@ -5445,7 +5445,8 @@ async function mpHerkenVriend(bewijzen) {
   /* een lopend potje houdt de soort waarmee het begon; het volgende begint met wat de groeten nu bewijzen */
   if (fid && !vrPotjeLoopt()) mp.viaFriend = fid;
 }
-/* rol a = de kant met de kleinste sleutel toen ze vrienden werden, b = de ander; elk heeft zijn eigen bus */
+/* rol a = de kant met de kleinste sleutel toen ze vrienden werden (bij vrienden van voor deze versie: wie vroeg), b = de
+   ander; elk heeft zijn eigen bus voor uitnodigingen */
 function myRole(f) { return f.host ? 'a' : 'b'; }
 function theirRole(f) { return f.host ? 'b' : 'a'; }
 async function busFor(f, role) {
@@ -5712,8 +5713,11 @@ async function blobNaarStaat(k, blob) {
    seq die het zag; een eigen merk; de handelingen die wachten, op volgorde; per einde dat het zelf schreef de uitslag
    die het dan telt (in vorige staat van de oudere potjes geen uitslag meer); het verschil tussen zijn eigen klok en
    die van de server bij de laatste lezing, alleen om tijden te tonen; wanneer het de staat het laatst opnieuw schreef;
-   van de laatste potjes de kleuren en de zetten; en na het weghalen van de vriend het geheim, tot de laatste handeling
-   bezorgd is. Welke potjes het telde, staat in het profielitem (DOC.loc.geteld), bij de tellers. */
+   van de laatste potjes de kleuren en de zetten; een remise-aanbod dat met de eigen volgende zet meegaat; een eigen
+   aanbod waar de vriend met een zet op antwoordde, tot het kind dat hoorde; bij welke halve zet het kind de regel over
+   herhaling het laatst las; per geteld einde wat het verdiende, tot de eindkaart van dat einde het zei; een Nu niet op
+   de eigen uitdaging, tot thuis het zei; en na het weghalen van de vriend het geheim, tot de laatste handeling bezorgd
+   is. Welke potjes het telde, staat in het profielitem (DOC.loc.geteld), bij de tellers. */
 const PAAR_KEY = 'schaakheld-paar';
 let versiesOnbekend = false, versiesGezien = false;
 /* een server zonder staten met een versie: potjes met vrienden gaan door de kamer, en wat zo bewaard is, staat meteen
@@ -7713,7 +7717,7 @@ const PATTERNS = {
 };
 
 function patName(S, sq) { return NAME_NL[S.board[sq].toLowerCase()]; }
-/* het paard, de loper; een paard pak je "het", de andere stukken "hem" (de schaakcoach) */
+/* het paard, de loper; een paard pak je "het", de andere stukken "hem" */
 function hetStuk(p) { const t = p.toLowerCase(); return (t === 'n' ? 'het ' : 'de ') + NAME_NL[t]; }
 /* het voornaamwoord van een stuk, uit zijn letter of zijn naam: het paard is "het", de dame "ze" en "haar",
    de andere stukken "hij" en "hem" */
@@ -8464,8 +8468,8 @@ function trucHint() {
 }
 
 /* De zinnen bij een truc: de naam komt van het type van de opdracht, de stukken
-   van de vorm van dat type, nooit van wat de herkenning nog meer ziet (de
-   schaakcoach); geen vorm gevonden, dan alleen de naam. Met de velden om aan te wijzen. */
+   van de vorm van dat type, nooit van wat de herkenning nog meer ziet; geen
+   vorm gevonden, dan alleen de naam. Met de velden om aan te wijzen. */
 function trucZinnen(S, m, type) {
   makeMove(S, m);
   const op = sq => S.board[sq], stuk = NAME_NL[op(m.to).toLowerCase()];

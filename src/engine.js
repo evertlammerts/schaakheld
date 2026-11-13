@@ -965,7 +965,7 @@ function genScanTask(type, rng) {
 const CHECK_NODES = 25000;
 /* White's move m in S played out: Black's best reply and White's best reply
    at the budget, then the captures resolved. white is White's score after m
-   (the value V of the chess coach's measures), material what White has won
+   (the value V), material what White has won
    or lost along that line (L; a fork or a pin shows here, positional points
    do not), reply Black's reply, mateNext whether Black mates at once. */
 function lineAfter(S, m, nodes) {

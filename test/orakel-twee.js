@@ -1,5 +1,5 @@
-/* Orakel, tweeapparatentests: de regels van plan.md die pas te zien zijn
-   als beide kanten echt draaien. Elke testnaam begint met
+/* Tweeapparatentests: gedrag dat pas te zien is als beide kanten echt
+   draaien. Elke testnaam begint met
    zijn regelnummer. Gebruikt de helpers van test/harnas.js en de
    tweeapparatensuite (samenSpelen, speel, scanQR). */
 
@@ -36,9 +36,9 @@ async function nodigUit(van) {
 }
 
 async function orakelTwee() {
-  /* ================= increment 2 ================= */
+  /* ================= [2.x] het speelscherm: bord, strook en uitleg ================= */
 
-  /* regel 2.5: op een speelscherm staat geen melding; een antwoord of een fout na een vriendenpotje staat in de strook */
+  /* op een speelscherm staat geen melding; een antwoord of een fout na een vriendenpotje staat in de strook */
   await regel('[2.5] na een vriendenpotje: "Nu niet" op de vriendschapsvraag staat in de strook van wie vroeg, en zijn knop is weer als eerst', async function (check) {
     const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
     await samenSpelen(daan, fien);
@@ -95,7 +95,7 @@ async function orakelTwee() {
     check('en niet de Sterrenregen van de tablet', !/Sterrenregen/.test(zonderZacht(telefoon.scherm())));
   });
 
-  /* ================= increment 3 ================= */
+  /* ================= [3.x] thuis en Ik: de kaart, het weekdoel, het level en koppelen ================= */
 
   await regel('[3.2] een potje met een vriend telt als gezien, op beide apparaten', async function (check) {
     zetDatum('2026-11-12T16:00:00');
@@ -128,7 +128,7 @@ async function orakelTwee() {
     const mees = maakApparaat('Mees'), ipad = maakApparaat(null);
     await mees.ev('linkShareFlow()');
     await wacht();
-    /* de code staat als vier genummerde woorden (regel 4.8) */
+    /* de code staat als vier genummerde woorden */
     const vier = (mees.modal().match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
     const code = vier.length === 4 ? vier.join('-') : undefined;
     check('testopzet: vier woorden', !!code);
@@ -150,9 +150,9 @@ async function orakelTwee() {
     check('Mees kreeg iets van de iPad en zegt het ook', mees.get('P.xp') === 10 && /andere apparaat/.test(tekstVan(mees, 'ikBewaard')));
   });
 
-  /* ================= increment 4 ================= */
+  /* ================= [4.x] samen spelen en vrienden ================= */
 
-  /* regel 1.4: niets anders haalt het bewaarde potje tegen Turbo weg, ook niet
+  /* niets anders haalt het bewaarde potje tegen Turbo weg, ook niet
      een potje met een vriend dat ertussen gespeeld wordt en afloopt */
   await regel('[1.4] een vriendenpotje ertussen laat het bewaarde potje tegen Turbo staan, ook als het afloopt', async function (check) {
     const o = maakOpslag(), zetten = ['e2e4', 'e7e5', 'g1f3', 'b8c6'];
@@ -715,7 +715,7 @@ async function orakelTwee() {
     check('en het potje staat er nog', !!samenPotje(b));
   });
 
-  /* steekproef: wat de strook en het bord zeggen als de ander weg is, of na het einde wegging */
+  /* wat de strook en het bord zeggen als de ander weg is, of na het einde wegging */
   await regel('[4.3] is de ander weg, dan zegt de strook dat ook na een eigen zet, en niet dat de ander nu zet', async function (check) {
     const { wit, zwart } = await tweeZetten();
     stopApparaat(zwart);
@@ -1313,8 +1313,8 @@ async function orakelTwee() {
     } finally { __server.welkomZonderAnder = false; }
   });
 
-  /* vrienden worden als toestand: wat elk kind wil, gaat mee met elke groet en na elke tik; het apparaat handelt
-     naar de twee toestanden, nooit naar de volgorde van berichten */
+  /* vrienden worden als toestand: wat elk kind wil, gaat mee met elke groet, en elke verandering groet opnieuw; het
+     apparaat handelt naar de twee toestanden, nooit naar de volgorde van berichten */
   await regel('[2.5] Nu niet, en dan vraagt wie vroeg opnieuw: de ander krijgt de vraag weer, en ja maakt één vriendschap', async function (check) {
     const { fien, daan } = await daanVraagt();
     tikTekst(fien, 'Nu niet');
@@ -1526,7 +1526,7 @@ async function orakelTwee() {
 
   await regel('[2.5] haalt een kind de ander weg terwijl ze samen spelen en gaat het na het einde naar huis, dan noemt de strook van de ander de vriendenlijst nog: die heeft het kind er nog in', async function (check) {
     /* een potje tussen vrienden in de kamer: op een server zonder staten met een versie; op de staat van het paar
-       vraagt weghalen eerst om op te geven (regel 6.8), en daar zegt het einde het met de knoppen van de kaart */
+       vraagt weghalen eerst om op te geven, en daar zegt het einde het met de knoppen van de kaart */
     const echt = fetch;
     fetch = oudeServer(echt);
     try {
@@ -1556,7 +1556,7 @@ async function orakelTwee() {
 
   await regel('[2.5] wie de ander nog in de lijst heeft en tijdens het potje herlaadt, leest na het einde nog dat hij de ander later weer kan uitnodigen', async function (check) {
     /* een potje tussen vrienden in de kamer: op een server zonder staten met een versie; op de staat van het paar
-       vraagt weghalen eerst om op te geven (regel 6.8), en daar zegt het einde het met de knoppen van de kaart */
+       vraagt weghalen eerst om op te geven, en daar zegt het einde het met de knoppen van de kaart */
     const echt = fetch;
     fetch = oudeServer(echt);
     try {
@@ -1589,7 +1589,7 @@ async function orakelTwee() {
 
   await regel('[2.5] haalt een kind de ander zelf weg terwijl ze samen spelen, dan noemt zijn strook de vriendenlijst niet meer als de ander naar huis gaat', async function (check) {
     /* een potje tussen vrienden in de kamer: op een server zonder staten met een versie; op de staat van het paar
-       vraagt weghalen eerst om op te geven (regel 6.8), en daar zegt het einde het met de knoppen van de kaart */
+       vraagt weghalen eerst om op te geven, en daar zegt het einde het met de knoppen van de kaart */
     const echt = fetch;
     fetch = oudeServer(echt);
     try {
@@ -1621,7 +1621,7 @@ async function orakelTwee() {
 
   await regel('[2.5] na een herlading telt een vriend nog: wie herlaadt, opgeeft terwijl de ander weg is en wiens lijn even wegvalt, leest dat hij de ander later weer kan uitnodigen', async function (check) {
     /* een potje tussen vrienden in de kamer: op een server zonder staten met een versie; op de staat van het paar
-       vraagt weghalen eerst om op te geven (regel 6.8), en daar zegt het einde het met de knoppen van de kaart */
+       vraagt weghalen eerst om op te geven, en daar zegt het einde het met de knoppen van de kaart */
     const echt = fetch;
     fetch = oudeServer(echt);
     try {
@@ -2063,7 +2063,7 @@ async function orakelTwee() {
 
   await regel('[2.5] de vriendenlijst hoort bij wat een apparaat vasthoudt: haalt een kind de ander weg terwijl ze samen in de kamer spelen, dan biedt het einde aan beide kanten weer Vrienden worden', async function (check) {
     /* een potje tussen vrienden in de kamer: op een server zonder staten met een versie (op de staat van het paar vraagt
-       weghalen eerst om op te geven, regel 6.8) */
+       weghalen eerst om op te geven) */
     const echt = fetch;
     fetch = oudeServer(echt);
     try {
@@ -2133,7 +2133,7 @@ async function orakelTwee() {
     x.ev('globalThis.__houd = []; var __mmh = mpMsg; globalThis.__laat = function () { var h = globalThis.__houd; globalThis.__houd = null; h.forEach(function (m) { __mmh(m); }); }; mpMsg = function (m) { if (globalThis.__houd && m && m.t === "hallo") { globalThis.__houd.push(m); return; } return __mmh(m); }');
   };
   for (const [wie, uitleg] of [['gast', 'de gast heeft de vriend al, de gastheer nog niet'], ['gastheer', 'de gastheer heeft de vriend al, de gast nog niet']]) {
-    await regel('[2.5] W10 ' + uitleg + ' als de revanche begint: die blijft voor allebei een potje in de kamer, met gelijke borden bij elke zet; aan het einde hebben beide de vriend, en het volgende potje staat in de staat van het paar', async function (check) {
+    await regel('[2.5] ' + uitleg + ' als de revanche begint: die blijft voor allebei een potje in de kamer, met gelijke borden bij elke zet; aan het einde hebben beide de vriend, en het volgende potje staat in de staat van het paar', async function (check) {
       const { fien, daan } = await eindeTussenTwee();
       check('testopzet: Fien is de gastheer', fien.get('MP.host') === true && daan.get('MP.host') === false);
       /* wie de vriend als laatste krijgt, mist eerst de groet van de ander */
@@ -2176,7 +2176,7 @@ async function orakelTwee() {
     });
   }
 
-  await regel('[2.5] W10 de gast nam de vriend terug net voor de start van de gastheer aankwam: hij volgt niet, het potje is voor allebei een potje in de kamer, en de staat van het paar kreeg het nooit', async function (check) {
+  await regel('[2.5] de gast nam de vriend terug net voor de start van de gastheer aankwam: hij volgt niet, het potje is voor allebei een potje in de kamer, en de staat van het paar kreeg het nooit', async function (check) {
     const { fien, daan } = await eindeTussenTwee();
     tikTekst(fien, 'Vrienden worden');
     await wacht();
@@ -2803,7 +2803,7 @@ async function orakelTwee() {
     check('vóór het potje tegen Turbo', t.indexOf('Turbo') > t.indexOf('Fien') && t.indexOf('Fien') >= 0);
   });
 
-  /* D38: een uitnodiging op de Verder-kaart heeft beide antwoorden in de kaart */
+  /* een uitnodiging op de Verder-kaart heeft beide antwoorden in de kaart */
   async function uitnodigingTijdensPotje() {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     await wordenVrienden(fien, daan);
@@ -3213,8 +3213,8 @@ async function orakelTwee() {
     check('de strook zegt het', /Dit potje kon ik niet bewaren\. Laat de app open, dan kunnen jullie verder\./.test(tekstVan(wit, 'bubble')));
   });
 
-  /* wat een kapotte bouw liet passeren (de mutaties van de review) */
-  /* regel 4.2: een remise-aanbod dat komt terwijl het kind thuis is, wacht; het antwoord staat onder het bord */
+  /* fouten die een kapotte bouw eerder liet passeren: elke test hieronder faalt als die fout terugkomt */
+  /* een remise-aanbod dat komt terwijl het kind thuis is, wacht; het antwoord staat onder het bord */
   await regel('[4.2] een remise-aanbod terwijl het kind thuis is, wacht: de kaart zegt het, en Antwoord opent het potje met de vraag onder het bord', async function (check) {
     const { wit, zwart } = await tweeZetten();
     zwart.tik('backBtn');
@@ -3247,7 +3247,7 @@ async function orakelTwee() {
     check('remise aan beide kanten', eindziet(wit, 'Gelijkspel') && eindziet(zwart, 'Gelijkspel'));
   });
 
-  /* regel 4.12 met D38: de rij van een vriend toont het ene lopende potje */
+  /* de rij van een vriend toont het ene lopende potje */
   await regel('[4.12] de rij van een vriend toont het lopende potje: wie aan zet is, en de knop opent het', async function (check) {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     await wordenVrienden(fien, daan);

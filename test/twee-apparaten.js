@@ -282,7 +282,7 @@ async function alles() {
   evert.ev('mpWordFlow()');
   oscar.ev('mpWordFlow()');
   await tik();
-  /* de eigen woorden staan genummerd: "Jouw woorden: 1 wild 2 duizend" (regel 4.8) */
+  /* de eigen woorden staan genummerd: "Jouw woorden: 1 wild 2 duizend" */
   const eigen = function (app) { const m = app.modal().match(/Jouw woorden: <b>1 ([a-z]+) &nbsp; 2 ([a-z]+)<\/b>/); return m ? m[1] + '-' + m[2] : undefined; };
   const codeE = eigen(evert), codeO = eigen(oscar);
   ok('woorden: allebei twee woorden om voor te lezen', !!codeE && !!codeO && codeE !== codeO);
@@ -314,7 +314,7 @@ async function alles() {
   const ipad = maakApparaat(null);
   await evert.ev('linkShareFlow()');
   await tik();
-  /* de code staat als vier genummerde woorden (regel 4.8) */
+  /* de code staat als vier genummerde woorden */
   const vier = (evert.modal().match(/<span class="w-chip"><b>\d<\/b> [a-z]+<\/span>/g) || []).map(function (x) { return x.replace(/<[^>]+>|\d/g, '').trim(); });
   const code4 = vier.length === 4 ? vier.join('-') : undefined;
   ok('koppelen: Evert krijgt vier woorden om over te typen', !!code4);

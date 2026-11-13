@@ -48,9 +48,9 @@
     return m;
   };
   const speel = function (S, zetten) { for (const k of zetten) E.makeMove(S, zet(S, k)); return S; };
-  /* een rustige zet die 95 minder scoort dan de beste en niets verliest (reviewer, v7) */
+  /* een rustige zet die 95 minder scoort dan de beste en niets verliest */
   const STIL_FEN = 'r2qkb1r/ppp1bppp/B1bp1n2/4p3/4P3/5P1N/PPPPQ1PP/R1B2K1R w kq - 1 10', STIL_ZET = 'a6b5';
-  /* een regel uit de voorraad, die de tool met de vijf toetsen van de coach bij 300.000 knopen controleerde */
+  /* een regel uit de voorraad, die de tool met de vijf toetsen van checkPieceTask bij 300.000 knopen controleerde */
   const STUK_GOED = 'r1b1kb1r/pppp1pp1/4pq1p/4N3/1n1P4/P1n1B3/1PPQPPPP/1R2KB1R w|stuk|b2c3,d2c3';
   /* een middenspel buiten het boek waarin een zoektocht op tijd een andere zet kiest dan het knoopbudget */
   const SUPER_FEN = 'r1bq1k1r/p1p3pp/2p1pp2/4p3/1bNP2n1/5N2/PPP2PPP/R1BQ1RK1 w - - 0 11';
@@ -115,7 +115,7 @@
     const k = E.blunderCheck(U, zet(U, 'd1d6'));
     check('Txd6 geeft een toren voor een loper (170): alarm', !!k && k.loss === 170);
     check('met c7xd6 als de zet van Turbo die het verlies begint', !!k && !!k.take && E.moveKey(k.take) === 'c7d6');
-    /* de lijn van de coach: na 4.f3?? is Dh4+ Turbo's beste zet, maar die slaat niets */
+    /* de lijn: na 4.f3?? is Dh4+ Turbo's beste zet, maar die slaat niets */
     const W = speel(E.newGame(), ['g1h3', 'e7e6', 'e2e3', 'b8a6', 'f1c4', 'd7d5']);
     const f = E.blunderCheck(W, zet(W, 'f2f3'));
     check('4.f3 laat de loper op c4 staan: alarm, verlies 330', !!f && f.loss === 330);
@@ -211,8 +211,8 @@
     check('schaak, zoektocht -95: niet goed', E.ookMag('schaak', 0, -95) === false);
   });
 
-  /* de schaakcoach, met een zoektocht van 600.000 posities en een lijn van zes halve zetten: deze reddingen verliezen
-     later een pion of meer, dus ze zijn niet ook goed */
+  /* met een zoektocht van 600.000 posities en een lijn van zes halve zetten verliezen deze reddingen later een pion
+     of meer, dus ze zijn niet ook goed */
   regel('[5.5] Red je stuk: reddingen die later toch verliezen, staan niet bij de zetten die ook goed zijn', function (check) {
     if (!check('er is een voorraad STUK_POOL', typeof STUK_POOL !== 'undefined' && STUK_POOL.length > 0)) return;
     for (const [bord, k] of [['1r1qkb1r/1pp2pp1/p1np3p/3np3/3Pb3/3QBN2/PPPKPPPP/2R2B1R w', 'd3a3'], ['r2qkb1r/ppp2ppp/3p1n2/4p3/3nPB2/2N4b/PPP2PPP/R2QKBR1 w', 'f1b5'],
@@ -530,7 +530,7 @@
     check('Dd3-c3 als valstrik: afgekeurd', E.checkSafeTask({ S: S, move: zet(S, 'd3c3'), trap: true }) === null);
   });
 
-  /* de aanvulling van de coach: L en V moeten het eens zijn, anders is de zet geen van beide */
+  /* L en V moeten het eens zijn, anders is de zet geen van beide */
   regel('[5.3] Valstrik: een zet waarna een stuk valt dat bij elke zet valt, is geen valstrik en ook niet veilig', function (check) {
     /* de loper op e2 is gepend en aangevallen: na elke zet slaat Txe2+ hem */
     const S = E.parseFEN('4r1k1/pp4pp/8/8/8/3p4/PP2B1PP/4K3 w - - 0 1');
@@ -541,7 +541,7 @@
     check('a2-a3 als veilig: afgekeurd', E.checkSafeTask({ S: S, move: zet(S, 'a2a3'), trap: false }) === null);
   });
 
-  /* fix list item 18 (de schaakcoach): een zet die mat in één toelaat is de duidelijkste valstrik; de straf is de matzet */
+  /* een zet die mat in één toelaat is de duidelijkste valstrik; de straf is de matzet */
   regel('[5.3] Valstrik: een zet die mat in één toelaat is een valstrik, met de matzet als straf', function (check) {
     /* na Pf3-e1 is Dxh2 mat: langs de lijn gaat alleen de pion op h2 */
     const S = E.parseFEN('6k1/2b2ppp/3q4/8/8/5N2/PPP2PPP/3Q1RK1 w - - 0 1');
@@ -561,7 +561,6 @@
     check('a2-a3: ook geen valstrik', E.checkSafeTask({ S: S, move: zet(S, 'a2a3'), trap: true }) === null);
   });
 
-  /* de drie voorraadregels van de reviewer en de regel van de coach (R1) */
   regel('[5.3] Red je stuk: een redding die materiaal verliest, of een opdracht met andere zetten even goed, wordt afgekeurd', function (check) {
     for (const [r, waarom] of [['r2qkb1r/pppb1ppp/3p1n2/4p3/1n1NPB2/3P1Q2/PPP1KPPP/RN3B1R w|stuk|a2a3,c2c3', 'twee dreigingen, niet te redden'],
       ['r2qkb1r/ppp2ppp/2n2n2/1B1p4/3Pp1b1/2N1PN2/PPPB1P1P/R2QK2R w|stuk|b5c6', 'niet te redden, de redding verliest'],
@@ -649,7 +648,7 @@
     check('geen (' + fout.length + (fout.length ? ', zoals ' + fout[0].fen : '') + ')', fout.length === 0);
   });
 
-  /* de coach (K3): in deze zes scoort een foute zet ongeveer even goed als een antwoord; de tool houdt ze nu tegen */
+  /* in deze zes scoort een foute zet ongeveer even goed als een antwoord; de tool houdt ze nu tegen */
   regel('[5.5] Koning ontsnapt: de zes puzzels waarin een foute zet bijna even goed is als het antwoord, staan niet in de voorraad', function (check) {
     if (!check('er is een voorraad KONING_POOL', typeof KONING_POOL !== 'undefined' && KONING_POOL.length > 0)) return;
     const borden = KONING_POOL.map(function (p) { return p.fen.split(' ')[0]; });
@@ -719,7 +718,7 @@
     }
   });
 
-  /* de schaakcoach na het eerste deel: de truc die de uitleg noemt is niet wat wint, of een andere zet
+  /* de truc die de uitleg noemt is niet wat wint, of een andere zet
      die ook de truc is, staat binnen anderhalf punt van het antwoord */
   regel('[5.1] een truc die niet wint, of waar een andere zet met dezelfde truc bijna even goed is, staat niet in de voorraad', function (check) {
     if (!check('er is een voorraad TRUC_POOL', typeof TRUC_POOL !== 'undefined' && Array.isArray(TRUC_POOL))) return;
@@ -797,7 +796,7 @@
 
   /* ---------- 5.9: Red je stuk uit een geverifieerde voorraad ---------- */
 
-  /* de coach (R2): Dg5-h4 redt de dame, maar na ...g5 en ...g4 is het paard op h3 weg; voorbij de lijn van twee halve zetten */
+  /* Dg5-h4 redt de dame, maar na ...g5 en ...g4 is het paard op h3 weg; voorbij de lijn van twee halve zetten */
   regel('[5.9] Red je stuk: de opdracht waarin een redding drie zetten later het paard kost, staat niet in de voorraad', function (check) {
     if (!check('er is een voorraad STUK_POOL', typeof STUK_POOL !== 'undefined' && Array.isArray(STUK_POOL))) return;
     check('niet in de voorraad', !STUK_POOL.some(function (r) { return r.split('|')[0] === '1rbqk1r1/1ppp1ppp/p2bnn2/4p1Q1/4P3/2NB3N/PPPP1PPP/R1B1R1K1 w'; }));
@@ -824,7 +823,7 @@
     check('elke regel klopt' + (slecht.length ? ' (niet: ' + slecht.slice(0, 3).join('; ') + ')' : ''), slecht.length === 0);
   });
 
-  /* de vijf toetsen van de coach met het budget van de voorraad; bij een ander budget valt een goede regel soms net buiten de marge van 50 */
+  /* de vijf toetsen van checkPieceTask met het budget van de voorraad; bij een ander budget valt een goede regel soms net buiten de marge van 50 */
   regel('[5.9] een steekproef van twee uit de Red je stuk-voorraad: de vijf toetsen houden bij 300.000 knopen, ook het stuk is te redden en elke redding verliest geen pion', function (check) {
     if (!check('er is een voorraad STUK_POOL', typeof STUK_POOL !== 'undefined' && Array.isArray(STUK_POOL))) return;
     if (!knoopbudget(check)) return;
@@ -838,12 +837,12 @@
 
   /* De generatoren die live blijven, op vaste zaden. Op deze Mac onder een
      seconde per opdracht; de echte maat is een paar seconden onder de 6x
-     vertraging in Chromium (gemeten in de review, ux-run/reviews/inc5/snelheid.md). */
+     vertraging in Chromium. */
   /* Geteld in knopen, niet in milliseconden: zo meet de test de code en niet
      hoe druk de machine is. Onder de 6x vertraging zoekt Chromium ongeveer
-     40.000 knopen per seconde (snelheid.md: 50.000 knopen in 1,2 s), dus
+     40.000 knopen per seconde (gemeten: 50.000 knopen in 1,2 s), dus
      120.000 knopen is zo'n drie seconden. */
-  /* fix list item 27: de negen zaden die bij 200 per soort meer dan 160.000 posities zochten (snelheid.md); onder de 6x vertraging is 160.000 zo'n vier seconden */
+  /* de negen zaden die bij 200 per soort meer dan 160.000 posities zochten; onder de 6x vertraging is 160.000 zo'n vier seconden */
   regel('[5.9] Veilig of valstrik zoekt per opdracht hoogstens 160.000 posities, ook bij de zwaarste zaden', function (check) {
     for (const [trap, zaad] of [[false, 182137], [false, 665196], [true, 1227446], [true, 182138], [false, 1393744], [true, 997795],
       [false, 871090], [false, 688953], [true, 237571]]) {
@@ -1006,7 +1005,7 @@
   });
 
   regel('[5.8] sleutelmoment: een gedekte pion slaan is een ruil, een vluchtende dame mist niets, en de verdediger die wegging krijgt een naam', function (check) {
-    /* de coach: Dxd5 slaat een pion die c6 dekt; de les is de gedekte pion, niet een hangend stuk */
+    /* Dxd5 slaat een pion die c6 dekt; de les is de gedekte pion, niet een hangend stuk */
     let k = E.keyMoment(speel(E.parseFEN('4k3/8/2p5/3p4/8/8/8/3QK3 w - - 0 1'), ['d1d5', 'c6d5']));
     check('Dxd5, cxd5: een ruil (' + JSON.stringify(k) + ')', !!k && k.kind === 'ruil' && k.moveNo === 1);
     /* de dame vlucht voor het paard; Txa8 zou de dame kosten, dus niets gemist */
@@ -1021,7 +1020,6 @@
       !!k && k.kind === 'hang' && k.defender === 'loper' && k.moved === true && k.piece === 'paard');
   });
 
-  /* de reviewer, ronde 2 op 5a832a6 (bevindingen 9 en 10) */
   regel('[5.8] sleutelmoment: wie zelf naar een ongedekt veld gaat, liet geen verdediger weggaan; een verdediger die bleef staan ging niet weg; terugslaan elders is geen ruil; 2 punten minder is niets gemist', function (check) {
     const moment = function (fen, k) { const S = E.parseFEN(fen); return E.moveMoment(S, zet(S, k)); };
     for (const [fen, k, stuk, het] of [['4k3/8/8/3p4/8/2N5/8/4K3 w - - 0 1', 'c3e4', 'paard', 'het'],
@@ -1046,7 +1044,7 @@
   });
 
   regel('[5.8] sleutelmoment: Turbo zet een vork na je zet; een vork van jou telt pas als hij iets opleverde', function (check) {
-    /* de lijn van de coach: 4.f3?? Dh4+ valt koning en loper tegelijk aan */
+    /* de lijn: 4.f3?? Dh4+ valt koning en loper tegelijk aan */
     const S = speel(E.newGame(), ['g1h3', 'e7e6', 'e2e3', 'b8a6', 'f1c4', 'd7d5', 'f2f3', 'd8h4']);
     let k = E.keyMoment(S);
     check('truc bij zet 4 (' + JSON.stringify(k) + ')', !!k && k.kind === 'truc' && k.moveNo === 4 && k.punish === 'd8h4');
