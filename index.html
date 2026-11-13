@@ -5753,7 +5753,9 @@ function paarVan(fid) {
     telBij: p.telBij && typeof p.telBij === 'object' && !Array.isArray(p.telBij) ? p.telBij : {},
     potjes: p.potjes && typeof p.potjes === 'object' && !Array.isArray(p.potjes) ? p.potjes : {}, verschil: Number.isFinite(p.verschil) ? p.verschil : 0,
     vernieuwd: Number.isFinite(p.vernieuwd) ? p.vernieuwd : null, doorGespeeld: typeof p.doorGespeeld === 'string' ? p.doorGespeeld : null,
-    bodMetZet: typeof p.bodMetZet === 'string' ? p.bodMetZet : null, herhaalGezegd: typeof p.herhaalGezegd === 'string' ? p.herhaalGezegd : null, vriend: p.vriend && typeof p.vriend === 'object' && typeof p.vriend.k === 'string' ? p.vriend : null };
+    bodMetZet: typeof p.bodMetZet === 'string' ? p.bodMetZet : null,
+    telKaart: p.telKaart && typeof p.telKaart === 'object' && !Array.isArray(p.telKaart) ? p.telKaart : {},
+    neeTeMelden: typeof p.neeTeMelden === 'string' ? p.neeTeMelden : null, herhaalGezegd: typeof p.herhaalGezegd === 'string' ? p.herhaalGezegd : null, vriend: p.vriend && typeof p.vriend === 'object' && typeof p.vriend.k === 'string' ? p.vriend : null };
 }
 function bewaarPaar(fid, p) {
   const o = paren();
@@ -5810,13 +5812,20 @@ function telEinde(u, rol, fid) {
   if ((u.soort === 'mat' && u.door === rol) || (u.soort === 'opgave' && u.door !== rol)) bump('c.winsOnline', 1);
   return xp;
 }
-/* wat dit apparaat in deze run telde, per potje: de eindkaart zegt het, ook als het pas telt na haar opening */
-const telLog = {};
-function telRegelVan(id) { const t = telLog[id]; return t ? eindTelRegel(t.xp, t.doelGehaald, true) : ''; }
-function eindkaartTelling(id) {
+/* Wat dit apparaat telde, per potje: het staat bij het paar tot de eindkaart van dat potje het zei, ook over een
+   herlading, en ook als het pas telt na de opening van de kaart. */
+function telRegelVan(fid, id) { const t = paarVan(fid).telKaart[id]; return t ? eindTelRegel(t.xp, t.doelGehaald, true) : ''; }
+function telKaartGezegd(fid, id) {
+  const p = paarVan(fid);
+  if (!(id in p.telKaart)) return;
+  delete p.telKaart[id];
+  bewaarPaar(fid, p);
+}
+function eindkaartTelling(fid, id) {
   const el = $('ekTel');
   if (!el || !session || !session.over || (session.oud ? session.oud.gameId : MP && MP.gameId) !== id) return;
-  el.innerHTML = telRegelVan(id);
+  el.innerHTML = telRegelVan(fid, id);
+  telKaartGezegd(fid, id);
 }
 /* met een weggehaalde vriend gaat ook de lijst van wat dit apparaat met hem telde */
 function vergeetGeteld(fid) {
@@ -5833,7 +5842,7 @@ function getelde(fid) { const l = DOC.loc.geteld && DOC.loc.geteld[fid]; return 
 function telPaar(fid, rol) {
   /* na Alles wissen bezorgt het apparaat nog de opgave, maar het nieuwe profiel begint blanco */
   if (!P.friends[fid]) return;
-  const p = paarVan(fid), s = p.staat;
+  const p = paarVan(fid), s = p.staat, nu = [];
   if (!s) return;
   let iets = false;
   for (const g of [s.spel && s.spel.fase === 'klaar' ? s.spel : null].concat(s.vorige)) {
@@ -5841,13 +5850,16 @@ function telPaar(fid, rol) {
     const u = g.uitslag || p.telBij[g.id] || null;
     DOC.loc.geteld = Object.assign({}, DOC.loc.geteld, { [fid]: getelde(fid).concat([g.id]).slice(-GETELD_PER_VRIEND) });
     const doelVoor = goalDoneWeek(curWeek()), xp = u ? telEinde(u, rol, fid) : 0;
-    telLog[g.id] = { xp, doelGehaald: !doelVoor && goalDoneWeek(curWeek()) };
+    p.telKaart = Object.assign({}, p.telKaart, { [g.id]: { xp, doelGehaald: !doelVoor && goalDoneWeek(curWeek()) } });
+    const oud = Object.keys(p.telKaart);
+    if (oud.length > VORIGE_MAX + 1) delete p.telKaart[oud[0]];
+    nu.push(g.id);
     saveP();
     delete p.telBij[g.id];
     bewaarPaar(fid, p);
     iets = true;
   }
-  if (iets) { checkBadges(); updateHud(); renderWeek(); renderWeekStrip(); for (const id in telLog) eindkaartTelling(id); syncNow().then(ok => { if (!ok) syncSoon(); }); }
+  if (iets) { checkBadges(); updateHud(); renderWeek(); renderWeekStrip(); for (const id of nu) eindkaartTelling(fid, id); syncNow().then(ok => { if (!ok) syncSoon(); }); }
 }
 /* wat een apparaat zelf doet met wat het las: een einde of antwoord nemen, een aanbod stempelen, de remise na
    veertien dagen van het eigen aanbod; vooraan in de rij */
@@ -6104,7 +6116,7 @@ function paarVeranderd(fid, voor, uitkomsten) {
   if (ev.herstel) ev.herstelRec = paarRecords(fid, na, true).find(x => x.gameId === ev.herstel) || null;
   const recVoor = paarRecords(fid, voor), recNa = paarRecords(fid, na);
   /* de eigen uitdaging kreeg Nu niet: dat hoort het kind één keer, thuis */
-  if (vsp && vsp.fase === 'uitdaging' && vsp.door === rol && nsp && nsp.id === vsp.id && nsp.fase === 'nee') ev.nee = true;
+  if (vsp && vsp.fase === 'uitdaging' && vsp.door === rol && nsp && nsp.id === vsp.id && nsp.fase === 'nee') ev.nee = nsp.id;
   if (MP && MP.paar === fid && MP.gameId) {
     const g = MP.gameId, rec = recNa.find(x => x.gameId === g);
     const bekeken = nsp && nsp.id === g ? !!nsp.bekeken[rol] : na.vorige.some(v => v.id === g && v.bekeken && v.bekeken[rol]);
@@ -6233,7 +6245,7 @@ function paarRecords(fid, staat, ookBekeken) {
 /* wat van een potje op het scherm te zien is; de rest (wanneer bewaard, de bus) verandert het scherm niet */
 const potjeStand = r => r ? JSON.stringify([r.moves, r.result, r.offer, r.state]) : null;
 /* Wat het kind ziet van wat de staat bracht. Een afgewezen uitdaging hoort het één keer, thuis. */
-let afgewezenUitdagingen = [], pollVerversen = false; /* thuis opnieuw tekenen, één keer na het lezen van alle staten */
+let pollVerversen = false; /* thuis opnieuw tekenen, één keer na het lezen van alle staten */
 /* per potje de zin over een tik in deze run die niet telde, voor de eindkaart die het kind later opent */
 let eindRegelLater = {};
 function vriendPotjeVerder(fid, R, voor, ev) {
@@ -6247,13 +6259,20 @@ function vriendPotjeVerder(fid, R, voor, ev) {
     else if (MP.gameId === ev.geweigerd) { mpStop(true); goHome(); }
   } else if (ev.andereApparaat) showToast('Je zet op je andere apparaat telde al.');
   if (ev.regel && !ev.herstel) showToast(ev.regel);
-  if (ev.nee && P.friends[fid]) afgewezenUitdagingen.push(P.friends[fid].naam);
+  if (ev.nee && P.friends[fid]) { const p = paarVan(fid); p.neeTeMelden = ev.nee; bewaarPaar(fid, p); }
   nieuwPotjeTekenen();
   pollVerversen = true;
 }
+/* Een Nu niet op de eigen uitdaging staat bij het paar tot thuis het zei: thuis zegt het zodra de vensters weg zijn,
+   ook na een oefening, een potje of een herlading. */
 function meldUitdagingNee() {
-  if (!afgewezenUitdagingen.length || session || modalOpen) return;
-  const naam = escHtml(afgewezenUitdagingen.shift());
+  const fid = Object.keys(P.friends || {}).find(id => paren()[id] && paarVan(id).neeTeMelden);
+  if (!fid || session || !$('scr-play').classList.contains('hidden')) return;
+  if (modalOpen) { naVensters(meldUitdagingNee); return; }
+  const p = paarVan(fid);
+  p.neeTeMelden = null;
+  bewaarPaar(fid, p);
+  const naam = escHtml(P.friends[fid].naam);
   meldInPlaats('<div class="m-emoji">🙂</div><h2>' + naam + ' kan nu even niet</h2><p>Daag ' + naam + ' later gerust nog eens uit.</p>' +
     '<div class="m-btns"><button class="btn sun" id="meldOk">Oké</button></div>', () => $('meldOk').addEventListener('click', closeModal));
 }
@@ -7558,7 +7577,7 @@ function spin(show, txt) {
    Met cancelable=true krijgt de modal een ✕ en sluit hij ook via een tik
    naast de kaart of Escape. Zonder die vlag sluit alleen een eigen knop,
    zodat keuzes met gevolgen (wissen, level-up, verbinden) bewust blijven. */
-let modalQueue = [], modalOpen = false, modalCancelable = false, modalKey = null, naVensterFn = null;
+let modalQueue = [], modalOpen = false, modalCancelable = false, modalKey = null, naVensterFns = [];
 function renderModal(html, setup, cancelable, key) {
   modalCancelable = !!cancelable;
   modalKey = key || null;
@@ -7587,10 +7606,10 @@ function closeModal() {
   modalKey = null;
   $('overlay').classList.add('hidden');
   modalQueue = [];
-  if (naVensterFn) { const f = naVensterFn; naVensterFn = null; f(); }
+  if (naVensterFns.length) { const l = naVensterFns; naVensterFns = []; l.forEach(f => f()); }
 }
 /* een melding die pas komt als het kind de vensters heeft weggetikt: een venster verbergt hem anders meteen */
-function naVensters(fn) { if (modalOpen) naVensterFn = fn; else fn(); }
+function naVensters(fn) { if (!modalOpen) fn(); else if (!naVensterFns.includes(fn)) naVensterFns.push(fn); }
 /* Een vraag waarvan het antwoord niet meer telt mag niet alsnog gesteld
    worden: wachtte hij in de rij, dan verdwijnt hij hier. */
 function dropModal(key) {
@@ -11021,8 +11040,9 @@ function endGame(st, stil) {
       /* het kind ziet het einde: dat schrijft het in de staat, zodat zijn andere apparaten de kaart niet meer tonen */
       const rol = myRole(P.friends[eindPaar]), winnaar = st.result === 'd' ? null : st.result === session.myColor ? rol : andereRol(rol);
       pasToe(eindPaar, { soort: 'bekijk', id: oudId, einde: { soort: st.reason, winnaar } });
-      const tel = telLog[oudId];
-      endGameOnline(st, drawTxt, false, tel ? tel.xp : 0, telRegelVan(oudId));
+      const tel = paarVan(eindPaar).telKaart[oudId];
+      endGameOnline(st, drawTxt, false, tel ? tel.xp : 0, telRegelVan(eindPaar, oudId));
+      telKaartGezegd(eindPaar, oudId);
       return;
     }
     const doelVoor = goalDoneWeek(curWeek());
@@ -11499,6 +11519,8 @@ function renderIkBewaard() {
 }
 
 function renderHome() {
+  /* na de vensters van thuis zelf, zoals een trofee */
+  setTimeout(meldUitdagingNee, 0);
   renderVerder();
   updateHud();
   renderPatBook();

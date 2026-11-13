@@ -4021,4 +4021,110 @@ async function orakelTwee6() {
     check('geen teller, geen week en geen XP', tellers(mees) === voorM && tellers(fien) === voorF && mees.get('P.xp') === xpM && fien.get('P.xp') === xpF &&
       weekOnline(mees) === 0 && weekOnline(fien) === 0);
   });
+
+  /* ================= wat een kind nog moet zien over een paar, staat bij het paar ================= */
+
+  await regel('[6.3] AF7 een einde dat het apparaat telde terwijl de kaart nog dicht was: na een herlading noemt de eindkaart de XP nog, en daarna staat het nergens meer', async function (check) {
+    zetDatum('2026-11-16T10:00:00');
+    const mees = maakApparaat('Mees');
+    let fien = maakApparaat('Fien');
+    const fid = await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 22, mees);
+    fien.tik('backBtn');
+    await wacht();
+    stopApparaat(fien);
+    const voor = fien.get('P.xp');
+    await geefOp(mees);
+    await tijd(5000);
+    fien = await opent(fien);
+    await tijd(20000);
+    check('testopzet: Fien telde het einde, met 30 XP, en de kaart staat nog dicht', fien.get('P.xp') - voor === 30 && /Mees gaf op/.test(tekstVan(fien, 'verder')));
+    stopApparaat(fien);
+    await tijd(3600000);
+    fien = await opent(fien);
+    await tijd(20000);
+    fien.tik('verderKaart');
+    await wacht();
+    check('de eindkaart noemt de XP', /\+30\s*XP/.test(tekstVan(fien, 'eindkaart')));
+    check('daarna staat het nergens meer', fien.get('JSON.stringify(paarVan(' + JSON.stringify(fid) + ').telKaart || {})') === '{}');
+  });
+
+  const neeTerwijlOefening = async function () {
+    zetDatum('2026-11-16T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    const fid = await wordenVrienden(mees, fien);
+    for (const x of [mees, fien]) { if (x.open()) x.ev('closeModal()'); if (opSpeelscherm(x)) { x.tik('backBtn'); await wacht(); } }
+    await tijd(20000);
+    await daagUit(mees, fid, 'Fien');
+    await tijd(20000);
+    mees.ev('startDrill(DRILL_KINDS[0])');
+    await wacht();
+    await fien.ev('friendPoll()');
+    await wacht();
+    if (fien.open()) fien.ev('closeModal()');
+    if (!zichtbaar(fien, 'view-spelen')) fien.tik('tabSpelen');
+    await wacht();
+    tikTekst(fien, 'Nu niet');
+    await tijd(40000);
+    return { mees, fien, fid };
+  };
+  const KAN_NIET = /Fien kan nu even niet/;
+
+  await regel('[6.4] AF7 Fien zegt Nu niet terwijl Mees in een oefening zit: gaat Mees naar huis, dan hoort hij het één keer', async function (check) {
+    const { mees } = await neeTerwijlOefening();
+    check('testopzet: Mees zit in de oefening, zonder venster', opSpeelscherm(mees) && !KAN_NIET.test(mees.scherm()));
+    mees.tik('backBtn');
+    await wacht();
+    if (kanTikken(mees, 'Stoppen')) { tikTekst(mees, 'Stoppen'); await wacht(); }
+    await tijd(3000);
+    check('thuis het venster', opThuis(mees) && KAN_NIET.test(mees.scherm()));
+    tikTekst(mees, 'Oké');
+    await wacht();
+    mees.tik('tabVrienden');
+    await wacht();
+    mees.tik('tabSpelen');
+    await tijd(60000);
+    check('daarna niet nog eens', !KAN_NIET.test(mees.scherm()));
+  });
+
+  await regel('[6.4] AF7 Fien zegt Nu niet terwijl Mees in een oefening zit, en Mees doet de app dicht en open: thuis hoort hij het één keer', async function (check) {
+    let { mees } = await neeTerwijlOefening();
+    check('testopzet: Mees zit in de oefening, zonder venster', opSpeelscherm(mees) && !KAN_NIET.test(mees.scherm()));
+    stopApparaat(mees);
+    await tijd(60000);
+    mees = herlaad(mees);
+    await wacht();
+    vierWeg(mees);
+    await tijd(20000);
+    for (let i = 0; i < 4 && mees.open() && !KAN_NIET.test(mees.scherm()); i++) { mees.ev('closeModal()'); await tijd(3000); }
+    check('thuis het venster', KAN_NIET.test(mees.scherm()));
+    tikTekst(mees, 'Oké');
+    await wacht();
+    mees = herlaad(mees);
+    await tijd(20000);
+    for (let i = 0; i < 4 && mees.open() && !KAN_NIET.test(mees.scherm()); i++) { mees.ev('closeModal()'); await tijd(3000); }
+    check('na nog een herlading niet nog eens', !KAN_NIET.test(mees.scherm()));
+  });
+
+  await regel('[6.4] AF7 staat er bij het openen van de app een ander venster, dan komt het Nu niet zodra dat venster dicht is', async function (check) {
+    let { mees } = await neeTerwijlOefening();
+    stopApparaat(mees);
+    await tijd(60000);
+    mees = herlaad(mees);
+    mees.ev('showModal("<p>Een ander venster</p>")');
+    await wacht();
+    check('testopzet: het andere venster staat, zonder het bericht', mees.open() && !KAN_NIET.test(mees.scherm()));
+    mees.ev('closeModal()');
+    check('meteen na het sluiten het bericht', KAN_NIET.test(mees.scherm()));
+  });
+
+  await regel('[6.4] AF7 wat wacht tot de vensters weg zijn, komt allemaal: twee meldingen die op hetzelfde venster wachten, komen allebei', async function (check) {
+    const a = maakApparaat('Lotte');
+    const melding = meldingen(a);
+    a.ev('showModal("<p>even</p>"); naVensters(function () { showToast("een"); }); naVensters(function () { showToast("twee"); })');
+    check('testopzet: nog niets', melding() === '');
+    a.ev('closeModal()');
+    check('allebei', melding() === 'een | twee');
+  });
+
 }
