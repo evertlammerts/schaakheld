@@ -2746,6 +2746,7 @@ const TRUC_DIFF = { vork: .4, penning: .6, spies: .6, aftrek: .7, mat1: .5, mat2
 /* waar dit apparaat per type in de voorraad is: elke truc eenmaal voor er een
    terugkomt (plan rule 5.1); een eigen sleutel, buiten het profiel (rule 5.10) */
 const TRUC_PLEK_KEY = 'schaakheld-trucplek';
+let trucPlekNu = null;
 
 function trucUitVoorraad() {
   const pool = typeof TRUC_POOL !== 'undefined' ? TRUC_POOL : [];
@@ -2755,12 +2756,21 @@ function trucUitVoorraad() {
   const anders = kans.filter(t => t !== session.lastType);
   const type = pick(anders.length ? anders : kans);
   const regels = pool.filter(r => r.split('|')[1] === type);
-  let plek = {};
-  try { plek = JSON.parse(opslag(TRUC_PLEK_KEY)) || {}; } catch (e) {}
-  const i = (+plek[type] || 0) % regels.length;
-  plek[type] = i + 1;
-  opslag(TRUC_PLEK_KEY, JSON.stringify(plek));
-  return trucTask(regels[i]);
+  let plek = trucPlekNu;
+  if (!plek) {
+    try { plek = JSON.parse(opslag(TRUC_PLEK_KEY)); } catch (e) {}
+    if (!plek || typeof plek !== 'object' || Array.isArray(plek)) plek = {};
+  }
+  const nu = Number.isInteger(plek[type]) && plek[type] >= 0 ? plek[type] : 0;
+  /* een regel die niet te lezen is, slaat de app over: nooit een ongecontroleerde opdracht ervoor in de plaats */
+  for (let n = 0; n < regels.length; n++) {
+    const i = (nu + n) % regels.length, task = trucTask(regels[i]);
+    plek[type] = i + 1;
+    if (!task) continue;
+    trucPlekNu = opslag(TRUC_PLEK_KEY, JSON.stringify(plek)) ? null : plek;
+    return task;
+  }
+  return null;
 }
 
 function buildTrucs() {
@@ -5440,6 +5450,8 @@ function confirmReset() {
         try { localStorage.removeItem('schaakheld1'); } catch (e) {}
         opslag(POTJE_KEY, null);
         opslag(RONDJES_KEY, null);
+        opslag(TRUC_PLEK_KEY, null);
+        trucPlekNu = null;
         /* wissen is lokaal: dit apparaat ontkoppelt en begint blanco.
            Andere apparaten en de server houden het profiel, dus een
            vergissing is herstelbaar door opnieuw te koppelen. Zonder

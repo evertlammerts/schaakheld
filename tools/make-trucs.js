@@ -39,7 +39,18 @@ const AFGEKEURD = {
   /* de schaakcoach, zes halve zetten diep: na Dg5-h4 kosten ...g5 en ...g4 het paard op h3 */
   '1rbqk1r1/1ppp1ppp/p2bnn2/4p1Q1/4P3/2NB3N/PPPP1PPP/R1B1R1K1 w': 'stuk',
   /* de schaakcoach, zes zetten diep: de aangevallen dame ontsnapt met een dubbele dreiging, geen penning */
-  '3q1k1r/rpp1bppp/4bn2/3Pp3/1n6/1B1Q1N2/PPPPKPPP/R1B4R w': 'penning'
+  '3q1k1r/rpp1bppp/4bn2/3Pp3/1n6/1B1Q1N2/PPPPKPPP/R1B4R w': 'penning',
+  /* de schaakcoach: na Ke7 is Dxd8+ Kxd8 een damenruil; wat wint is de toren op g8 en later de loper */
+  'r1bqk1r1/pppp2p1/n6p/3Qbp2/5B2/2P1P3/P1P2PPP/R3KB1R w': 'spies',
+  /* de schaakcoach: wat wint is Dxc6+ en Dxa8, een vork van koning en toren, geen penning */
+  'r1b1k2r/p1p2p1p/2pbqp2/8/3p1B2/2P2Q2/PP2NPPP/R3K2R w': 'penning',
+  /* de schaakcoach, 1.500.000 knopen: de aftrekaanval wint maar een pion */
+  '2kr3r/ppp1bppp/3pqn2/4p1B1/3nP1b1/2N2N2/PPP1BPPP/R2Q2KR w': 'aftrek',
+  /* de schaakcoach, 500.000 knopen: een andere zet die ook de truc is, staat binnen anderhalf punt van
+     het antwoord (Dxf7, f4-f5, Pc3-b5); "er is nog een sterkere" zou dan niet kloppen */
+  '1r2k1nr/1pp1bpp1/p1bqp2p/3pN3/3PP3/2N2Q2/PPPB1PPP/2R1R1K1 w': 'vork',
+  'r1b1k2r/1ppp1ppp/p1nbq2n/3NN3/2BPPP2/4B3/PPP3PP/2RQK2R w': 'aftrek',
+  'r1b1kb1r/pppn1pp1/3p1q1p/n2Pp3/2B5/2NQPN2/PPPB1PPP/R3K2R w': 'aftrek'
 };
 
 function mulberry32(a) {
@@ -76,7 +87,8 @@ function winstVeld(S, m) {
     if (E.gameStatus(S).over) break;
     const wit = E.think(S, 60000, 8, { nodes: LIJN_KNOPEN }).m;
     if (!wit) break;
-    if (E.isCapture(S, wit)) veld = wit.flags === 'e' ? wit.to - 16 : wit.to;
+    /* een slag die bij ruilen niets oplevert is niet de winst: dan gaat de lijn door */
+    if (E.isCapture(S, wit) && (wit.flags === 'e' || E.seeSquare(S, wit.to) >= 150)) veld = wit.flags === 'e' ? wit.to - 16 : wit.to;
     else { if (wit.from === stuk) stuk = wit.to; E.makeMove(S, wit); gezet.push(wit); }
   }
   for (let i = 0; i < gezet.length; i++) E.unmakeMove(S);

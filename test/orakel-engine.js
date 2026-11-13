@@ -362,8 +362,9 @@
   regel('[5.1] een vork of penning waarvan het stuk meteen geslagen wordt, staat niet als vork of penning in de voorraad', function (check) {
     if (!check('er is een voorraad TRUC_POOL', typeof TRUC_POOL !== 'undefined' && Array.isArray(TRUC_POOL))) return;
     const typeVan = function (bord) { const r = TRUC_POOL.find(function (x) { return x.split('|')[0] === bord; }); return r ? r.split('|')[1] : null; };
+    /* r1b1k2r/1ppp1ppp/p1nbq2n/3NN3/... stond hier ook; die regel is weg, zie de test hieronder */
     for (const b of ['1rb1k2r/1pp1bpp1/p2pn2p/3n1q2/3PN3/3BPN2/PPP1QPPP/3RR1K1 w', '2kr3r/ppp2pRp/2qbb3/3Nn3/8/4PB2/PPP1QP1P/1RB1K3 w',
-      'r1b1k2r/1ppp1ppp/p1nbq2n/3NN3/2BPPP2/4B3/PPP3PP/2RQK2R w', 'r1b2rk1/ppp2ppp/6n1/2nqp1B1/3pN3/3P1Q2/PPP1PNPP/3RKB1R w',
+      'r1b2rk1/ppp2ppp/6n1/2nqp1B1/3pN3/3P1Q2/PPP1PNPP/3RKB1R w',
       'r1b2rk1/ppp2ppp/n2bp3/7q/3BpnN1/3P4/PPPNBPPP/2RQ1K1R w']) {
       check(b + ': een aftrekaanval (' + typeVan(b) + ')', typeVan(b) === 'aftrek');
     }
@@ -372,6 +373,21 @@
       'r1b1kb1r/p1pq1ppp/4pn2/1Q1p1n2/1p1PP3/1B3N2/PPP1NPPP/R1B1K2R w']) {
       check(b + ': niet in de voorraad (' + typeVan(b) + ')', typeVan(b) === null);
     }
+  });
+
+  /* de schaakcoach na het eerste deel: de truc die de uitleg noemt is niet wat wint, of een andere zet
+     die ook de truc is, staat binnen anderhalf punt van het antwoord */
+  regel('[5.1] een truc die niet wint, of waar een andere zet met dezelfde truc bijna even goed is, staat niet in de voorraad', function (check) {
+    if (!check('er is een voorraad TRUC_POOL', typeof TRUC_POOL !== 'undefined' && Array.isArray(TRUC_POOL))) return;
+    const typeVan = function (bord) { const r = TRUC_POOL.find(function (x) { return x.split('|')[0] === bord; }); return r ? r.split('|')[1] : null; };
+    for (const b of ['r1bqk1r1/pppp2p1/n6p/3Qbp2/5B2/2P1P3/P1P2PPP/R3KB1R w', 'r1b1k2r/p1p2p1p/2pbqp2/8/3p1B2/2P2Q2/PP2NPPP/R3K2R w',
+      '2kr3r/ppp1bppp/3pqn2/4p1B1/3nP1b1/2N2N2/PPP1BPPP/R2Q2KR w', '1r2k1nr/1pp1bpp1/p1bqp2p/3pN3/3PP3/2N2Q2/PPPB1PPP/2R1R1K1 w',
+      'r1b1k2r/1ppp1ppp/p1nbq2n/3NN3/2BPPP2/4B3/PPP3PP/2RQK2R w', 'r1b1kb1r/pppn1pp1/3p1q1p/n2Pp3/2B5/2NQPN2/PPPB1PPP/R3K2R w']) {
+      check(b + ': niet in de voorraad (' + typeVan(b) + ')', typeVan(b) === null);
+    }
+    const per = {};
+    TRUC_POOL.forEach(function (r) { const t = r.split('|')[1]; per[t] = (per[t] || 0) + 1; });
+    check('vork 141, penning 57, spies 31, aftrekaanval 32 (' + JSON.stringify(per) + ')', per.vork === 141 && per.penning === 57 && per.spies === 31 && per.aftrek === 32);
   });
 
   regel('[5.1] een type met 14 trucs blijft uit de Trucendoos, met 15 doet het mee', function (check) {

@@ -195,6 +195,76 @@ async function orakelFlow5() {
     });
   });
 
+  /* ---------- de plek in de voorraad: ook als bewaren misgaat, elke truc eenmaal ---------- */
+
+  const bordVan5 = function (r) { return r.split('|')[0]; };
+  const volgendeTruc5 = function (a) { return a.get('(function () { var t = trucUitVoorraad(); return t ? toFEN(t.S).split(" ").slice(0, 2).join(" ") : null; })()'); };
+  for (const [naam, waarde] of [['een getal', '5'], ['een lijst', '[1,2]'], ['een tekst', '"vork"'], ['een breuk', '{"vork":1.5}'], ['geen json', 'kapot{']]) {
+    await regel('[5.1] een bewaarde plek die ' + naam + ' is: de Trucendoos begint bij de eerste truc en gaat daarna door', async function (check) {
+      const vork = vanType5('vork', 15);
+      await metVoorraad5(TRUC_POOL, vork, async function () {
+        const a = nieuwKind();
+        a.opslag.setItem('schaakheld-trucplek', waarde);
+        await startOefening(a, 'trucs');
+        check('de eerste truc (' + opdracht5(a).bord + ')', isPuzzel5(a) && opdracht5(a).bord === bordVan5(vork[0]));
+        check('daarna de tweede en de derde', volgendeTruc5(a) === bordVan5(vork[1]) && volgendeTruc5(a) === bordVan5(vork[2]));
+        check('de plek is weer heel (' + a.opslag.getItem('schaakheld-trucplek') + ')', a.opslag.getItem('schaakheld-trucplek') === '{"vork":3}');
+      });
+    });
+  }
+
+  await regel('[5.1] lukt bewaren van de plek niet, dan onthoudt de app hem zolang hij open is: geen truc komt terug', async function (check) {
+    const vork = vanType5('vork', 15);
+    await metVoorraad5(TRUC_POOL, vork, async function () {
+      const a = nieuwKind();
+      const echt = a.opslag.setItem;
+      a.opslag.setItem = function (k, v) { if (k === 'schaakheld-trucplek') throw new Error('vol'); return echt.call(this, k, v); };
+      try {
+        await startOefening(a, 'trucs');
+        const gezien = [opdracht5(a).bord, volgendeTruc5(a), volgendeTruc5(a), volgendeTruc5(a)];
+        check('vier verschillende trucs, in de volgorde van de voorraad (' + gezien.join(' / ') + ')',
+          gezien.every(function (b, i) { return b === bordVan5(vork[i]); }));
+      } finally { a.opslag.setItem = echt; }
+    });
+  });
+
+  await regel('[5.1] een regel uit de voorraad die niet te lezen is, slaat de app over: de volgende regel, nooit een opdracht die niet gecontroleerd is', async function (check) {
+    const vork = vanType5('vork', 15);
+    await metVoorraad5(TRUC_POOL, ['kapot w|vork|e2e4'].concat(vork), async function () {
+      const a = nieuwKind();
+      await startOefening(a, 'trucs');
+      check('de truc van de tweede regel (' + opdracht5(a).bord + ')', isPuzzel5(a) && opdracht5(a).bord === bordVan5(vork[0]));
+      check('daarna gewoon door', volgendeTruc5(a) === bordVan5(vork[1]));
+    });
+  });
+
+  await regel('[5.1] Alles wissen begint ook de plek in de voorraad opnieuw', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'trucs');
+    if (!check('testopzet: de plek is bewaard', !!a.opslag.getItem('schaakheld-trucplek'))) return;
+    await naarHuis(a);
+    a.ev('confirmReset()');
+    await wacht();
+    a.tik('rstGo');
+    await wacht();
+    check('de plek is weg', a.opslag.getItem('schaakheld-trucplek') === null && a.get('trucPlekNu') === null);
+  });
+
+  /* de Trucendoos wisselt van soort: de soort van de vorige truc komt niet meteen terug */
+  await regel('[5.1] de Trucendoos geeft niet twee keer achter elkaar dezelfde soort truc', async function (check) {
+    await metVoorraad5(TRUC_POOL, vanType5('vork', 15).concat(vanType5('penning', 15)), async function () {
+      const echt = Math.random;
+      Math.random = vasteKans5(38);
+      try {
+        const a = nieuwKind();
+        await startOefening(a, 'trucs');
+        const soorten = a.get('(function () { var s = [session.task.type]; for (var i = 0; i < 9; i++) { buildTrucs(); s.push(session.task.type); } return s; })()');
+        check('tien trucs, nooit twee keer dezelfde soort na elkaar (' + soorten.join(' ') + ')',
+          soorten.length === 10 && soorten.every(function (t, i) { return i === 0 || t !== soorten[i - 1]; }));
+      } finally { Math.random = echt; }
+    });
+  });
+
   await regel('[5.1] na een opgeloste truc antwoordt Turbo op het bord, zodat het kind ziet wat het won', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'trucs');
