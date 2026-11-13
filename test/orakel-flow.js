@@ -1211,7 +1211,7 @@ async function orakelFlow() {
     check('de opgeslagen waarden blijven', b.get('P.predict') === false && b.get('P.guard') === true);
   });
 
-  /* de regel in het blad met geslagen stukken komt uit outline.md en interaction.md */
+  /* de regel met geslagen stukken in het blad: wie hoeveel punten voor staat, en wat elke kant pakte */
   const materiaal = [
     ['jij staat een pion voor', ['e2e4', 'd7d5', 'e4d5', 'g8f6'], /Jij \+1/, /Jij staat 1 punt voor\.[^]*Jij pakte:/],
     ['Turbo staat een pion voor', ['e2e4', 'd7d5', 'd2d3', 'd5e4'], /Turbo \+1/, /Turbo staat 1 punt voor\.[^]*Turbo pakte:/]
