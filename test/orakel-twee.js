@@ -1811,6 +1811,91 @@ async function orakelTwee() {
     check('na het einde en een ja: allebei vrienden, met één geheim', !!geheimen(fien2) && geheimen(fien2) === geheimen(daan) && geheimen(fien2).split(',').length === 1);
   });
 
+  await regel('[2.5] een regel over wat de ander wil, zegt de strook als het verandert, niet bij elke groet: wie revanche wil en Nu niet zegt, laat de vrager het nee lezen', async function (check) {
+    const { fien, daan } = await eindeTussenTwee();
+    tikTekst(daan, 'Revanche');
+    await tel(2);
+    check('testopzet: Fien leest dat Daan revanche wil', /Daan wil revanche/.test(tekstVan(fien, 'bubble')));
+    tikTekst(fien, 'Vrienden worden');
+    await tel(3);
+    check('na haar vraag zegt de strook van Fien Gevraagd, niet weer dat Daan revanche wil', /Gevraagd/.test(tekstVan(fien, 'bubble')));
+    tikTekst(daan, 'Nu niet');
+    await tel(3);
+    check('Fien leest dat Daan nu even niet wil, en dat blijft staan', /Daan wil nu even niet/.test(tekstVan(fien, 'bubble')));
+  });
+
+  await regel('[2.5] het venster "Jullie zijn nu vrienden!" blijft staan tot het kind erin tikte: sluit het begin van de revanche het meteen, dan komt het bij het volgende einde', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await samenSpelen(fien, daan);
+    await geefOp(aanZet(fien, daan));
+    await tel(2);
+    tikTekst(fien, 'Vrienden worden');
+    await tel(2);
+    tikTekst(daan, 'Ja, vrienden');
+    for (let j = 0; j < 400; j++) await null;
+    /* daarna is de lijn van Daan dood in beide richtingen; zijn Revanche komt nergens aan, zijn apparaat weet het wel */
+    daan.ev('(function () { var w = MP.ws; w.onmessage = null; w.send = function () {}; })()');
+    await tel(1);
+    tikTekst(daan, 'Revanche');
+    await tel(2);
+    check('testopzet: Fien heeft Daan, Daan nog niet', !!geheimen(fien) && !geheimen(daan));
+    tikTekst(fien, 'Revanche');
+    await tel(2);
+    wissel(daan);
+    await tel(5);
+    check('testopzet: de revanche loopt bij allebei, allebei de vriend, geen venster over het bord',
+      fien.get('!!(session && !session.over)') && daan.get('!!(session && !session.over)') && !!geheimen(daan) &&
+      geheimen(fien) === geheimen(daan) && !fien.open() && !daan.open());
+    await speel(fien, daan, 'e2e4');
+    await speel(fien, daan, 'e7e5');
+    await geefOp(aanZet(fien, daan));
+    await tel(6);
+    check('aan het einde ziet Daan het venster met de drie plaatjes', daan.ziet('Jullie zijn nu vrienden!'));
+  });
+
+  await regel('[2.5] de vriendenlijst hoort bij wat een apparaat vasthoudt: haalt een kind de ander weg terwijl ze samen spelen, dan biedt het einde aan beide kanten weer Vrienden worden', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    const fid = await wordenVrienden(fien, daan);
+    fien.ev('if (MP) mpStop(); goHome()');
+    daan.ev('if (MP) mpStop(); goHome()');
+    await wacht();
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    await speel(fien, daan, 'e7e5');
+    check('testopzet: ze spelen als vrienden', fien.get('!!MP.bewezen') && daan.get('!!MP.bewezen'));
+    fien.tik('backBtn');
+    await wacht();
+    fien.ev('removeFriendAsk(' + JSON.stringify(fid) + ')');
+    fien.tik('rmVrJa');
+    await wacht();
+    fien.tik('verderKaart');
+    await wacht();
+    check('testopzet: Fien is terug in het potje en heeft Daan niet meer', fien.get('!!(session && session.online && !session.over)') && !geheimen(fien));
+    await geefOp(aanZet(fien, daan));
+    await tel(3);
+    check('aan het einde: allebei de knop Vrienden worden', kanTikken(fien, 'Vrienden worden') && kanTikken(daan, 'Vrienden worden'));
+  });
+
+  await regel('[2.5] een profiel van het andere apparaat van het kind zonder de ander, terwijl ze samen spelen: het einde biedt aan beide kanten weer Vrienden worden', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    const fid = await wordenVrienden(fien, daan);
+    fien.ev('if (MP) mpStop(); goHome()');
+    daan.ev('if (MP) mpStop(); goHome()');
+    await wacht();
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    await speel(fien, daan, 'e7e5');
+    check('testopzet: ze spelen als vrienden', fien.get('!!MP.bewezen') && daan.get('!!MP.bewezen'));
+    /* het profiel van de tablet van Fien, waarop zij Daan weghaalde, komt binnen */
+    fien.ev('(function () { var d = JSON.parse(JSON.stringify(DOC)); d.friends[' + JSON.stringify(fid) + '] = Object.assign({}, d.friends[' +
+      JSON.stringify(fid) + '], { weg: true, t: Date.now() + 1000 }); applyRemoteDoc(d); })()');
+    await tel(3);
+    check('testopzet: Fien heeft Daan niet meer', !geheimen(fien));
+    await geefOp(aanZet(fien, daan));
+    await tel(3);
+    check('aan het einde: allebei de knop Vrienden worden', kanTikken(fien, 'Vrienden worden') && kanTikken(daan, 'Vrienden worden'));
+  });
+
   await regel('[2.5] het venster "Jullie zijn nu vrienden!" hoort bij het einde: begint de revanche, ook bij een gast die de start uit de stand haalt, dan is het weg', async function (check) {
     const { fien, daan } = await eindeTussenTwee();
     tikTekst(daan, 'Revanche');
