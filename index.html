@@ -3641,23 +3641,45 @@ function bewaarSamen() {
   const moves = MP.S.hist.map(u => moveKey(u.m));
   /* de vriend weet het: de staat liet het zien, of de kamer liet zien dat hij de uitslag heeft; een potje in de kamer
      kent alleen de kamer */
-  const vriendWeet = !!MP.viaFriend && (!!MP.vriendWeet || !!(oud && oud.vriendWeet) || !!(MP.result && MP.bekend));
-  const klaar = MP.result && MP.shown && (opStaat() ? vriendWeet : MP.bekend);
-  /* een potje dat in de kamer begon, blijft een potje in de kamer, ook met een vriend die er intussen is; alleen zonder
-     staten met een versie op de server hoort het bij de vriend */
-  const fid = opStaat() || versiesOnbekend ? MP.viaFriend || null : null;
+  const klaar = MP.result && MP.shown && (opStaat() ? SAMEN_VELDEN.vriendWeet.uit(oud) : MP.bekend);
   if (!klaar) {
-    games[MP.gameId] = Object.assign({}, oud, { gameId: MP.gameId, fid, room: MP.room || null,
-      seat: MP.room ? MP.seat : null, host: MP.host, myColor: MP.myColor, gameNo: MP.gameNo, moves,
-      peerName: MP.peerName || '', result: MP.result || null, offer: MP.offer || null,
-      shown: !!MP.shown, beurtT: oud && oud.moves.length === moves.length ? oud.beurtT : Date.now(), updated: Date.now(),
-      sessie: MP.vr ? MP.vr.sessie : 0, kamer: MP.kamer || null, nogTonen: MP.vrNogTonen || null, terugZeggen: !!MP.vrTerugZeggen,
-      tel: MP.telWie || null }, vriendWeet ? { vriendWeet: true } : {});
+    const rec = { beurtT: oud && oud.moves.length === moves.length ? oud.beurtT : Date.now(), updated: Date.now() };
+    for (const k in SAMEN_VELDEN) rec[k] = SAMEN_VELDEN[k].uit(oud);
+    games[MP.gameId] = Object.assign({}, oud, rec);
   }
   const gelukt = schrijfSamen(games);
   MP.nietBewaard = !gelukt;
   return gelukt;
 }
+/* Wat een potje in de kamer over een herlading houdt: per veld van het bewaarde potje wat bewaard wordt (uit), wat er bij
+   het hervatten van terugkomt (terug) en waar dat in MP gaat (zet). Bewaren en hervatten lopen allebei deze lijst af. */
+const mpVeld = naam => v => { MP[naam] = v; };
+const SAMEN_VELDEN = {
+  gameId: { uit: () => MP.gameId, terug: r => r.gameId, zet: mpVeld('gameId') },
+  /* een potje dat in de kamer begon, blijft een potje in de kamer, ook met een vriend die er intussen is; alleen zonder
+     staten met een versie op de server hoort het bij de vriend */
+  fid: { uit: () => opStaat() || versiesOnbekend ? MP.viaFriend || null : null, terug: r => r.fid || null, zet: mpVeld('viaFriend') },
+  room: { uit: () => MP.room || null, terug: r => r.room || null, zet: mpVeld('room') },
+  seat: { uit: () => MP.room ? MP.seat : null, terug: r => r.seat || null, zet: mpVeld('seat') },
+  host: { uit: () => MP.host, terug: r => r.host, zet: mpVeld('host') },
+  myColor: { uit: () => MP.myColor, terug: r => r.myColor, zet: mpVeld('myColor') },
+  gameNo: { uit: () => MP.gameNo, terug: r => r.gameNo, zet: mpVeld('gameNo') },
+  moves: { uit: () => MP.S.hist.map(u => moveKey(u.m)), terug: (r, S) => S, zet: mpVeld('S') },
+  peerName: { uit: () => MP.peerName || '', terug: r => r.peerName, zet: mpVeld('peerName') },
+  result: { uit: () => MP.result || null, terug: r => geldigeUitslag(r.result), zet: mpVeld('result') },
+  offer: { uit: () => MP.offer || null, terug: r => geldigAanbod(r.offer), zet: mpVeld('offer') },
+  shown: { uit: () => !!MP.shown, terug: r => !!geldigeUitslag(r.result) && r.shown === true, zet: mpVeld('shown') },
+  /* de vriend weet het: de staat liet het zien, of de kamer liet zien dat hij de uitslag heeft */
+  vriendWeet: { uit: oud => !!MP.viaFriend && (!!MP.vriendWeet || !!(oud && oud.vriendWeet) || !!(MP.result && MP.bekend)),
+    terug: r => !!r.vriendWeet, zet: mpVeld('vriendWeet') },
+  /* terug in de kamer is een nieuwe sessie; het nummer staat meteen bewaard, zodat elke terugkeer een hoger heeft */
+  sessie: { uit: () => MP.vr ? MP.vr.sessie : 0, terug: r => telGetal(r.sessie) + 1, zet: v => { MP.vr.sessie = v; } },
+  kamer: { uit: () => MP.kamer || null, terug: r => geldigeKamer(r.kamer), zet: mpVeld('kamer') },
+  nogTonen: { uit: () => MP.vrNogTonen || null, terug: r => typeof r.nogTonen === 'string' && ID_RE.test(r.nogTonen) ? r.nogTonen : null,
+    zet: mpVeld('vrNogTonen') },
+  terugZeggen: { uit: () => !!MP.vrTerugZeggen, terug: r => r.terugZeggen === true, zet: mpVeld('vrTerugZeggen') },
+  tel: { uit: () => MP.telWie || null, terug: r => typeof r.tel === 'string' && r.tel.length <= 80 ? r.tel : null, zet: mpVeld('telWie') }
+};
 /* velden van een bewaard potje bijwerken, zonder de rest te raken */
 function bijSamen(gameId, velden) {
   const g = samenRauw();
@@ -3728,18 +3750,13 @@ function samenBewaren() { return samenLoopt() || !!(MP && MP.S && MP.result && !
 function thuisVerversen() { if ($('scr-play').classList.contains('hidden')) { renderVerder(); renderFriends(); meldUitdagingNee(); } }
 /* bij het openen van de app: weer verbinden met het bewaarde stoeltje */
 function samenHervat(b) {
-  mpStart(b.r.room || null, b.r.seat || null, b.r.host);
-  const result = geldigeUitslag(b.r.result);
-  Object.assign(MP, { gameId: b.r.gameId, myColor: b.r.myColor, gameNo: b.r.gameNo, peerName: b.r.peerName,
-    viaFriend: b.r.fid || null, paar: b.r.paar || null, S: b.S, over: !!result, result, offer: geldigAanbod(b.r.offer),
-    shown: !!result && b.r.shown === true, bekend: !!result && uitslagVanAnderKant(result, b.r.myColor), vriendWeet: !!b.r.vriendWeet,
-    geleerd: b.r.geleerd || null });
-  /* terug in de kamer is een nieuwe sessie; het nummer staat meteen bewaard, zodat elke terugkeer een hoger heeft */
-  MP.vr.sessie = telGetal(b.r.sessie) + 1;
-  MP.kamer = geldigeKamer(b.r.kamer);
-  MP.vrNogTonen = typeof b.r.nogTonen === 'string' && ID_RE.test(b.r.nogTonen) ? b.r.nogTonen : null;
-  MP.vrTerugZeggen = b.r.terugZeggen === true;
-  MP.telWie = typeof b.r.tel === 'string' && b.r.tel.length <= 80 ? b.r.tel : null;
+  const v = {};
+  for (const k in SAMEN_VELDEN) v[k] = SAMEN_VELDEN[k].terug(b.r, b.S);
+  mpStart(v.room, v.seat, v.host);
+  for (const k in SAMEN_VELDEN) SAMEN_VELDEN[k].zet(v[k]);
+  /* een potje op de staat van het paar komt uit die staat, niet uit wat dit apparaat van de kamer bewaarde */
+  MP.paar = b.r.paar || null;
+  Object.assign(MP, { over: !!MP.result, bekend: !!MP.result && uitslagVanAnderKant(MP.result, MP.myColor) });
   bewaarSamen();
 }
 /* de hele stand, voor de ander na elke verbinding en zodra die terug is */
@@ -5648,7 +5665,7 @@ function mpVolgtRecord(r, ev) {
   if (bord) MP.S = S;
   const result = r.result ? geldigeUitslag(r.result) : null;
   Object.assign(MP, { offer: r.offer ? Object.assign({}, r.offer) : null, result, over: !!result,
-    bekend: !!result && (r.bekend === true || uitslagVanAnderKant(result, MP.myColor)), vriendWeet: !!r.vriendWeet, geleerd: r.geleerd || null });
+    bekend: !!result && (r.bekend === true || uitslagVanAnderKant(result, MP.myColor)), vriendWeet: !!r.vriendWeet });
   if (ev.zetVervallen) MP.zetVervallen = true;
   if (!inBeeld) { if (ev.andereApparaat) showToast('Je zet op je andere apparaat telde al.'); return; }
   if (bord) toonStand(MP.S);

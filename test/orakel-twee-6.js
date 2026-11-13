@@ -3525,4 +3525,30 @@ async function orakelTwee6() {
       check('een vriend op een server zonder staten: ook de regel van de kamer', /✔ Je potje blijft vandaag staan op /.test(tekstVan(c, 'verder')) && !/stopt nooit/.test(tekstVan(c, 'verder')));
     } finally { fetch = echt; }
   });
+
+  /* ================= wat een potje in de kamer over een herlading houdt ================= */
+
+  await regel('[4.1] AD1 een potje in de kamer met elk bewaard veld gezet: na een herlading komt elk veld terug zoals het was, en de sessie is één hoger', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    await speel(a, b, 'e2e4');
+    await speel(a, b, 'e7e5');
+    /* elk veld een waarde die niet leeg is; de uitslag is van Fien zelf en nog niet bekend, dus het potje blijft bewaard */
+    a.ev('versiesOnbekend = true; Object.assign(MP, { viaFriend: "vriendvandaan1", gameNo: 3, ' +
+      'offer: { by: MP.myColor, ply: MP.S.hist.length, answer: null, t: 1794000000000 }, result: { kind: "opgave", by: MP.myColor, ply: MP.S.hist.length }, ' +
+      'shown: true, bekend: false, vriendWeet: true, kamer: { fid: "vriendvandaan1", paar: "paarcode0001", voor: 3, mijn: 4 }, ' +
+      'vrNogTonen: "vriendvandaan1", vrTerugZeggen: true, telWie: "naam:Daan" }); MP.vr.sessie = 5; bewaarSamen()');
+    const velden = 'JSON.stringify(Object.keys(SAMEN_VELDEN).map(function (k) { return [k, SAMEN_VELDEN[k].uit(null)]; }))';
+    const voor = JSON.parse(a.get(velden)), id = a.get('MP.gameId');
+    check('testopzet: elk bewaard veld heeft een waarde', voor.length > 10 && voor.every(function (kv) {
+      return kv[1] != null && kv[1] !== '' && kv[1] !== false && kv[1] !== 0 && !(Array.isArray(kv[1]) && !kv[1].length); }));
+    /* de herlading hervat het bewaarde potje zelf, zoals bij het openen van de app */
+    const a2 = herlaad(a);
+    const na = JSON.parse(a2.get('(function () { versiesOnbekend = true; return MP && MP.gameId === ' + JSON.stringify(id) + ' ? ' + velden + ' : "[]"; })()'));
+    const bij = function (l, k) { const kv = l.find(function (x) { return x[0] === k; }); return kv ? JSON.stringify(kv[1]) : 'ontbreekt'; };
+    for (const kv of voor) {
+      const k = kv[0], verwacht = k === 'sessie' ? JSON.stringify(kv[1] + 1) : JSON.stringify(kv[1]);
+      check(k + ' komt terug (' + bij(na, k) + ', verwacht ' + verwacht + ')', bij(na, k) === verwacht);
+    }
+  });
 }
