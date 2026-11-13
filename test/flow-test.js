@@ -1138,6 +1138,29 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     var b = herlaad(a);
     check('ook na bewaren en laden', b.get('!!DOC.set.potjes && DOC.set.potjes.abcdefghijkl === "2026-W46"'));
   });
+  await regel('[V5] compat: een profiel van de release van nu laadt met een lege lijst getelde vriendenpotjes en verliest niets', function (check) {
+    var d = normDoc(releaseDoc()), v = viewFromDoc(d);
+    check('punten, tellers, trofeeën, de week en de vriend blijven', v.xp === 520 && v.stars === 40 && v.wins === 3 && v.c.gamesPlayed === 9 &&
+      v.c.winsOnline === 2 && wkGet(curWeek(), 'online', v) === 1 && v.badges.winst === true && v.badges.potje === true &&
+      v.name === 'Oscar' && v.theme === 'oceaan' && v.friends.vriendevert1.naam === 'Evert');
+    check('een lege lijst', !!d.loc.geteld && typeof d.loc.geteld === 'object' && !Array.isArray(d.loc.geteld) && Object.keys(d.loc.geteld).length === 0);
+  });
+  await regel('[V5] de lijst getelde vriendenpotjes: per vriend de laatste acht echte potje-ids, alleen van dit apparaat, en mee door bewaren en laden', function (check) {
+    var raw = releaseDoc(), tien = [];
+    for (var i = 0; i < 10; i++) tien.push('potjenummer' + (10 + i));
+    raw.loc.geteld = { vriendevert1: tien, vriendanna01: ['kort', 'abcdefghijkl', 5, 'abcdefghijkl'], '<b>x</b>xxx': ['abcdefghijkl'], vriendleeg01: [] };
+    var d = normDoc(raw);
+    check('de laatste acht bij Evert', JSON.stringify(d.loc.geteld.vriendevert1) === JSON.stringify(tien.slice(2)));
+    check('alleen echte ids, elk één keer, en geen vreemde of lege vriend', JSON.stringify(d.loc.geteld.vriendanna01) === '["abcdefghijkl"]' &&
+      JSON.stringify(Object.keys(d.loc.geteld).sort()) === '["vriendanna01","vriendevert1"]');
+    var ander = normDoc(releaseDoc());
+    check('samenvoegen houdt de eigen lijst en neemt die van een ander apparaat niet over',
+      JSON.stringify(mergeDoc(d, ander).loc.geteld) === JSON.stringify(d.loc.geteld) && Object.keys(mergeDoc(ander, d).loc.geteld).length === 0);
+    var a = maakApparaat('Oscar');
+    a.ev('DOC.loc.geteld = ' + JSON.stringify({ vriendevert1: ['abcdefghijkl'] }) + '; saveP()');
+    var b = herlaad(a);
+    check('na bewaren en laden staat de lijst er nog', b.get('JSON.stringify(DOC.loc.geteld)') === '{"vriendevert1":["abcdefghijkl"]}');
+  });
   await regel('[6.7] de set houdt de 400 nieuwste einden, bij twee weken voor één potje de laatste, en een naam die elk object kent is geen gezien potje', function (check) {
     var raw = releaseDoc();
     raw.set.potjes = {};

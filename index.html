@@ -2629,6 +2629,8 @@ const COUNTERS = ['xp', 'wins', 'stars', 'c.gamesPlayed', 'c.winsL2', 'c.winsL3'
 const PREFS = ['name', 'sound', 'guard', 'predict', 'theme', 'weekGoal', 'start'];
 const DRILL_KINDS = ['scan', 'best3', 'trucs', 'koning', 'opening'];
 const LOG_DAYS = 28, WEEKS_KEPT = 16, MAX_LOG = 400, MAX_FRIENDS = 64;
+/* per vriend de potjes die dit apparaat telde; een staat toont er hoogstens vier (spel en vorige) */
+const GETELD_PER_VRIEND = 8;
 /* de vijf oefenspellen; ref is de richttijd (ms) per opdracht voor de vorm-score */
 const DRILLS = {
   scan: { e: '🔍', naam: 'Speurogen', ref: 25000 },
@@ -2671,7 +2673,7 @@ const DEV = (() => {
 function emptyDoc() {
   return { v: 2, epoch: 0, cnt: {}, set: { badges: {}, potjes: {} }, lww: {}, max: { best: 0, goal: {} },
     log: {}, friends: {},
-    loc: { streak: 0, lastLevel: 0, day: null, weekSeen: null, shownBadges: [], lastKind: null, lastSeen: null } };
+    loc: { streak: 0, lastLevel: 0, day: null, weekSeen: null, shownBadges: [], lastKind: null, lastSeen: null, geteld: {} } };
 }
 
 /* ISO-week als 'YYYY-Www', maandag als eerste dag: de week is de eenheid
@@ -2847,6 +2849,17 @@ function normDoc(raw) {
   /* een doc van voor deze lijst heeft elke trofee die het heeft al laten zien */
   const getoond = (raw.loc && Array.isArray(raw.loc.shownBadges) ? raw.loc.shownBadges : Object.keys(d.set.badges)).slice(0, MAX_BADGES);
   d.loc.shownBadges = getoond.filter((k, i) => typeof k === 'string' && d.set.badges[k] === true && getoond.indexOf(k) === i);
+  /* per apparaat, nooit samengevoegd: welke vriendenpotjes dit apparaat telde, per vriend */
+  d.loc.geteld = {};
+  const geteld = raw.loc && raw.loc.geteld;
+  if (geteld && typeof geteld === 'object' && !Array.isArray(geteld)) {
+    for (const fid in geteld) {
+      const l = geteld[fid];
+      if (!/^[A-Za-z0-9_-]{8,32}$/.test(fid) || fid in Object.prototype || !Array.isArray(l) || Object.keys(d.loc.geteld).length >= MAX_FRIENDS) continue;
+      const ids = l.filter((x, i) => typeof x === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(x) && l.indexOf(x) === i).slice(-GETELD_PER_VRIEND);
+      if (ids.length) d.loc.geteld[fid] = ids;
+    }
+  }
   return d;
 }
 
@@ -2888,7 +2901,7 @@ function migrateLegacy(o, dev) {
   for (const f of PREFS) d.lww[f] = { v: o[f], t: o[f] === defs[f] ? 0 : t };
   d.max.best = +o.best || 0;
   d.loc = { streak: +o.streak || 0, lastLevel: o.lastLevel == null ? null : o.lastLevel,
-    day: o.day || null, weekSeen: null, lastKind: null, lastSeen: null, shownBadges: Object.keys(d.set.badges) };
+    day: o.day || null, weekSeen: null, lastKind: null, lastSeen: null, shownBadges: Object.keys(d.set.badges), geteld: {} };
   return d;
 }
 
@@ -4740,6 +4753,241 @@ async function blobNaarStaat(k, blob) {
     vorige.push({ id: v.id, weet: { a: v.weet.a, b: v.weet.b }, uitslag, bekeken: { a: v.bekeken.a, b: v.bekeken.b } });
   }
   return { v: 2, seq: o.seq, spel, vorige };
+}
+/* ---------- een apparaat op de staat van een paar ----------
+   Per vriend bewaart dit apparaat, buiten het profiel: de staat die het houdt, als tekst (zo stuurt terugschrijven
+   dezelfde bytes) en geopend; de versie die de server het laatst toonde (toont, null als het nooit las); de hoogste
+   seq die het zag; de klok van de server bij het laatste lezen; een eigen merk; de handelingen die wachten, op
+   volgorde; en per einde dat het zelf schreef de uitslag die het dan telt (in vorige staat van de oudere potjes geen
+   uitslag meer). Welke potjes het telde, staat in het profielitem (DOC.loc.geteld), bij de tellers. */
+const PAAR_KEY = 'schaakheld-paar';
+let versiesOnbekend = false;
+function paren() {
+  let o = null;
+  try { o = JSON.parse(opslag(PAAR_KEY)); } catch (e) {}
+  return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+}
+function paarVan(fid) {
+  const p = paren()[fid] || {};
+  /* het merk komt er één keer en blijft: een tweede merk zou een eigen einde als dat van een ander apparaat lezen */
+  if (typeof p.merk !== 'string' || !/^[A-Za-z0-9_-]{16}$/.test(p.merk)) {
+    p.merk = b64url(randBytes(12));
+    const o = paren();
+    o[fid] = p;
+    opslag(PAAR_KEY, JSON.stringify(o));
+  }
+  return { blob: typeof p.blob === 'string' ? p.blob : null, staat: p.staat && typeof p.staat === 'object' ? p.staat : null,
+    versie: typeof p.versie === 'string' ? p.versie : '', toont: typeof p.toont === 'string' ? p.toont : null,
+    hoogste: Number.isInteger(p.hoogste) && p.hoogste >= 0 ? p.hoogste : 0, nu: Number.isFinite(p.nu) ? p.nu : null,
+    merk: p.merk,
+    rij: Array.isArray(p.rij) ? p.rij.filter(a => a && typeof a === 'object' && typeof a.soort === 'string') : [],
+    telBij: p.telBij && typeof p.telBij === 'object' && !Array.isArray(p.telBij) ? p.telBij : {} };
+}
+function bewaarPaar(fid, p) {
+  const o = paren();
+  o[fid] = p;
+  return opslag(PAAR_KEY, JSON.stringify(o));
+}
+async function paarBus(f) {
+  const key = f.k + ':paar';
+  if (!busCache.has(key)) {
+    const bewijs = b64url(await hkdfBits(f.k, 'potje', 32));
+    busCache.set(key, { bewijs, bus: await sha256hex(bewijs) });
+  }
+  return busCache.get(key);
+}
+/* één verzoek per paar tegelijk: lezen, verwerken en schrijven van een paar wachten op elkaar */
+const paarSlot = {};
+function inPaarSlot(fid, fn) {
+  const r = (paarSlot[fid] || Promise.resolve()).then(() => fn());
+  paarSlot[fid] = r.catch(() => {});
+  return r;
+}
+async function schrijfPaar(f, blob, als) {
+  try {
+    const to = await paarBus(f);
+    const r = await fetch(SYNC_URL + '/v1/potje', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bus: to.bus, bewijs: to.bewijs, blob, als }) });
+    if (r.status === 404) return { oud: true };
+    if (r.status !== 409) return { code: r.status };
+    let d = null;
+    try { d = await r.json(); } catch (e) {}
+    return { code: 409, blob: d && typeof d.blob === 'string' && d.blob ? d.blob : null };
+  } catch (e) { return { code: 0 }; }
+}
+/* een staat die nog telt: een lopend potje, een uitdaging, of een einde of antwoord dat nog niet allebei weten */
+function staatTelt(s) { const sp = s && s.spel; return !!sp && (sp.fase === 'potje' || sp.fase === 'uitdaging' || !(sp.weet.a && sp.weet.b)); }
+/* bij dezelfde seq en een andere inhoud wint een einde, anders de hoogste versie: op elk apparaat dezelfde keus */
+function sterkerDan(mijn, mijnVersie, hun, hunVersie) {
+  const a = spelAf(mijn.spel), b = spelAf(hun.spel);
+  return a !== b ? a : mijnVersie > hunVersie;
+}
+function telEinde(u, rol) {
+  if ((u.soort !== 'opgave' && u.soort !== 'remise') || u.ply >= MIN_PLIES_TELT) { bump('c.gamesPlayed', 1); bumpWeek('online', 1); }
+  if ((u.soort === 'mat' && u.door === rol) || (u.soort === 'opgave' && u.door !== rol)) bump('c.winsOnline', 1);
+}
+function getelde(fid) { const l = DOC.loc.geteld && DOC.loc.geteld[fid]; return Array.isArray(l) ? l : []; }
+/* V5: een afgelopen potje met het eigen merk telt op dit apparaat, één keer. De lijst staat in het profielitem en
+   gaat mee met de eerste teller in dezelfde bewaaractie: wie tussen lijst en tellers stopt, telt niet twee keer en
+   verliest niets. */
+function telPaar(fid, rol) {
+  const p = paarVan(fid), s = p.staat;
+  if (!s) return;
+  let iets = false;
+  for (const g of [s.spel && s.spel.fase === 'klaar' ? s.spel : null].concat(s.vorige)) {
+    if (!g || g.weet[rol] !== p.merk || getelde(fid).includes(g.id)) continue;
+    const u = g.uitslag || p.telBij[g.id] || null;
+    DOC.loc.geteld = Object.assign({}, DOC.loc.geteld, { [fid]: getelde(fid).concat([g.id]).slice(-GETELD_PER_VRIEND) });
+    if (u) telEinde(u, rol);
+    saveP();
+    delete p.telBij[g.id];
+    bewaarPaar(fid, p);
+    iets = true;
+  }
+  if (iets) checkBadges();
+}
+/* wat een apparaat zelf doet met wat het las: een einde of antwoord nemen, een aanbod stempelen, de remise na
+   veertien dagen van het eigen aanbod; vooraan in de rij */
+function eigenHandelingen(fid, rol) {
+  const p = paarVan(fid), sp = p.staat && p.staat.spel;
+  if (!sp) return;
+  const kop = { id: sp.id, ply: sp.zetten.length, zelf: true }, erbij = [];
+  if (spelAf(sp) && !sp.weet[rol]) erbij.push(Object.assign({ soort: 'neem' }, kop));
+  if (sp.fase === 'potje' && sp.bod && sp.bod.t == null) erbij.push(Object.assign({ soort: 'stempel' }, kop));
+  if (sp.fase === 'potje' && sp.bod && sp.bod.door === rol && sp.bod.t != null && p.nu != null && p.nu - sp.bod.t >= VEERTIEN_DAGEN_S) {
+    erbij.push(Object.assign({ soort: 'vanzelf' }, kop));
+  }
+  const nieuw = erbij.filter(a => !p.rij.some(x => x.soort === a.soort && x.id === a.id && x.ply === a.ply));
+  if (!nieuw.length) return;
+  p.rij = nieuw.concat(p.rij);
+  bewaarPaar(fid, p);
+}
+/* V3: wat de server toont (blob, of null als er niets staat) naast wat dit apparaat houdt. Is de server ouder of
+   leeg, dan schrijft het zijn staat terug als die nog telt, of als de server een potje toont dat dit apparaat als
+   afgelopen kent; een afgelopen staat die allebei weten, houdt het bij een lege server als geheugen. Anders neemt
+   het wat de server toont, ook met een lagere seq. Wat niet te openen is of van een nieuwere app, blijft staan:
+   false, en er gaat niets heen. */
+async function verwerkPaar(fid, X, nu) {
+  const f = P.friends[fid], rol = myRole(f);
+  for (let ronde = 0; ronde < 6; ronde++) {
+    const sx = X ? await blobNaarStaat(f.k, X) : null, vx = X ? await versieVan(X) : '';
+    const p = paarVan(fid);
+    if (nu != null) p.nu = nu;
+    if (X && (!sx || sx.nieuwer)) { bewaarPaar(fid, p); return false; }
+    p.toont = vx;
+    const sy = p.staat;
+    let neem = true, terug = false;
+    if (!X) {
+      if (sy && staatTelt(sy)) terug = true;
+      else if (sy) neem = false;
+    } else if (sy && vx !== p.versie) {
+      const ouder = sx.seq < p.hoogste || (sx.seq === sy.seq && sterkerDan(sy, p.versie, sx, vx));
+      const afgelopen = [sy.spel && spelAf(sy.spel) ? sy.spel.id : null].concat(sy.vorige.map(e => e.id), getelde(fid));
+      const kent = !!sx.spel && afgelopen.includes(sx.spel.id) && !(sy.spel && sy.spel.id === sx.spel.id && sx.seq >= sy.seq);
+      if (ouder && (staatTelt(sy) || kent)) terug = true;
+    }
+    if (terug) {
+      bewaarPaar(fid, p);
+      const ant = await schrijfPaar(f, p.blob, vx);
+      if (ant.oud) { versiesOnbekend = true; return false; }
+      if (ant.code === 409) { X = ant.blob; continue; }
+      if (ant.code !== 204) return false;
+      const q = paarVan(fid);
+      q.toont = q.versie;
+      bewaarPaar(fid, q);
+      break;
+    }
+    if (neem) {
+      p.blob = X;
+      p.staat = sx;
+      p.versie = vx;
+      if (sx) p.hoogste = sx.seq;
+    }
+    bewaarPaar(fid, p);
+    break;
+  }
+  telPaar(fid, rol);
+  eigenHandelingen(fid, rol);
+  return true;
+}
+async function leesPaarNu(fid) {
+  const f = P.friends[fid];
+  if (!f || !f.k || versiesOnbekend) return false;
+  const to = await paarBus(f);
+  let d = null;
+  try {
+    const r = await fetch(SYNC_URL + '/v1/bus/check', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bussen: [to.bus] }) });
+    if (r.status !== 200) return false;
+    d = await r.json();
+  } catch (e) { return false; }
+  if (!d || !Number.isFinite(d.nu)) { versiesOnbekend = true; return false; }
+  return verwerkPaar(fid, d.blobs && typeof d.blobs[to.bus] === 'string' ? d.blobs[to.bus] : null, d.nu);
+}
+/* de rij afwerken: wat al in de staat staat, is gedaan; wat niet meer past, vervalt zonder woord; de rest gaat als
+   schrijfactie op de versie die de server toonde. Zonder netwerk of bij een andere fout blijft de rij staan. */
+async function werkRijAf(fid) {
+  const f = P.friends[fid];
+  if (!f || !f.k) return {};
+  if (versiesOnbekend) { const p = paarVan(fid); p.rij = []; bewaarPaar(fid, p); return { oud: true }; }
+  const rol = myRole(f);
+  if (paarVan(fid).nu == null && !(await leesPaarNu(fid))) return versiesOnbekend ? werkRijAf(fid) : {};
+  for (let ronde = 0; ronde < 40; ronde++) {
+    const p = paarVan(fid);
+    if (!p.rij.length) return {};
+    const a = p.rij[0], basis = p.staat || { v: 2, seq: p.hoogste, spel: null, vorige: [] };
+    const r = alGedaan(basis, a, rol, p.merk) ? null : staatNa(basis, Object.assign({}, a, { merk: p.merk }), rol, p.nu);
+    if (!r || !r.past) {
+      p.rij.shift();
+      bewaarPaar(fid, p);
+      continue;
+    }
+    const na = r.staat, sp = na.spel;
+    if (sp && sp.fase === 'klaar' && sp.weet[rol] === p.merk && !getelde(fid).includes(sp.id) && !(p.staat && p.staat.spel && p.staat.spel.id === sp.id &&
+      p.staat.spel.weet[rol] === p.merk)) {
+      p.telBij[sp.id] = sp.uitslag;
+      const ids = Object.keys(p.telBij);
+      if (ids.length > GETELD_PER_VRIEND) delete p.telBij[ids[0]];
+    }
+    bewaarPaar(fid, p);
+    const blob = await staatNaarBlob(f.k, na), versie = await versieVan(blob);
+    const ant = await schrijfPaar(f, blob, p.toont != null ? p.toont : p.versie);
+    if (ant.oud) { versiesOnbekend = true; return werkRijAf(fid); }
+    if (ant.code === 409) {
+      if (!(await verwerkPaar(fid, ant.blob, null))) return {};
+      continue;
+    }
+    if (ant.code !== 204) return {};
+    const q = paarVan(fid);
+    Object.assign(q, { blob, staat: na, versie, toont: versie, hoogste: Math.max(q.hoogste, na.seq) });
+    if (q.rij.length && JSON.stringify(q.rij[0]) === JSON.stringify(a)) q.rij.shift();
+    bewaarPaar(fid, q);
+    telPaar(fid, rol);
+    eigenHandelingen(fid, rol);
+  }
+  return {};
+}
+/* een handeling van het kind: achteraan in de rij, die meteen bewaard is, en dan de rij afwerken */
+function pasToe(fid, actie) {
+  const p = paarVan(fid);
+  p.rij.push(actie);
+  bewaarPaar(fid, p);
+  return inPaarSlot(fid, () => werkRijAf(fid));
+}
+/* na een lezing, uit de check of uit een 409: verwerken, dan de rij */
+function staatGelezen(fid, blob, nu) {
+  return inPaarSlot(fid, async () => (await verwerkPaar(fid, blob, nu)) ? werkRijAf(fid) : {});
+}
+function leesPaar(fid) {
+  return inPaarSlot(fid, async () => (await leesPaarNu(fid)) ? werkRijAf(fid) : {});
+}
+/* V4: wat het kind voor zich heeft: de bewaarde staat met wat nog wacht erin verwerkt */
+function zichtVan(fid) {
+  const f = P.friends[fid], p = paarVan(fid);
+  if (!f) return null;
+  let s = p.staat || { v: 2, seq: p.hoogste, spel: null, vorige: [] };
+  for (const a of p.rij) { const r = staatNa(s, Object.assign({}, a, { merk: p.merk }), myRole(f), p.nu); if (r.past) s = r.staat; }
+  return s;
 }
 /* wat in de eigen potjesbus staat: het potje zonder naam, wit als rol van de vriendschap */
 function vriendBusInhoud(r) {
