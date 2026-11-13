@@ -3822,6 +3822,43 @@ async function orakelTwee() {
     check('de regel blijft staan (' + tekstVan(zwart, 'bubble') + ')', tekstVan(zwart, 'bubble').indexOf('Een stelling stond er net voor de tweede keer.') >= 0);
   });
 
+  /* zonder een stelling die er twee keer stond is er geen regel over herhaling: ook niet aan het begin van een potje, bij
+     alles waarop de strook van het kind dat aan zet is iets zegt */
+  await regel('[5.6] een vriendenpotje dat net begon: geen regel over herhaling als de lijn wegvalt of terugkomt, de ander weggaat of terugkomt, na Pauze of een herlading', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    await wacht(3000);
+    let wit = a.get('MP.myColor') === 'w' ? a : b;
+    const zwart = wit === a ? b : a, gelezen = [];
+    const lees = function (wat) { gelezen.push(wat + ': ' + tekstVan(wit, 'bubble')); };
+    check('testopzet: geen zet gedaan, wit is aan zet', wit.get('MP.S.hist.length === 0 && MP.S.turn === MP.myColor'));
+    lees('het begin');
+    geenNetwerk(zwart); await wacht(30000); lees('de ander is weg');
+    weerNetwerk(zwart); await wacht(30000); lees('de ander is terug');
+    geenNetwerk(wit); await wacht(30000); lees('de eigen lijn is weg');
+    weerNetwerk(wit); await wacht(60000); lees('de eigen lijn is terug');
+    wit.tik('backBtn'); await wacht(); wit.tik('verderKaart'); await wacht(); lees('Pauze en terug');
+    wit = await terugInPotje(wit); await wacht(3000); lees('na een herlading');
+    check('testopzet: wit is in het potje, nog zonder zet', wit.get('!!(session && session.online) && MP.S.hist.length === 0'));
+    check('nergens een regel over herhaling (' + gelezen.join(' / ') + ')', gelezen.every(function (z) { return !/tweede keer|stond er al eens/.test(z); }));
+  });
+
+  /* de beloofde regel komt alleen op de beurt van het kind zelf: gaat de ander weg terwijl die aan zet is, dan zegt de strook dat */
+  await regel('[5.6] een vriendenpotje: de beloofde regel komt niet op de beurt van de ander, ook niet als de ander dan weggaat', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    for (const z of ['e2e4', 'e7e5', 'd1h5', 'e8e7', 'h5h4', 'e7e8', 'h4h5', 'e8e7', 'h5h4']) await speel(a, b, z);
+    await wacht(3000);
+    const wit = a.get('MP.myColor') === 'w' ? a : b, zwart = wit === a ? b : a;
+    check('testopzet: zwart staat de tweede keer schaak', zwart.get('repetitions(MP.S)') === 1 && /^Schaak!/.test(tekstVan(zwart, 'bubble')));
+    zet(zwart, 'e7e6');
+    await wacht(3000);
+    stopApparaat(wit);
+    await wacht(30000);
+    check('testopzet: zwart weet dat de ander weg is, en wit is aan zet', zwart.get('MP.peerWeg === true && MP.S.turn !== MP.myColor'));
+    check('zwart leest dat de ander weg is, niet de regel (' + tekstVan(zwart, 'bubble') + ')', /is er nu niet/.test(tekstVan(zwart, 'bubble')));
+  });
+
   /* zelfde grenzen als de Go-test van 4.10: na 9,5 minuten nog wel, na 10,5 niet meer */
   await regel('[4.10] de nep-server: een koppelcode werkt tien minuten, daarna niet meer', async function (check) {
     const klok = __server.klok;

@@ -1835,6 +1835,43 @@ async function orakelFlow5() {
     });
   }
 
+  /* na Zet terug en een herlading: staat er in het potje zoals het nu is geen stelling twee keer, dan zegt de strook niets
+     over herhaling, ook niet als het bewaarde getal nu precies de lengte van het potje is */
+  await regel('[5.6] de beloofde regel stond er, dan twee keer Zet terug en een herlading: geen regel over herhaling', async function (check) {
+    const echt = pickMove;
+    pickMove = function (S) { const k = HERHAAL_R[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt.apply(null, arguments); };
+    try {
+      let a = nieuwKind();
+      await startPotje(a, 2);
+      for (const k of ['d2d4', 'e1d2', 'd2e1', 'c1d2', 'd2c1', 'b1c3']) { zet(a, k); await wacht(3000); }
+      check('testopzet: de beloofde regel staat er (' + strook5(a) + ')', a.get('session.S.hist.length') === 12 && strook5(a) === HERHAAL_SCHULD5);
+      for (let i = 0; i < 2; i++) { tikTekst(a, 'Zet terug'); await wacht(); }
+      check('testopzet: acht halve zetten, en geen stelling staat er twee keer', a.get('session.S.hist.length') === 8 && a.get('repetitions(session.S)') === 0);
+      a = herlaad(a);
+      await wacht(1000);
+      a.tik('verderKaart');
+      await wacht(1500);
+      check('testopzet: het potje is terug', a.get('!!session && session.kind === "game" && session.S.hist.length === 8'));
+      check('geen regel over herhaling (' + strook5(a) + ')', strook5(a) !== HERHAAL_SCHULD5 && strook5(a) !== HERHAAL_ZIN5);
+    } finally { pickMove = echt; }
+  });
+
+  /* de beloofde regel gaat ook voor Turbo's waarschuwing voor een truc: die is hulp, de regel kondigt een regel van het spel aan */
+  await regel('[5.6] de beloofde regel gaat voor de waarschuwing voor een truc van Turbo op die beurt', async function (check) {
+    const echt = pickMove, TURBO = { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4d5' };
+    pickMove = function (S) { const k = TURBO[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
+    try {
+      const a = nieuwKind();
+      await startPotje(a, 2);
+      a.ev('session.S = parseFEN("3q2k1/8/8/P6N/8/8/8/6K1 b - - 0 30"); BD.mode = "off"; renderBoard(); turboTurn()');
+      await wacht(3000);
+      for (const k of ['g1h1', 'h1g1', 'g1f1']) { zet(a, k); await wacht(3000); }
+      check('testopzet: Turbo\'s Dd4-d5 is een truc', a.get('session.S.hist.length') === 7 &&
+        !!a.get('(function () { var S = session.S, u = S.hist[S.hist.length - 1]; unmakeMove(S); var c = patternCallout(S, u.m); makeMove(S, u.m); return c && c.key; })()'));
+      check('de beloofde regel (' + strook5(a) + ')', strook5(a) === HERHAAL_SCHULD5);
+    } finally { pickMove = echt; }
+  });
+
   /* Zet terug neemt de tweede keer mee: staat er in het potje zoals het nu is geen stelling twee keer, dan is er niets beloofd */
   await regel('[5.6] Zet terug neemt de tweede keer terug: daarna zegt de strook niets over herhaling', async function (check) {
     const echt = pickMove, TURBO = { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4' };

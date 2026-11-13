@@ -4171,7 +4171,7 @@ function bewaarSamen() {
       myColor: MP.myColor, gameNo: MP.gameNo, moves: MP.S.hist.map(u => moveKey(u.m)),
       peerName: MP.peerName || '', result: MP.result || null, offer: MP.offer || null,
       shown: !!MP.shown, updated: Date.now(), sessie: MP.vr ? MP.vr.sessie : 0, kamer: MP.kamer || null,
-      nogTonen: MP.vrNogTonen || null, terugZeggen: !!MP.vrTerugZeggen, tel: MP.telWie || null, herhaalGezegd: MP.herhaalGezegd || 0 };
+      nogTonen: MP.vrNogTonen || null, terugZeggen: !!MP.vrTerugZeggen, tel: MP.telWie || null, herhaalGezegd: MP.herhaalGezegd == null ? null : MP.herhaalGezegd };
   }
   const gelukt = schrijfSamen(games);
   MP.nietBewaard = !gelukt;
@@ -4237,7 +4237,7 @@ function samenHervat(b) {
   MP.vrNogTonen = typeof b.r.nogTonen === 'string' && ID_RE.test(b.r.nogTonen) ? b.r.nogTonen : null;
   MP.vrTerugZeggen = b.r.terugZeggen === true;
   MP.telWie = typeof b.r.tel === 'string' && b.r.tel.length <= 80 ? b.r.tel : null;
-  MP.herhaalGezegd = Number.isInteger(b.r.herhaalGezegd) && b.r.herhaalGezegd >= 0 && b.r.herhaalGezegd <= b.S.hist.length ? b.r.herhaalGezegd : 0;
+  MP.herhaalGezegd = Number.isInteger(b.r.herhaalGezegd) && b.r.herhaalGezegd >= 1 && b.r.herhaalGezegd <= b.S.hist.length ? b.r.herhaalGezegd : null;
   bewaarSamen();
 }
 /* de hele stand, voor de ander na elke verbinding en zodra die terug is */
@@ -4633,7 +4633,7 @@ function mpBeginGame(S0) {
   if (!MP.viaFriend && bv && !bv.weg) MP.viaFriend = MP.bewezenFid;
   vrTelNaar(MP.viaFriend || 'naam:' + mpNaam());
   MP.revMine = MP.revTheirs = false;
-  Object.assign(MP, { S: S0 || newGame(), over: false, result: null, offer: null, shown: false, bekend: false, herhaalGezegd: 0 });
+  Object.assign(MP, { S: S0 || newGame(), over: false, result: null, offer: null, shown: false, bekend: false, herhaalGezegd: null });
   /* een nieuw potje met dezelfde vriend: de kaart van het gestopte potje mag weg */
   if (samenWeg && (samenWeg.fid ? samenWeg.fid === MP.viaFriend : samenWeg.naam === mpNaam())) samenWeg = null;
   session = { kind: 'game', online: true, S: MP.S, level: 0, tips: 0,
@@ -6487,8 +6487,8 @@ function leesRecord(r, k) {
     if (!(r.drawAsked === null || geheel(r.drawAsked, 0, r.moves.length))) r.drawAsked = null;
     if (r.patXP === undefined) r.patXP = 0;
     else if (!geheel(r.patXP, 0, 3)) r.patXP = 3;
-    /* zonder een geldig getal is de regel over herhaling nog beloofd als er een stelling twee keer stond */
-    if (!geheel(r.herhaalGezegd, 0, r.moves.length)) r.herhaalGezegd = 0;
+    /* zonder een geldig getal stond de regel over herhaling er nog nooit; op de beginstelling kan hij er niet staan */
+    if (!geheel(r.herhaalGezegd, 1, r.moves.length)) r.herhaalGezegd = null;
     return { r, S };
   } catch (e) { return { kapot: true }; }
 }
@@ -6497,7 +6497,7 @@ function potjeInhoud() {
   const S = session.cloud ? session.cloud.realS : session.S;
   return { level: session.level, moves: S.hist.map(h => moveKey(h.m)), tips: session.tips,
     drawAsked: session.drawAsked == null ? null : session.drawAsked, started: session.started, patXP: session.patXP || 0,
-    herhaalGezegd: session.herhaalGezegd || 0 };
+    herhaalGezegd: session.herhaalGezegd == null ? null : session.herhaalGezegd };
 }
 function bewaarPotje() {
   if (!session || session.kind !== 'game' || session.online || session.over) return;
@@ -8341,7 +8341,7 @@ function startGame(level, bewaard) {
   gezien();
   session = { kind: 'game', S: bewaard ? bewaard.S : newGame(), level, tips: bewaard ? bewaard.r.tips : 3, over: false,
     pending: null, drawAsked: bewaard ? bewaard.r.drawAsked : null, started: bewaard ? bewaard.r.started : Date.now(),
-    patXP: bewaard ? bewaard.r.patXP || 0 : 0, herhaalGezegd: bewaard ? bewaard.r.herhaalGezegd : 0 };
+    patXP: bewaard ? bewaard.r.patXP || 0 : 0, herhaalGezegd: bewaard ? bewaard.r.herhaalGezegd : null };
   showScreen('play');
   /* in de balk de naam zonder het plaatje van de niveaukeuze: zo past de naam */
   $('modeTitle').textContent = TURBO_NAMES[level].replace(/^\S+\s/, '');
@@ -8810,7 +8810,8 @@ const HERHAAL_ZIN = 'Deze stelling stond er al eens. Bij de derde keer is het re
 function tweedeKeer(S) { return repetitions(S) === 1; }
 /* Stond een stelling er voor de tweede keer terwijl iets anders de strook had, dan is deze regel beloofd: hij is waar op
    elk bord. Of hij beloofd is, volgt uit de zetten van het potje; het potje onthoudt alleen bij welke halve zet de regel
-   er het laatst stond (herhaalGezegd), zodat een herlading de belofte houdt en Zet terug haar met de zetten meeneemt. */
+   er het laatst stond (herhaalGezegd, null als hij er nog nooit stond), zodat een herlading de belofte houdt en Zet terug
+   haar met de zetten meeneemt. */
 const HERHAAL_SCHULD = 'Een stelling stond er net voor de tweede keer. De derde keer is het remise. Liever niet? Speel anders.';
 /* Bij welke halve zet een stelling er het laatst voor de tweede keer stond, voor de stelling die er nu staat (0: nooit).
    Na een slag of een pionzet kan geen eerdere stelling meer terugkomen: dan is er niets meer om voor te waarschuwen. */
@@ -8831,21 +8832,18 @@ function herhaalGezegdNu(S) {
   (session.online ? MP : session).herhaalGezegd = S.hist.length;
   if (session.online) bewaarSamen(); else bewaarPotje();
 }
-/* De beloofde regel raadt de volgende keuze van het kind aan: hij komt als het kind aan zet is, en gaat dan voor alles
-   wat de strook anders zou zeggen, ook voor schaak (dat het bord laat zien en horen); anders kan elke beurt tot de derde
-   keer met iets anders beginnen. */
-function herhaalBeloofd(S) {
-  if (!(eerdereTweedeKeer(S) > ((session.online ? MP : session).herhaalGezegd || 0))) return null;
-  herhaalGezegdNu(S);
-  return HERHAAL_SCHULD;
-}
-/* Op de beurt van het kind blijft een regel over herhaling staan tot het kind zet: de beloofde regel, of een regel die op
-   deze beurt al in de strook kwam, ook na een herlading. Een bericht over de verbinding of over de ander gaat er dan niet
-   overheen. */
+/* De regel over herhaling op de beurt van het kind. Zonder een stelling die er nu twee keer staat en nog terug kan komen,
+   is er geen. Is er een, dan is de beloofde regel er als hij sinds die tweede keer niet in de strook stond: hij raadt de
+   volgende keuze aan, dus hij gaat voor alles wat de strook anders zou zeggen, ook voor schaak (dat het bord laat zien en
+   horen) en een truc van Turbo. Stond de regel er op deze beurt al, dan blijft hij staan tot het kind zet, ook na een
+   herlading; een bericht over de verbinding of over de ander gaat er niet overheen. */
 function herhaalOpBeurt(S) {
   if (S.turn !== (session.online ? MP.myColor : 'w')) return null;
+  const p = eerdereTweedeKeer(S), nu = tweedeKeer(S);
+  if (!p && !nu) return null;
   const gezegd = (session.online ? MP : session).herhaalGezegd;
-  return herhaalBeloofd(S) || (gezegd === S.hist.length ? (tweedeKeer(S) ? HERHAAL_ZIN : HERHAAL_SCHULD) : null);
+  if (p && (gezegd == null || gezegd < p)) { herhaalGezegdNu(S); return HERHAAL_SCHULD; }
+  return gezegd === S.hist.length ? (nu ? HERHAAL_ZIN : HERHAAL_SCHULD) : null;
 }
 /* de regel over het bord zelf, op een vrije strook */
 function herhaalBord(S) {
@@ -9098,7 +9096,7 @@ function undoMove() {
   session.laatsteVraag = null;
   /* een moment hoort bij een zet in de geschiedenis: een teruggenomen zet neemt zijn moment mee */
   for (const k in session.momenten || {}) if (+k >= S.hist.length) delete session.momenten[k];
-  session.herhaalGezegd = Math.min(session.herhaalGezegd || 0, S.hist.length);
+  if (session.herhaalGezegd != null) session.herhaalGezegd = Math.min(session.herhaalGezegd, S.hist.length) || null;
   bewaarPotje();
   nieuweStand(S);
   renderBoard();
