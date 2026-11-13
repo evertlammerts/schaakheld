@@ -248,11 +248,12 @@ function samenPotje(app) {
   return ids.length === 1 ? r.games[ids[0]] : null;
 }
 
-/* het lopende bewaarde vriendenpotje met deze vriend, ook als er meer vriendenpotjes bewaard staan */
+/* het lopende bewaarde vriendenpotje met deze vriend, ook als er meer vriendenpotjes bewaard staan; een ingetrokken
+   uitdaging is alleen een verborgen merkteken */
 function vriendenpotjeMet(app, fid) {
   const r = opgeslagen(app, 'schaakheld-samen');
   const g = r && r.games && typeof r.games === 'object' ? Object.keys(r.games).map(function (k) { return r.games[k]; }) : [];
-  return g.filter(function (x) { return !!x && x.fid === fid && !x.result; })[0] || null;
+  return g.filter(function (x) { return !!x && x.fid === fid && !x.result && !x.ingetrokken; })[0] || null;
 }
 
 /* de regels "Ook nog" onder de Verder-kaart, zoals een kind ze leest */
