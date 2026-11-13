@@ -4549,6 +4549,186 @@ function potjeZetten(s) {
   }
   return uit;
 }
+/* ---------- de staat van een paar vrienden: één potje of uitdaging, met een versie ----------
+   Per paar vrienden staat er op de server één staat. Een apparaat verandert hem alleen met een schrijfactie die
+   zegt welke versie het las, en de server neemt die alleen aan als dat nog de versie is die hij heeft: elke
+   verandering heeft één winnaar, en geen apparaat voegt twee lezingen samen. staatNa() is de tabel van de
+   veranderingen. Rollen a en b zijn die van de vriendschap; een merk is het eigen teken van een apparaat voor dit
+   paar; nu is de klok van de server in seconden.
+   { v: 2, seq, spel: null | { id, wit, door, fase, zetten, bod, uitslag, weet, bekeken, t }, vorige } */
+const VEERTIEN_DAGEN_S = 14 * 86400;
+const andereRol = r => r === 'a' ? 'b' : 'a';
+function rolAanZet(spel) { return (spel.zetten.length % 2 === 0) === (spel.wit === 'a') ? 'a' : 'b'; }
+function standVanZetten(zetten) {
+  const S = newGame();
+  for (const z of zetten) {
+    const m = legalMoves(S).find(x => moveKey(x) === z);
+    if (!m) return null;
+    makeMove(S, m);
+  }
+  return S;
+}
+/* een einde of een Nu niet; vrij is het paar pas als allebei het weten */
+function spelAf(spel) { return !!spel && (spel.fase === 'klaar' || spel.fase === 'nee'); }
+function paarVrij(staat) { const s = staat.spel; return !s || (spelAf(s) && !!s.weet.a && !!s.weet.b); }
+/* De staat na een handeling { soort, id, ply, merk, ... } van rol, of waarom ze niet (meer) past. Een handeling
+   noemt het potje en de halve zet waarop ze gedaan is: zo kan een opgave die zonder netwerk wachtte nooit het
+   volgende potje opgeven. */
+function staatNa(staat, actie, rol, nu) {
+  const uit = JSON.parse(JSON.stringify(staat)), s = uit.spel, nee = waarom => ({ past: false, waarom });
+  const ditPotje = !!s && actie.id === s.id, dezeZet = !!s && actie.ply === s.zetten.length;
+  /* wie het einde maakt, weet het; zag het kind het op het scherm, dan bekeek het het ook (de remise na veertien
+     dagen schrijft een apparaat terwijl het kind meestal niet kijkt) */
+  const einde = (soort, door, extra) => {
+    s.fase = 'klaar';
+    s.bod = null;
+    s.uitslag = Object.assign({ soort, door, ply: s.zetten.length }, extra || {});
+    s.weet = { a: null, b: null };
+    s.weet[rol] = actie.merk;
+    s.bekeken = { a: false, b: false };
+    s.bekeken[rol] = actie.gezien != null ? !!actie.gezien : actie.soort !== 'vanzelf';
+  };
+  /* een zet, een begin, een antwoord of een einde dateert het potje; een stempel, een aanbod, nemen en bekijken niet */
+  let dateert = true;
+  if (actie.soort === 'weghalen') {
+    /* een vriend weghalen of alles wissen: een potje als opgeven, een eigen uitdaging als intrekken, die van de vriend
+       als Nu niet; een einde of antwoord dat dit kind nog niet nam, wordt genomen */
+    if (!s) return nee('er is niets');
+    const als = s.fase === 'potje' ? 'opgeven' : s.fase === 'uitdaging' ? (s.door === rol ? 'intrekken' : 'nee') : !s.weet[rol] ? 'neem' : null;
+    if (!als) return nee('niets te schrijven');
+    return staatNa(staat, { soort: als, id: s.id, ply: s.zetten.length, merk: actie.merk, gezien: true }, rol, nu);
+  }
+  if (actie.soort === 'uitdaging' || actie.soort === 'start') {
+    if (!paarVrij(staat)) return nee(s.fase === 'uitdaging' ? 'er staat al een uitdaging' : s.fase === 'potje' ? 'er loopt een potje' :
+      'de vriend weet het einde of het antwoord nog niet');
+    /* het afgelopen potje of het Nu niet gaat zonder zetten naar vorige: daar vindt een apparaat zijn merk nog */
+    if (s) uit.vorige = { id: s.id, fase: s.fase, uitslag: s.uitslag, weet: s.weet, bekeken: s.bekeken };
+    uit.spel = { id: actie.id, wit: actie.wit, door: rol, fase: actie.soort === 'start' ? 'potje' : 'uitdaging', zetten: [], bod: null,
+      uitslag: null, weet: { a: null, b: null }, bekeken: { a: false, b: false }, t: nu };
+  } else if (actie.soort === 'bekijk') {
+    const doel = s && s.id === actie.id && spelAf(s) ? s : uit.vorige && uit.vorige.id === actie.id ? uit.vorige : null;
+    if (!doel || doel.bekeken[rol]) return nee('niets nieuws te bekijken');
+    doel.bekeken[rol] = true;
+    dateert = false;
+  } else if (!s) return nee('er is niets');
+  else if (actie.soort === 'intrekken') {
+    if (s.fase !== 'uitdaging' || s.door !== rol || !ditPotje) return nee('geen eigen uitdaging');
+    uit.spel = null;
+  } else if (actie.soort === 'ja' || actie.soort === 'nee') {
+    if (s.fase !== 'uitdaging' || s.door === rol || !ditPotje) return nee('geen uitdaging van de vriend');
+    if (actie.soort === 'ja') s.fase = 'potje';
+    else {
+      s.fase = 'nee';
+      s.weet = { a: null, b: null };
+      s.weet[rol] = actie.merk;
+      s.bekeken = { a: false, b: false };
+      s.bekeken[rol] = true;
+    }
+  } else if (actie.soort === 'zet') {
+    if (s.fase !== 'potje' || !ditPotje) return nee('geen lopend potje');
+    if (rolAanZet(s) !== rol || !dezeZet) return nee('niet aan zet op deze stand');
+    const S = standVanZetten(s.zetten), m = S && legalMoves(S).find(x => moveKey(x) === actie.zet);
+    if (!m) return nee('de zet kan niet');
+    makeMove(S, m);
+    s.zetten.push(actie.zet);
+    /* een open aanbod van de vriend is met deze zet beantwoord */
+    if (s.bod && s.bod.door !== rol) s.bod = null;
+    const st = gameStatus(S);
+    if (st.over) einde(st.reason, rol);
+    else if (actie.bod) s.bod = { door: rol, ply: s.zetten.length, t: null };
+  } else if (actie.soort === 'bod') {
+    /* na de eigen zet, één keer per eigen zet */
+    if (s.fase !== 'potje' || !ditPotje || !dezeZet) return nee('geen lopend potje op deze stand');
+    if (!s.zetten.length || rolAanZet(s) === rol || s.bod) return nee('nu geen aanbod');
+    s.bod = { door: rol, ply: s.zetten.length, t: null };
+    dateert = false;
+  } else if (actie.soort === 'stempel') {
+    /* wie het aanbod het eerst leest, zet de klok van de server erop: vanaf dan lopen de veertien dagen */
+    if (s.fase !== 'potje' || !s.bod || s.bod.t != null || !ditPotje) return nee('geen aanbod zonder stempel');
+    s.bod.t = nu;
+    dateert = false;
+  } else if (actie.soort === 'aannemen') {
+    if (s.fase !== 'potje' || !s.bod || s.bod.door === rol || !ditPotje || !dezeZet) return nee('geen aanbod van de vriend');
+    einde('remise', s.bod.door);
+  } else if (actie.soort === 'vanzelf') {
+    if (s.fase !== 'potje' || !s.bod || s.bod.door !== rol || s.bod.t == null || nu - s.bod.t < VEERTIEN_DAGEN_S || !ditPotje || !dezeZet) {
+      return nee('geen eigen aanbod van veertien dagen');
+    }
+    einde('remise', rol, { vanzelf: true, bodT: s.bod.t });
+  } else if (actie.soort === 'opgeven') {
+    if (s.fase !== 'potje' || !ditPotje || !dezeZet) return nee('geen lopend potje op deze stand');
+    einde('opgave', rol);
+  } else if (actie.soort === 'neem') {
+    if (!spelAf(s) || s.weet[rol] || !ditPotje) return nee('niets te nemen');
+    s.weet[rol] = actie.merk;
+    dateert = false;
+  } else return nee('onbekende handeling');
+  if (dateert && uit.spel) uit.spel.t = nu;
+  uit.seq = staat.seq + 1;
+  return { past: true, staat: uit };
+}
+/* Na een geweigerde schrijfactie (of een antwoord dat kwijtraakte): heeft de staat al wat dit apparaat wilde? Dan is
+   de handeling gedaan, en wordt ze niet herhaald of geweigerd. */
+function alGedaan(staat, actie, rol, merk) {
+  const s = staat.spel, v = staat.vorige;
+  const hier = s && s.id === actie.id ? s : null, eerder = v && v.id === actie.id ? v : null;
+  const eigenEinde = x => !!x && x.fase !== 'potje' && x.fase !== 'uitdaging' && x.weet && x.weet[rol] === merk;
+  switch (actie.soort) {
+    case 'uitdaging': case 'start': return !!hier || !!eerder;
+    case 'intrekken': return !hier;
+    case 'ja': return !!hier && (hier.fase === 'potje' || hier.fase === 'klaar') || !!eerder && eerder.fase === 'klaar';
+    case 'zet': return !!hier && hier.zetten.length > actie.ply && hier.zetten[actie.ply] === actie.zet;
+    case 'bod': return !!hier && !!hier.bod && hier.bod.door === rol && hier.bod.ply === actie.ply;
+    case 'stempel': return !!hier && !!hier.bod && hier.bod.t != null;
+    case 'nee': case 'aannemen': case 'vanzelf': case 'opgeven': case 'neem': return eigenEinde(hier) || eigenEinde(eerder);
+    case 'bekijk': return !!(hier || eerder) && !!(hier || eerder).bekeken[rol];
+    case 'weghalen': return !s || (spelAf(s) && !!s.weet[rol]);
+    default: return false;
+  }
+}
+/* de staat in de bus: verzegeld met het geheim van de vriendschap, altijd even lang, de zetten twee bytes per halve
+   zet; de versie is de sha256 van de tekst die de server krijgt */
+async function staatNaarBlob(k, staat) {
+  const inhoud = Object.assign({}, staat, { spel: staat.spel ? Object.assign({}, staat.spel, { zetten: zettenNaarBus(staat.spel.zetten) }) : null });
+  return b64url(await sealJSON(k, 'paar', vasteLengte(inhoud, POTJE_LENGTE)));
+}
+function versieVan(blob) { return sha256hex(blob); }
+/* Wat niet klopt, is niet te lezen (null). Een staat van een nieuwere app wordt niet overschreven: { nieuwer: true }. */
+async function blobNaarStaat(k, blob) {
+  let o = null;
+  try { o = await openJSON(k, 'paar', b64urlBytes(String(blob))); } catch (e) { return null; }
+  if (!o || typeof o !== 'object') return null;
+  if (typeof o.v === 'number' && o.v > 2) return { nieuwer: true };
+  if (o.v !== 2 || !Number.isInteger(o.seq) || o.seq < 0) return null;
+  const rol = x => x === 'a' || x === 'b', merk = x => x === null || (typeof x === 'string' && x.length >= 1 && x.length <= 64);
+  const weetGoed = w => !!w && typeof w === 'object' && merk(w.a) && merk(w.b);
+  const bekekenGoed = b => !!b && typeof b === 'object' && typeof b.a === 'boolean' && typeof b.b === 'boolean';
+  /* alleen wat een uitslag mag dragen; undefined is: klopt niet */
+  const uitslagVan = (u, n) => u === null ? null : !u || !UITSLAG_SOORT.includes(u.soort) || !rol(u.door) || !Number.isInteger(u.ply) || u.ply < 0 ||
+    (n != null && u.ply > n) ? undefined : Object.assign({ soort: u.soort, door: u.door, ply: u.ply }, u.vanzelf === true ? { vanzelf: true } : {},
+      Number.isFinite(u.bodT) ? { bodT: u.bodT } : {});
+  let spel = null;
+  if (o.spel !== null) {
+    const s = o.spel;
+    if (!s || typeof s !== 'object' || !ID_RE.test(String(s.id)) || !rol(s.wit) || !rol(s.door) ||
+        !['uitdaging', 'nee', 'potje', 'klaar'].includes(s.fase) || !weetGoed(s.weet) || !bekekenGoed(s.bekeken)) return null;
+    const zetten = potjeZetten(s.zetten);
+    const uitslag = zetten ? uitslagVan(s.uitslag, zetten.length) : undefined;
+    if (!zetten || !standVanZetten(zetten) || uitslag === undefined || (s.fase === 'klaar') !== !!uitslag) return null;
+    const bod = s.bod;
+    if (bod !== null && !(bod && rol(bod.door) && bod.ply === zetten.length && (bod.t === null || Number.isFinite(bod.t)))) return null;
+    spel = { id: s.id, wit: s.wit, door: s.door, fase: s.fase, zetten, bod: bod ? { door: bod.door, ply: bod.ply, t: bod.t } : null,
+      uitslag, weet: { a: s.weet.a, b: s.weet.b }, bekeken: { a: s.bekeken.a, b: s.bekeken.b }, t: Number.isFinite(s.t) ? s.t : null };
+  }
+  let vorige = null;
+  if (o.vorige !== null) {
+    const v = o.vorige;
+    const uitslag = v ? uitslagVan(v.uitslag) : undefined;
+    if (!v || !ID_RE.test(String(v.id)) || !['nee', 'klaar'].includes(v.fase) || uitslag === undefined || !weetGoed(v.weet) || !bekekenGoed(v.bekeken)) return null;
+    vorige = { id: v.id, fase: v.fase, uitslag, weet: { a: v.weet.a, b: v.weet.b }, bekeken: { a: v.bekeken.a, b: v.bekeken.b } };
+  }
+  return { v: 2, seq: o.seq, spel, vorige };
+}
 /* wat in de eigen potjesbus staat: het potje zonder naam, wit als rol van de vriendschap */
 function vriendBusInhoud(r) {
   const f = P.friends[r.fid];

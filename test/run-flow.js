@@ -16,4 +16,5 @@ var __APP_SRC = readFile('.tmp-ui.js');
 load('test/harnas.js');
 load('test/orakel-flow.js');
 load('test/orakel-flow-6.js');
+load('test/orakel-versies.js');
 load('test/flow-test.js');
