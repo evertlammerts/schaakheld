@@ -1604,6 +1604,25 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     !!leesSamen() && leesSamen().r.gameId === 'potje-test-2' && /Je potje met Fien loopt nog/.test(__els.toast.textContent));
   mpStop(true);
   opslag(SAMEN_KEY, null);
+  /* terug in de kamer na een herlading: de sessie is een hoger dan bewaard, en dat staat meteen bewaard */
+  var hervatMet = function (extra) {
+    var r = Object.assign({ gameId: 'potje-sessie', room: 'kamer-sessie', seat: 'stoel-sessie', host: true, myColor: 'w', gameNo: 1,
+      moves: ['e2e4'], peerName: 'Fien', fid: null, result: null, offer: null, shown: false, updated: Date.now() }, extra);
+    schrijfSamen({ 'potje-sessie': r });
+    samenHervat(leesSamen());
+    var uit = { sessie: MP.vr.sessie, kamer: MP.kamer, bewaard: leesSamen().r.sessie, kamerBewaard: leesSamen().r.kamer };
+    mpStop(true);
+    opslag(SAMEN_KEY, null);
+    return uit;
+  };
+  var hv = hervatMet({ sessie: 3, kamer: { fid: 'vriend-in-kamer1', paar: 'a b', voor: 2, mijn: 3 } });
+  ok('[2.5] mp: terug in de kamer is een nieuwe sessie, en de vriend van deze kamer blijft bij zijn twee sessies',
+    hv.sessie === 4 && hv.bewaard === 4 && !!hv.kamer && hv.kamer.fid === 'vriend-in-kamer1' && hv.kamer.voor === 2 && hv.kamer.mijn === 3 &&
+    hv.kamerBewaard.mijn === 3);
+  hv = hervatMet({});
+  ok('[2.5] mp: een bewaard potje zonder sessie en kamer komt terug als sessie 1, zonder vriend van deze kamer', hv.sessie === 1 && hv.kamer === null);
+  hv = hervatMet({ sessie: -2, kamer: { fid: '<b>', paar: 'a b', voor: '1', mijn: 1 } });
+  ok('[2.5] mp: een onzinnige sessie of kamer telt niet, en breekt niets', hv.sessie === 1 && hv.kamer === null);
 
   /* het maatje geeft op: wij winnen, zonder XP en zonder gedeelde wins */
   MP = { room: 'r', seat: 's', host: true, myColor: 'w', gameNo: 1, revMine: false,
@@ -1673,27 +1692,30 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await tikje();
   vmaat.send(JSON.stringify({ room: vk.id, seat: vk.gast }));
   await tikje();
-  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila' }));
+  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', sessie: 1 }));
   await tikje();
   closeModal();
   /* een afgelopen online potje biedt "vrienden worden" aan, tenzij je al vrienden bent */
   session = { kind: 'game', online: true, myColor: 'w', over: false, S: parseFEN('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1') };
+  MP.S = session.S;
   BD.mode = 'move';
   commitKid(legalMoves(session.S).find(function (x) { return alg(x.to) === 'a8'; }));
   await tikje();
   ok('vriend: eindscherm biedt vrienden worden aan', __els.eindkaart.innerHTML.indexOf('Vrienden worden') >= 0);
   fire(__els.mpVriend, 'click');
+  for (i = 0; i < 30; i++) await null;
   await tikje();
-  var vraag = vmaat.inbox.filter(function (m) { return m.t === 'vriend?'; })[0];
-  ok('vriend: vraag met publieke sleutel over de relay, K zelf niet', !!vraag && geldigePub(vraag.pub) && !vraag.k && !!MP.ecdh);
-  /* het maatje zegt ja: eigen sleutelpaar, antwoord met zijn publieke sleutel */
+  var vraag = vmaat.inbox.filter(function (m) { return m.t === 'vr' && m.vr && m.vr.wil === 1 && m.vr.pub; }).pop();
+  ok('vriend: wat dit kind wil, gaat als toestand met de publieke sleutel over de relay, K zelf niet',
+    !!vraag && geldigePub(vraag.vr.pub) && !vraag.vr.k && !vraag.k && !P.friends[Object.keys(P.friends)[0]]);
+  /* het maatje zegt ja: eigen sleutelpaar, en het zag ons willen */
   var mKp = await ecdhStart();
-  var mK = await ecdhFinish(mKp.kp, vraag.pub);
-  vmaat.send(JSON.stringify({ t: 'vriend', pub: mKp.pub }));
+  var mK = await ecdhFinish(mKp.kp, vraag.vr.pub);
+  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: mKp.pub, wil: 1, nee: 0, zag: 1, voor: vraag.vr.sessie } }));
   await tikje();
   var fids = Object.keys(P.friends);
-  ok('vriend: opgeslagen in de CRDT met hetzelfde geheim als het maatje', fids.length === 1 &&
-    P.friends[fids[0]].k === mK && P.friends[fids[0]].host === true && P.friends[fids[0]].naam === 'Mila' &&
+  ok('vriend: opgeslagen in de CRDT met hetzelfde geheim als het maatje, de rol uit de volgorde van de sleutels', fids.length === 1 &&
+    P.friends[fids[0]].k === mK && P.friends[fids[0]].host === (vraag.vr.pub < mKp.pub) && P.friends[fids[0]].naam === 'Mila' &&
     fids[0] === (await sha256hex(mK)).slice(0, 16) && !!DOC.friends[fids[0]]);
   ok('vriend: bevestiging met dezelfde drie plaatjes', __els.modalBox.innerHTML.indexOf('nu vrienden') >= 0 &&
     __els.modalBox.innerHTML.indexOf(friendTrio(mK)) >= 0 && MP.viaFriend === fids[0]);
@@ -1754,93 +1776,111 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     !!volHallo && volHallo.bewijzen.length === MAX_FRIENDS && JSON.stringify(volHallo).length < 4096 &&
     volHallo.bewijzen.length === onsHallo.bewijzen.length);
   P.friends = echteVrienden;
-  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila' })); /* haar naam terug op de verse verbinding */
+  vmaat.send(JSON.stringify({ t: 'hallo', naam: 'Mila', sessie: 1 })); /* haar naam terug op de verse verbinding */
   await tikje();
   modalQueue.length = 0;
   closeModal();
-  /* andersom: het maatje vraagt, wij zeggen nee en daarna ja */
+  /* andersom: het maatje wil, wij zeggen nee en daarna ja; elk deel begint met een verse toestand na een einde */
+  var mijnVr = function () { var l = vmaat.inbox.filter(function (m) { return m.t === 'vr' && m.vr; }); return l.length ? l[l.length - 1].vr : null; };
+  var vers = function () { Object.assign(MP, vrBegin(1)); MP.anderKent = true; MP.S = parseFEN('6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1'); MP.over = true; vmaat.inbox.length = 0; };
   MP.viaFriend = null;
+  vers();
   var mKp2 = await ecdhStart();
-  vmaat.send(JSON.stringify({ t: 'vriend?', pub: mKp2.pub }));
+  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: mKp2.pub, wil: 1, nee: 0, zag: 0, voor: null } }));
   await tikje();
-  ok('vriend: vraag van het maatje = modal', __els.modalBox.innerHTML.indexOf('Mila wil vrienden worden') >= 0);
+  ok('vriend: wil van het maatje = venster', __els.modalBox.innerHTML.indexOf('Mila wil vrienden worden') >= 0);
   fire(__els.vrNee, 'click');
   await tikje();
-  ok('vriend: nee gaat terug', vmaat.inbox.some(function (m) { return m.t === 'vriend' && m.nee === true; }));
-  vmaat.send(JSON.stringify({ t: 'vriend?', pub: mKp2.pub }));
+  ok('vriend: het nee gaat terug als toestand', !!mijnVr() && mijnVr().nee === 1 && mijnVr().voor === 1 && mijnVr().wil === 0);
+  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: mKp2.pub, wil: 2, nee: 0, zag: 0, voor: 1 } }));
   await tikje();
   fire(__els.vrJa, 'click');
-  await tikje();
-  var antw = vmaat.inbox.filter(function (m) { return m.t === 'vriend' && m.pub; })[0];
-  var mK2 = await ecdhFinish(mKp2.kp, antw.pub);
-  var fid2 = (await sha256hex(mK2)).slice(0, 16);
-  ok('vriend: wie ja zei, is pas vriend als wie vroeg het bevestigt', !P.friends[fid2] && !!MP.vriendWacht);
-  vmaat.send(JSON.stringify({ t: 'vriend', ok: true, ja: antw.pub }));
-  await tikje();
-  ok('vriend: als ja-zegger opgeslagen met rol b', !!P.friends[fid2] && P.friends[fid2].host === false && P.friends[fid2].k === mK2);
-  closeModal();
-  ok('vriend: kapotte sleutel wordt genegeerd', (function () { mpOnVriendVraag({ t: 'vriend?', pub: 'x<script>' }); return __els.overlay.classList.contains('hidden'); })());
-  /* zijn vraag komt binnen terwijl het eindscherm nog open staat: dan wacht
-     hij in de rij en zien wij hem niet. Tikken wij dan zelf op "vrienden
-     worden", dan is dat ja zeggen op zijn vraag. Twee losse vragen zouden
-     twee geheimen maken, waarvan de ander er maar een kent. */
-  MP.viaFriend = null;
-  MP.hunVraag = null;
-  var voorDub = Object.keys(P.friends).length;
-  vmaat.inbox.length = 0;
-  showModal('<div class="m-emoji">🏆</div><h2>JIJ WINT!</h2>', function () {});
-  var dubKp = await ecdhStart();
-  vmaat.send(JSON.stringify({ t: 'vriend?', pub: dubKp.pub }));
-  await tikje();
-  ok('vriend: zijn vraag wacht achter het eindscherm', modalQueue.length === 1 &&
-    __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0);
-  await vriendVragen();
   for (i = 0; i < 30; i++) await null;
   await tikje();
-  var dubAntw = vmaat.inbox.filter(function (m) { return m.t === 'vriend' && m.pub; })[0];
-  vmaat.send(JSON.stringify({ t: 'vriend', ok: true, ja: dubAntw && dubAntw.pub }));
+  var antw = mijnVr();
+  var mK2 = await ecdhFinish(mKp2.kp, antw.pub);
+  var fid2 = (await sha256hex(mK2)).slice(0, 16);
+  ok('vriend: wie ja zei, bewaart pas als de ander zijn willen zag', !P.friends[fid2] && antw.wil === 1 && antw.zag === 2);
+  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: mKp2.pub, wil: 2, nee: 0, zag: 1, voor: 1 } }));
   await tikje();
-  var dubK = dubAntw ? await ecdhFinish(dubKp.kp, dubAntw.pub) : null;
-  var dubFid = dubK ? (await sha256hex(dubK)).slice(0, 16) : null;
+  ok('vriend: dan opgeslagen, met de rol uit de volgorde van de sleutels', !!P.friends[fid2] && P.friends[fid2].host === (antw.pub < mKp2.pub) && P.friends[fid2].k === mK2);
+  closeModal();
+  vers();
+  var voorKapot = Object.keys(P.friends).length;
+  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: 'x<script>', wil: 1, nee: 0, zag: 1, voor: 1 } }));
+  await tikje();
+  closeModal();
+  ok('vriend: een kapotte sleutel maakt geen vriend en breekt niets', (await vrWil(), true) && Object.keys(P.friends).length === voorKapot);
+  closeModal();
+  /* zijn willen komt binnen terwijl er een ander venster openstaat: dan wacht zijn vraag in de rij. Tikken wij
+     zelf op "vrienden worden", dan is dat dezelfde tik als ja: één vriendschap met één geheim */
+  MP.viaFriend = null;
+  vers();
+  var voorDub = Object.keys(P.friends).length;
+  showModal('<div class="m-emoji">🏆</div><h2>JIJ WINT!</h2>', function () {});
+  var dubKp = await ecdhStart();
+  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: dubKp.pub, wil: 1, nee: 0, zag: 0, voor: null } }));
+  await tikje();
+  ok('vriend: zijn vraag wacht achter het andere venster', modalQueue.length === 1 && __els.modalBox.innerHTML.indexOf('JIJ WINT') >= 0);
+  await vrWil();
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  var dubAntw = mijnVr();
+  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: dubKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 } }));
+  await tikje();
+  var dubK = await ecdhFinish(dubKp.kp, dubAntw.pub);
+  var dubFid = (await sha256hex(dubK)).slice(0, 16);
   ok('vriend: zelf vragen is dan ja zeggen, één vriendschap met hetzelfde geheim',
-    !vmaat.inbox.some(function (m) { return m.t === 'vriend?'; }) &&
-    Object.keys(P.friends).length === voorDub + 1 && !!dubFid && !!P.friends[dubFid] &&
-    P.friends[dubFid].k === dubK && P.friends[dubFid].host === false);
-  ok('vriend: de wachtende vraag is weg en kan niet alsnog beantwoord worden',
-    modalQueue.length === 0 && __els.modalBox.innerHTML.indexOf('wil vrienden worden') < 0 &&
-    MP.hunVraag === null);
-  /* en andersom: is de vraag wel op tijd te zien, dan blijft ja zeggen ja zeggen */
+    Object.keys(P.friends).length === voorDub + 1 && !!P.friends[dubFid] && P.friends[dubFid].k === dubK);
+  ok('vriend: de wachtende vraag is weg', !modalQueue.some(function (q) { return q[3] === 'vriendvraag'; }) &&
+    __els.modalBox.innerHTML.indexOf('wil vrienden worden') < 0);
   setFriend(dubFid, Object.assign({}, P.friends[dubFid], { weg: true }));
   closeModal();
   await tikje();
-  /* allebei tegelijk gevraagd: één K aan beide kanten, geen dubbele vrienden */
+  /* allebei tegelijk: één K aan beide kanten, geen dubbele vrienden, niets dat kruist */
   MP.viaFriend = null;
+  vers();
   var voorKruis = Object.keys(P.friends).length;
-  await vriendVragen();
+  await vrWil();
+  for (i = 0; i < 30; i++) await null;
   await tikje();
-  var onzePub = MP.ecdh.pub;
+  var onzePub = mijnVr().pub;
   var kruisKp = await ecdhStart();
-  vmaat.send(JSON.stringify({ t: 'vriend?', pub: kruisKp.pub }));
+  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: kruisKp.pub, wil: 1, nee: 0, zag: 0, voor: 1 } }));
   await tikje();
-  var wijKleiner = onzePub < kruisKp.pub;
-  var kruisAntw = vmaat.inbox.filter(function (m) { return m.t === 'vriend' && m.pub === onzePub; }).length;
-  ok('vriend: gekruiste vraag, de kant met de kleinste sleutel antwoordt', wijKleiner ? (kruisAntw === 1 && MP.ecdh === null) : (kruisAntw === 0 && !!MP.ecdh));
-  if (!wijKleiner) {
-    /* het maatje is de kleinste: die antwoordt met zijn eigen sleutel op onze vraag */
-    vmaat.send(JSON.stringify({ t: 'vriend', pub: kruisKp.pub }));
-    await tikje();
-  } else {
-    vmaat.send(JSON.stringify({ t: 'vriend', ok: true, ja: onzePub }));
-    await tikje();
-  }
+  ok('vriend: tegelijk gevraagd: wij zagen het willen van het maatje en zeggen dat, zonder vriend tot het ons willen zag',
+    mijnVr().zag === 1 && Object.keys(P.friends).length === voorKruis);
+  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: kruisKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 } }));
+  await tikje();
   var kKruis = await ecdhFinish(kruisKp.kp, onzePub);
   var fidKruis = (await sha256hex(kKruis)).slice(0, 16);
-  ok('vriend: gekruist levert aan beide kanten hetzelfde geheim, precies één nieuwe vriend',
+  ok('vriend: tegelijk levert aan beide kanten hetzelfde geheim, precies één nieuwe vriend',
     !!P.friends[fidKruis] && P.friends[fidKruis].k === kKruis && Object.keys(P.friends).length === voorKruis + 1 &&
-    P.friends[fidKruis].host === !wijKleiner &&
-    (wijKleiner || vmaat.inbox.some(function (m) { return m.t === 'vriend' && m.ok === true && m.ja === kruisKp.pub; })));
+    P.friends[fidKruis].host === (onzePub < kruisKp.pub));
   closeModal();
   setFriend(fidKruis, Object.assign({}, P.friends[fidKruis], { weg: true }));
+  /* een toestand van een nieuwe sessie van het maatje komt binnen terwijl wij het geheim maken */
+  MP.viaFriend = null;
+  vers();
+  var voorTraag = Object.keys(P.friends).length;
+  await vrWil();
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  var traagKp = await ecdhStart();
+  var poortOpen, poort = new Promise(function (r) { poortOpen = r; });
+  var echteFinish = ecdhFinish;
+  ecdhFinish = async function (a, b) { await poort; return echteFinish(a, b); };
+  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 1, pub: traagKp.pub, wil: 1, nee: 0, zag: 1, voor: 1 } }));
+  await tikje();
+  vmaat.send(JSON.stringify({ t: 'vr', vr: { sessie: 2, pub: null, wil: 0, nee: 0, zag: 0, voor: null } }));
+  await tikje();
+  poortOpen();
+  for (i = 0; i < 30; i++) await null;
+  await tikje();
+  ecdhFinish = echteFinish;
+  ok('vriend: een nieuwe sessie van het maatje terwijl het geheim gemaakt wordt: geen vriend, en wij wachten weer op een ja',
+    Object.keys(P.friends).length === voorTraag && !MP.kamer && vrKaart() === 'gevraagd');
+  closeModal();
   mpStop();
   setFriend(fid2, Object.assign({}, P.friends[fid2], { weg: true }));
   goHome();
