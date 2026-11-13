@@ -3830,6 +3830,44 @@ async function orakelTwee() {
     check('de regel blijft staan (' + tekstVan(wit, 'bubble') + ')', beloofd(wit));
   });
 
+  /* een revanche begint alsof de regel er nog nooit stond: wat het vorige potje onthield, houdt in het nieuwe niets tegen */
+  await regel('[5.6] een vriendenpotje: een revanche begint alsof de regel over herhaling er nog nooit stond', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    for (const z of ['g1f3', 'g8f6', 'f3g1', 'f6g8']) await speel(a, b, z);
+    await wacht(3000);
+    const x = a.get('MP.myColor') === 'w' ? a : b;
+    check('testopzet: wit leest de regel over het bord op zijn beurt bij halve zet 4 (' + tekstVan(x, 'bubble') + ')', zegtHerhaling(x) && x.get('MP.herhaalGezegd') === 4);
+    await geefOp(x);
+    await wacht(3000);
+    await revanche(a, b);
+    await wacht(3000);
+    check('testopzet: een nieuw potje, en wie wit was speelt nu zwart', x.get('!!(session && session.online && !session.over) && MP.S.hist.length === 0 && MP.myColor === "b"'));
+    /* nu zet hij zelf de tweede keer neer (4... Pg8) en wit antwoordt rustig */
+    for (const z of ['g1f3', 'g8f6', 'f3g1', 'f6g8', 'b1c3']) await speel(a, b, z);
+    await wacht(3000);
+    check('testopzet: zwart is aan zet bij halve zet 5', x.get('MP.S.hist.length === 5 && MP.S.turn === MP.myColor'));
+    check('zwart leest de beloofde regel (' + tekstVan(x, 'bubble') + ')', beloofd(x));
+  });
+
+  /* een vriendenpotje dat terugkomt, leest uit het bewaarde potje op welke beurt de regel er stond: wat op een eerdere beurt
+     al gelezen is, komt na een herlading niet nog eens */
+  await regel('[5.6] een vriendenpotje dat na een herlading terugkomt, weet dat de regel er op een eerdere beurt al stond', async function (check) {
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    for (const z of ['g1f3', 'g8f6', 'f3g1', 'f6g8']) await speel(a, b, z);
+    await wacht(3000);
+    let x = a.get('MP.myColor') === 'w' ? a : b;
+    check('testopzet: wit leest de regel over het bord bij halve zet 4', zegtHerhaling(x));
+    for (const z of ['b1c3', 'b8c6']) await speel(a, b, z);
+    await wacht(3000);
+    check('testopzet: wit is aan zet bij halve zet 6 en leest de regel niet nog eens (' + tekstVan(x, 'bubble') + ')',
+      x.get('MP.S.hist.length === 6 && MP.S.turn === MP.myColor') && !zegtHerhaling(x) && !beloofd(x));
+    x = await terugInPotje(x);
+    check('testopzet: wit is terug in het potje', x.get('!!(session && session.online && !session.over) && MP.S.hist.length === 6'));
+    check('na de herlading niet nog eens (' + tekstVan(x, 'bubble') + ')', !zegtHerhaling(x) && !beloofd(x));
+  });
+
   /* zonder een stelling die er twee keer stond is er geen regel over herhaling: ook niet aan het begin van een potje, bij
      alles waarop de strook van het kind dat aan zet is iets zegt */
   await regel('[5.6] een vriendenpotje dat net begon: geen regel over herhaling als de lijn wegvalt of terugkomt, de ander weggaat of terugkomt, na Pauze of een herlading', async function (check) {

@@ -1828,6 +1828,27 @@ async function orakelFlow5() {
     } finally { pickMove = echt; }
   });
 
+  /* dat de regel er op deze beurt stond, gaat meteen met het potje mee: wie de app sluit zodra hij er staat, vindt bij het
+     openen het getal van deze beurt en dezelfde regel */
+  await regel('[5.6] de regel over herhaling wordt meteen met het potje bewaard: wie de app sluit zodra hij er staat, vindt hem terug als gezegd op die beurt', async function (check) {
+    const echt = pickMove;
+    pickMove = turboVolgt5({ 1: 'g8f6', 3: 'f6g8' }, echt);
+    try {
+      let a = nieuwKind();
+      await startPotje(a, 2);
+      for (const k of ['g1f3', 'f3g1']) { zet(a, k); await wacht(3000); }
+      check('testopzet: de regel over het bord bij halve zet 4 (' + strook5(a) + ')', a.get('session.S.hist.length') === 4 && strook5(a) === HERHAAL_ZIN5);
+      const bewaard = JSON.parse(a.opslag.getItem(POTJE)).games[2];
+      check('het bewaarde potje heeft meteen het getal van deze beurt (' + JSON.stringify(bewaard.herhaalGezegd) + ')', bewaard.herhaalGezegd === 4);
+      a = herlaad(a);
+      await wacht(1000);
+      a.tik('verderKaart');
+      await wacht(1500);
+      check('na het openen staat dezelfde regel er (' + strook5(a) + ')', a.get('session.S.hist.length') === 4 && strook5(a) === HERHAAL_ZIN5);
+      check('en het getal is nog dat van deze beurt', JSON.parse(a.opslag.getItem(POTJE)).games[2].herhaalGezegd === 4);
+    } finally { pickMove = echt; }
+  });
+
   /* de reeks met schaak bij de tweede keer, vanaf de beginstelling: de regel over het bord staat er op die beurt, ook na een
      herlading, en de derde keer is remise */
   const HERHAAL_R = { 1: 'e7e6', 3: 'd8g5', 5: 'g5a5', 7: 'a5b6', 9: 'b6a5', 11: 'a5a6', 13: 'a6a5' };
