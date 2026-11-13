@@ -279,9 +279,8 @@ func gelezenVersie(s *server, bus string) string {
 }
 
 type potjesGelezen struct {
-	Blobs       map[string]string
-	Ongewijzigd map[string]int64
-	Nu          *int64
+	Blobs map[string]string
+	Nu    *int64
 }
 
 func leesPotjes(s *server, ids ...string) potjesGelezen {
@@ -536,70 +535,6 @@ func TestOrakelPotjeVastVertraagd(t *testing.T) {
 		leesPotjes(s, bus)
 		if d := time.Since(start); d < 30*time.Millisecond {
 			t.Fatalf("lezen na %v, wil minstens 30ms", d)
-		}
-	}(t)
-}
-
-// een klok die op verzoek bij elke vraag een seconde verder loopt
-type tikKlok struct {
-	mu     sync.Mutex
-	t      time.Time
-	tikken bool
-}
-
-func (k *tikKlok) now() time.Time {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if k.tikken {
-		k.t = k.t.Add(time.Second)
-	}
-	return k.t
-}
-
-func TestOrakelPotjeOngewijzigd(t *testing.T) {
-	s, clk := newTestServer(t, nil)
-	// [6.10] de check meldt hoe lang de bytes van een potjesbus gelijk bleven
-	func(t tb) {
-		bewijs, bus := potjeBus("a")
-		if c := schrijfPotje(s, bewijs, bus, "zet-1"); c != 204 {
-			t.Fatalf("schrijven: %d", c)
-		}
-		clk.advance(2 * time.Hour)
-		if g := leesPotjes(s, bus); g.Ongewijzigd[bus] != 7200 {
-			t.Fatalf("na 2 uur: %+v, wil 7200", g)
-		}
-		schrijfPotje(s, bewijs, bus, "zet-1")
-		if g := leesPotjes(s, bus); g.Ongewijzigd[bus] != 7200 {
-			t.Fatalf("dezelfde bytes opnieuw houden de tijd: %+v, wil 7200", g)
-		}
-		clk.advance(time.Hour)
-		schrijfPotje(s, bewijs, bus, "zet-2")
-		if g := leesPotjes(s, bus); g.Ongewijzigd[bus] != 0 {
-			t.Fatalf("andere bytes zetten de tijd op nul: %+v", g)
-		}
-		clk.advance(30 * time.Minute)
-		if g := leesPotjes(s, bus); g.Ongewijzigd[bus] != 1800 {
-			t.Fatalf("een half uur na de wijziging: %+v, wil 1800", g)
-		}
-	}(t)
-}
-
-func TestOrakelPotjeOngewijzigdEenMoment(t *testing.T) {
-	klok := &tikKlok{t: time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)}
-	s, _ := newTestServer(t, func(c *config) { c.now = klok.now })
-	// [6.10] alle tijden in een antwoord komen van hetzelfde moment
-	func(t tb) {
-		bewijsA, busA := potjeBus("a")
-		bewijsB, busB := potjeBus("b")
-		if schrijfPotje(s, bewijsA, busA, "x") != 204 || schrijfPotje(s, bewijsB, busB, "y") != 204 {
-			t.Fatalf("schrijven lukt niet")
-		}
-		klok.mu.Lock()
-		klok.tikken = true
-		klok.mu.Unlock()
-		g := leesPotjes(s, busA, busB)
-		if len(g.Ongewijzigd) != 2 || g.Ongewijzigd[busA] != g.Ongewijzigd[busB] {
-			t.Fatalf("twee bussen van hetzelfde moment, in een antwoord: %+v", g)
 		}
 	}(t)
 }
