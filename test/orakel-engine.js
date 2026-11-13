@@ -130,6 +130,18 @@
 
   /* ---------- 5.3: veilig of valstrik, gecontroleerd bij het kiezen ---------- */
 
+  /* de generator stelt ook een valstrik voor die mat in één toelaat, en de keuze houdt hem, ook als de matzet niets slaat */
+  regel('[5.3] Veilig of valstrik: de generator geeft een valstrik met een stille matzet als straf (zaad 228)', function (check) {
+    if (!knoopbudget(check)) return;
+    const t = E.genSafeTask(true, vast(228));
+    check('een valstrik met mat', !!t && t.trap === true && t.mate === true);
+    if (!t || !t.mate) return;
+    E.makeMove(t.S, t.move);
+    const slag = E.isCapture(t.S, t.punish), mat = (function () { E.makeMove(t.S, t.punish); const st = E.gameStatus(t.S); E.unmakeMove(t.S); return st.reason === 'mat'; })();
+    E.unmakeMove(t.S);
+    check('de straf is mat en slaat niets (' + E.moveKey(t.punish) + ')', mat && !slag);
+  });
+
   regel('[5.3] Veilig of valstrik: een "veilige" zet die een stuk verliest, wordt bij het kiezen afgekeurd', function (check) {
     /* Coach 3: na Dd3-c3 geeft Pf6-e4+ een vork op koning en dame */
     const S = E.parseFEN('r2qkb1r/pppb1ppp/4pn2/3p4/1n1P1B2/3QP3/PPPKNPPP/RN3B1R w kq - 2 7');
@@ -388,6 +400,17 @@
     const per = {};
     TRUC_POOL.forEach(function (r) { const t = r.split('|')[1]; per[t] = (per[t] || 0) + 1; });
     check('vork 141, penning 57, spies 31, aftrekaanval 32 (' + JSON.stringify(per) + ')', per.vork === 141 && per.penning === 57 && per.spies === 31 && per.aftrek === 32);
+  });
+
+  /* een vork die ook mat is, heet in de app "Dit was mat": in de voorraad heeft geen truc een mat in een */
+  regel('[5.1] geen vork, penning, spies of aftrekaanval in de voorraad staat ook mat in een', function (check) {
+    if (!check('er is een voorraad TRUC_POOL', typeof TRUC_POOL !== 'undefined' && Array.isArray(TRUC_POOL))) return;
+    const met = TRUC_POOL.filter(function (r) {
+      if (['vork', 'penning', 'spies', 'aftrek'].indexOf(r.split('|')[1]) < 0) return false;
+      const t = E.trucTask(r);
+      return !t || E.matingMoves(t.S, 1).length > 0;
+    });
+    check('geen enkele (' + met.slice(0, 3).join(' / ') + ')', met.length === 0);
   });
 
   regel('[5.1] een type met 14 trucs blijft uit de Trucendoos, met 15 doet het mee', function (check) {

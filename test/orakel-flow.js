@@ -1152,7 +1152,7 @@ async function orakelFlow() {
     check('de hint onder het bord', onderZin(a) === 'Je toren op a1 wordt aangevallen door de loper op c3. Met deze hint is de opdracht nog 2 sterren waard.');
     zet(a, 'g1h1');
     await wacht(4000);
-    check('Turbo pakt de toren: de zet staat erbij, en "toch" want het was het hangende stuk', /^Turbo speelt .+ en pakt toch je toren\. Probeer nog een zet\.$/.test(onderZin(a)));
+    check('Turbo pakt de toren: de zet staat erbij, en dat het hangende stuk nog steeds aangevallen stond', /^Turbo speelt .+, slaat toren ?: je toren stond nog steeds aangevallen\. Probeer nog een zet\.$/.test(onderZin(a)));
     check('de strook houdt de vraag', strook(a) === vraag);
     zet(a, 'a1a2');
     await wacht(3000);
@@ -1308,7 +1308,8 @@ async function orakelFlow() {
     await regel('[2.4] Trucendoos, ' + type + ': de foute poging en de uitleg na twee missers horen bij deze truc', async function (check) {
       const a = nieuwKind();
       await startOefening(a, 'trucs');
-      const fout = a.get('(function () { var t = genPatternTask(' + JSON.stringify(type) + '); if (!t) return null;' +
+      /* een vaste opdracht uit de gecontroleerde voorraad: een willekeurige vork was soms ook mat in een */
+      const fout = a.get('(function () { var t = trucTask(TRUC_POOL.filter(function (r) { return r.split("|")[1] === ' + JSON.stringify(type) + '; })[0]); if (!t) return null;' +
         'session.task = t; session.S = t.S; session.phase = "puzzle"; session.tries = 0; t.hintUsed = false;' +
         'BD.mode = "puzzle"; BD.glow.clear(); renderBoard(); opdrachtVan("trucs." + t.type);' +
         'var uit = legalMoves(t.S).filter(function (m) { var info = patternsAfterMove(t.S, m);' +
@@ -1802,14 +1803,15 @@ async function orakelFlow() {
   });
 
   /* Koning ontsnapt: "toch" alleen als Turbo het stuk pakt dat al hing */
-  await regel('[2.4] Koning ontsnapt: pakt Turbo na een poging een ander stuk, dan zegt de zin welk stuk en waar, zonder "toch"', async function (check) {
+  await regel('[2.4] Koning ontsnapt: pakt Turbo na een poging een ander stuk, dan zegt de zetnaam welk stuk, zonder "nog steeds aangevallen"', async function (check) {
     const a = nieuwKind();
     await startOefening(a, 'koning');
-    /* de toren op d4 hangt (de pion op e5) en dekt het paard op d6 tegen de toren op d8 */
-    zetOpdracht(a, '3r2k1/5ppp/3N4/4p3/3R4/8/PP4PP/6K1 w - - 0 1', 'stuk', ['d4d5', 'd4d3', 'd4d2', 'd4d1'], '{ hang: threatDetails(S)[0] }');
+    /* de toren op d4 hangt (de pion op e5) en dekt het paard op d6 tegen de toren op d8; zwart heeft
+       een luchtgat op h7, anders zette wit na Txd6 mat met Ta8+ en Turbo slaat dan niet */
+    zetOpdracht(a, '3r2k1/5pp1/3N3p/4p3/3R4/8/PP4PP/6K1 w - - 0 1', 'stuk', ['d4d5', 'd4d3', 'd4d2', 'd4d1'], '{ hang: threatDetails(S)[0] }');
     zet(a, 'd4a4');
     await wacht(4000);
-    check('de zin', /^Turbo speelt .+ en pakt je paard op d6\. Probeer nog een zet\.$/.test(onderZin(a)) && !/toch/.test(onderZin(a)));
+    check('de zin', /^Turbo speelt Toren d8 → d6, slaat paard ?\. Probeer nog een zet\.$/.test(onderZin(a)) && !/nog steeds/.test(onderZin(a)));
   });
 
   await regel('[2.4] Koning ontsnapt: de hint zegt of de koning het zelf moet doen', async function (check) {

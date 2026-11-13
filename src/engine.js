@@ -663,7 +663,7 @@ function pickMove(S, level, rng, budgetMs) {
 }
 
 /* Blunder guard: does move m allow mate in one, or lose 150cp or more by force
-   against the material on the board now (plan rule 5.4, decision D40)? A
+   against the material on the board now? A
    better move that was not played is no danger, so it is never the baseline.
    Returns null or {loss, punish, take}: punish is the opponent's best reply
    (with mate: true when it mates), take the capture that starts the loss, so
@@ -915,7 +915,7 @@ function lineAfter(S, m, nodes) {
   for (let i = back.length; i > 0; i--) unmakeMove(S);
   return out;
 }
-/* Veilig of valstrik (plan rule 5.3, decision D31). A "veilig" move loses no
+/* Veilig of valstrik. A "veilig" move loses no
    pawn along its line, allows no mate in one, and is at most 2 points below
    the best move; a "valstrik" loses 2.5 points or more along its line, is
    at least 2.5 points below the best move, and is punished by a capture,
@@ -940,7 +940,7 @@ function checkSafeTask(task, nodes) {
   if (line.material > -250 || best - line.white < 250 || !line.reply || !isCaptureAfter(S, task.move, line.reply)) return null;
   return Object.assign({}, task, { punish: line.reply, mate: false });
 }
-/* Red je stuk (plan rule 5.3): exactly one threat; the piece can be saved,
+/* Red je stuk: exactly one threat; the piece can be saved,
    best play losing at most a pawn against the position as it stands; every
    answer within half a pawn of the best and losing no pawn along its line;
    every other move at least 1.5 points below the lowest answer, so a move
@@ -1013,7 +1013,7 @@ function between(a, b, c) {
    by force, confirmed by checkSafeTask. After three candidates that the check
    rejects it gives up, so the child never waits long. A trap's punishment is
    a capture, so the explanation can say what is taken. */
-/* About four seconds under the 6x slowdown (plan rule 5.9); when it is spent
+/* About four seconds under the 6x slowdown; when it is spent
    the generator gives nothing and the app gives another kind of task. */
 const SAFE_NODES = 160000;
 function genSafeTask(wantTrap, rng) {
@@ -1588,7 +1588,7 @@ function keyMoment(S) {
 /* --- the verified stock of tricks (src/trucs.js, made by tools/make-trucs.js) --- */
 
 /* A type serves only with this many verified puzzles: fewer, and a child who
-   plays daily recognises the positions within a week (decision D24). */
+   plays daily recognises the positions within a week. */
 const TRUC_MIN = 15;
 /* "<board> <side>": eight rows of eight squares and one king of each colour,
    so parseFEN never meets a board it cannot read */
