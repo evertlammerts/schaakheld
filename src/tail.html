@@ -1119,8 +1119,7 @@ function openSamen() {
   if (st.over) { endGame(st); return; }
   BD.mode = MP.S.turn === MP.myColor ? 'move' : 'off';
   if (remiseVraagOpen()) { toonRemiseVraag(); return; }
-  say(!MP.open && MP.pogingen > 0 ? GEEN_NET_SPEL :
-    MP.peerWeg ? anderWeg() : MP.S.turn === MP.myColor ? 'Jij bent aan zet! 💭' : mpNaam() + ' is aan zet… ⏳');
+  if (!MP.open && MP.pogingen > 0) say(GEEN_NET_SPEL); else zegBeurt();
 }
 function toonSamenScherm(S = MP.S, kleur = MP.myColor, naam = mpNaam()) {
   showScreen('play');
@@ -1531,11 +1530,18 @@ function mpOnZet(m) {
     if (st.over) { endGame(st); return; }
     BD.mode = 'move';
     remiseRij();
-    if (inCheck(S)) { snd.check(); say('Schaak! Red je koning. 👑'); } else say('Jij weer! Wat wordt je plan? 💭');
+    if (inCheck(S)) {
+      snd.check();
+      if (tweedeKeer(S)) session.herhaalSchuld = true;
+      say('Schaak! Red je koning. 👑');
+    } else say(herhaalRegel(S) || 'Jij weer! Wat wordt je plan? 💭');
   });
 }
-/* is de ander weg, dan zegt de strook dat, en niet dat de ander nu zet */
-function zegBeurt() { say(MP.peerWeg ? anderWeg() : MP.S.turn === MP.myColor ? 'Jij bent aan zet! 💭' : mpNaam() + ' is aan zet… ⏳'); }
+/* is de ander weg, dan zegt de strook dat, en niet dat de ander nu zet; waar de strook zegt wie aan zet is, staat de regel
+   over herhaling als die er is */
+function zegBeurt() {
+  say(MP.peerWeg ? anderWeg() : herhaalRegel(MP.S) || (MP.S.turn === MP.myColor ? 'Jij bent aan zet! 💭' : mpNaam() + ' is aan zet… ⏳'));
+}
 function anderWeg() { return mpNaam() + ' is er nu niet. Jullie potje blijft staan. Ga gerust iets anders doen: het staat bij Verder.'; }
 const SAMEN_NIET_BEWAARD = 'Dit potje kon ik niet bewaren. Laat de app open, dan kunnen jullie verder.';
 const GEEN_NET_SPEL = 'Er is nu geen verbinding. Ik blijf het proberen. Jullie potje blijft staan.';
@@ -5641,7 +5647,7 @@ function potjeStatus(S) {
 /* de tweede keer dezelfde stelling: de derde keer is remise, en dat hoort het kind voor het gebeurt; de regel gaat over
    de stelling die er staat, dus wie dan schaak staat hoort eerst "Schaak!" en de regel pas bij een volgende tweede keer */
 const HERHAAL_ZIN = 'Deze stelling stond er al eens. Bij de derde keer is het remise. Wil je dat niet? Kies een andere zet.';
-function tweedeKeer(S) { return !session.online && repetitions(S) === 1; }
+function tweedeKeer(S) { return repetitions(S) === 1; }
 /* stond een stelling er voor de tweede keer terwijl iets anders de strook had, dan komt deze regel bij de eerstvolgende
    vrije strook: hij is waar op elk bord */
 const HERHAAL_SCHULD = 'Een stelling stond er net voor de tweede keer. De derde keer is het remise. Liever niet? Speel anders.';
@@ -5682,7 +5688,7 @@ function commitKid(m) {
       /* zonder verbinding geen belofte dat de ander de zet al ziet */
       say(!session.samenBewaard ? SAMEN_NIET_BEWAARD :
         MP && MP.zetZonderNet ? 'Je zet is bewaard. Er is nu geen verbinding, dus ' + mpNaam() + ' ziet hem nog niet.' :
-        MP && MP.peerWeg ? anderWeg() : 'Nu ' + mpNaam() + '… 💭');
+        MP && MP.peerWeg ? anderWeg() : herhaalRegel(S) || 'Nu ' + mpNaam() + '… 💭');
       return;
     }
     if (co) {
