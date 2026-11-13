@@ -51,7 +51,6 @@ type busEntry struct {
 type potjeEntry struct {
 	blob    string
 	expires time.Time // laatste schrijven plus potjeTTL, dus ook de volgorde van plaatsmaken
-	changed time.Time // laatste schrijven met andere bytes, of de start van de server
 }
 
 // op schijf staat wat in het geheugen staat: de versleutelde bytes en tot
@@ -109,7 +108,7 @@ func (s *server) laadPotjes() error {
 			pf.Tot = grens
 			s.writeFileAtomic(pad, pf)
 		}
-		s.potjes[id] = potjeEntry{blob: pf.Blob, expires: pf.Tot, changed: now}
+		s.potjes[id] = potjeEntry{blob: pf.Blob, expires: pf.Tot}
 	}
 	for len(s.potjes) > maxPotjes {
 		s.evictOldestPotjeLocked()
@@ -254,14 +253,8 @@ func (s *server) handlePotjePost(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusConflict, map[string]string{"blob": p.blob})
 		return
 	}
-	now := s.cfg.now()
-	// dezelfde bytes opnieuw verlengen alleen: zo meet ongewijzigd hoe lang
-	// een kant niets nieuws schreef, ook als de app zijn bus vernieuwt
-	if !bestaat || p.blob != in.Blob {
-		p.changed = now
-	}
 	p.blob = in.Blob
-	p.expires = now.Add(potjeTTL)
+	p.expires = s.cfg.now().Add(potjeTTL)
 	// eerst de schijf: lukt die niet, dan verandert er ook in het geheugen niets
 	if err := s.writeFileAtomic(s.potjePad(in.Bus), potjeFile{Tot: p.expires, Blob: p.blob}); err != nil {
 		opslagMislukt(w, err)
@@ -291,12 +284,10 @@ func (s *server) evictOldestPotjeLocked() {
 }
 
 // handleBusCheck geeft de briefjes uit de opgegeven bussen terug (alleen
-// de bestaande), uitnodigingen en potjes door elkaar; voor een potjesbus
-// ook hoeveel seconden zijn bytes gelijk bleven, allemaal gemeten op
-// hetzelfde moment, zodat twee apparaten met hetzelfde antwoord dezelfde
-// volgorde zien. Zelfde rem als elk onge-authenticeerd pad: het is een
-// tweede hendel op dezelfde vergrendeling en die hoort niet gratis te
-// zijn. Begrensd in aantal per verzoek.
+// de bestaande), uitnodigingen en potjes door elkaar, en de klok van de
+// server in hele seconden. Zelfde rem als elk onge-authenticeerd pad: het
+// is een tweede hendel op dezelfde vergrendeling en die hoort niet gratis
+// te zijn. Begrensd in aantal per verzoek.
 func (s *server) handleBusCheck(w http.ResponseWriter, r *http.Request) {
 	var in struct{ Bussen []string }
 	if !readJSON(w, r, 8192, &in) {
@@ -312,7 +303,6 @@ func (s *server) handleBusCheck(w http.ResponseWriter, r *http.Request) {
 	defer func() { <-s.busC }()
 	time.Sleep(s.cfg.redeemDelay)
 	out := map[string]string{}
-	ongewijzigd := map[string]int64{}
 	s.mu.Lock()
 	s.sweepBusesLocked()
 	s.sweepPotjesLocked()
@@ -326,9 +316,8 @@ func (s *server) handleBusCheck(w http.ResponseWriter, r *http.Request) {
 		}
 		if p, ok := s.potjes[id]; ok {
 			out[id] = p.blob
-			ongewijzigd[id] = int64(now.Sub(p.changed) / time.Second)
 		}
 	}
 	s.mu.Unlock()
-	writeJSON(w, map[string]any{"blobs": out, "ongewijzigd": ongewijzigd, "nu": now.Unix()})
+	writeJSON(w, map[string]any{"blobs": out, "nu": now.Unix()})
 }

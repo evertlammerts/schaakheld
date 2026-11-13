@@ -533,10 +533,9 @@ function __herstartServer() {
   __server.wsrooms = {};
   __server.pending = {};
   __server.buses = {};
-  /* de potjesbussen staan op schijf, zoals in bus.go: ze blijven, en hun
-     ongewijzigd telt vanaf de start, want alleen tot staat op schijf */
+  /* de potjesbussen staan op schijf, zoals in bus.go: wat niet verlopen is
+     blijft */
   __veegPotjes();
-  for (const id in __server.potjes) __server.potjes[id].veranderd = __busNu();
 }
 /* alleen de potjesbussen kwijt, zoals een verloren map potjes: voor een
    apparaat dat zijn staat terug moet schrijven */
@@ -640,7 +639,7 @@ var fetch = function (url, opts) {
           for (const id in __server.potjes) if (weg === null || __server.potjes[id].tot < __server.potjes[weg].tot) weg = id;
           delete __server.potjes[weg];
         }
-        __server.potjes[body.bus] = { blob: blob, tot: nu + POTJE_TTL, veranderd: oud && oud.blob === blob ? oud.veranderd : nu };
+        __server.potjes[body.bus] = { blob: blob, tot: nu + POTJE_TTL };
         res(204);
       });
     }
@@ -649,16 +648,13 @@ var fetch = function (url, opts) {
       if (vraag.length > MAX_BUS_CHECK) { res(400); return; }
       __veegBussen();
       __veegPotjes();
-      var blobs = {}, ongewijzigd = {}, nuC = __busNu();
+      var blobs = {}, nuC = __busNu();
       vraag.forEach(function (id) {
         if (!/^[a-f0-9]{64}$/.test(id)) return;
         if (id in __server.buses) blobs[id] = __server.buses[id].blob;
-        if (id in __server.potjes) {
-          blobs[id] = __server.potjes[id].blob;
-          ongewijzigd[id] = Math.floor((nuC - __server.potjes[id].veranderd) / 1000);
-        }
+        if (id in __server.potjes) blobs[id] = __server.potjes[id].blob;
       });
-      res(200, { blobs: blobs, ongewijzigd: ongewijzigd, nu: Math.floor(nuC / 1000) });
+      res(200, { blobs: blobs, nu: Math.floor(nuC / 1000) });
     }
     else if (m === 'POST' && path === '/v1/room') {
       const k = __nieuweKamer();

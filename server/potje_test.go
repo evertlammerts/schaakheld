@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -37,23 +38,38 @@ func TestPotjeHerschrijvenBijVolDuwtNiemandWeg(t *testing.T) {
 	}
 }
 
-func TestPotjeVerlopenEnTerugMetDezelfdeBytesBegintVers(t *testing.T) {
+func TestPotjeVerlopenTeltDeOudeVersieNiet(t *testing.T) {
 	s, clk := newTestServer(t, nil)
 	bewijs, bus := potjeBus("a")
-	if c := schrijfPotje(s, bewijs, bus, "zet-1"); c != 204 {
-		t.Fatalf("schrijven: %d", c)
+	if a := schrijfPotjeAls(s, bewijs, bus, "zet-1", ""); a.code != 204 {
+		t.Fatalf("schrijven: %+v", a)
 	}
 	// geen check tussendoor: die veegt ook, en verbergt dan een schrijven dat niet veegt
 	clk.advance(potjeTTL + time.Hour)
-	if c := schrijfPotje(s, bewijs, bus, "zet-1"); c != 204 {
-		t.Fatalf("opnieuw schrijven na het verlopen: %d", c)
+	if a := schrijfPotjeAls(s, bewijs, bus, "zet-2", versieVan("zet-1")); a.code != 409 || !a.metBlob || a.blob != "" {
+		t.Fatalf("na het verlopen met de oude versie: %+v, wil 409 met een leeg briefje", a)
 	}
-	clk.advance(5 * time.Second)
-	if g := leesPotjes(s, bus); g.Blobs[bus] != "zet-1" || g.Ongewijzigd[bus] != 5 {
-		t.Fatalf("verlopen en met dezelfde bytes terug: %+v, wil 5 seconden", g)
+	if a := schrijfPotjeAls(s, bewijs, bus, "zet-2", ""); a.code != 204 {
+		t.Fatalf("daarna met een lege als: %+v, wil 204", a)
 	}
 }
 
+func TestCheckAntwoordAlleenBlobsEnNu(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	bewijs, bus := potjeBus("a")
+	u := "uitnodiging-0123456789abcdef"
+	if schrijfPotjeAls(s, bewijs, bus, "staat", "").code != 204 || busPost(t, s, busID(u), u, "x") != 204 {
+		t.Fatal("schrijven lukt niet")
+	}
+	w := doe(s, "POST", "/v1/bus/check", map[string]any{"bussen": []string{bus, busID(u)}})
+	var velden map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &velden); err != nil {
+		t.Fatal(err)
+	}
+	if _, nu := velden["nu"]; len(velden) != 2 || velden["blobs"] == nil || !nu {
+		t.Fatalf("de check hoort alleen blobs en nu te geven: %s", w.Body.String())
+	}
+}
 func TestPotjeTabelTeltUitnodigingenNietMee(t *testing.T) {
 	s, clk := newTestServer(t, nil)
 	for i := 0; i < maxBuses; i++ {
@@ -123,22 +139,6 @@ func TestBusEnPotjeGrensInBytes(t *testing.T) {
 	}
 }
 
-func TestPotjeLeeftijdAlleenVoorPotjesbussen(t *testing.T) {
-	s, _ := newTestServer(t, nil)
-	u := "uitnodiging-0123456789abcdef"
-	bewijs, bus := potjeBus("a")
-	if busPost(t, s, busID(u), u, "x") != 204 || schrijfPotje(s, bewijs, bus, "y") != 204 {
-		t.Fatalf("schrijven lukt niet")
-	}
-	g := leesPotjes(s, busID(u), bus)
-	if g.Blobs[busID(u)] != "x" || g.Blobs[bus] != "y" {
-		t.Fatalf("lezen: %+v", g)
-	}
-	if _, heeft := g.Ongewijzigd[busID(u)]; heeft || len(g.Ongewijzigd) != 1 {
-		t.Fatalf("alleen de potjesbus krijgt een leeftijd: %+v", g.Ongewijzigd)
-	}
-}
-
 /* ---------- de staat van een paar staat op schijf ---------- */
 
 // een testserver op de map dir die echt naar schijf schrijft, met fsync
@@ -190,8 +190,8 @@ func TestPotjeOverleeftHerstart(t *testing.T) {
 	}
 	clk.advance(20 * 24 * time.Hour)
 	s2, _ := newTestServer(t, opSchijf(dir, clk.now))
-	if g := leesPotjes(s2, busA, busB); g.Blobs[busA] != "staat-a" || g.Blobs[busB] != "staat-b" || g.Ongewijzigd[busA] != 0 {
-		t.Fatalf("na de herstart: %+v, wil beide staten, ongewijzigd vanaf de herstart", g)
+	if g := leesPotjes(s2, busA, busB); g.Blobs[busA] != "staat-a" || g.Blobs[busB] != "staat-b" {
+		t.Fatalf("na de herstart: %+v, wil beide staten", g)
 	}
 	if a := schrijfPotjeAls(s2, bewijsB, busB, "staat-b2", versieVan("staat-x")); a.code != 409 || a.blob != "staat-b" {
 		t.Fatalf("na de herstart met een verkeerde versie: %+v, wil 409 met staat-b", a)
