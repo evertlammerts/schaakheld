@@ -1694,7 +1694,7 @@ function renderFriends() {
       uitd ? (uitd.mijnUitdaging ? '' : '<button class="btn plain small" data-uitdja="' + uitd.gameId + '">Ja, spelen!</button>') :
       g ? '<button class="btn plain small" data-speel="' + id + '">' + (beurt ? 'Jij bent aan zet' : 'Bekijk') + '</button>' :
       '<button class="btn plain small" data-invite="' + id + '">Uitnodigen</button>';
-    return '<div class="friend' + (wacht ? ' wait' : '') + (beurt ? ' beurt' : '') + '" data-fid="' + id + '">' +
+    return '<div class="friend' + (wacht ? ' wait' : '') + (beurt ? ' beurt' : '') + (g && stand[id].stil ? ' stil' : '') + '" data-fid="' + id + '">' +
       '<div class="f-kop"><span class="f-emo">' + friendTrio(f.k) + '</span><span class="f-naam">' + naam + '</span>' +
       '<button class="icon-btn f-meer" data-meer="' + id + '" title="Meer" aria-label="Meer over ' + naam + '">⋯</button></div>' +
       '<div class="f-voet"><span class="f-sub">' + sub + '</span>' + knop + '</div></div>';
@@ -2599,7 +2599,7 @@ function uitnodigingOpKaart() {
   const w = uitnodigingWacht, f = w && P.friends[w.fid];
   const over = w ? INVITE_TTL - (Date.now() - +w.inv.ts) : 0;
   if (!w || !f || f.weg || over <= 0 || seenInv.includes(w.inv.id)) { uitnodigingWacht = null; return null; }
-  return { naam: f.naam, minuten: Math.max(1, Math.ceil(over / 60000)) };
+  return { naam: f.naam, fid: w.fid, minuten: Math.max(1, Math.ceil(over / 60000)) };
 }
 function uitnodigingNee() {
   const w = uitnodigingWacht, f = w && P.friends[w.fid];
@@ -3634,7 +3634,7 @@ function samenItem(s) {
   if (s.bod) {
     const zin = !s.vriend ? 'Remise is gelijkspel: niemand wint, niemand verliest.' : s.bodT && antwoordDagVoorbij(s.bodT) ?
       'Antwoorden kan nu nog.' : 'Antwoorden kan tot en met ' + antwoordDag(s.bodT || Date.now()) + '.';
-    return { rule: 'R1', title: naam + ' biedt remise aan', button: 'Antwoord', vriend: true, volgorde: 1, tijd, soort: 'potje',
+    return { rule: 'R1', title: naam + ' biedt remise aan', button: 'Antwoord', vriend: true, volgorde: 1, tijd, soort: 'potje', fid: s.fid,
       text: zin, ook: naam + ' biedt remise aan', rij: { titel, plek: naam + ' biedt remise aan. ' + zin }, action: actie };
   }
   /* een vriend die een week of langer niet zette: het potje zakt naar het eind, en de kaart zegt hoe lang al */
@@ -3643,7 +3643,7 @@ function samenItem(s) {
     stil ? stilZin(naam, dagen) : zinDoetMee(s.mijnUitdaging, n, s.myColor, naam) || (!beurt ? naam + ' is aan zet.' :
       s.vriend && n ? naam + ' heeft gezet. Jij bent aan zet.' : 'Jij bent aan zet.');
   return { rule: 'R1', title: 'Verder: je potje met ' + naam, button: 'Speel verder', vriend: true, naam, opDagen: !!s.vriend,
-    wat: s.nietBewaard || s.eigenBod ? null : 'potje', volgorde: beurt ? 1 : stil ? 7 : 5, tijd, soort: 'potje', text: zin,
+    wat: s.nietBewaard || s.eigenBod ? null : 'potje', volgorde: beurt ? 1 : stil ? 7 : 5, tijd, soort: 'potje', fid: s.fid, text: zin,
     ook: 'je potje met ' + naam, action: actie,
     rij: { titel, plek: s.vriend && !beurt && !stil && !s.eigenBod && !s.zonderNet ? naam + ' is aan zet · ' + dagWoord(dagen) : zin } };
 }
@@ -3674,7 +3674,7 @@ function nextStep(P, ctx) {
      tegen Turbo, een rondje, een vriendenpotje waarin de vriend aan zet is, de eigen uitdaging, stille potjes */
   if (ctx.uitnodiging) {
     const zin = 'De uitnodiging is nog ' + ctx.uitnodiging.minuten + ' minuten geldig.';
-    bezig.push({ rule: 'R1i', title: ctx.uitnodiging.naam + ' wil spelen', button: 'Ja, spelen!', volgorde: 2, soort: 'uitdaging',
+    bezig.push({ rule: 'R1i', title: ctx.uitnodiging.naam + ' wil spelen', button: 'Ja, spelen!', volgorde: 2, soort: 'uitdaging', fid: ctx.uitnodiging.fid,
       text: zin, ook: ctx.uitnodiging.naam + ' wil spelen', rij: { titel: ctx.uitnodiging.naam + ' wil spelen', plek: zin },
       action: { go: 'uitnodiging' }, nee: { go: 'uitnodigingNee' }, vraag: { go: 'uitnodigingVraag' } });
   }
@@ -3686,7 +3686,7 @@ function nextStep(P, ctx) {
   }
   for (const k of DRILL_KINDS) {
     const r = ctx.rondjes && ctx.rondjes[k];
-    if (r) bezig.push({ rule: 'R2b', title: 'Verder: ' + DRILLS[k].naam, button: 'Ga verder', wat: 'rondje', volgorde: 4, soort: 'rondje',
+    if (r) bezig.push({ rule: 'R2b', title: 'Verder: ' + DRILLS[k].naam, button: 'Ga verder', wat: 'rondje', volgorde: 4, soort: 'rondje', art: DRILLS[k].e,
       rij: { titel: 'Je rondje ' + DRILLS[k].naam, plek: 'opdracht ' + (r.round + 1) + ' van 5' },
       text: 'Opdracht ' + (r.round + 1) + ' van 5. Je sterren van dit rondje staan er nog.',
       ook: 'je rondje ' + DRILLS[k].naam + ', opdracht ' + (r.round + 1) + ' van 5', action: { go: 'rondje', kind: k } });
@@ -3756,7 +3756,7 @@ function doeActie(a) {
    worden. */
 function vriendItems(alle) {
   const uit = [];
-  if (samenWeg) uit.push({ rule: 'R1', title: 'Je potje met ' + samenWeg.naam + ' is gestopt', button: 'Bekijk', volgorde: 0, soort: 'potje',
+  if (samenWeg) uit.push({ rule: 'R1', title: 'Je potje met ' + samenWeg.naam + ' is gestopt', button: 'Bekijk', volgorde: 0, soort: 'potje', fid: samenWeg.fid,
     text: 'De verbinding viel weg. Dit potje telt voor niemand mee.', ook: 'je potje met ' + samenWeg.naam, action: { go: 'gestopt' },
     rij: { titel: 'Je potje met ' + samenWeg.naam + ' is gestopt', plek: 'De verbinding viel weg.' } });
   const lijst = alle.slice();
@@ -3765,14 +3765,15 @@ function vriendItems(alle) {
     if ((samenWeg && b.r.gameId === samenWeg.gameId) || b.r.nee) continue;
     const hier = !!(MP && MP.S && MP.gameId === b.r.gameId), vriend = !!(hier ? MP.viaFriend : b.r.fid);
     const S = hier ? MP.S : b.S, naam = (hier ? MP.peerName : b.r.peerName) || 'je maatje', kleur = hier ? MP.myColor : b.r.myColor;
+    const fid = (hier ? MP.viaFriend : b.r.fid) || null;
     const uitslag = hier ? MP.result : b.r.result, gezien = hier ? MP.shown : b.r.shown === true;
     const bod = hier ? remiseVraagOpen() : !!b.r.offer && b.r.offer.by !== kleur && !b.r.offer.answer && b.r.offer.ply === S.hist.length;
     const aanbod = hier ? MP.offer : b.r.offer;
     const kleurZin = 'Jij speelt met ' + (kleur === 'w' ? 'wit' : 'zwart') + '.';
     if (b.r.state === 'uitdaging') uit.push(b.r.mijnUitdaging ?
-      { rule: 'R1', title: 'Je uitdaging aan ' + naam, button: 'Bekijk', volgorde: 6, soort: 'uitdaging', text: 'Nog geen antwoord van ' + naam + '.',
+      { rule: 'R1', title: 'Je uitdaging aan ' + naam, button: 'Bekijk', volgorde: 6, soort: 'uitdaging', fid, text: 'Nog geen antwoord van ' + naam + '.',
         ook: 'je uitdaging aan ' + naam + ', nog geen antwoord', action: { go: 'vrienden' }, rij: { titel: 'Je uitdaging aan ' + naam, plek: 'nog geen antwoord' } } :
-      { rule: 'R1u', title: naam + ' daagt je uit', button: 'Ja, spelen!', volgorde: 2, soort: 'uitdaging', text: kleurZin,
+      { rule: 'R1u', title: naam + ' daagt je uit', button: 'Ja, spelen!', volgorde: 2, soort: 'uitdaging', fid, text: kleurZin,
         ook: naam + ' daagt je uit', action: { go: 'uitdagingJa', gameId: b.r.gameId }, nee: { go: 'uitdagingNee', gameId: b.r.gameId },
         vraag: { go: 'uitdagingVraag', gameId: b.r.gameId }, rij: { titel: naam + ' daagt je uit', plek: kleurZin } });
     /* een afgelopen potje dat dit kind al zag, wacht alleen nog tot de ander het weet: geen kaart */
@@ -3780,10 +3781,10 @@ function vriendItems(alle) {
       /* een potje met een vriend dat telde op een ander apparaat van dit kind, toonde dat apparaat al */
       if (vriend && DOC.set.potjes[b.r.gameId]) continue;
       const e = vriend ? kaartEinde(uitslag, kleur, naam) : { titel: 'Je potje met ' + naam + ' is klaar', zin: 'Kijk hoe het afliep.' };
-      uit.push({ rule: 'R1', title: e.titel, button: 'Bekijk', volgorde: 0, soort: 'potje', text: e.zin, ook: 'je potje met ' + naam,
+      uit.push({ rule: 'R1', title: e.titel, button: 'Bekijk', volgorde: 0, soort: 'potje', fid, text: e.zin, ook: 'je potje met ' + naam,
         rij: { titel: e.titel, plek: e.zin }, action: hier ? { go: 'samen', gameId: b.r.gameId } : { go: 'oud', gameId: b.r.gameId } });
     }
-    else if (!uitslag) uit.push(samenItem({ peerName: naam, moves: S.hist.map(u => moveKey(u.m)), myColor: kleur, bod, vriend,
+    else if (!uitslag) uit.push(samenItem({ peerName: naam, moves: S.hist.map(u => moveKey(u.m)), myColor: kleur, bod, vriend, fid,
       beurtT: b.r.beurtT || b.r.updated || ((samenRauw() || {})[b.r.gameId] || {}).beurtT,
       bodT: bod ? (hier ? MP.offer : b.r.offer).t : null, eigenBod: vriend && !!aanbod && aanbod.by === kleur && !aanbod.answer && aanbod.ply === S.hist.length,
       gameId: b.r.gameId, mijnUitdaging: !!b.r.mijnUitdaging, zonderNet: (hier && !!MP.room && !MP.open && MP.pogingen > 0) || (vriend && potjesNetFout),
@@ -3838,7 +3839,7 @@ function turboItems() {
   const alle = leesPotjes() || {};
   return Object.keys(alle).filter(k => !alle[k].kapot).map(k => {
     const b = alle[k], n = b.r.moves.length, zet = Math.floor(n / 2) + 1, naam = TURBO_NAMES[+k].replace(/^\S+\s/, '');
-    return { rule: 'R2', title: 'Verder: je potje tegen ' + naam, button: 'Speel verder', wat: 'potje', volgorde: 3, tijd: +b.r.updated || 0,
+    return { rule: 'R2', title: 'Verder: je potje tegen ' + naam, button: 'Speel verder', wat: 'potje', volgorde: 3, tijd: +b.r.updated || 0, art: TURBO_NAMES[+k].split(' ')[0],
       soort: 'potje', text: 'Zet ' + zet + '. ' + (n % 2 === 0 ? 'Jij bent aan zet.' : 'Turbo is aan zet.'), ook: 'je potje tegen ' + naam + ', zet ' + zet,
       rij: { titel: 'Je potje tegen ' + naam, plek: 'zet ' + zet }, action: { go: 'game', level: +k } };
   });
@@ -3853,9 +3854,16 @@ function telLijst(items) {
 }
 /* alles wat nog bezig is, in de volgorde van de kaart; een rij opent zijn potje of rondje, een vraag krijgt zijn antwoorden */
 function bezigBlad(lijst) {
-  showModal('<h2>Wat nog bezig is</h2><div class="m-btns lopend-lijst">' + lijst.map((it, i) => '<button class="btn plain lopend" data-rij="' + i + '">' +
-    '<span class="l-titel">' + escHtml(it.rij ? it.rij.titel : it.title) + '</span><span class="l-plek">' + escHtml(it.rij ? it.rij.plek : it.text) +
-    '</span></button>').join('') + '</div>', () => {
+  const art = it => {
+    const f = it.fid && P.friends[it.fid];
+    return f ? '<span class="l-art trio">' + friendTrio(f.k).split(' ').map(e => '<span>' + e + '</span>').join('') + '</span>' :
+      '<span class="l-art">' + (it.art || '🤝') + '</span>';
+  };
+  /* het kind aan zet valt op; een stil potje staat er rustig bij */
+  showModal('<h2>Wat nog bezig is</h2><div class="lopend-lijst">' + lijst.map((it, i) => '<button class="lopend' + (it.volgorde === 7 ? ' stil' : '') +
+    '" data-rij="' + i + '">' + art(it) + '<span class="l-txt"><span class="l-titel">' + escHtml(it.rij ? it.rij.titel : it.title) + '</span>' +
+    '<span class="l-plek' + (it.volgorde === 1 ? ' beurt' : '') + '">' + escHtml(it.rij ? it.rij.plek : it.text) + '</span></span>' +
+    '<span class="l-pijl">›</span></button>').join('') + '</div>', () => {
       document.querySelectorAll('.lopend').forEach(k => k.addEventListener('click', () => {
         const it = lijst[+k.dataset.rij];
         closeModal();

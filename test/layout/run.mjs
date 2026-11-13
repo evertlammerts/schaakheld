@@ -895,6 +895,27 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       }` });
 }
 
+/* plan.md 6.9 met het blad: elke rij is minstens 56 hoog, de titel staat boven waar het ding staat, en niets is breder dan het scherm */
+for (const [W, H] of [[360, 640], [375, 553]]) {
+  const n = '[6.9] ' + W + 'x' + H + ': het blad Wat nog bezig is heeft per ding een rij van minstens 56 hoog, met de titel boven de plek';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H}, ${JSON.stringify(VIER_BEZIG)});
+      await page.waitForTimeout(2500);
+      await klik('#ookNog');
+      await page.waitForTimeout(500);
+      const rijen = await page.evaluate(() => [...document.querySelectorAll('.lopend')].map(r => {
+        const b = r.getBoundingClientRect(), t = r.querySelector('.l-titel'), p = r.querySelector('.l-plek');
+        const tr = t && t.getBoundingClientRect(), pr = p && p.getBoundingClientRect();
+        return { h: b.height, left: b.left, right: b.right, titel: t ? t.textContent : '', onder: !!tr && !!pr && pr.top >= tr.bottom - 0.5 };
+      }));
+      check(n, 'vier rijen: Maximiliaantje, Sem, Turbo en het rondje', rijen.length === 4);
+      check(n, 'elke rij minstens 56 hoog', rijen.length > 0 && rijen.every(r => r.h >= 55.5));
+      check(n, 'de plek staat onder de titel', rijen.length > 0 && rijen.every(r => r.titel && r.onder));
+      check(n, 'binnen het scherm', rijen.every(r => r.left >= -0.5 && r.right <= ${W} + 0.5));
+      check(n, 'geen zijwaarts scrollen', (await pagina()).sw <= ${W});` });
+}
+
 function draai(geval) {
   const code = 'async page => {' + HELPERS + '\ntry {' + geval.code + '\n} catch (e) { for (const r of ' +
     JSON.stringify(geval.regels) + ') check(r, "uitzondering: " + (e && e.message ? e.message.split("\\n")[0] : e), false); }\n' +
