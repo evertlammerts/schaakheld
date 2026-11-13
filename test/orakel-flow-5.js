@@ -1333,6 +1333,72 @@ async function orakelFlow5() {
     check('de zin (' + t + ')', t === 'Zet 5: je dame ging naar g5. Daar stond ze onbeschermd, en ik pakte haar (9 punten).');
   });
 
+  /* na Turbo's matzet: waarom de koning het stuk dat schaak geeft niet slaat (de regel van de schaakcoach) */
+  const MATUITLEG5 = [
+    ['dubbelschaak', '1k1rr3/ppp2ppp/5q2/2b1p3/2Q1P3/N2P3P/PP2n1BP/R5KR w - - 0 1',
+      'Dubbelschaak: het paard op e2 en de loper op c5 geven allebei schaak.'],
+    ['een dame naast de koning, gedekt', '6k1/8/8/8/8/7b/5PqP/6K1 w - - 0 1',
+      'De dame op g2 geeft schaak, en f1 en h1 zijn gedekt. Je koning mag haar niet slaan: ze wordt gedekt door de loper op h3.'],
+    ['een toren naast de koning, gedekt', '6k1/8/8/2b5/6n1/8/7r/7K w - - 0 1',
+      'De toren op h2 geeft schaak, en g1 en g2 zijn gedekt. Je koning mag hem niet slaan: hij wordt gedekt door het paard op g4.'],
+    ['verder weg, en een stuk dat slaat staat in een penning', '1k5r/1p3ppp/p6n/1qp1p1B1/4P3/P7/RPP1QPPP/3r1K1R w - - 0 1',
+      'De toren op d1 geeft schaak. Je dame op e2 mag de toren niet slaan: ze staat in een penning.'],
+    ['verder weg en niets kan slaan', '6k1/8/8/8/8/8/5nPP/6RK w - - 0 1', 'Het paard op f2 geeft schaak.']];
+  for (const [wat, fen, zin] of MATUITLEG5) {
+    await regel('[5.5] na Turbo\'s matzet, ' + wat + ': "' + zin + '"', async function (check) {
+      const a = nieuwKind();
+      const z = norm5(a.get('matUitleg(parseFEN(' + JSON.stringify(fen) + '))'));
+      check('testopzet: wit staat mat', a.get('gameStatus(parseFEN(' + JSON.stringify(fen) + ')).reason') === 'mat');
+      check('de zin (' + z + ')', z === zin);
+    });
+  }
+
+  /* een valstrik: het stuk dat zette stond tussen Turbo's stuk en iets dat meer waard is (V9) */
+  await regel('[5.5] Veilig of valstrik: "Je paard stond tussen de loper op g4 en je dame. Nu niet meer: dat kost je 6 punten."', async function (check) {
+    const a = nieuwKind();
+    const z = a.get('(function () { var S = parseFEN("rn1qkb1r/ppp2ppp/4pn2/3p4/4P1b1/2NB1N2/PPPP1PPP/R1BQK2R w KQkq - 0 1");' +
+      ' var m = legalMoves(S).find(function (x) { return moveKey(x) === "f3g5"; }); makeMove(S, m);' +
+      ' var straf = legalMoves(S).find(function (x) { return moveKey(x) === "g4d1"; }); unmakeMove(S); return valstrikWaarom(S, m, straf, false); })()');
+    check('de reden (' + z + ')', z === 'Je paard stond tussen de loper op g4 en je dame. Nu niet meer: dat kost je 6 punten.');
+  });
+  /* een fout krijgt altijd uitleg: een valstrik zonder reden komt niet op het bord */
+  await regel('[5.5] Veilig of valstrik: elke valstrik die op het bord komt, heeft een reden', async function (check) {
+    const echt = Math.random;
+    Math.random = vasteKans5(2121);
+    try {
+      const a = nieuwKind();
+      await startOefening(a, 'best3');
+      let vallen = 0;
+      for (let i = 0; i < 60; i++) {
+        if (!a.get('buildSafe()')) continue;
+        if (!a.get('session.task.trap')) continue;
+        vallen++;
+        const z = a.get('(function () { var t = session.task; return valstrikWaarom(t.S, t.move, t.punish, t.mate); })()');
+        if (!z) check('een valstrik zonder reden: ' + a.get('toFEN(session.task.S) + " " + moveKey(session.task.move)'), false);
+      }
+      check('testopzet: valstrikken (' + vallen + ')', vallen >= 10);
+    } finally { Math.random = echt; }
+  });
+
+  /* mat in één: een pion die en passant de schaakgever slaat, slaat hem; geen stuk ertussen */
+  await regel('[5.5] Trucendoos, mat in één: Turbo die de schaakgever en passant slaat: "Na Pion b2 → b4 kan Turbo je pion slaan."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'trucs');
+    zetOpdracht(a, '4r3/1Q2N1p1/2p4p/k3PP2/p3P3/7P/PPP3P1/4R1K1 w - - 0 1', 'mat1', ['e7c6']);
+    zet(a, 'b2b4');
+    await wacht(4000);
+    check('de zin (' + onder5(a) + ')', onder5(a) === 'Na Pion b2 → b4 kan Turbo je pion slaan. Probeer nog een zet.');
+  });
+  /* een pion die promoveert en dan wordt geslagen, is een dame die wordt geslagen */
+  await regel('[5.5] Trucendoos: een promotie op een veld waar Turbo slaat: "Dan pakt Turbo je dame op f8."', async function (check) {
+    const a = nieuwKind();
+    await startOefening(a, 'trucs');
+    zetOpdracht(a, 'r1bq3r/ppp1kPpp/1b5n/7Q/3n1B2/2NP3N/PPP1BPPP/RK5R w - - 0 1', 'spies', ['f4g5']);
+    zet(a, 'f7f8q');
+    await wacht(4000);
+    check('de zin (' + onder5(a) + ')', onder5(a) === 'Dan pakt Turbo je dame op f8. Zoek een veilig veld.');
+  });
+
   /* ---------- 5.5: Trucendoos, mat in twee (T9 tot T11) ---------- */
 
   const MAT2_5 = 'k7/8/2K5/8/8/8/8/7R w - - 0 1';
@@ -1617,7 +1683,8 @@ async function orakelFlow5() {
     check('tijdens het antwoord geen oude zin (' + onder5(a) + ')', onder5(a) === '');
     await wacht(8000);
     const r = redenen5(a);
-    check('de laatste reden (' + r.join(' / ') + ')', /^De truc was /.test(r[0] || '') && r[r.length - 1] === 'Jouw zet: nog niet de vork.');
+    check('de laatste reden (' + r.join(' / ') + ')', /^De truc was /.test(r[0] || '') && /^Jouw zet: nog niet de vork: Turbo speelt dan .+\.$/.test(r[r.length - 1] || '') &&
+      !/Probeer/.test(r[r.length - 1]));
   });
 
   /* "valt maar één stuk aan" alleen als de zet echt één stuk van Turbo aanvalt: De2 valt c4 en g4 aan */
@@ -1627,7 +1694,11 @@ async function orakelFlow5() {
     zetOpdracht(a, '1k1r1b1r/1p1q1p1p/p1pp1p2/6B1/2nPP1b1/3Q2N1/PPP2PPP/1R2KBR1 w - - 0 1', 'vork', ['g5f6']);
     zet(a, 'd3e2');
     await wacht(4000);
-    check('de zin (' + onder5(a) + ')', onder5(a) === 'Nog niet de vork. Kijk naar alle stukken van Turbo, en probeer nog een zet.');
+    const pijl = a.get('BD.arrows.length === 1 ? moveKey(BD.arrows[0]) : null');
+    const m = /^Nog niet de vork: Turbo speelt dan (.+)\. Probeer nog een zet\.$/.exec(onder5(a));
+    check('de zin (' + onder5(a) + ')', !!m);
+    check('de zet in de zin is de pijl op het bord (' + pijl + ')', !!m && !!pijl && a.get('(function () { var S = parseFEN(' + JSON.stringify('1k1r1b1r/1p1q1p1p/p1pp1p2/6B1/2nPP1b1/3Q2N1/PPP2PPP/1R2KBR1 w - - 0 1') + ');' +
+      ' makeMove(S, legalMoves(S).find(function (x) { return moveKey(x) === "d3e2"; })); return moveNameNL(S, legalMoves(S).find(function (x) { return moveKey(x) === ' + JSON.stringify(pijl) + '; })); })()') === m[1]);
   });
 
   /* "Dan pakt Turbo je {stuk} op {veld}." en het bord laat precies die slag zien */

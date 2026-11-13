@@ -1323,7 +1323,7 @@ async function orakelFlow() {
       await wacht(3000);
       /* "mat" is een het-woord: nog geen mat in twee */
       check('de poging noemt deze truc', rij ? tekstVan(a, 'hulpZin').trim() === rij :
-        tekstVan(a, 'hulpZin').indexOf(type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + naam + '.') === 0);
+        tekstVan(a, 'hulpZin').indexOf(type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + naam + ': Turbo speelt dan ') === 0);
       zet(a, fout[1]);
       await wacht(8000);
       const reden = a.doc.__tekst(a.el('taskBox').querySelectorAll('.e-body')[0] || a.el('taskBox')).trim();
@@ -1784,7 +1784,7 @@ async function orakelFlow() {
       zet(a, fout[0]);
       await wacht(3000);
       check('de poging noemt deze truc', rij ? tekstVan(a, 'hulpZin').trim() === rij :
-        tekstVan(a, 'hulpZin').indexOf('Nog niet de ' + a.get('PATTERNS.' + type + '.n.toLowerCase()') + '.') === 0);
+        tekstVan(a, 'hulpZin').indexOf('Nog niet de ' + a.get('PATTERNS.' + type + '.n.toLowerCase()') + ': Turbo speelt dan ') === 0);
       zet(a, fout[1]);
       await wacht(8000);
       const reden = a.doc.__tekst(a.el('taskBox').querySelectorAll('.e-body')[0] || a.el('taskBox')).trim();

@@ -5890,14 +5890,14 @@ function trucPogingZin(S, m, type, info, antwoord) {
     let feit = 'Dat is geen schaak.', verder = 'Zoek een zet die schaak geeft.';
     if (inCheck(S) && antwoord) {
       const aanvaller = findAttacker(S, S.kings.b, 'w');
-      feit = 'Na ' + naam + ' kan ' + (antwoord.to === aanvaller ? 'Turbo je ' + NAME_NL[S.board[aanvaller].toLowerCase()] + ' slaan.' :
+      feit = 'Na ' + naam + ' kan ' + (slagVeld(S, antwoord) === aanvaller ? 'Turbo je ' + NAME_NL[S.board[aanvaller].toLowerCase()] + ' slaan.' :
         antwoord.from === S.kings.b ? 'de koning naar ' + alg(antwoord.to) + '.' : 'Turbo er een stuk tussen zetten.');
       verder = 'Probeer nog een zet.';
     }
     unmakeMove(S);
     return { feit, verder };
   }
-  if (onveiligeTruc(S, m, type, info)) return { feit: 'Dan pakt Turbo je ' + stuk + ' op ' + alg(m.to) + '.', verder: 'Zoek een veilig veld.' };
+  if (onveiligeTruc(S, m, type, info)) return { feit: 'Dan pakt Turbo je ' + (m.promo ? NAME_NL[m.promo] : stuk) + ' op ' + alg(m.to) + '.', verder: 'Zoek een veilig veld.' };
   if (type !== 'mat2' && patternMatches(S, m, type, info))
     return { feit: 'Ook een ' + PATTERNS[type].n.toLowerCase() + '! Er is nog een sterkere.', verder: 'Probeer nog een zet.' };
   if (type === 'vork') {
@@ -5906,8 +5906,13 @@ function trucPogingZin(S, m, type, info, antwoord) {
     unmakeMove(S);
     if (doelen === 1) return { feit: 'Je ' + stuk + ' valt maar één stuk aan.', verder: 'Zoek een zet die twee stukken aanvalt.' };
   }
-  return { feit: type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + PATTERNS[type].n.toLowerCase() + '.',
+  if (type === 'mat2' || !antwoord) return { feit: type === 'mat2' ? 'Nog geen mat in twee.' : 'Nog niet de ' + PATTERNS[type].n.toLowerCase() + '.',
     verder: 'Kijk naar alle stukken van Turbo, en probeer nog een zet.' };
+  /* het antwoord dat de pijl op het bord laat zien */
+  makeMove(S, m);
+  const naam = moveNameNL(S, antwoord);
+  unmakeMove(S);
+  return { feit: 'Nog niet de ' + PATTERNS[type].n.toLowerCase() + ': Turbo speelt dan ' + zetB(naam), verder: 'Probeer nog een zet.' };
 }
 /* de truc van de opdracht, maar op een veld waar Turbo het stuk pakt */
 function onveiligeTruc(S, m, type, info) {
@@ -6274,7 +6279,12 @@ function scanExplanations(task, bad, missed) {
 /* --- safe/trap drill --- */
 function buildSafe() {
   const wantTrap = Math.random() < 0.5;
-  const task = genSafeTask(wantTrap);
+  /* een fout krijgt altijd uitleg: een valstrik waar geen reden bij past, komt niet op het bord */
+  let task = null;
+  for (let i = 0; i < 4 && !task; i++) {
+    const t = genSafeTask(wantTrap);
+    if (t && (!t.trap || valstrikWaarom(t.S, t.move, t.punish, t.mate))) task = t;
+  }
   if (!task) return false;
   session.task = task;
   session.S = task.S;
@@ -6295,6 +6305,8 @@ function buildSafe() {
 function valstrikWaarom(S, m, straf, mat) {
   const stuk = NAME_NL[S.board[m.from].toLowerCase()];
   const dekte = pieceAttacksSq(S, m.from, straf.to);
+  /* het stuk dat zette, stond op de lijn van Turbo's stuk naar wat het nu slaat */
+  const tussen = inDeWeg(S, straf.from, straf.flags === 'e' ? straf.to + 16 : straf.to) === m.from;
   /* bij de matzet: dekte het stuk het matveld */
   if (mat) return dekte ? 'Je ' + stuk + ' dekte ' + alg(straf.to) + '. Nu niet meer.' : null;
   makeMove(S, m);
@@ -6304,6 +6316,8 @@ function valstrikWaarom(S, m, straf, mat) {
   if (t === m.to) zin = findAttacker(S, m.to, 'w') < 0 ? 'Je ' + stuk + ' op ' + alg(m.to) + ' staat daar onbeschermd.' :
     'Je ' + stuk + ' op ' + alg(m.to) + ' is wel gedekt, maar Turbo slaat met ' + hetStuk(S.board[straf.from]) + ': dat kost jou meer.';
   else if (x && dekte && findAttacker(S, t, 'w') < 0) zin = 'Je ' + stuk + ' dekte je ' + NAME_NL[x.toLowerCase()] + ' op ' + alg(t) + '. Nu niet meer.';
+  else if (x && tussen) zin = 'Je ' + stuk + ' stond tussen ' + hetStuk(S.board[straf.from]) + ' op ' + alg(straf.from) + ' en je ' + NAME_NL[x.toLowerCase()] +
+    '. Nu niet meer: dat kost je ' + ptsNL(seeSquare(S, t, TABEL)) + '.';
   else {
     const info = patternsAfterMove(S, straf);
     const truc = info.fork.length >= 2 ? 'vork' : info.pin ? 'penning' : info.skewer ? 'spies' : info.discovered.length ? 'aftrekaanval' : null;
@@ -6649,17 +6663,32 @@ function koningRedenen(S, t, m) {
     (d && d.zet ? 'Turbo dreigde mat met ' + d.zet + '.' : null);
   return [eerst, koningHoe(S, m, d)].filter(Boolean);
 }
-/* Na Turbo's matzet: wie schaak geeft, en twee lege velden naast de koning die ook gedekt zijn */
+/* Na Turbo's matzet: wie schaak geeft, twee lege velden naast de koning die ook gedekt zijn, en waarom de koning het
+   stuk dat schaak geeft niet slaat */
 function matUitleg(S) {
-  const a = findAttacker(S, S.kings.w, 'b');
-  if (a < 0) return '';
-  const velden = [];
+  const k = S.kings.w, hetOp = a => hetStuk(S.board[a]) + ' op ' + alg(a);
+  const schakers = piecesOf(S, 'b').filter(a => pieceAttacksSq(S, a, k));
+  if (!schakers.length) return '';
+  if (schakers.length >= 2) return ' Dubbelschaak: ' + hetOp(schakers[0]) + ' en ' + hetOp(schakers[1]) + ' geven allebei schaak.';
+  const a = schakers[0], x = S.board[a], velden = [];
   for (const d of [-17, -16, -15, -1, 1, 15, 16, 17]) {
     const sq = S.kings.w + d;
     if (!(sq & 0x88) && !S.board[sq] && attacked(S, sq, 'b')) velden.push(alg(sq));
   }
-  return ' ' + hoofd(hetStuk(S.board[a])) + ' op ' + alg(a) + ' geeft schaak' +
-    (velden.length >= 2 ? ', en ' + velden[0] + ' en ' + velden[1] + ' zijn gedekt.' : '.');
+  return ' ' + hoofd(hetOp(a)) + ' geeft schaak' + (velden.length >= 2 ? ', en ' + velden[0] + ' en ' + velden[1] + ' zijn gedekt.' : '.') + nietSlaan(S, a);
+}
+/* Bij mat staat een stuk dat naast de koning schaak geeft altijd gedekt, en kan een wit stuk dat het verder weg aanvalt
+   alleen niet slaan omdat het in een penning staat. De dekker telt ook als hij door het veld van de koning kijkt. */
+function nietSlaan(S, a) {
+  const k = S.kings.w, x = S.board[a], goedkoop = (p, q) => VAL[S.board[p].toLowerCase()] - VAL[S.board[q].toLowerCase()];
+  if (Math.abs((a & 15) - (k & 15)) <= 1 && Math.abs((a >> 4) - (k >> 4)) <= 1) {
+    S.board[k] = null;
+    const d = piecesOf(S, 'b').filter(p => p !== a && pieceAttacksSq(S, p, a)).sort(goedkoop)[0];
+    S.board[k] = 'K';
+    return d == null ? '' : ' Je koning mag ' + hemVan(x) + ' niet slaan: ' + hijVan(x) + ' wordt gedekt door ' + hetStuk(S.board[d]) + ' op ' + alg(d) + '.';
+  }
+  const w = piecesOf(S, 'w').filter(p => p !== k && pieceAttacksSq(S, p, a)).sort(goedkoop)[0];
+  return w == null ? '' : ' Je ' + NAME_NL[S.board[w].toLowerCase()] + ' op ' + alg(w) + ' mag ' + hetStuk(x) + ' niet slaan: ' + hijVan(S.board[w]) + ' staat in een penning.';
 }
 function koningAttempt(m) {
   if (!session || session.phase !== 'puzzle') return;
