@@ -1425,7 +1425,7 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   await tikje();
   hostSock.send(JSON.stringify({ t: 'hallo', naam: 'Mo' }));
   await tikje();
-  ok('[4.7] mp gast: wachten tot de host start, en de kaart zegt wie', __els.modalBox.innerHTML.indexOf('Mo start het potje. Even wachten.') >= 0);
+  ok('[4.7] mp gast: wachten tot de host start, en de kaart zegt wie', __els.modalBox.innerHTML.indexOf('Wacht tot Mo op Spelen tikt. Dan loot de app wie met wit begint.') >= 0);
   hostSock.send(JSON.stringify({ t: 'start', jij: 'b', n: 1 }));
   await tikje();
   ok('mp gast: potje als zwart, wit is aan zet', !!session && session.online === true &&

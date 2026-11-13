@@ -1065,7 +1065,7 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
         check(n, s + ' boven de tabbalk', !!r && !!tab && r.top >= 0 && r.bottom <= tab.top + 0.5);
       }
       const v = await page.evaluate(() => (document.getElementById('verder') || {}).textContent || '');
-      check(n, 'de kaart is het stille potje met de uitweg', /heeft al een week niet gezet/.test(v) && /Wacht je liever niet/.test(v));` });
+      check(n, 'de kaart is het stille potje met de uitweg', /heeft al een week niet gezet/.test(v) && /Klaar met wachten/.test(v));` });
 }
 
 /* plan.md 6.4: het venster als het paar bezet is: het plaatje bovenaan, de zin eronder, één Oké en geen kruisje */

@@ -163,12 +163,12 @@ async function orakelFlow6() {
       return opslagMetPotjes([{ fid: 'vriendfien1', naam: 'Fien' }],
         [{ gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien', moves: ['d2d4', 'd7d5', 'c2c4'], beurtT: new __EchteDate(beurt).getTime() }]);
     };
-    for (const [beurt, nu, zin] of [['2026-11-13T23:00:00', '2026-11-14T01:00:00', 'Fien is aan zet · gisteren'],
-      ['2026-11-14T00:30:00', '2026-11-14T01:00:00', 'Fien is aan zet · vandaag']]) {
+    for (const [beurt, nu, zin] of [['2026-11-13T23:00:00', '2026-11-14T01:00:00', 'Fien is sinds gisteren aan zet'],
+      ['2026-11-14T00:30:00', '2026-11-14T01:00:00', 'Fien is aan zet']]) {
       zetDatum(nu);
       const a = await kind(potjeOm(beurt));
       a.tik('tabVrienden');
-      check(zin, vriendRijTekst(a, 'vriendfien1').indexOf(zin) >= 0);
+      check(zin, vriendRijTekst(a, 'vriendfien1').indexOf(zin) >= 0 && !/vandaag|geleden|·/.test(vriendRijTekst(a, 'vriendfien1')));
     }
     zetDatum('2026-11-14T00:30:00');
     const b = await kind(potjeOm('2026-11-07T23:30:00'));
@@ -264,7 +264,7 @@ async function orakelFlow6() {
     const a = await kind(opslagMetPotjes([fien], [{ gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien', moves: ['d2d4', 'd7d5', 'c2c4'],
       beurtT: Date.now() - 10 * DAG }]));
     const v = tekstVan(a, 'verder');
-    check('de uitweg', /Wacht je liever niet\? In het potje kun je via ⋯ remise aanbieden\./.test(v) && !/blijft staan/.test(v));
+    check('de uitweg', /Klaar met wachten\? Tik in het potje op de drie puntjes en bied remise aan\./.test(v) && !/blijft staan|stopt nooit/.test(v));
   });
 
   await regel('[6.1] de zetten in de bus houden elke promotie: dame, toren, loper en paard', async function (check) {
@@ -285,7 +285,8 @@ async function orakelFlow6() {
       'schaakheld-rondjes': JSON.stringify({ scan: { round: 2, earned: 6 } }) }));
     const v = tekstVan(a, 'verder');
     check('de kaart: het potje waarin het kind aan zet is', /je potje met Fien/i.test(v) && /Fien heeft gezet\. Jij bent aan zet\./.test(v));
-    check('de regel onder de kaart', /Je potje met Fien blijft staan, ook als jullie allebei de app dichtdoen\./.test(v));
+    check('de regel onder de kaart: het potje stopt nooit vanzelf, en geen apparaat', /✔ Dit potje stopt nooit vanzelf\. Het wacht, hoe lang het ook duurt\./.test(v) &&
+      !/op deze|blijft staan/.test(v));
     check('precies één regel Ook nog, die telt', JSON.stringify(ookNogRegels(a)) === JSON.stringify(['Ook nog 3 potjes en je rondje']));
     tikTekst(a, 'Ook nog');
     await wacht();
@@ -293,7 +294,7 @@ async function orakelFlow6() {
     check('het blad heet Wat nog bezig is', /Wat nog bezig is/.test(blad));
     check('elk ding in de volgorde van de kaart: aan zet, Turbo het laatst gespeeld eerst, het rondje, dan de vriend aan zet', plek.every(function (p) { return p >= 0; }) &&
       plek.every(function (p, i) { return i === 0 || p > plek[i - 1]; }));
-    check('de rij van Sem zegt wie aan zet is en sinds wanneer', /Sem is aan zet · 2 dagen geleden/.test(blad));
+    check('de rij van Sem zegt wie aan zet is en sinds wanneer', /Sem is al 2 dagen aan zet/.test(blad));
     tikTekst(a, 'Je potje met Sem');
     await wacht();
     check('een rij opent zijn potje', opSpeelscherm(a) && a.get('session.S.hist.length') === 1);
@@ -348,10 +349,10 @@ async function orakelFlow6() {
     a.tik('verderKaart');
     await wacht(20000);
     check('de terugknop is Pauze', /‹ Pauze/.test(tekstVan(a, 'backBtn')));
-    check('op je eigen beurt', tekstVan(a, 'bubble').indexOf('Fien is er nu niet. Doe gerust je zet: Fien ziet hem bij het openen van SchaakHeld.') >= 0);
+    check('op je eigen beurt', tekstVan(a, 'bubble').indexOf('Doe gerust je zet. Fien ziet hem zodra Fien het potje opent.') >= 0 && !/is er nu niet/.test(tekstVan(a, 'bubble')));
     zet(a, 'g1f3');
     await wacht(5000);
-    check('na je zet', tekstVan(a, 'bubble').indexOf('Fien is er nu niet. Je zet is bewaard: Fien ziet hem bij het openen van SchaakHeld.') >= 0);
+    check('na je zet', tekstVan(a, 'bubble').indexOf('Je zet is bewaard. Fien ziet hem zodra Fien het potje opent.') >= 0 && !/is er nu niet/.test(tekstVan(a, 'bubble')));
     check('✔ bewaard in de balk', zichtbaar(a, 'bewaard') && /✔ bewaard/.test(tekstVan(a, 'bewaard')));
     check('geen einde en geen teller veranderd', !a.get('session.over') && !/gestopt|telt voor niemand/.test(a.scherm()) && tellers(a) === voor);
   });

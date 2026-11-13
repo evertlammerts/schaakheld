@@ -3263,7 +3263,7 @@ async function orakelTwee() {
     for (const x of [wit, zwart]) { x.tik('backBtn'); await wacht(); x.tik('tabVrienden'); await wacht(); }
     const rij = function (x) { return x.doc.__tekst(x.el('friendList')); };
     check('wit leest dat het aan zet is, met de knop Jij bent aan zet', /Jij bent aan zet\./.test(rij(wit)) && kanTikken(wit, 'Jij bent aan zet') && !/Uitnodigen/.test(rij(wit)));
-    check('zwart leest wie aan zet is en sinds wanneer, met Bekijk', new RegExp(wit.naam + ' is aan zet · vandaag').test(rij(zwart)) &&
+    check('zwart leest wie aan zet is en sinds wanneer, met Bekijk', new RegExp(wit.naam + ' is aan zet').test(rij(zwart)) && !/vandaag|sinds/.test(rij(zwart)) &&
       kanTikken(zwart, 'Bekijk') && !/Uitnodigen/.test(rij(zwart)));
     tikTekst(wit, 'Jij bent aan zet');
     await wacht();
@@ -3702,8 +3702,8 @@ async function orakelTwee() {
     await wacht();
     fien.tik('mpJa');
     await wacht();
-    check('bij Daan', /Jij start het potje\. Tik op Spelen!/.test(daan.scherm()));
-    check('bij Fien', /Daan start het potje\. Even wachten\./.test(fien.scherm()));
+    check('bij Daan', /Tik op Spelen! Dan loot de app wie met wit begint\./.test(daan.scherm()) && !/start het potje/.test(daan.scherm()));
+    check('bij Fien', /Wacht tot Daan op Spelen tikt\. Dan loot de app wie met wit begint\./.test(fien.scherm()) && !/start het potje/.test(fien.scherm()));
   });
 
   await regel('[4.7] een vriendschapsvraag na een potje staat in de eindkaart van de ander, niet erachter', async function (check) {
