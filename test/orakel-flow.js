@@ -620,6 +620,19 @@ async function orakelFlow() {
     check('geen woordvenster, wel de zin', !/Samen spelen op afstand/.test(a.scherm()) && /De server doet even niet mee/.test(toastTekst(a)));
   });
 
+  await regel('[4.8] twee snelle tikken op "Ik typ woorden" openen één venster', async function (check) {
+    const a = nieuwKind();
+    a.tik('tabVrienden');
+    await wacht(500);
+    a.tik('vrWoord');
+    a.tik('vrWoord');
+    await wacht(2000);
+    check('testopzet: het woordvenster', /Samen spelen op afstand/.test(a.scherm()));
+    tikTekst(a, 'Terug');
+    await wacht(1000);
+    check('na Terug staat er geen tweede venster', !a.open());
+  });
+
   await regel('[1.3] Revanche na afloop begint meteen een nieuw potje, zonder vraag', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
     a.tik('verderKaart');

@@ -760,8 +760,9 @@ function WebSocket(url) {
           oud._sluit(1006, '', false);
         }, 0);
       }
-      lever(self, '{"t":"welkom"}');
+      /* zoals room.go: het welkom zegt of de ander nu verbonden is */
       const p = peer();
+      lever(self, '{"t":"welkom","peer":' + !!p + '}');
       if (p) lever(p, '{"t":"peer","aan":true}');
       return;
     }

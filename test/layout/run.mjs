@@ -693,9 +693,10 @@ for (const [W, H] of KLEIN) {
 }
 
 /* de volle kaart van een potje tussen kinderen: een potje dat telt (dus met de regel over wat telde), de trofee van
-   het eerste potje, de vriendschapsvraag en een naam van veertien letters */
-for (const [W, H] of [...KLEIN, [360, 780]]) {
-  const n = '[4.7] ' + W + 'x' + H + ': de volle eindkaart van een potje tussen kinderen, met een trofee, de vriendschapsvraag en een lange naam: alles past';
+   het eerste potje, de vriendschapsvraag en een naam van veertien letters, gewonnen of verloren */
+for (const [W, H, uitslag] of [[360, 640, 'w'], [375, 553, 'w'], [375, 647, 'w'], [360, 780, 'w'], [360, 640, 'b'], [360, 780, 'b']]) {
+  const n = '[4.7] ' + W + 'x' + H + ': de volle eindkaart van een potje tussen kinderen, ' + (uitslag === 'w' ? 'gewonnen' : 'verloren') +
+    ', met een trofee, de vriendschapsvraag en een lange naam: alles past';
   GEVALLEN.push({ regels: [n], code: `
       const n = ${JSON.stringify(n)};
       await vers(${W}, ${H});
@@ -705,7 +706,7 @@ for (const [W, H] of [...KLEIN, [360, 780]]) {
         mpBeginGame();
         const S = session.S;
         for (let i = 0; i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
-        endGame({ over: true, result: 'b', reason: 'mat' });
+        endGame({ over: true, result: ${JSON.stringify(uitslag)}, reason: 'mat' });
         await new Promise(r => setTimeout(r, 300));
         mpOnVriendVraag({ t: 'vriend?', pub: 'A'.repeat(88) });
         await new Promise(r => setTimeout(r, 1200));
@@ -918,10 +919,12 @@ for (const [W, H] of [[375, 553], [360, 640]]) {
       await vers(${W}, ${H});
       await page.evaluate(() => openingChooser());
       await page.waitForTimeout(500);
+      /* gemeten tegen de onderkant van de naam zelf: een regel die achter een naam van twee regels doorloopt, staat ook lager dan de bovenkant */
       const r = await page.evaluate(() => { const s = document.querySelector('.opt-btn .o-sub'); if (!s) return null;
-        const p = s.parentElement.getBoundingClientRect(), q = s.getBoundingClientRect(); return { p: p.top, q: q.top }; });
+        const naam = document.createRange(); naam.selectNodeContents(s.parentElement.firstChild);
+        return { naam: naam.getBoundingClientRect().bottom, q: s.getBoundingClientRect().top }; });
       check(n, 'testopzet: een keuze met een regel eronder', !!r);
-      check(n, 'de regel staat onder de naam', !!r && r.q >= r.p + 12);` });
+      check(n, 'de regel begint onder de naam (' + (r && Math.round(r.q)) + ' tegen ' + (r && Math.round(r.naam)) + ')', !!r && r.q >= r.naam - 0.5);` });
 }
 
 /* de regel die van het level omhoog zweeft, blijft binnen het scherm */

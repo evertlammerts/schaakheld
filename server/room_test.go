@@ -306,6 +306,59 @@ func TestRelay(t *testing.T) {
 	gast2.Close(websocket.StatusNormalClosure, "")
 }
 
+// Het welkom zegt of de ander nu verbonden is: wie opnieuw verbindt nadat de
+// ander wegging, hoort dat anders nooit.
+func TestWelkomZegtOfDeAnderErIs(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	w := do(t, s, "POST", "/v1/room", "", nil)
+	var rm struct{ Room, Seat, Guest string }
+	json.Unmarshal(w.Body.Bytes(), &rm)
+
+	host := wsDial(t, ctx, ts, rm.Room, rm.Seat)
+	if got := wsRead(t, ctx, host); got != `{"t":"welkom","peer":false}` {
+		t.Fatalf("host alleen in de kamer: kreeg %q", got)
+	}
+	gast := wsDial(t, ctx, ts, rm.Room, rm.Guest)
+	if got := wsRead(t, ctx, gast); got != `{"t":"welkom","peer":true}` {
+		t.Fatalf("gast bij de host: kreeg %q", got)
+	}
+	if got := wsRead(t, ctx, host); got != `{"t":"peer","aan":true}` {
+		t.Fatalf("host verwacht peer-aan, kreeg %q", got)
+	}
+
+	// de host gaat weg terwijl de gast geen lijn heeft; de gast komt terug en hoort het van het welkom
+	gast.CloseNow()
+	if got := wsRead(t, ctx, host); got != `{"t":"peer","aan":false}` {
+		t.Fatalf("host verwacht peer-weg, kreeg %q", got)
+	}
+	vertrek(t, s, rm.Room, rm.Seat, host)
+	gast2 := wsDial(t, ctx, ts, rm.Room, rm.Guest)
+	if got := wsRead(t, ctx, gast2); got != `{"t":"welkom","peer":false}` {
+		t.Fatalf("gast terug zonder host: kreeg %q", got)
+	}
+
+	// een stoel die wordt overgenomen (een telefoon die van netwerk wisselt) telt als verbonden
+	host2 := wsDial(t, ctx, ts, rm.Room, rm.Seat)
+	if got := wsRead(t, ctx, host2); got != `{"t":"welkom","peer":true}` {
+		t.Fatalf("host terug bij de gast: kreeg %q", got)
+	}
+	if got := wsRead(t, ctx, gast2); got != `{"t":"peer","aan":true}` {
+		t.Fatalf("gast verwacht peer-aan, kreeg %q", got)
+	}
+	gast3 := wsDial(t, ctx, ts, rm.Room, rm.Guest)
+	if got := wsRead(t, ctx, gast3); got != `{"t":"welkom","peer":true}` {
+		t.Fatalf("gast neemt zijn stoel over: kreeg %q", got)
+	}
+	gast2.CloseNow()
+	gast3.CloseNow()
+	host2.CloseNow()
+}
+
 /* ---------- hoe lang een kamer leeft ---------- */
 
 func verbind(t *testing.T, ctx context.Context, ts *httptest.Server, room, seat string) *websocket.Conn {
