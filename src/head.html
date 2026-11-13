@@ -477,11 +477,13 @@
   @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
   @keyframes shake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-5%) } 75% { transform: translateX(5%) } }
   @keyframes pulse-miss { 0%,100% { box-shadow: inset 0 0 0 4px rgba(255,111,89,1) } 50% { box-shadow: inset 0 0 0 7px rgba(255,111,89,.5) } }
-  .cell.hero-pc { animation: hero-glow 1.4s ease infinite; }
-  @keyframes hero-glow { 0%,100% { box-shadow: inset 0 0 0 4px var(--sun) } 50% { box-shadow: inset 0 0 0 8px rgba(255,197,61,.55) } }
+  /* de hint: dezelfde twee kleuren als een gekozen veld, zodat hij op een donker veld even goed te zien is; drie keer kloppen, dan stil */
+  .cell.hero-pc { box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 5px #FFFFFF; animation: hero-glow 1.4s ease 3; }
+  .cell.hero-pc.light, .cell.hero-pc.dark { background: var(--sun-soft); }
+  @keyframes hero-glow { 50% { box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 9px #FFFFFF; } }
   .cell.check { background: radial-gradient(circle, #FF8A76 20%, #FF6F59 100%) !important; animation: pulse-miss 1s ease 3; }
   /* de hint moet ook op de koning die schaak staat te zien zijn: zijn eigen animatie wint van die van schaak */
-  .cell.check.hero-pc { animation: hero-glow 1.4s ease infinite; }
+  .cell.check.hero-pc { animation: hero-glow 1.4s ease 3; }
   .cell.spy { box-shadow: inset 0 0 0 4px #9B6FE8; }
 
   #arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
@@ -686,6 +688,9 @@
   .eindkaart h2 { margin: 0; font-size: var(--fs-xl); }
   .eindkaart p { margin: 0; font-size: var(--fs-sm); color: var(--text-quiet); }
   .eindkaart .ek-xp { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); color: var(--accent-text); }
+  .eindkaart .ek-moment { width: min(100%, 320px); }
+  .eindkaart .ek-moment h3 { margin: 0 0 2px; font-size: var(--fs-sm); }
+  .eindkaart .ek-moment p { color: var(--text); }
   .ek-trofee { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .ek-badge { display: flex; flex-direction: column; align-items: center; width: 88px; font-size: var(--fs-cap); font-weight: 700; }
   .ek-be { font-size: 40px; line-height: 1.1; }
@@ -696,9 +701,19 @@
   .eindkaart.klein .ek-badge { flex-direction: row; gap: 6px; width: auto; }
   .eindkaart.klein .ek-be { font-size: 28px; }
   .eindkaart .ek-btns { display: flex; flex-direction: column; gap: 8px; width: min(100%, 280px); }
-  /* op een klein bord past de kaart met de vriendschapsvraag alleen met de twee antwoorden naast elkaar */
-  .eindkaart.klein #ekVraag .ek-btns { flex-direction: row; width: 100%; }
-  .eindkaart.klein #ekVraag .ek-btns .btn { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 0 8px; white-space: nowrap; }
+  /* op een klein bord: twee knoppen naast elkaar (ook de twee antwoorden op de vriendschapsvraag, want alleen zo past
+     die kaart), het moment als een alinea, kleinere trofeeën */
+  .eindkaart.klein .ek-btns.twee, .eindkaart.klein #ekVraag .ek-btns { flex-direction: row; width: 100%; }
+  .eindkaart.klein .ek-btns.twee .btn, .eindkaart.klein #ekVraag .ek-btns .btn { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 0 8px; white-space: nowrap; }
+  .eindkaart.klein .ek-moment h3 { display: inline; font-size: inherit; }
+  .eindkaart.klein .ek-moment h3::after { content: ': '; }
+  .eindkaart.klein .ek-moment p { display: inline; }
+  .eindkaart.klein .ek-trofee { gap: 2px 12px; }
+  .eindkaart.klein .ek-be { font-size: 24px; }
+  .eindkaart.klein small { display: block; font-size: var(--fs-cap); line-height: 1.25; }
+  /* wat je de volgende keer nakijkt: een zachte regel in een eigen blok onder het moment; na de regels van een
+     klein bord, want die maken elke alinea van het moment even sterk inline */
+  .eindkaart .ek-moment p.ek-volgende { display: block; margin-top: 2px; font-size: var(--fs-cap); line-height: 1.25; color: var(--text-quiet); }
   .play-bottom {
     grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
     padding: 0 var(--g) 8px;
@@ -722,7 +737,14 @@
   .play-bottom.uitleg .e-head { grid-column: 1; grid-row: 1; align-self: center; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); }
   .play-bottom.uitleg .action-row { grid-column: 2; grid-row: 1; margin: 0; display: block; }
   .play-bottom.uitleg .action-row .btn { min-height: 44px; padding: 0 16px; }
-  .play-bottom.uitleg .e-body { grid-column: 1 / -1; grid-row: 2; min-height: 0; overflow-y: auto; padding-bottom: 8px; font-size: var(--fs-sm); line-height: 1.33; }
+  /* een uitleg die verder gaat dan het vak vervaagt aan de voet, zodat een halve regel niet afgeknipt lijkt;
+     meer dan 12 px raakt op 375x553 de tweede regel van de eerste reden */
+  .play-bottom.uitleg .e-body { grid-column: 1 / -1; grid-row: 2; min-height: 0; overflow-y: auto; padding-bottom: 12px; font-size: var(--fs-sm); line-height: 1.33;
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 12px), transparent); mask-image: linear-gradient(#000 calc(100% - 12px), transparent); }
+  /* er staat nog meer onder de rand: een pijltje, ook als de rand precies tussen twee redenen valt */
+  .play-bottom.uitleg { position: relative; }
+  .play-bottom.uitleg.meer::after { content: ''; position: absolute; right: 14px; bottom: 3px; width: 7px; height: 7px;
+    border-right: 2px solid var(--text-quiet); border-bottom: 2px solid var(--text-quiet); transform: rotate(45deg); pointer-events: none; }
   .e-body p { margin: 0 0 4px; }
   .e-body ul { margin: 0; padding-left: 1.1em; }
   .e-body li { margin: 0 0 4px; }

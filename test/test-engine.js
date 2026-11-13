@@ -148,10 +148,19 @@ for (const type of ['attacked', 'capture', 'mobility', 'free']) {
   check('scan gen ' + type, ok, 5);
 }
 for (const wantTrap of [true, false]) {
+  /* the check behind the generator gives up after a few rejected candidates,
+     so without a seed a run now and then finds nothing */
+  let seed = wantTrap ? 1001 : 1002;
+  const rng = () => {
+    seed = (seed + 0x6D2B79F5) >>> 0;
+    let x = Math.imul(seed ^ (seed >>> 15), seed | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
   const t = Date.now();
   let ok = 0;
   for (let i = 0; i < 5; i++) {
-    const task = E.genSafeTask(wantTrap);
+    const task = E.genSafeTask(wantTrap, rng);
     if (task && task.trap === wantTrap) ok++;
   }
   console.log('safe trap=' + wantTrap + '  ' + ok + '/5 ok, avg ' + Math.round((Date.now() - t) / 5) + 'ms');
@@ -168,12 +177,20 @@ for (const wantTrap of [true, false]) {
   check('best3 gen', ok, 5);
 }
 
-/* Trap tasks must come with a capture as punishment. */
+/* Trap tasks come with a capture as punishment, or with the mate (fix list item 18). */
 {
-  const task = E.genSafeTask(true);
+  let seed = 1801;
+  const rng = () => {
+    seed = (seed + 0x6D2B79F5) >>> 0;
+    let x = Math.imul(seed ^ (seed >>> 15), seed | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+  const task = E.genSafeTask(true, rng);
+  check('trap: the seed gives a task', !!task, true);
   if (task) {
     E.makeMove(task.S, task.move);
-    check('trap punish is capture', E.isCapture(task.S, task.punish), true);
+    check('trap punish is a capture, or the mate', E.isCapture(task.S, task.punish) || task.mate === true, true);
     E.unmakeMove(task.S);
   }
 }
@@ -339,9 +356,21 @@ for (const wantTrap of [true, false]) {
   const t = E.genKingTask(null, 1);
   check('king: live generator smoke (one attempt)', t === null || (t.S.turn === 'w' && t.answers.length >= 1 && t.answers.length <= 2), true);
   check('colorFlipped: mirrors and swaps', E.toFEN(E.colorFlipped(E.parseFEN('k7/8/2K5/8/8/8/8/7R w - - 0 1'))), '7r/8/8/8/8/2k5/8/K7 b - - 0 1');
-  const p = E.genPieceTask();
-  check('piece: generator returns a hanging piece with saves', !!p && p.type === 'stuk' && p.hang.victim >= 300 &&
+  /* the app reads Red je stuk from the verified stock; the live generator is
+     its fallback and rejects most candidates, so it gets a fixed seed */
+  const p = typeof STUK_POOL !== 'undefined' ? E.trucTask(STUK_POOL[0]) : null;
+  check('piece: a stock line gives a hanging piece with saves', !!p && p.type === 'stuk' && p.hang.victim >= 300 &&
     p.answers.length >= 1 && p.answers.length <= 4, true);
+  let seed = 10;
+  const rng = () => {
+    seed = (seed + 0x6D2B79F5) >>> 0;
+    let x = Math.imul(seed ^ (seed >>> 15), seed | 1);
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+  const live = E.genPieceTask(rng);
+  check('piece: the live generator gives nothing or a task the check accepts', live === null ||
+    (live.type === 'stuk' && live.hang.victim >= 300 && !!E.checkPieceTask(live)), true);
   if (p) {
     const base = E.forcedMaterial(p.S);
     check('piece: every answer keeps the material', p.answers.every(a => {

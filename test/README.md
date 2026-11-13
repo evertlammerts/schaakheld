@@ -4,7 +4,7 @@
 
 | Suite | Bestand | Draait op |
 |---|---|---|
-| engine | `test-engine.js` (perft-counts zijn heilig) | jsc |
+| engine | `test-engine.js` (perft-counts zijn heilig), `orakel-engine.js` | jsc |
 | flow | `flow-test.js`, `orakel-flow.js` | jsc, DOM-shim |
 | twee apparaten | `twee-apparaten.js`, `orakel-twee.js` | jsc, DOM-shim, gedeelde nep-server |
 | server | `server/*_test.go`, ook `server/orakel_test.go` | go |
@@ -24,11 +24,15 @@ het blok anders, dan is dat een ontwerpwijziging voor de lead.
 | Suite | Nog niet gebouwd | Gebouwd |
 |---|---|---|
 | flow, twee apparaten | `nogNiet('[n.m] ...', async check => {...})` | `regel('[n.m] ...', ...)` |
+| engine | `nogNiet('[n.m] ...', function (check) {...})` | `regel('[n.m] ...', ...)` |
 | server | `nogNiet(t, "[n.m] ...", func(t tb) {...})` | het blok rechtstreeks met `t` |
 | layout | het nummer staat niet in `GEBOUWD` | het nummer staat in `GEBOUWD` |
 
-Elke suite bewijst dit mechanisme zelf (`orakelZelftest` in `harnas.js`,
-`TestOrakelMechanisme`, `zelftest()` in `layout/run.mjs`).
+Elke suite bewijst dit mechanisme zelf (`orakelZelftest` in `harnas.js`, het
+proefblok bovenin `orakel-engine.js`, `TestOrakelMechanisme`, `zelftest()` in
+`layout/run.mjs`). Een engine-blok dat lang zoekt, controleert eerst goedkoop
+of wat het nodig heeft er is, zodat het snel faalt zolang de regel niet
+gebouwd is.
 
 ## Een flowtest of tweeapparatentest schrijven
 

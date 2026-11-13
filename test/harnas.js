@@ -34,8 +34,11 @@ function maakApparaat(naam, opties) {
   };
   /* een klok die scheef staat: dit apparaat leest de tijd van de wereld plus klokAf ms */
   const klokAf = opties.klokAf || 0;
-  const namen = ['document', 'localStorage', 'location', 'history', '__els', 'setTimeout', 'WebSocket', 'fetch'];
-  const waarden = [doc, opslag, loc, loc.__history, doc.__els, eigenTimer, EigenSocket, eigenFetch];
+  /* de shim vraagt minder beweging, zodat een zet meteen staat; een test die midden in een schuivend stuk
+     tikt, zet beweging aan */
+  const beweging = opties.beweging ? function () { return { matches: false }; } : matchMedia;
+  const namen = ['document', 'localStorage', 'location', 'history', '__els', 'setTimeout', 'WebSocket', 'fetch', 'matchMedia'];
+  const waarden = [doc, opslag, loc, loc.__history, doc.__els, eigenTimer, EigenSocket, eigenFetch, beweging];
   if (klokAf) {
     const ScheveDate = function (...a) {
       const W = Date;

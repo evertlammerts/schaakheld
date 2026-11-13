@@ -8,6 +8,7 @@ var __VASTE_OPMAAK = (function () {
 load('test/dom-shim.js');
 load('src/engine.js');
 load('src/koning.js');
+load('src/trucs.js');
 load('src/words.js');
 load('src/qr.js');
 load('src/jsqr.js');
@@ -15,6 +16,7 @@ load('.tmp-ui.js');
 var __APP_SRC = readFile('.tmp-ui.js');
 load('test/harnas.js');
 load('test/orakel-flow.js');
+load('test/orakel-flow-5.js');
 load('test/orakel-flow-6.js');
 load('test/orakel-versies.js');
 load('test/flow-test.js');

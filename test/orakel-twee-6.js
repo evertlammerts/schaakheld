@@ -3555,7 +3555,7 @@ async function orakelTwee6() {
     a.ev('versiesOnbekend = true; Object.assign(MP, { viaFriend: "vriendvandaan1", gameNo: 3, ' +
       'offer: { by: MP.myColor, ply: MP.S.hist.length, answer: null, t: 1794000000000 }, result: { kind: "opgave", by: MP.myColor, ply: MP.S.hist.length }, ' +
       'shown: true, bekend: false, vriendWeet: true, kamer: { fid: "vriendvandaan1", paar: "paarcode0001", voor: 3, mijn: 4 }, ' +
-      'vrNogTonen: "vriendvandaan1", vrTerugZeggen: true, telWie: "naam:Daan" }); MP.vr.sessie = 5; bewaarSamen()');
+      'vrNogTonen: "vriendvandaan1", vrTerugZeggen: true, telWie: "naam:Daan", herhaalGezegd: 2 }); MP.vr.sessie = 5; bewaarSamen()');
     const velden = 'JSON.stringify(Object.keys(SAMEN_VELDEN).map(function (k) { return [k, SAMEN_VELDEN[k].uit(null)]; }))';
     const voor = JSON.parse(a.get(velden)), id = a.get('MP.gameId');
     check('testopzet: elk bewaard veld heeft een waarde', voor.length > 10 && voor.every(function (kv) {
