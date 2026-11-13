@@ -8812,15 +8812,20 @@ function tweedeKeer(S) { return repetitions(S) === 1; }
    elk bord. Of hij beloofd is, volgt uit de zetten van het potje; het potje onthoudt alleen bij welke halve zet de regel
    er het laatst stond (herhaalGezegd), zodat een herlading de belofte houdt en Zet terug haar met de zetten meeneemt. */
 const HERHAAL_SCHULD = 'Een stelling stond er net voor de tweede keer. De derde keer is het remise. Liever niet? Speel anders.';
-/* bij welke halve zet een stelling er het laatst voor de tweede keer stond, voor de stelling die er nu staat (0: nooit) */
+/* Bij welke halve zet een stelling er het laatst voor de tweede keer stond, voor de stelling die er nu staat (0: nooit).
+   Na een slag of een pionzet kan geen eerdere stelling meer terugkomen: dan is er niets meer om voor te waarschuwen. */
 function eerdereTweedeKeer(S) {
   const zetten = S.hist.map(u => u.m), tel = {};
   for (let i = 0; i < zetten.length; i++) unmakeMove(S);
-  let p = 0;
+  let p = 0, vast = 0;
   const kijk = i => { const k = positionKey(S); tel[k] = (tel[k] || 0) + 1; if (tel[k] === 2 && i < zetten.length) p = i; };
   kijk(0);
-  zetten.forEach((m, i) => { makeMove(S, m); kijk(i + 1); });
-  return p;
+  zetten.forEach((m, i) => {
+    if (isCapture(S, m) || S.board[m.from].toLowerCase() === 'p') vast = i + 1;
+    makeMove(S, m);
+    kijk(i + 1);
+  });
+  return vast > p ? 0 : p;
 }
 function herhaalGezegdNu(S) {
   (session.online ? MP : session).herhaalGezegd = S.hist.length;

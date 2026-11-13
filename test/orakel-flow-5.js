@@ -1812,6 +1812,29 @@ async function orakelFlow5() {
     } finally { pickMove = echt; }
   });
 
+  /* de beloofde regel gaat over een stelling die nog terug kan komen: na een slag of een pionzet sinds die tweede keer kan
+     dat niet meer, en dan is er niets beloofd */
+  for (const [wat, fen, turbo] of [
+    ['een slag', '3q2k1/8/8/P7/8/8/3P4/6K1 b - - 0 30', { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'd4d2' }],
+    ['een pionzet', '3q2k1/7p/8/P7/8/8/8/6K1 b - - 0 30', { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4', 6: 'h7h6' }]]) {
+    await regel('[5.6] had schaak de strook bij de tweede keer en komt daarna ' + wat + ': de stelling kan niet meer terugkomen, dus geen beloofde regel', async function (check) {
+      const echt = pickMove;
+      pickMove = function (S) { const k = turbo[S.hist.length]; return legalMoves(S).find(function (m) { return moveKey(m) === k; }) || echt(S, 2); };
+      try {
+        const a = nieuwKind();
+        await startPotje(a, 2);
+        a.ev('session.S = parseFEN(' + JSON.stringify(fen) + '); BD.mode = "off"; renderBoard(); turboTurn()');
+        await wacht(3000);
+        for (const k of ['g1h1', 'h1g1']) { zet(a, k); await wacht(3000); }
+        check('testopzet: de tweede keer, met schaak (' + strook5(a) + ')', a.get('repetitions(session.S)') === 1 && strook5(a) === 'Je staat schaak! Red je koning! 👑');
+        zet(a, 'g1f1');
+        await wacht(3000);
+        check('testopzet: Turbo speelde ' + turbo[6], a.get('session.S.hist.length') === 7 && a.get('moveKey(session.S.hist[6].m)') === turbo[6]);
+        check('geen beloofde regel (' + strook5(a) + ')', strook5(a) !== HERHAAL_SCHULD5 && strook5(a) !== HERHAAL_ZIN5);
+      } finally { pickMove = echt; }
+    });
+  }
+
   /* Zet terug neemt de tweede keer mee: staat er in het potje zoals het nu is geen stelling twee keer, dan is er niets beloofd */
   await regel('[5.6] Zet terug neemt de tweede keer terug: daarna zegt de strook niets over herhaling', async function (check) {
     const echt = pickMove, TURBO = { 0: 'd8d4', 2: 'd4d5', 4: 'd5d4' };
@@ -1866,7 +1889,7 @@ async function orakelFlow5() {
     ['met een getal voorbij het potje', { herhaalGezegd: 99 }, true],
     ['met het getal van deze beurt: de regel stond er al, en het kind zette nog niet', { herhaalGezegd: 6 }, true]]) {
     await regel('[5.6] een bewaard potje ' + wat + ': ' + (zin ? 'terug in het potje staat de beloofde regel in de strook' : 'geen regel, maar het welkom'), async function (check) {
-      const a = nieuwKind({ opslag: opslagMetPotje(2, ['e2e3', 'b8c6', 'g1f3', 'c6b8', 'f3g1', 'g7g6'], extra) });
+      const a = nieuwKind({ opslag: opslagMetPotje(2, ['e2e3', 'b8c6', 'g1f3', 'c6b8', 'f3g1', 'g8f6'], extra) });
       a.tik('verderKaart');
       await wacht(1500);
       check('testopzet: het potje is terug en het kind is aan zet', a.get('!!session && session.kind === "game" && session.S.hist.length === 6 && session.S.turn === "w"'));
@@ -1882,7 +1905,7 @@ async function orakelFlow5() {
     check('de strook (' + strook5(a) + ')', a.get('session.S.hist.length') === 8 && strook5(a) === HERHAAL_SCHULD5);
   });
   await regel('[5.6] een bewaard potje met een beloofde regel waarin het kind schaak staat: terug in het potje gaat de beloofde regel voor, en het schaak blijft op het bord', async function (check) {
-    const a = nieuwKind({ opslag: opslagMetPotje(2, ['g1f3', 'g8f6', 'f3g1', 'f6g8', 'f2f3', 'e7e6', 'e1f2', 'd8h4']) });
+    const a = nieuwKind({ opslag: opslagMetPotje(2, ['f2f3', 'e7e6', 'g1h3', 'g8h6', 'h3g1', 'h6g8', 'g1h3', 'd8h4']) });
     a.tik('verderKaart');
     await wacht(1500);
     check('testopzet: het potje is terug en het kind staat schaak', a.get('!!session && session.S.hist.length === 8 && inCheck(session.S)'));

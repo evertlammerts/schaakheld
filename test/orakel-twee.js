@@ -3765,13 +3765,14 @@ async function orakelTwee() {
   await regel('[5.6] een vriendenpotje: wie bij de tweede keer schaak stond en op zijn volgende beurt weer schaak staat, leest de beloofde regel, en het schaak blijft op het bord', async function (check) {
     const a = maakApparaat('Fien'), b = maakApparaat('Daan');
     await samenSpelen(a, b);
-    for (const z of ['e2e4', 'd7d5', 'f1b5', 'c8d7', 'b5f1', 'd7c8', 'f1b5']) await speel(a, b, z);
+    /* de witte dame jaagt de koning: Dh4+ staat er na 5. Dh4+ voor de tweede keer, en 6. Dg4+ geeft weer schaak zonder te slaan */
+    for (const z of ['e2e4', 'e7e5', 'd1h5', 'e8e7', 'h5h4', 'e7e8', 'h4h5', 'e8e7', 'h5h4']) await speel(a, b, z);
     await wacht(3000);
     const wit = a.get('MP.myColor') === 'w' ? a : b, zwart = wit === a ? b : a;
-    check('testopzet: zwart hoort eerst Schaak! (' + tekstVan(zwart, 'bubble') + ')', /^Schaak!/.test(tekstVan(zwart, 'bubble')));
-    zet(zwart, 'b8c6');
+    check('testopzet: zwart hoort eerst Schaak! (' + tekstVan(zwart, 'bubble') + ')', zwart.get('repetitions(MP.S)') === 1 && /^Schaak!/.test(tekstVan(zwart, 'bubble')));
+    zet(zwart, 'e7e6');
     await wacht(3000);
-    zet(wit, 'b5c6');
+    zet(wit, 'h4g4');
     await wacht(3000);
     check('testopzet: zwart staat weer schaak', zwart.get('inCheck(MP.S)'));
     check('zwart leest de beloofde regel (' + tekstVan(zwart, 'bubble') + ')', tekstVan(zwart, 'bubble').indexOf('Een stelling stond er net voor de tweede keer.') >= 0);
