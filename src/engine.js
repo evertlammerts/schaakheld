@@ -386,6 +386,25 @@ function forcedMaterial(S) {
   const v = quiesce(S, -Infinity, Infinity, 8, evalMatSTM);
   return S.turn === 'w' ? v : -v;
 }
+/* The children's table (pion 1, paard 3, loper 3, toren 5, dame 9) in the engine's
+   hundreds: a sum of pieces a child reads is never a rounded engine value, so two
+   bishops for a rook is 1 point and not the 1.6 of 330 + 330 - 500. */
+const TABEL = { p: 100, n: 300, b: 300, r: 500, q: 900, k: 20000 };
+function pointsOf(S) {
+  let s = 0;
+  for (let sq = 0; sq < 128; sq++) {
+    if (sq & 0x88) continue;
+    const p = S.board[sq];
+    if (!p || p === 'K' || p === 'k') continue;
+    s += isWhitePiece(p) ? TABEL[p.toLowerCase()] : -TABEL[p.toLowerCase()];
+  }
+  return s;
+}
+/* forcedMaterial counted by the children's table */
+function forcedPoints(S) {
+  const v = quiesce(S, -Infinity, Infinity, 8, x => x.turn === 'w' ? pointsOf(x) : -pointsOf(x));
+  return S.turn === 'w' ? v : -v;
+}
 
 /* --- opening book: a handful of sound, kid-friendly lines in coordinate notation.
    Turbo (level 2 and 3) plays from it while the game follows a line; the
@@ -662,26 +681,47 @@ function pickMove(S, level, rng, budgetMs) {
   return top[Math.floor(rng() * top.length)].m;
 }
 
-/* Blunder guard: does move m allow mate in one, or lose 150cp or more by force
-   against the material on the board now? A
-   better move that was not played is no danger, so it is never the baseline.
-   Returns null or {loss, punish, take}: punish is the opponent's best reply
-   (with mate: true when it mates), take the capture that starts the loss, so
-   a text that says what is lost never shows a quiet move. */
-function blunderCheck(S, m) {
-  const mySign = S.turn === 'w' ? 1 : -1, now = material(S) * mySign;
-  makeMove(S, m);
-  const mate = mateReply(S);
-  const loss = mate ? MATE : now - forcedMaterial(S) * mySign;
-  let punish = mate, take = null;
-  if (!mate && loss >= 150) {
-    const reply = rootScores(S, 2);
-    punish = reply.length ? reply[0].m : null;
-    take = lossStart(S, punish);
-  }
+/* The loss of the mover's move x by the alarm's measure: MATE when the
+   opponent then mates in one, otherwise the material on the board now minus
+   the forced material after it. A move that mates loses nothing at all, and a
+   move that ends the game in a draw is never counted as better. */
+function lossAfter(S, x, now, sign) {
+  makeMove(S, x);
+  const st = gameStatus(S);
+  const l = st.over ? (st.reason === 'mat' ? -Infinity : Infinity) : mateReply(S) ? MATE : now - forcedMaterial(S) * sign;
   unmakeMove(S);
-  if (mate) return { loss, punish, take: null, mate: true };
-  return loss >= 150 ? { loss, punish, take } : null;
+  return l;
+}
+/* Blunder guard: does move m allow mate in one, or lose 150cp or more by force
+   against the material on the board now, while another legal move loses at
+   least a pawn less? A better move that was not played is no danger, so it is
+   never the baseline; and when every move loses as much, there is nothing to
+   warn about. Returns null or {loss, punish, take, points, anyway}: punish is
+   the opponent's best reply (with mate: true when it mates), take the capture
+   that starts the loss, points the loss by the children's table, anyway
+   whether every move loses at least a pawn. */
+function blunderCheck(S, m) {
+  const sign = S.turn === 'w' ? 1 : -1, now = material(S) * sign, pointsNow = pointsOf(S) * sign;
+  makeMove(S, m);
+  const over = gameStatus(S).over, mate = over ? null : mateReply(S);
+  const loss = over ? 0 : mate ? MATE : now - forcedMaterial(S) * sign;
+  unmakeMove(S);
+  if (loss < 150) return null;
+  /* stop at the first move that is a pawn better and loses less than a pawn */
+  let better = false, least = Infinity;
+  for (const x of legalMoves(S)) {
+    if (moveKey(x) === moveKey(m)) continue;
+    const l = lossAfter(S, x, now, sign);
+    if (l < least) least = l;
+    if (l <= loss - 100) { better = true; if (least < 100) break; }
+  }
+  if (!better) return null;
+  if (mate) return { loss, punish: mate, take: null, mate: true, points: 0, anyway: least >= 100 };
+  makeMove(S, m);
+  const reply = rootScores(S, 2), punish = reply.length ? reply[0].m : null;
+  const take = lossStart(S, punish), points = pointsNow - forcedPoints(S) * sign;
+  unmakeMove(S);
+  return { loss, punish, take, points, anyway: least >= 100 };
 }
 
 /* The capture that starts a loss in S, for the side to move: its best move
@@ -811,15 +851,16 @@ function findAttacker(S, t, by) {
 
 /* Static exchange on square t: net material the side to move can win by capturing
    there (capturing with the cheapest attacker first; 0 when declining is better). */
-function seeSquare(S, t) {
+function seeSquare(S, t, vals) {
+  vals = vals || VAL;
   const p = S.board[t];
   if (!p) return 0;
   const caps = legalMoves(S).filter(m => m.to === t && S.board[m.to]);
   if (!caps.length) return 0;
   caps.sort((a, b) => VAL[S.board[a.from].toLowerCase()] - VAL[S.board[b.from].toLowerCase()]);
-  const victim = VAL[p.toLowerCase()];
+  const victim = vals[p.toLowerCase()];
   makeMove(S, caps[0]);
-  const net = victim - seeSquare(S, t);
+  const net = victim - seeSquare(S, t, vals);
   unmakeMove(S);
   return Math.max(0, net);
 }
@@ -1491,8 +1532,10 @@ function capturedSq(S, m) { return m.flags === 'e' ? m.to + (S.turn === 'w' ? -1
 function isPattern(info) { return info.fork.length >= 2 || !!info.pin || !!info.skewer || info.discovered.length > 0; }
 
 /* What one move m of White meant, from the position before it: at most one
-   moment, the first kind that applies, or null. A loss is in centipawns;
-   blunderCheck counts one from 150, so the exchange counts and one pawn never. */
+   moment, the first kind that applies, or null. A loss is in centipawns and
+   comes from blunderCheck: from 150, so the exchange counts and one pawn
+   never, and only when another move loses at least a pawn less. verlies is the
+   same loss by the children's table, for the text. */
 function moveMoment(S, m) {
   const base = { moveNo: S.full, ply: S.hist.length, move: moveKey(m) };
   const bc = blunderCheck(S, m);
@@ -1500,30 +1543,35 @@ function moveMoment(S, m) {
   /* Turbo takes back on the square the child just captured on: the lesson is
      the defended piece that was taken, not a piece left hanging. */
   if (bc && bc.punish && isCapture(S, m) && bc.punish.to === m.to)
-    return Object.assign(base, { kind: 'ruil', loss: bc.loss, sq: alg(m.to), punish: moveKey(bc.punish) });
+    return Object.assign(base, { kind: 'ruil', loss: bc.loss, verlies: bc.points, sq: alg(m.to), punish: moveKey(bc.punish) });
   if (bc && bc.punish) {
     makeMove(S, m);
-    const t = capturedSq(S, bc.punish), victim = isCapture(S, bc.punish) ? (S.board[t] || 'p') : null;
-    const undefended = !!victim && findAttacker(S, t, 'w') < 0;
-    const info = patternsAfterMove(S, bc.punish);
+    const cap = isCapture(S, bc.punish), t = capturedSq(S, bc.punish), victim = cap ? (S.board[t] || 'p') : null;
+    const exchange = cap && S.board[t] ? seeSquare(S, t) : 0;
+    const undefended = cap && findAttacker(S, t, 'w') < 0;
+    const info = patternsAfterMove(S, bc.punish), by = NAME_NL[S.board[bc.punish.from].toLowerCase()];
     unmakeMove(S);
     const taken = victim ? { sq: alg(t), piece: NAME_NL[victim.toLowerCase()], points: POINTS[victim.toLowerCase()] } : {};
+    const loss = { loss: bc.loss, verlies: bc.points, punish: moveKey(bc.punish) };
+    /* a capture that wins on its own square is the lesson, whatever shape the
+       capturing piece makes afterwards; a trick only when the gain lies elsewhere */
     if (undefended) {
       /* taken where it went itself: no guard of that square went away */
       const d = t === m.to ? -1 : findAttacker(S, t, 'w');
-      return Object.assign(base, { kind: 'hang', loss: bc.loss, punish: moveKey(bc.punish),
-        defender: d >= 0 ? NAME_NL[S.board[d].toLowerCase()] : null, moved: d >= 0 && d === m.from }, taken);
+      return Object.assign(base, { kind: 'hang', self: t === m.to, defender: d >= 0 ? NAME_NL[S.board[d].toLowerCase()] : null,
+        moved: d >= 0 && d === m.from }, loss, taken);
     }
-    if (isPattern(info)) return Object.assign(base, { kind: 'truc', loss: bc.loss, punish: moveKey(bc.punish) }, taken);
+    if (cap && exchange >= bc.loss - 50) return Object.assign(base, { kind: 'slag', by }, loss, taken);
+    if (isPattern(info)) return Object.assign(base, { kind: 'truc' }, loss, taken);
   }
   if (isCapture(S, m)) {
-    const victim = S.board[capturedSq(S, m)] || 'p';
+    const victim = (S.board[capturedSq(S, m)] || 'p').toLowerCase();
     makeMove(S, m);
-    const back = seeSquare(S, m.to);
+    const back = seeSquare(S, m.to), backPoints = seeSquare(S, m.to, TABEL);
     unmakeMove(S);
-    const net = VAL[victim.toLowerCase()] - back;
-    if (net <= -200) return Object.assign(base, { kind: 'ruil', loss: -net, sq: alg(m.to) });
-    if (net >= 250) return Object.assign(base, { kind: 'goed', gain: net, sq: alg(m.to) });
+    const net = VAL[victim] - back;
+    if (net >= 250) return Object.assign(base, { kind: 'goed', gain: net, winst: TABEL[victim] - backPoints, sq: alg(m.to),
+      piece: back === 0 ? NAME_NL[victim] : null });
   }
   makeMove(S, m);
   const mated = inCheck(S) && legalMoves(S).length === 0;
@@ -1538,8 +1586,8 @@ function moveMoment(S, m) {
   const wins = winnableCaptures(S).filter(x => x.gain >= 300 && resultOf(x.move) - afterM >= 250);
   if (wins.length && !wins.some(x => isCapture(S, m) && capturedSq(S, m) === x.sq)) {
     const w = wins.reduce((a, b) => b.gain > a.gain ? b : a);
-    return Object.assign(base, { kind: 'gemist', loss: w.gain, sq: alg(w.sq), piece: NAME_NL[S.board[w.sq].toLowerCase()],
-      points: POINTS[S.board[w.sq].toLowerCase()], with: moveKey(w.move) });
+    return Object.assign(base, { kind: 'gemist', loss: w.gain, winst: seeSquare(S, w.sq, TABEL), sq: alg(w.sq),
+      piece: NAME_NL[S.board[w.sq].toLowerCase()], points: POINTS[S.board[w.sq].toLowerCase()], with: moveKey(w.move) });
   }
   const info = patternsAfterMove(S, m);
   if (info.safe && isPattern(info)) return Object.assign(base, { kind: 'goed', pattern: true, gain: 0 });
@@ -1553,33 +1601,46 @@ function materialAt(S, ply) {
   for (let i = back.length - 1; i >= 0; i--) makeMove(S, back[i]);
   return v;
 }
-/* The one moment for the end card: a mate first, otherwise the largest loss,
-   otherwise the best good move; on a tie the earliest, since the first big
-   mistake usually decided the game. A pattern move counts as good only when
-   it worked: after the child's next move White is at least 2 points better
-   than before it, because the detector also sees forks that win nothing. */
+/* Did Turbo use a moment of loss: his next move was the punishment, or a
+   capture on the square of the piece that could be taken. A chance the child
+   missed (gemist) happened whatever Turbo did. */
+function momentUsed(k, S) {
+  if (k.kind === 'gemist' || k.kind === 'goed') return true;
+  const u = S && S.hist[k.ply + 1];
+  if (!u) return false;
+  return moveKey(u.m) === k.punish || (!!u.cap && !!k.sq && alg(u.m.to) === k.sq);
+}
+/* The one moment for the end card: a mate first, otherwise the largest loss
+   that Turbo used, otherwise the largest one he let pass, otherwise the best
+   good move; on a tie the earliest, since the first big mistake usually
+   decided the game. A pattern move counts as good only when it worked: after
+   the child's next move White is at least 2 points better than before it,
+   because the detector also sees forks that win nothing. */
 function chooseMoment(moments, S) {
   const ms = moments.filter(Boolean).map(x => {
-    if (!x.pattern) return x;
+    if (!x.pattern) return Object.assign({}, x, { used: momentUsed(x, S) });
     if (!S || S.hist.length < x.ply + 3) return null;
     const gain = materialAt(S, x.ply + 3) - materialAt(S, x.ply);
-    return gain >= 200 ? Object.assign({}, x, { gain }) : null;
+    return gain >= 200 ? Object.assign({}, x, { gain, used: true }) : null;
   }).filter(Boolean);
-  const mate = ms.find(x => x.kind === 'mat');
+  const mate = ms.find(x => x.kind === 'mat' && x.used) || ms.find(x => x.kind === 'mat');
   if (mate) return mate;
-  const lost = ms.filter(x => x.kind !== 'goed');
-  if (lost.length) return lost.reduce((a, b) => b.loss > a.loss ? b : a);
+  const lost = ms.filter(x => x.kind !== 'goed'), usedLost = lost.filter(x => x.used);
+  const pool = usedLost.length ? usedLost : lost;
+  if (pool.length) return pool.reduce((a, b) => b.loss > a.loss ? b : a);
   const good = ms.filter(x => x.kind === 'goed');
   return good.length ? good.reduce((a, b) => b.gain > a.gain ? b : a) : null;
 }
-/* The key moment of the game so far, from its first move. The app can call
-   moveMoment after each move instead, so nothing waits at the end. */
-function keyMoment(S) {
+/* The key moment of the game so far, from its first move; perMove gives the
+   moment of one move of White (the app passes the ones it worked out while
+   Turbo thought, with the names for the end card). */
+function keyMoment(S, perMove) {
+  perMove = perMove || moveMoment;
   const moves = S.hist.map(u => u.m);
   for (let i = 0; i < moves.length; i++) unmakeMove(S);
   const moments = [];
   for (const m of moves) {
-    if (S.turn === 'w') moments.push(moveMoment(S, m));
+    if (S.turn === 'w') moments.push(perMove(S, m));
     makeMove(S, m);
   }
   return chooseMoment(moments, S);
@@ -1649,6 +1710,6 @@ if (typeof module !== 'undefined') {
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
     winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
-    repetitions, positionKey, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
+    repetitions, positionKey, pointsOf, forcedPoints, TABEL, lossStart, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
     POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };
 }

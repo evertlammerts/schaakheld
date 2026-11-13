@@ -673,6 +673,17 @@
   .eindkaart.klein .ek-badge { flex-direction: row; gap: 6px; width: auto; }
   .eindkaart.klein .ek-be { font-size: 28px; }
   .eindkaart .ek-btns { display: flex; flex-direction: column; gap: 8px; width: min(100%, 280px); }
+  /* wat je de volgende keer nakijkt: een zachte regel onder het moment */
+  .eindkaart .ek-moment p.ek-volgende { display: block; margin-top: 2px; font-size: var(--fs-cap); line-height: 1.25; color: var(--text-quiet); }
+  /* op een klein bord: de twee knoppen naast elkaar, het moment als een alinea, kleinere trofeeën */
+  .eindkaart.klein .ek-btns.twee { flex-direction: row; width: 100%; }
+  .eindkaart.klein .ek-btns.twee .btn { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 0 8px; white-space: nowrap; }
+  .eindkaart.klein .ek-moment h3 { display: inline; font-size: inherit; }
+  .eindkaart.klein .ek-moment h3::after { content: ': '; }
+  .eindkaart.klein .ek-moment p { display: inline; }
+  .eindkaart.klein .ek-trofee { gap: 2px 12px; }
+  .eindkaart.klein .ek-be { font-size: 24px; }
+  .eindkaart.klein small { display: block; font-size: var(--fs-cap); line-height: 1.25; }
   .play-bottom {
     grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
     padding: 0 var(--g) 8px;
@@ -1383,6 +1394,25 @@ function forcedMaterial(S) {
   const v = quiesce(S, -Infinity, Infinity, 8, evalMatSTM);
   return S.turn === 'w' ? v : -v;
 }
+/* The children's table (pion 1, paard 3, loper 3, toren 5, dame 9) in the engine's
+   hundreds: a sum of pieces a child reads is never a rounded engine value, so two
+   bishops for a rook is 1 point and not the 1.6 of 330 + 330 - 500. */
+const TABEL = { p: 100, n: 300, b: 300, r: 500, q: 900, k: 20000 };
+function pointsOf(S) {
+  let s = 0;
+  for (let sq = 0; sq < 128; sq++) {
+    if (sq & 0x88) continue;
+    const p = S.board[sq];
+    if (!p || p === 'K' || p === 'k') continue;
+    s += isWhitePiece(p) ? TABEL[p.toLowerCase()] : -TABEL[p.toLowerCase()];
+  }
+  return s;
+}
+/* forcedMaterial counted by the children's table */
+function forcedPoints(S) {
+  const v = quiesce(S, -Infinity, Infinity, 8, x => x.turn === 'w' ? pointsOf(x) : -pointsOf(x));
+  return S.turn === 'w' ? v : -v;
+}
 
 /* --- opening book: a handful of sound, kid-friendly lines in coordinate notation.
    Turbo (level 2 and 3) plays from it while the game follows a line; the
@@ -1659,26 +1689,47 @@ function pickMove(S, level, rng, budgetMs) {
   return top[Math.floor(rng() * top.length)].m;
 }
 
-/* Blunder guard: does move m allow mate in one, or lose 150cp or more by force
-   against the material on the board now? A
-   better move that was not played is no danger, so it is never the baseline.
-   Returns null or {loss, punish, take}: punish is the opponent's best reply
-   (with mate: true when it mates), take the capture that starts the loss, so
-   a text that says what is lost never shows a quiet move. */
-function blunderCheck(S, m) {
-  const mySign = S.turn === 'w' ? 1 : -1, now = material(S) * mySign;
-  makeMove(S, m);
-  const mate = mateReply(S);
-  const loss = mate ? MATE : now - forcedMaterial(S) * mySign;
-  let punish = mate, take = null;
-  if (!mate && loss >= 150) {
-    const reply = rootScores(S, 2);
-    punish = reply.length ? reply[0].m : null;
-    take = lossStart(S, punish);
-  }
+/* The loss of the mover's move x by the alarm's measure: MATE when the
+   opponent then mates in one, otherwise the material on the board now minus
+   the forced material after it. A move that mates loses nothing at all, and a
+   move that ends the game in a draw is never counted as better. */
+function lossAfter(S, x, now, sign) {
+  makeMove(S, x);
+  const st = gameStatus(S);
+  const l = st.over ? (st.reason === 'mat' ? -Infinity : Infinity) : mateReply(S) ? MATE : now - forcedMaterial(S) * sign;
   unmakeMove(S);
-  if (mate) return { loss, punish, take: null, mate: true };
-  return loss >= 150 ? { loss, punish, take } : null;
+  return l;
+}
+/* Blunder guard: does move m allow mate in one, or lose 150cp or more by force
+   against the material on the board now, while another legal move loses at
+   least a pawn less? A better move that was not played is no danger, so it is
+   never the baseline; and when every move loses as much, there is nothing to
+   warn about. Returns null or {loss, punish, take, points, anyway}: punish is
+   the opponent's best reply (with mate: true when it mates), take the capture
+   that starts the loss, points the loss by the children's table, anyway
+   whether every move loses at least a pawn. */
+function blunderCheck(S, m) {
+  const sign = S.turn === 'w' ? 1 : -1, now = material(S) * sign, pointsNow = pointsOf(S) * sign;
+  makeMove(S, m);
+  const over = gameStatus(S).over, mate = over ? null : mateReply(S);
+  const loss = over ? 0 : mate ? MATE : now - forcedMaterial(S) * sign;
+  unmakeMove(S);
+  if (loss < 150) return null;
+  /* stop at the first move that is a pawn better and loses less than a pawn */
+  let better = false, least = Infinity;
+  for (const x of legalMoves(S)) {
+    if (moveKey(x) === moveKey(m)) continue;
+    const l = lossAfter(S, x, now, sign);
+    if (l < least) least = l;
+    if (l <= loss - 100) { better = true; if (least < 100) break; }
+  }
+  if (!better) return null;
+  if (mate) return { loss, punish: mate, take: null, mate: true, points: 0, anyway: least >= 100 };
+  makeMove(S, m);
+  const reply = rootScores(S, 2), punish = reply.length ? reply[0].m : null;
+  const take = lossStart(S, punish), points = pointsNow - forcedPoints(S) * sign;
+  unmakeMove(S);
+  return { loss, punish, take, points, anyway: least >= 100 };
 }
 
 /* The capture that starts a loss in S, for the side to move: its best move
@@ -1808,15 +1859,16 @@ function findAttacker(S, t, by) {
 
 /* Static exchange on square t: net material the side to move can win by capturing
    there (capturing with the cheapest attacker first; 0 when declining is better). */
-function seeSquare(S, t) {
+function seeSquare(S, t, vals) {
+  vals = vals || VAL;
   const p = S.board[t];
   if (!p) return 0;
   const caps = legalMoves(S).filter(m => m.to === t && S.board[m.to]);
   if (!caps.length) return 0;
   caps.sort((a, b) => VAL[S.board[a.from].toLowerCase()] - VAL[S.board[b.from].toLowerCase()]);
-  const victim = VAL[p.toLowerCase()];
+  const victim = vals[p.toLowerCase()];
   makeMove(S, caps[0]);
-  const net = victim - seeSquare(S, t);
+  const net = victim - seeSquare(S, t, vals);
   unmakeMove(S);
   return Math.max(0, net);
 }
@@ -2488,8 +2540,10 @@ function capturedSq(S, m) { return m.flags === 'e' ? m.to + (S.turn === 'w' ? -1
 function isPattern(info) { return info.fork.length >= 2 || !!info.pin || !!info.skewer || info.discovered.length > 0; }
 
 /* What one move m of White meant, from the position before it: at most one
-   moment, the first kind that applies, or null. A loss is in centipawns;
-   blunderCheck counts one from 150, so the exchange counts and one pawn never. */
+   moment, the first kind that applies, or null. A loss is in centipawns and
+   comes from blunderCheck: from 150, so the exchange counts and one pawn
+   never, and only when another move loses at least a pawn less. verlies is the
+   same loss by the children's table, for the text. */
 function moveMoment(S, m) {
   const base = { moveNo: S.full, ply: S.hist.length, move: moveKey(m) };
   const bc = blunderCheck(S, m);
@@ -2497,30 +2551,35 @@ function moveMoment(S, m) {
   /* Turbo takes back on the square the child just captured on: the lesson is
      the defended piece that was taken, not a piece left hanging. */
   if (bc && bc.punish && isCapture(S, m) && bc.punish.to === m.to)
-    return Object.assign(base, { kind: 'ruil', loss: bc.loss, sq: alg(m.to), punish: moveKey(bc.punish) });
+    return Object.assign(base, { kind: 'ruil', loss: bc.loss, verlies: bc.points, sq: alg(m.to), punish: moveKey(bc.punish) });
   if (bc && bc.punish) {
     makeMove(S, m);
-    const t = capturedSq(S, bc.punish), victim = isCapture(S, bc.punish) ? (S.board[t] || 'p') : null;
-    const undefended = !!victim && findAttacker(S, t, 'w') < 0;
-    const info = patternsAfterMove(S, bc.punish);
+    const cap = isCapture(S, bc.punish), t = capturedSq(S, bc.punish), victim = cap ? (S.board[t] || 'p') : null;
+    const exchange = cap && S.board[t] ? seeSquare(S, t) : 0;
+    const undefended = cap && findAttacker(S, t, 'w') < 0;
+    const info = patternsAfterMove(S, bc.punish), by = NAME_NL[S.board[bc.punish.from].toLowerCase()];
     unmakeMove(S);
     const taken = victim ? { sq: alg(t), piece: NAME_NL[victim.toLowerCase()], points: POINTS[victim.toLowerCase()] } : {};
+    const loss = { loss: bc.loss, verlies: bc.points, punish: moveKey(bc.punish) };
+    /* a capture that wins on its own square is the lesson, whatever shape the
+       capturing piece makes afterwards; a trick only when the gain lies elsewhere */
     if (undefended) {
       /* taken where it went itself: no guard of that square went away */
       const d = t === m.to ? -1 : findAttacker(S, t, 'w');
-      return Object.assign(base, { kind: 'hang', loss: bc.loss, punish: moveKey(bc.punish),
-        defender: d >= 0 ? NAME_NL[S.board[d].toLowerCase()] : null, moved: d >= 0 && d === m.from }, taken);
+      return Object.assign(base, { kind: 'hang', self: t === m.to, defender: d >= 0 ? NAME_NL[S.board[d].toLowerCase()] : null,
+        moved: d >= 0 && d === m.from }, loss, taken);
     }
-    if (isPattern(info)) return Object.assign(base, { kind: 'truc', loss: bc.loss, punish: moveKey(bc.punish) }, taken);
+    if (cap && exchange >= bc.loss - 50) return Object.assign(base, { kind: 'slag', by }, loss, taken);
+    if (isPattern(info)) return Object.assign(base, { kind: 'truc' }, loss, taken);
   }
   if (isCapture(S, m)) {
-    const victim = S.board[capturedSq(S, m)] || 'p';
+    const victim = (S.board[capturedSq(S, m)] || 'p').toLowerCase();
     makeMove(S, m);
-    const back = seeSquare(S, m.to);
+    const back = seeSquare(S, m.to), backPoints = seeSquare(S, m.to, TABEL);
     unmakeMove(S);
-    const net = VAL[victim.toLowerCase()] - back;
-    if (net <= -200) return Object.assign(base, { kind: 'ruil', loss: -net, sq: alg(m.to) });
-    if (net >= 250) return Object.assign(base, { kind: 'goed', gain: net, sq: alg(m.to) });
+    const net = VAL[victim] - back;
+    if (net >= 250) return Object.assign(base, { kind: 'goed', gain: net, winst: TABEL[victim] - backPoints, sq: alg(m.to),
+      piece: back === 0 ? NAME_NL[victim] : null });
   }
   makeMove(S, m);
   const mated = inCheck(S) && legalMoves(S).length === 0;
@@ -2535,8 +2594,8 @@ function moveMoment(S, m) {
   const wins = winnableCaptures(S).filter(x => x.gain >= 300 && resultOf(x.move) - afterM >= 250);
   if (wins.length && !wins.some(x => isCapture(S, m) && capturedSq(S, m) === x.sq)) {
     const w = wins.reduce((a, b) => b.gain > a.gain ? b : a);
-    return Object.assign(base, { kind: 'gemist', loss: w.gain, sq: alg(w.sq), piece: NAME_NL[S.board[w.sq].toLowerCase()],
-      points: POINTS[S.board[w.sq].toLowerCase()], with: moveKey(w.move) });
+    return Object.assign(base, { kind: 'gemist', loss: w.gain, winst: seeSquare(S, w.sq, TABEL), sq: alg(w.sq),
+      piece: NAME_NL[S.board[w.sq].toLowerCase()], points: POINTS[S.board[w.sq].toLowerCase()], with: moveKey(w.move) });
   }
   const info = patternsAfterMove(S, m);
   if (info.safe && isPattern(info)) return Object.assign(base, { kind: 'goed', pattern: true, gain: 0 });
@@ -2550,33 +2609,46 @@ function materialAt(S, ply) {
   for (let i = back.length - 1; i >= 0; i--) makeMove(S, back[i]);
   return v;
 }
-/* The one moment for the end card: a mate first, otherwise the largest loss,
-   otherwise the best good move; on a tie the earliest, since the first big
-   mistake usually decided the game. A pattern move counts as good only when
-   it worked: after the child's next move White is at least 2 points better
-   than before it, because the detector also sees forks that win nothing. */
+/* Did Turbo use a moment of loss: his next move was the punishment, or a
+   capture on the square of the piece that could be taken. A chance the child
+   missed (gemist) happened whatever Turbo did. */
+function momentUsed(k, S) {
+  if (k.kind === 'gemist' || k.kind === 'goed') return true;
+  const u = S && S.hist[k.ply + 1];
+  if (!u) return false;
+  return moveKey(u.m) === k.punish || (!!u.cap && !!k.sq && alg(u.m.to) === k.sq);
+}
+/* The one moment for the end card: a mate first, otherwise the largest loss
+   that Turbo used, otherwise the largest one he let pass, otherwise the best
+   good move; on a tie the earliest, since the first big mistake usually
+   decided the game. A pattern move counts as good only when it worked: after
+   the child's next move White is at least 2 points better than before it,
+   because the detector also sees forks that win nothing. */
 function chooseMoment(moments, S) {
   const ms = moments.filter(Boolean).map(x => {
-    if (!x.pattern) return x;
+    if (!x.pattern) return Object.assign({}, x, { used: momentUsed(x, S) });
     if (!S || S.hist.length < x.ply + 3) return null;
     const gain = materialAt(S, x.ply + 3) - materialAt(S, x.ply);
-    return gain >= 200 ? Object.assign({}, x, { gain }) : null;
+    return gain >= 200 ? Object.assign({}, x, { gain, used: true }) : null;
   }).filter(Boolean);
-  const mate = ms.find(x => x.kind === 'mat');
+  const mate = ms.find(x => x.kind === 'mat' && x.used) || ms.find(x => x.kind === 'mat');
   if (mate) return mate;
-  const lost = ms.filter(x => x.kind !== 'goed');
-  if (lost.length) return lost.reduce((a, b) => b.loss > a.loss ? b : a);
+  const lost = ms.filter(x => x.kind !== 'goed'), usedLost = lost.filter(x => x.used);
+  const pool = usedLost.length ? usedLost : lost;
+  if (pool.length) return pool.reduce((a, b) => b.loss > a.loss ? b : a);
   const good = ms.filter(x => x.kind === 'goed');
   return good.length ? good.reduce((a, b) => b.gain > a.gain ? b : a) : null;
 }
-/* The key moment of the game so far, from its first move. The app can call
-   moveMoment after each move instead, so nothing waits at the end. */
-function keyMoment(S) {
+/* The key moment of the game so far, from its first move; perMove gives the
+   moment of one move of White (the app passes the ones it worked out while
+   Turbo thought, with the names for the end card). */
+function keyMoment(S, perMove) {
+  perMove = perMove || moveMoment;
   const moves = S.hist.map(u => u.m);
   for (let i = 0; i < moves.length; i++) unmakeMove(S);
   const moments = [];
   for (const m of moves) {
-    if (S.turn === 'w') moments.push(moveMoment(S, m));
+    if (S.turn === 'w') moments.push(perMove(S, m));
     makeMove(S, m);
   }
   return chooseMoment(moments, S);
@@ -2646,7 +2718,7 @@ if (typeof module !== 'undefined') {
     patternsAfterMove, patternMatches, genPatternTask, genMate1Task, genMate2Task,
     winnableCaptures, nullMoved, threatDetails, mateScore, matesIn, matesWithin, matingMoves, SAVE_DEPTH, SAVE_MAX_EVAL, SAVE_MS, saveHolds, colorFlipped,
     genKingTask, genPieceTask, BOOK_LINES, bookMoves, bookMove, moveKey, hashOf, think, clearTT,
-    repetitions, positionKey, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
+    repetitions, positionKey, pointsOf, forcedPoints, TABEL, lossStart, SUPER_NODES, CHECK_NODES, SAFE_NODES, checkSafeTask, checkPieceTask, lineAfter, nodesSearched,
     POINTS, moveMoment, chooseMoment, keyMoment, mateReply, TRUC_MIN, trucTask, trucTypes, saveKind, pieceTaskFrom };
 }
 'use strict';
@@ -6868,8 +6940,9 @@ function coachEval(S, m) {
   let stars, msg;
   if (blunder) {
     stars = 0;
-    msg = (blunder.mate ? 'Pas op: na deze zet kan Turbo je schaakmat zetten.' : 'Pas op: na deze zet wint Turbo ' + ptsNL(blunder.loss) + '.') +
-      (punish ? ' Turbo speelt dan ' + zetB(punish) : '');
+    msg = (blunder.mate ? 'Pas op: na deze zet kan Turbo je schaakmat zetten.' :
+      'Pas op: na deze zet wint Turbo ' + ptsNL(blunder.points >= 100 ? blunder.points : blunder.loss) + '.') +
+      (punish ? ' Turbo speelt dan ' + zetB(punish) : '') + (blunder.anyway ? ' Een andere zet kost minder.' : '');
   } else if (sterker) {
     stars = 1;
     msg = 'Er was een sterkere zet.';
@@ -7410,7 +7483,7 @@ function onKidMove(m) {
     if (bl) {
       snd.bad();
       showModal('<div class="m-emoji">🐢❗</div><h2>Wacht even!</h2>' +
-        '<p>' + alarmZin(S, m, bl) + '</p>' +
+        '<p>' + alarmZin(S, m, bl) + (bl.anyway ? '<br>Een andere zet kost minder.' : '') + '</p>' +
         '<div class="m-btns"><button class="btn sun" id="gLook">🔍 Ik kijk nog even</button>' +
         '<button class="btn plain" id="gGo">Ik weet het zeker</button></div>', () => {
           $('gLook').addEventListener('click', () => { closeModal(); BD.mode = 'move'; renderBoard(); });
@@ -7472,7 +7545,7 @@ function commitKid(m) {
 }
 
 /* Het moment van de zet die het kind net deed, terwijl Turbo nadenkt: zo wacht de zet zelf
-   niet op de rekensom (tot 0,2 s onder een zes keer tragere processor) */
+   niet op de rekensom (tot 0,3 s onder een zes keer tragere processor) */
 function bewaarMoment(S) {
   const u = S.hist[S.hist.length - 1];
   if (!u || S.turn !== 'b') return;
@@ -7554,14 +7627,16 @@ function resolvePredict(sq) {
    voor Super Turbo en een kind dat al sterk is alleen dat er iets dreigt. */
 function turboZin(S, m) {
   if (isCapture(S, m)) {
-    const t = m.flags === 'e' ? m.to + 16 : m.to, x = S.board[t], winst = seeSquare(S, m.to);
+    const t = m.flags === 'e' ? m.to + 16 : m.to, x = S.board[t].toLowerCase(), y = S.board[m.from].toLowerCase();
     makeMove(S, m);
-    const terug = legalMoves(S).some(y => y.to === m.to && isCapture(S, y));
+    const terug = legalMoves(S).some(z => z.to === m.to && S.board[z.to]), back = terug ? seeSquare(S, m.to) : 0;
     unmakeMove(S);
-    const naam = NAME_NL[x.toLowerCase()], a = Math.round(VAL[x.toLowerCase()] / 100);
-    if (!terug) return 'Ik pak je ' + naam + ' op ' + alg(t) + ' (' + ptsNL(VAL[x.toLowerCase()]) + '). Niemand kan terugpakken.';
-    if (winst >= 100) return 'Ik pak je ' + naam + ' op ' + alg(t) + '. Jij pakt terug, maar dan heb ik ' + a + ' punten en jij ' + ptsNL(a * 100 - winst) + '.';
+    const kop = 'Ik pak je ' + NAME_NL[x] + ' op ' + alg(t) + ' (' + ptsNL(TABEL[x]) + ').';
+    if (!terug) return kop + ' Niemand kan terugpakken.';
+    if (VAL[x] - back >= 100) return kop + (TABEL[y] < TABEL[x] ? ' Pak je terug, dan krijg je maar ' + ptsNL(TABEL[y]) + '.' : ' Pak je terug, dan pak ik nog eens.');
   }
+  /* de dreiging is hulp, net als het blunderalarm: met dat alarm uit zegt Turbo haar niet */
+  if (!P.guard) return null;
   const voor = winnableCaptures(S).map(x => x.sq);
   makeMove(S, m);
   let zin = null;
@@ -7571,8 +7646,12 @@ function turboZin(S, m) {
       if (session.level >= 3 || stadium(P) === 'sterk') zin = 'Ik dreig iets. Zie je wat?';
       else {
         const x = nieuw.reduce((a, b) => b.gain > a.gain ? b : a), d = S.board[x.sq];
+        /* "je dekt" alleen als het kind na de slag echt kan terugslaan: een gepende verdediger of een koning die dan schaak staat telt niet */
+        const N = nullMoved(S), slag = legalMoves(N).find(z => z.from === x.move.from && z.to === x.move.to);
+        let terug = false;
+        if (slag) { makeMove(N, slag); terug = legalMoves(N).some(z => z.to === x.sq && N.board[z.to]); unmakeMove(N); }
         zin = 'Mijn ' + NAME_NL[S.board[x.move.from].toLowerCase()] + ' op ' + alg(x.move.from) + ' valt je ' + NAME_NL[d.toLowerCase()] +
-          ' op ' + alg(x.sq) + ' aan.' + (attacked(S, x.sq, 'w') ? ' Je dekt ' + hemVan(d) + ', maar de ruil is goed voor mij.' : '');
+          ' op ' + alg(x.sq) + ' aan.' + (terug ? ' Je dekt ' + hemVan(d) + ', maar de ruil is goed voor mij.' : '');
       }
     }
   }
@@ -7627,6 +7706,8 @@ function undoMove() {
   const S = session.S;
   if (S.hist.length < 2) return;
   unmakeMove(S); unmakeMove(S);
+  /* een moment hoort bij een zet in de geschiedenis: een teruggenomen zet neemt zijn moment mee */
+  for (const k in session.momenten || {}) if (+k >= S.hist.length) delete session.momenten[k];
   bewaarPotje();
   clearSel();
   BD.spy.clear();
@@ -7829,42 +7910,47 @@ function momentVan(S, m) {
   }
   return k;
 }
-/* Het sleutelmoment van het potje: de momenten zijn per zet van het kind berekend
-   terwijl Turbo nadenkt; wat ontbreekt, zoals de zetten van een hervat potje, nu. Nagespeeld op
-   een eigen bord vanaf de beginstand, waar elk potje tegen Turbo begint. */
+/* Het sleutelmoment van het potje: de momenten zijn per zet van het kind berekend terwijl Turbo
+   nadenkt; wat ontbreekt, zoals de zetten van een hervat potje, nu. Nagespeeld op een eigen bord
+   vanaf de beginstand, waar elk potje tegen Turbo begint. */
 function sleutelMoment(S) {
-  const T = newGame(), bekend = session.momenten || {}, moments = [];
+  const T = newGame(), bekend = session.momenten || {};
   for (const u of S.hist) {
     const m = legalMoves(T).find(x => sameMove(x, u.m));
     if (!m) return null;
-    if (T.turn === 'w') {
-      const b = bekend[T.hist.length];
-      moments.push(b && b.zet === moveKey(m) ? b.moment : momentVan(T, m));
-    }
     makeMove(T, m);
   }
-  return chooseMoment(moments, T);
+  return keyMoment(T, (B, m) => { const b = bekend[B.hist.length]; return b && b.zet === moveKey(m) ? b.moment : momentVan(B, m); });
 }
-/* De zin op de eindkaart per soort moment; geen moment: netjes gespeeld */
+/* De zin op de eindkaart per soort moment, en wat het kind de volgende keer kan nakijken. Een verlies
+   dat Turbo niet gebruikte, zegt wat hij had kunnen doen; geen moment: netjes gespeeld. */
 function momentTekst(k) {
   if (!k) return { kop: null, tekst: 'Netjes gespeeld: je gaf geen stuk weg.' };
-  const zet = 'Zet ' + k.moveNo + ': ', kop = 'Het belangrijkste moment';
-  const pt = p => ptsNL(p * 100);
+  const zet = 'Zet ' + k.moveNo + ': ', kop = 'Het belangrijkste moment', pt = p => ptsNL(p * 100);
+  const hem = n => n === 'paard' ? 'het' : 'hem', hij = n => n === 'paard' ? 'het' : 'hij';
+  const verlies = ptsNL(k.verlies >= 100 ? k.verlies : k.loss);
+  const pakte = k.used ? ', en ik pakte ' + hem(k.piece) + ' (' + pt(k.points) + ').' : '. Ik had ' + hem(k.piece) + ' kunnen pakken (' + pt(k.points) + ').';
   switch (k.kind) {
-    case 'hang': return { kop, tekst: k.defender ?
-      zet + 'je ' + k.stuk + ' ging naar ' + k.naar + '. Toen dekte niemand je ' + k.piece + ' op ' + k.sq + ' meer, en ik pakte ' +
-        (k.piece === 'paard' ? 'het' : 'hem') + ' (' + pt(k.points) + ').' :
-      zet + 'je ' + k.piece + ' op ' + k.sq + ' stond onbeschermd, en ik pakte ' + (k.piece === 'paard' ? 'het' : 'hem') + ' (' + pt(k.points) + ').' };
-    case 'truc': return { kop, tekst: zet + 'na je zet kon ik een ' + (k.truc || 'truc') + ' zetten.' +
-      (k.doelen && k.doelen.length >= 2 ? ' Mijn ' + k.stukTurbo + ' viel je ' + k.doelen[0] + ' en je ' + k.doelen[1] + ' tegelijk aan.' : '') };
-    case 'mat': return { kop, tekst: zet + 'na je zet kon ik mat zetten, met ' + k.strafNaam + '.' };
-    case 'ruil': return { kop, tekst: zet + 'je sloeg ' + hetNaam(k.geslagen || 'pion') + ' op ' + k.sq + ', maar die was gedekt. Na het terugslaan was je ' +
-      ptsNL(k.loss) + ' kwijt.' };
-    case 'gemist': return { kop, tekst: k.mateWith ? zet + 'je kon mij schaakmat zetten met ' + k.matNaam + '.' :
-      zet + 'je kon mijn ' + k.piece + ' op ' + k.sq + ' pakken. Dat was ' + ptsNL(k.loss) + ' winst.' };
+    case 'hang':
+      if (k.self) return { kop, tekst: zet + 'je ' + k.piece + ' ging naar ' + k.sq + '. Daar stond ' + hij(k.piece) + ' onbeschermd' + pakte,
+        volgende: 'Volgende keer: kijk of je stuk daar gedekt is.' };
+      if (k.defender) return { kop, tekst: zet + 'je ' + k.stuk + ' ging naar ' + k.naar + '. Toen dekte niemand je ' + k.piece + ' op ' + k.sq + ' meer' + pakte,
+        volgende: 'Volgende keer: kijk wat je stuk nog dekte, voor je het wegzet.' };
+      return { kop, tekst: zet + 'je ' + k.piece + ' op ' + k.sq + ' stond onbeschermd' + pakte, volgende: 'Volgende keer: kijk of je stuk daar gedekt is.' };
+    case 'truc': return { kop, tekst: zet + 'na je zet kon ik een ' + k.truc + ' zetten.' + (!k.used ? ' Ik zag het niet.' :
+      k.doelen && k.doelen.length >= 2 ? ' Mijn ' + k.stukTurbo + ' viel je ' + k.doelen[0] + ' en je ' + k.doelen[1] + ' tegelijk aan.' : ''),
+      volgende: 'Volgende keer: kijk wat ik na je zet kan aanvallen.' };
+    case 'slag': return { kop, tekst: zet + 'je ' + k.piece + ' op ' + k.sq + ' kon ik slaan met mijn ' + k.by + '.' +
+      (k.used ? ' Na het terugslaan was je ' + verlies + ' kwijt.' : ' Dat had je ' + verlies + ' gekost.'), volgende: 'Volgende keer: tel eerst wie er terug kan slaan.' };
+    case 'mat': return { kop, tekst: zet + 'na je zet kon ik mat zetten, met ' + k.strafNaam + '.', volgende: 'Volgende keer: kijk eerst of ik schaak kan geven.' };
+    case 'ruil': return { kop, tekst: zet + 'je sloeg ' + hetNaam(k.geslagen || 'pion') + ' op ' + k.sq + ', maar die was gedekt.' +
+      (k.used ? ' Na het terugslaan was je ' + verlies + ' kwijt.' : ' Ik had kunnen terugslaan.'), volgende: 'Volgende keer: tel eerst wie er terug kan slaan.' };
+    case 'gemist': return k.mateWith ? { kop, tekst: zet + 'je kon mij schaakmat zetten met ' + k.matNaam + '.', volgende: 'Volgende keer: kijk eerst of jij schaak kunt geven.' } :
+      { kop, tekst: zet + 'je kon mijn ' + k.piece + ' op ' + k.sq + ' pakken. Dat had je ' + ptsNL(k.winst >= 100 ? k.winst : k.loss) + ' opgeleverd.',
+        volgende: 'Volgende keer: kijk eerst wat jij kunt pakken.' };
     case 'goed': return { kop: 'Jouw beste zet', tekst: k.doelen && k.doelen.length >= 2 ?
       zet + 'je ' + k.stuk + ' viel mijn ' + k.doelen[0] + ' en mijn ' + k.doelen[1] + ' tegelijk aan. Een echte vork!' :
-      zet + 'je won ' + ptsNL(k.gain) + '.' };
+      k.piece ? zet + 'je pakte mijn ' + k.piece + ' (' + ptsNL(k.winst) + '). Goed gezien!' : zet + 'je won ' + ptsNL(k.winst >= 100 ? k.winst : k.gain) + '. Goed gezien!' };
     default: return { kop: null, tekst: 'Netjes gespeeld: je gaf geen stuk weg.' };
   }
 }
@@ -7893,7 +7979,7 @@ function endGame(st, stil) {
   if (!stil) afgemaakt('game');
   if (session.online) { if (telt) bumpWeek('online', 1); endGameOnline(st, drawTxt); return; }
   if (telt) bumpWeek('potjes' + session.level, 1);
-  let h, p, xp;
+  let h, p, xp, moe = null;
   if (st.result === 'w') {
     h = 'Gewonnen!';
     p = 'Schaakmat! Ik buig voor jou. Wat een partij.';
@@ -7902,13 +7988,14 @@ function endGame(st, stil) {
     if (session.level === 3) bump('c.winsL3', 1);
     ensureDay();
     xp = gameWinXP(session.level);
-    if (xp === TIRED_XP) p += '<br><small>Ik ben moe van al dat verliezen. Vandaag krijg je voor deze Turbo nog ' + TIRED_XP + ' XP per winst. Probeer een sterkere Turbo!</small>';
+    /* Turbo die moe is, zegt dat in de strook: op de kaart past het niet meer naast het moment en de trofeeën */
+    if (xp === TIRED_XP) moe = 'Ik ben moe van al dat verliezen. Vandaag krijg je voor deze Turbo nog ' + TIRED_XP + ' XP per winst. Probeer een sterkere Turbo!';
     P.day.winsByLvl[session.level] = (P.day.winsByLvl[session.level] || 0) + 1;
     bumpWeek('wins' + session.level, 1);
     snd.win(); celebrate();
   } else if (st.result === 'b') {
     h = 'Turbo wint dit potje';
-    p = st.reason === 'opgave' ? 'Je gaf op. Prima, dit potje is klaar.' : 'Schaakmat. Goed volgehouden!';
+    p = st.reason === 'opgave' ? 'Je gaf op. Dit potje is klaar.' : 'Schaakmat. Goed volgehouden!';
     xp = telt ? 15 : 0; if (!stil) snd.bad();
   } else {
     h = 'Gelijkspel!';
@@ -7921,11 +8008,12 @@ function endGame(st, stil) {
   if (stil) return;
   const lvl = session.level, mt = momentTekst(sleutelMoment(session.S));
   later(() => {
-    say(h);
+    say(moe || h);
     toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p>' +
-      '<div class="ek-moment">' + (mt.kop ? '<h3>' + mt.kop + '</h3>' : '') + '<p>' + mt.tekst + '</p></div>' +
+      '<div class="ek-moment">' + (mt.kop ? '<h3>' + mt.kop + '</h3>' : '') + '<p>' + mt.tekst + '</p>' +
+      (mt.volgende ? '<p class="ek-volgende">' + mt.volgende + '</p>' : '') + '</div>' +
       (xp ? '<p class="ek-xp">+' + xp + ' XP</p>' : '<p>Dit potje telt niet mee: het was korter dan tien zetten.</p>') + '<!--trofeeen-->' +
-      '<div class="ek-btns"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
+      '<div class="ek-btns twee"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
       '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', () => {
         $('mAgain').addEventListener('click', () => startGame(lvl));
         $('mHome').addEventListener('click', goHome);
@@ -8004,7 +8092,7 @@ const BADGES = [
 
 /* Een trofee, een level of een gehaald weekdoel wacht op de eindkaart van het potje of rondje. Wat dit
    apparaat aan trofeeën liet zien, staat per apparaat in P.shownBadges, zodat een trofee die nog wachtte als
-   het kind pauzeerde of herlaadde thuis komt, en nooit twee keer (D34). */
+   het kind pauzeerde of herlaadde thuis komt, en nooit twee keer. */
 function bewaarVoorKaart(b) { if (session) (session.voorKaart = session.voorKaart || []).push(b); }
 function nogTeTonen() { return BADGES.filter(b => P.badges[b.id] && !P.shownBadges.includes(b.id)); }
 function alsGetoond(lijst) {

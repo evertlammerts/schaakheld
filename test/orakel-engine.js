@@ -1,5 +1,5 @@
-/* Orakel, engine: de regels van plan.md voor increment 5 die in de engine
-   wonen (de schaakinhoud, learning.md 6.8). Zoals in de flowsuite staat een
+/* Orakel, engine: de regels over schaken die in de engine wonen: de
+   opdrachten, Turbo's zinnen en het belangrijkste moment. Zoals in de flowsuite staat een
    regel die nog niet gebouwd is als nogNiet(naam, blok): het blok moet
    falen (een controle die mislukt of een uitzondering), dan blijft de suite
    groen; slaagt het, dan wordt de suite rood. Een gebouwde regel heet
@@ -102,7 +102,7 @@
     check('2.d4 geeft geen alarm', E.blunderCheck(S, zet(S, 'd2d4')) === null);
   });
 
-  /* D40: het verlies telt tegen het materiaal dat nu op het bord staat, vanaf
+  /* het verlies telt tegen het materiaal dat nu op het bord staat, vanaf
      anderhalf punt; een kans die het kind laat liggen, is geen gevaar. */
   regel('[5.4] het alarm meet tegen het bord nu en vanaf 1,5 punt: een gemiste kans is geen gevaar', function (check) {
     const S = E.parseFEN('rnbqkb1r/pppp1ppp/8/4n3/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 0 3');
@@ -126,6 +126,118 @@
     const fen = E.toFEN(T);
     E.blunderCheck(T, zet(T, 'f3e5'));
     check('de stand blijft onaangeroerd', E.toFEN(T) === fen);
+  });
+
+  /* ---------- 5.4 en 5.8: geen waarschuwing en geen moment als elke zet even veel kost ---------- */
+
+  regel('[5.4] het alarm alleen als een andere zet minstens een pion minder kost', function (check) {
+    /* Pf3+ valt koning en dame aan: elke zet kost de dame */
+    const V = E.parseFEN('7k/8/8/8/8/5n2/3Q4/6K1 w - - 0 1');
+    check('een vork: geen alarm op een koningszet', E.legalMoves(V).every(function (m) { return E.blunderCheck(V, m) === null; }));
+    const W = E.parseFEN('6k1/8/8/8/2R5/8/6PP/r6K w - - 0 1');
+    check('de enige zet: geen alarm', E.legalMoves(W).length === 1 && E.blunderCheck(W, E.legalMoves(W)[0]) === null);
+    const M = E.parseFEN('7r/8/8/8/7P/8/2k5/K7 w - - 0 1');
+    check('elke zet laat mat toe: geen alarm', E.legalMoves(M).every(function (m) { return E.blunderCheck(M, m) === null; }));
+    const T = speel(E.newGame(), ['e2e4', 'e7e5', 'g1f3', 'b8c6']);
+    const r = E.blunderCheck(T, zet(T, 'f3e5'));
+    check('een andere zet is een pion beter: het alarm blijft, zonder "kost minder"', !!r && r.anyway === false);
+    /* Kh1 en Kg2 laten de dame vallen voor niets, Kf1 dekt haar */
+    const K = E.parseFEN('7k/8/8/8/8/5n2/8/4Q1K1 w - - 0 1');
+    const h = E.blunderCheck(K, zet(K, 'g1h1'));
+    check('alles kost iets, een andere zet minder: het alarm blijft met "kost minder"', !!h && h.anyway === true && E.blunderCheck(K, zet(K, 'g1f1')) === null);
+  });
+
+  /* Turbo's beste zet slaat niets: de slag die het verlies begint is de grootste van zijn slagen */
+  regel('[5.4] het alarm noemt van twee slagen die winnen de grootste', function (check) {
+    const S = E.parseFEN('6k1/1b6/8/8/8/2n2N2/R7/6K1 b - - 0 1');
+    const t = E.lossStart(S, zet(S, 'g8f7'));
+    check('Pxa2, de toren (' + (t && E.moveKey(t)) + ')', !!t && E.moveKey(t) === 'c3a2');
+  });
+
+  regel('[5.4] de punten die een kind leest komen uit de tabel van de kinderen', function (check) {
+    for (const g of [['twee lopers voor een toren', '3r2k1/3r1ppp/8/8/8/8/2B2PPP/5BK1 w - - 0 1', 'f1d3', 100],
+      ['een toren voor een loper', '6k1/2p5/3b4/8/8/8/5PPP/3R2K1 w - - 0 1', 'd1d6', 200],
+      ['een toren voor een paard', '6k1/2p5/3n4/8/8/8/5PPP/3R2K1 w - - 0 1', 'd1d6', 200],
+      ['een dame voor een toren', '6k1/2p5/3r4/8/8/8/5PPP/3Q2K1 w - - 0 1', 'd1d6', 400],
+      ['een paard voor een pion', 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3', 'f3e5', 200]]) {
+      const S = E.parseFEN(g[1]), b = E.blunderCheck(S, zet(S, g[2]));
+      check(g[0] + ': ' + (g[3] / 100) + ' (' + (b && b.points) + ')', !!b && b.points === g[3]);
+    }
+  });
+
+  regel('[5.8] sleutelmoment: geen moment voor een zet als elke zet even veel kost', function (check) {
+    const A = E.parseFEN('r7/1ppk4/6Pp/8/1p2p1R1/PP2Kq2/2P5/8 w - - 0 1');
+    check('Ke3-d4: de toren is met elke zet weg', E.moveMoment(A, zet(A, 'e3d4')) === null);
+    const B = E.parseFEN('rnb2b1r/p1p1k1pp/1p2p2n/3p1Bq1/7N/N3PQ2/PPPP1P1P/R1B1K2R w KQ - 0 1');
+    check('Lf5xe6: de loper is toch weg', E.moveMoment(B, zet(B, 'f5e6')) === null);
+  });
+
+  regel('[5.8] sleutelmoment: een slag die op zijn eigen veld wint is een slag, geen truc', function (check) {
+    /* Dd1-d3: Lxd3 cxd3 kost de dame voor een loper */
+    const S = E.parseFEN('6k1/8/b7/8/8/8/2P5/3Q2K1 w - - 0 1');
+    const k = E.moveMoment(S, zet(S, 'd1d3'));
+    check('een slag met de loper (' + JSON.stringify(k) + ')', !!k && k.kind === 'slag' && k.by === 'loper' && k.piece === 'dame' && k.sq === 'd3' && k.verlies === 600);
+  });
+
+  regel('[5.8] sleutelmoment: een stuk dat zelf naar een onbeschermd veld ging', function (check) {
+    const S = speel(E.newGame(), ['e2e4', 'e7e5', 'g1f3', 'd7d6']);
+    const k = E.moveMoment(S, zet(S, 'f3g5'));
+    check('Pg5: het paard zelf (' + JSON.stringify(k) + ')', !!k && k.kind === 'hang' && k.self === true && k.piece === 'paard' && k.sq === 'g5');
+  });
+
+  regel('[5.8] sleutelmoment: een verlies dat Turbo gebruikte gaat voor een groter verlies dat hij liet liggen', function (check) {
+    /* 2.La6? Pc6 (de loper blijft staan), 4.Pg5? Dxg5 (het paard gaat) */
+    const S = speel(E.newGame(), ['e2e4', 'e7e5', 'f1a6', 'b8c6', 'g1f3', 'd7d6', 'f3g5', 'd8g5']);
+    const ms = [{ kind: 'hang', loss: 330, ply: 2, moveNo: 2, sq: 'a6', punish: 'b7a6' }, { kind: 'hang', loss: 320, ply: 6, moveNo: 4, sq: 'g5', punish: 'd8g5' }];
+    const k = E.chooseMoment(ms, S);
+    check('zet 4, gebruikt (' + JSON.stringify(k) + ')', !!k && k.moveNo === 4 && k.used === true);
+    const alleenGemist = E.chooseMoment([ms[0]], S);
+    check('alleen de loper: gekozen, maar niet gebruikt', !!alleenGemist && alleenGemist.moveNo === 2 && alleenGemist.used === false);
+  });
+
+  regel('[5.8] sleutelmoment: de volgorde, mat eerst, dan het grootste verlies, een verlies voor een goede zet, de grootste winst', function (check) {
+    const S = speel(E.newGame(), ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'f8c5', 'b1c3', 'g8f6']);
+    const kies = function (ms) { const k = E.chooseMoment(ms.map(function (x, i) { return Object.assign({ ply: 2 * i, moveNo: i + 1, sq: 'h8', punish: 'h8h8' }, x); }), S); return k && k.moveNo; };
+    check('mat gaat voor een groot verlies', kies([{ kind: 'hang', loss: 900 }, { kind: 'mat', loss: E.MATE }]) === 2);
+    check('het grootste verlies', kies([{ kind: 'hang', loss: 300 }, { kind: 'hang', loss: 500 }]) === 2);
+    check('een verlies gaat voor een goede zet', kies([{ kind: 'goed', gain: 900 }, { kind: 'hang', loss: 300 }]) === 2);
+    check('van twee goede zetten de grootste winst', kies([{ kind: 'goed', gain: 300 }, { kind: 'goed', gain: 500 }]) === 2);
+  });
+
+  regel('[5.8] sleutelmoment: in een potje dat het kind won met mat is de matzet geen gemiste mat', function (check) {
+    const S = speel(E.newGame(), ['e2e4', 'e7e5', 'f1c4', 'b8c6', 'd1h5', 'g8f6', 'h5f7']);
+    const k = E.keyMoment(S);
+    check('geen moment over de matzet (' + JSON.stringify(k) + ')', !k || !(k.kind === 'gemist' && k.mateWith === 'h5f7') && k.moveNo !== 4);
+  });
+
+  regel('[5.8] sleutelmoment: alleen de zetten van wit tellen, en de app kan zijn eigen momenten meegeven', function (check) {
+    /* zwart laat zijn dame staan en wit pakt haar: dat is het moment, geen zet van Turbo */
+    const S = speel(E.newGame(), ['e2e4', 'e7e5', 'g1f3', 'd8g5', 'f3g5', 'f8e7']);
+    const k = E.keyMoment(S);
+    check('de dame van zet 3 (' + JSON.stringify(k) + ')', !!k && k.kind === 'goed' && k.moveNo === 3);
+    let n = 0;
+    const eigen = E.keyMoment(S, function (T, m) { n++; return E.moveMoment(T, m); });
+    check('de eigen functie draait voor elke zet van wit', n === 3 && !!eigen && eigen.moveNo === 3);
+  });
+
+  regel('[5.8] sleutelmoment: gemist, met de grootste winst, en niet wat het kind wel pakte', function (check) {
+    /* het kind kan mat zetten met Te8 maar speelt h3 */
+    const M = E.parseFEN('6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1');
+    const g = E.moveMoment(M, zet(M, 'h2h3'));
+    check('een gemiste mat (' + JSON.stringify(g) + ')', !!g && g.kind === 'gemist' && g.mateWith === 'e1e8');
+    /* een vrije toren en een vrij paard: het moment noemt de toren */
+    const T = E.parseFEN('8/5ppp/4k3/6r1/1n6/8/3Q1PPP/6K1 w - - 0 1');
+    const t = E.moveMoment(T, zet(T, 'h2h3'));
+    check('de grootste van twee (' + JSON.stringify(t) + ')', !!t && t.kind === 'gemist' && t.piece === 'toren');
+    const zelf = E.moveMoment(T, zet(T, 'd2g5'));
+    check('het kind pakt de toren zelf: niets gemist (' + JSON.stringify(zelf) + ')', !zelf || zelf.kind !== 'gemist');
+  });
+
+  regel('[5.8] sleutelmoment: een vork op een veld waar Turbo het stuk gewoon pakt is geen goede zet', function (check) {
+    /* Pc7+ vorkt koning en toren, maar de dame op d8 pakt het paard */
+    const S = E.parseFEN('r2qk3/8/8/1N6/8/8/8/4K3 w - - 0 1');
+    const k = E.moveMoment(S, zet(S, 'b5c7'));
+    check('geen goede zet (' + JSON.stringify(k) + ')', !k || k.kind !== 'goed');
   });
 
   /* ---------- 5.3: veilig of valstrik, gecontroleerd bij het kiezen ---------- */
@@ -166,7 +278,7 @@
       return { S: S, type: 'stuk', hang: E.threatDetails(S)[0], answers: zetten.map(function (k) { return { m: zet(S, k), info: null }; }) };
     };
     check('met e4xd5 als redding: afgekeurd', E.checkPieceTask(taak(['c3b5', 'e4d5'])) === null);
-    /* alleen de materiaaltoets keurt hem af: langs twee halve zetten kost hij een pion, al wint een langere lijn er een (de aanvulling van de coach, D14) */
+    /* alleen de materiaaltoets keurt hem af: langs twee halve zetten kost hij een pion, al wint een langere lijn er een */
     check('met alleen Pc3-b5: afgekeurd', E.checkPieceTask(taak(['c3b5'])) === null);
     check('de stand blijft onaangeroerd', E.toFEN(S) === fen);
     const t = E.trucTask(STUK_GOED);
@@ -175,7 +287,7 @@
     check('dezelfde stand zonder redding: afgekeurd', !!t && E.checkPieceTask(Object.assign({}, t, { answers: [] })) === null);
   });
 
-  /* de maten van de coach (schaak.md, "Measures for the fix list"; D31): veilig verliest geen pion langs de lijn */
+  /* veilig verliest geen pion langs de lijn */
   regel('[5.3] Veilig: een zet waarna zwart een pion slaat is niet veilig; een rustige zet die alleen iets minder scoort wel', function (check) {
     const S = E.parseFEN('6k1/8/8/5n2/8/4P3/8/R4K2 w - - 0 1');
     check('Kf1-g1: Pf5xe3 pakt de pion, dus niet veilig', E.checkSafeTask({ S: S, move: zet(S, 'f1g1'), trap: false }) === null);
@@ -275,7 +387,7 @@
     check('Lb3 staat nog steeds onder vuur: niet weg (' + JSON.stringify(r) + ')', r.kind !== 'weg' && r.kind !== 'weg-gedekt');
     r = soort('4r1k1/8/8/b7/4N3/8/1P6/6K1 w - - 0 1', 'e4', 'e4c3');
     check('Pc3: aangevallen door de loper maar gedekt door de pion (' + JSON.stringify(r) + ')', r.kind === 'weg-gedekt' && r.sq === 'c3');
-    /* zoals K6 bij increment 1: de dame op d6 valt de toren op h2 aan, en een stuk zet zich ertussen */
+    /* de dame op d6 valt de toren op h2 aan, en een stuk zet zich ertussen */
     r = soort('6k1/8/3q4/8/7B/8/5P1R/5K2 w - - 0 1', 'h2', 'h4g3');
     check('Lg3 tussen dame en toren (' + JSON.stringify(r) + ')', r.kind === 'ertussen');
     r = soort('4r1k1/8/8/8/4N3/8/3P4/6K1 w - - 0 1', 'e4', 'd2d3');
@@ -284,7 +396,7 @@
     check('cxd5 slaat de aanvaller van het paard (' + JSON.stringify(r) + ')', r.kind === 'aanvaller' && r.took === 'pion');
   });
 
-  /* de coach (schaak.md, de laatste sectie): goed is een antwoord of een zet die het potje meteen beëindigt, zoals de app oordeelt */
+  /* goed is een antwoord of een zet die het potje meteen beëindigt, zoals de app oordeelt */
   regel('[5.5] Koning ontsnapt: elke puzzel in de voorraad heeft een zet die fout is, dus "Er is één goede zet" betekent nooit "er is maar één zet"', function (check) {
     if (!check('er is een voorraad KONING_POOL', typeof KONING_POOL !== 'undefined' && KONING_POOL.length > 0)) return;
     const zonder = KONING_POOL.filter(function (p) {
@@ -300,7 +412,7 @@
     check('geen puzzel zonder foute zet (' + zonder.length + ' van ' + KONING_POOL.length + (zonder.length ? ', zoals ' + zonder[0].fen : '') + ')', zonder.length === 0);
   });
 
-  /* de coach (schaak.md, "The fix list stock", K2): remise als redding gooit een gewonnen stelling weg; ook een zet die
+  /* remise als redding gooit een gewonnen stelling weg; ook een zet die
      geen antwoord is, want de app rekent een zet die het potje beëindigt goed */
   regel('[5.5] Koning ontsnapt: geen zet is remise terwijl wit een stuk of meer voor staat', function (check) {
     if (!check('er is een voorraad KONING_POOL', typeof KONING_POOL !== 'undefined' && KONING_POOL.length > 0)) return;
@@ -369,8 +481,8 @@
     check('vork en mat in twee staan erin, met het doel van 40', (perType.vork || 0) >= 40 && (perType.mat2 || 0) >= 40);
   });
 
-  /* D24: een type telt mee vanaf 15 geverifieerde puzzels */
-  /* de coach (schaak.md, "the trick names from the stock"): het stuk dat de vork of penning maakt, wordt meteen geslagen en iets anders wint */
+  /* een type telt mee vanaf 15 geverifieerde puzzels */
+  /* het stuk dat de vork of penning maakt, wordt meteen geslagen en iets anders wint */
   regel('[5.1] een vork of penning waarvan het stuk meteen geslagen wordt, staat niet als vork of penning in de voorraad', function (check) {
     if (!check('er is een voorraad TRUC_POOL', typeof TRUC_POOL !== 'undefined' && Array.isArray(TRUC_POOL))) return;
     const typeVan = function (bord) { const r = TRUC_POOL.find(function (x) { return x.split('|')[0] === bord; }); return r ? r.split('|')[1] : null; };
@@ -618,7 +730,7 @@
     check('dezelfde zet', !!a.m && !!b.m && E.moveKey(a.m) === E.moveKey(b.m));
   });
 
-  /* de drie beginstellingen van de coach (learning.md 6.5), zwart aan zet */
+  /* drie beginstellingen met zwart aan zet */
   const EINDSPEL = [['dame', '8/8/8/4k3/8/8/8/3QK3 b - - 0 1'], ['toren', '8/8/8/4k3/8/8/8/R3K3 b - - 0 1'],
     ['toren', '8/8/3k4/8/8/2K5/8/7R b - - 0 1']];
   regel('[5.7] de sterkste Turbo zet mat met dame of toren tegen een kale koning, binnen 50 zetten en zonder herhaling', function (check) {

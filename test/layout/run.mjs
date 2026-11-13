@@ -78,7 +78,7 @@ const HELPERS = `
   const startPotje = async () => { await klik('#spelTurbo', '.mode-card[data-mode="game"]'); await page.waitForTimeout(200);
     await klik('[data-lvl="1"]'); await page.waitForTimeout(500); };
   const startOefening = async (k) => { await klik('#oefen-' + k, '.mode-card[data-mode="' + k + '"]'); await page.waitForTimeout(1200); };
-  /* Turbo vraagt pas bij een zet die ertoe doet, vanaf zijn vijfde zet (plan rule 5.11): in dit
+  /* Turbo vraagt pas bij een zet die ertoe doet, vanaf zijn vijfde zet: in dit
      bewaarde potje speelt wit 5.Pxe5, en Turbo's d6xe5 krijgt de voorspelvraag; het blunderalarm
      staat uit, anders houdt dat 5.Pxe5 eerst tegen */
   const potjeVoorVraag = async (W, H) => {
@@ -343,8 +343,8 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
       }` });
 }
 
-/* plan.md 2.6: de hint is op elk veld te zien (de twee kleuren van een gekozen veld) en klopt hoogstens drie keer;
-   plan.md 2.4: een uitleg die verder gaat dan het vak, vervaagt aan de voet */
+/* de hint is op elk veld te zien (de twee kleuren van een gekozen veld) en klopt hoogstens drie keer;
+   een uitleg die verder gaat dan het vak, vervaagt aan de voet */
 for (const [W, H] of [[375, 553], [360, 640]]) {
   const n6 = '[2.6] ' + W + 'x' + H + ': de hint is een tweekleurig teken op een licht veld, ook op een donker veld, en klopt hoogstens drie keer';
   const n4 = '[2.4] ' + W + 'x' + H + ': een uitleg die verder gaat dan het vak onder het bord, vervaagt aan de voet';
@@ -382,15 +382,15 @@ for (const [W, H] of [[375, 553], [360, 640]]) {
       if (u) check(n4, 'de voet vervaagt (' + u.masker + ')', u.masker !== 'none' && /gradient/.test(u.masker));` });
 }
 
-/* plan.md 5.5: een reden over een stuk is een punt in de lijst, ook met twee zinnen; de eerste zin
-   past helemaal onder het bord, de tweede mag scrollen. De langste: SG13 voor het paard en SG20. */
+/* een reden over een stuk is een punt in de lijst, ook met twee zinnen; de eerste zin
+   past helemaal onder het bord, de tweede mag scrollen. De langste: een veld waar het paard niet heen kan, en een stuk dat niet gratis is. */
 for (const [W, H] of [[375, 553], [360, 640]]) {
   const n = '[5.5] ' + W + 'x' + H + ': de eerste zin van een reden over een stuk past onder het bord, ook als er een tweede zin volgt';
   GEVALLEN.push({ regels: [n], code: `
       const n = ${JSON.stringify(n)};
       const gevallen = [
-        ['SG13, het paard', '6k1/8/8/8/3N4/8/8/6K1 w - - 0 1', 'mobility', 'd4', ['b3', 'b5', 'c2', 'c6', 'e2', 'e6', 'f3', 'f5', 'd6']],
-        ['SG20', '6k1/8/4p3/3n4/8/2N5/8/6K1 w - - 0 1', 'free', null, ['d5']]
+        ['een veld waar het paard niet heen kan', '6k1/8/8/8/3N4/8/8/6K1 w - - 0 1', 'mobility', 'd4', ['b3', 'b5', 'c2', 'c6', 'e2', 'e6', 'f3', 'f5', 'd6']],
+        ['een stuk dat niet gratis is', '6k1/8/4p3/3n4/8/2N5/8/6K1 w - - 0 1', 'free', null, ['d5']]
       ];
       for (const [naam, fen, type, stuk, tikken] of gevallen) {
         await vers(${W}, ${H});
@@ -415,7 +415,7 @@ for (const [W, H] of [[375, 553], [360, 640]]) {
       }` });
 }
 
-/* plan.md 5.5: de langste eerste reden na een antwoord van de Trucendoos, Red je stuk en Veilig of valstrik past helemaal onder het bord */
+/* de langste eerste reden na een antwoord van de Trucendoos, Red je stuk en Veilig of valstrik past helemaal onder het bord */
 for (const [W, H] of [[375, 553], [360, 640]]) {
   const n = '[5.5] ' + W + 'x' + H + ': de langste eerste reden van de Trucendoos, Red je stuk en Veilig of valstrik staat helemaal in beeld';
   GEVALLEN.push({ regels: [n], code: `
@@ -467,7 +467,7 @@ for (const [W, H] of [[375, 553], [360, 640]]) {
       if (v) check(n, 'veilig of valstrik: helemaal in beeld en niet afgeknipt', binnen(v, ${W}, ${H}) && !v.over && v.top >= v.onderTop - 0.5 && v.bottom <= v.onderBottom + 0.5);` });
 }
 
-/* plan.md 5.5: ook de langste eerste reden van Speurogen (SG16) en van De Beste Zet (B1, met de langste zetnaam) past helemaal onder het bord */
+/* ook de langste eerste reden van Speurogen en van De Beste Zet (met de langste zetnaam) past helemaal onder het bord */
 for (const [W, H] of [[375, 553], [360, 640]]) {
   const n = '[5.5] ' + W + 'x' + H + ': de langste eerste reden van Speurogen en De Beste Zet staat helemaal in beeld';
   GEVALLEN.push({ regels: [n], code: `
@@ -775,7 +775,7 @@ for (const [W, H] of KLEIN) {
         const ans = ['c6b6'].map(k => ({ m: legalMoves(S).find(x => moveKey(x) === k), info: null }));
         session.S = S; session.task = { S, type: 'mat2', answers: ans, hintUsed: false }; session.phase = 'puzzle'; session.tries = 0;
         BD.mode = 'puzzle'; renderBoard(); });
-      /* na elke foute zet speelt Turbo eerst zijn antwoord (decision D21), na de tweede volgt het voorspelen */
+      /* na elke foute zet speelt Turbo eerst zijn antwoord, na de tweede volgt het voorspelen */
       for (const k of ['h1h2', 'h1h3']) {
         await page.evaluate(k => { const m = legalMoves(session.S).find(x => moveKey(x) === k); onCell(m.from); onCell(m.to); }, k);
         await page.waitForTimeout(7000);
@@ -816,6 +816,45 @@ for (const [W, H] of KLEIN) {
         if (naam === 'winst') check(n, 'winst: met een trofee', !!k && /Winnaar|Eerste potje/.test(k.t));
       }`
   });
+}
+
+/* de volste eindkaart van een potje tegen Turbo past op een klein bord: een winst op een niveau
+   waar Turbo moe is, drie nieuwe trofeeën, een nieuw level en het langste moment met de regel eronder; de zin
+   dat Turbo moe is staat in de strook, heel, en het bord blijft staan */
+for (const [W, H] of [[375, 553], [360, 640], [375, 647]]) {
+  const n = '[2.5] ' + W + 'x' + H + ': de volste eindkaart tegen Turbo past: titel, moment, trofeeën en beide knoppen in beeld, Turbo\'s moe-zin heel in de strook';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      await startPotje();
+      const voor = await rect('#board');
+      await page.evaluate(() => { const S = session.S;
+        for (let i = 0; i < 24; i++) { const ms = legalMoves(S); makeMove(S, ms[i % ms.length]); }
+        ensureDay(); P.day.winsByLvl[session.level] = 2;
+        const lang = LEVELS.reduce((a, b, i) => b.n.length > LEVELS[a].n.length ? i : a, 1);
+        /* het level met de langste naam als vierde ding op de kaart (een level met een poort haalt de proef niet echt) */
+        P.lastLevel = levelIdx(P.xp + 15); bewaarVoorKaart({ e: LEVELS[lang].g, n: 'Level ' + LEVELS[lang].n });
+        /* precies drie nieuwe trofeeën en een level: alle andere staan al getoond */
+        BADGES.forEach(b => { P.badges[b.id] = true; if (!P.shownBadges.includes(b.id)) P.shownBadges.push(b.id); });
+        BADGES.slice(0, 3).forEach(b => bewaarVoorKaart(b));
+        sleutelMoment = () => ({ kind: 'hang', moveNo: 23, stuk: 'loper', naar: 'f4', defender: 'loper', piece: 'paard', sq: 'e5', points: 3, used: true });
+        endGame({ over: true, result: 'w', reason: 'mat' }); });
+      await page.waitForTimeout(1600);
+      const k = await page.evaluate(() => { const e = document.getElementById('eindkaart'); if (!e || !e.getClientRects().length) return null;
+        const r = x => { const b = x.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, w: b.width, h: b.height }; };
+        const st = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble');
+        return { sh: e.scrollHeight, ch: e.clientHeight, kaart: r(e), titel: r(e.querySelector('h2')), knoppen: [...e.querySelectorAll('.ek-btns .btn')].map(r),
+          trofeeen: e.querySelectorAll('.ek-badge').length, volgende: !!e.querySelector('.ek-volgende'), tekst: e.innerText,
+          strook: b.textContent, strookPast: st.scrollHeight <= st.clientHeight + 1 && b.getBoundingClientRect().bottom <= st.getBoundingClientRect().bottom + 0.5 }; });
+      check(n, 'testopzet: de eindkaart met vier dingen erop en het moment met zijn regel', !!k && k.trofeeen === 4 && k.volgende);
+      if (!k) return;
+      const binnenKaart = x => x.top >= k.kaart.top - 0.5 && x.bottom <= k.kaart.bottom + 0.5;
+      check(n, 'niets scrolt in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
+      check(n, 'de titel in beeld', binnen(k.titel, ${W}, ${H}) && binnenKaart(k.titel));
+      check(n, 'beide knoppen in de kaart, in beeld en minstens 44 hoog', k.knoppen.length === 2 && k.knoppen.every(x => binnen(x, ${W}, ${H}) && binnenKaart(x) && x.h >= 44));
+      check(n, 'de moe-zin staat niet op de kaart', k.tekst.indexOf('Ik ben moe') < 0);
+      check(n, 'de moe-zin staat heel in de strook (' + k.strook + ')', /^Ik ben moe van al dat verliezen/.test(k.strook) && k.strookPast);
+      check(n, 'het bord bleef staan', gelijk(voor, await rect('#board')));` });
 }
 
 /* het speelscherm van een oefening is precies zo hoog als het venster, en het vak onder het bord past precies om

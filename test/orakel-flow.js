@@ -6,7 +6,7 @@
 var POTJE = 'schaakheld-potje', RONDJES = 'schaakheld-rondjes';
 var START_FEN_O = toFEN(newGame());
 /* twintig halve zetten zonder slag of herhaling, gelijk materiaal */
-/* Turbo vraagt pas bij een zet die ertoe doet, vanaf zijn vijfde zet (plan rule 5.11): na deze
+/* Turbo vraagt pas bij een zet die ertoe doet, vanaf zijn vijfde zet: na deze
    acht halve zetten speelt wit 5.Pxe5, Turbo (niet Slaapkop, die zet vaak zomaar iets) slaat terug
    met d6xe5, en zwart kan dan nog rokeren */
 var VOOR_VRAAG = ['e2e4', 'e7e5', 'g1f3', 'g8f6', 'f1c4', 'f8c5', 'd2d3', 'd7d6'];
@@ -83,8 +83,8 @@ async function rondjeGoed(app, n) {
   }
 }
 
-/* D14 (a): de zin bij een foute poging in de Trucendoos die bij de zet past (rijen W4, W5 en W7
-   van de schaakcoach), of null als de algemene zin "Nog niet de {truc}." hoort */
+/* de zin bij een foute poging in de Trucendoos die bij de zet past (het stuk dat maar één stuk
+   aanvalt, een stuk dat Turbo pakt, of ook een truc), of null als de algemene zin "Nog niet de {truc}." hoort */
 function wRij(fen, k, type) {
   const S = parseFEN(fen), m = legalMoves(S).find(function (x) { return moveKey(x) === k; });
   if (type === 'mat1') {

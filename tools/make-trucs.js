@@ -12,7 +12,7 @@
    Elk zoeken met hetzelfde zaad vindt dezelfde stellingen: alle zoektochten
    in de engine tellen knopen, geen tijd.
 
-   Een stelling is een truc als (ux-run/design/learning.md 6.3.1):
+   Een stelling is een truc als:
    1. de beste zet op diepte 3 minstens 2 punten beter is dan de tweede;
    2. hij minstens 2 punten wint, ook als de engine dieper rekent;
    3. hij geen gewone slag is (een stuk dat je zo kunt pakken is Speurogen);
@@ -21,8 +21,8 @@
       spies of de aftrekaanval;
    5. geen zet die geen antwoord is, bij diep rekenen een punt beter scoort.
    Mat in een en mat in twee komen van genMate1Task en genMate2Task, die exact
-   zijn. Red je stuk komt van pieceTaskFrom, met de vijf toetsen van regel 5.3
-   (checkPieceTask) bij het kiezen en nog eens met 300.000 knopen.
+   zijn. Red je stuk komt van pieceTaskFrom, met de vijf toetsen van
+   checkPieceTask bij het kiezen en nog eens met 300.000 knopen.
    herzie haalt een bestaande voorraad door de toetsen van nu; merge leest
    ook src/trucs.js zelf, zodat een regel uit AFGEKEURD weg kan zonder te zoeken. */
 'use strict';
