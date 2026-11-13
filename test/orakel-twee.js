@@ -1255,6 +1255,40 @@ async function orakelTwee() {
     check('daarna: Dat lukte niet, en geen vriend', (await zagOoit(lukteNiet, 2000)) && vriendenVan(fien) === 0);
   });
 
+  await regel('[2.5] elke groet heeft dezelfde lengte: met of zonder vraag, revanche of wachtend ja, met elke naam, en onder de 4 KB van de relay', async function (check) {
+    const lengtes = [];
+    const meet = async function (x, wat) {
+      x.ev('(function () { var w = MP.ws, s = w.send; w.send = function (d) { if (/"t":"hallo"/.test(d)) globalThis.__hallo = new TextEncoder().encode(d).length; return s.call(w, d); }; })()');
+      globalThis.__hallo = null;
+      await x.ev('mpHallo()');
+      await wacht(100);
+      lengtes.push(wat + ' ' + globalThis.__hallo);
+      return globalThis.__hallo;
+    };
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Zoë Maximiliaa');
+    await samenSpelen(fien, daan);
+    await speel(fien, daan, 'e2e4');
+    const basis = await meet(fien, 'in het potje');
+    await meet(daan, 'lange naam');
+    await speel(fien, daan, 'e7e5');
+    await geefOp(daan);
+    await wacht();
+    await meet(fien, 'na het einde');
+    tikTekst(fien, 'Vrienden worden');
+    await wacht();
+    await meet(fien, 'met een vraag');
+    tikTekst(fien, 'Revanche');
+    await wacht();
+    await meet(fien, 'met een vraag en revanche');
+    fien.ev('mpOnVriend = function () {}');
+    tikTekst(daan, 'Ja, vrienden');
+    await wacht(2000);
+    check('testopzet: Daan wacht met zijn ja', daan.get('!!(MP && (MP.vriendWacht || MP.vriendLaat))'));
+    await meet(daan, 'met een wachtend ja');
+    check('allemaal even lang (' + lengtes.join(', ') + ')', !!basis && lengtes.every(function (l) { return +l.split(' ').pop() === basis; }));
+    check('onder de 4 KB', basis < 4096);
+  });
+
   await regel('[4.1] valt de eigen lijn na het einde weg, dan zegt de strook dat; komt hij terug, dan de knoppen ook', async function (check) {
     const { fien, daan } = await eindeTussenTwee();
     geenNetwerk(fien);

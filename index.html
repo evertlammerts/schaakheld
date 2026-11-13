@@ -4501,6 +4501,9 @@ function mpBewijzen() {
   }
   return mp.bewijzenP;
 }
+/* De groet heeft altijd precies dezelfde lengte in bytes: aan de grootte ziet de relay niet hoeveel vrienden een kind
+   heeft, of het na het einde iets vroeg of ja zei, of hoe lang zijn naam is. Ruim onder de 4 KB van de relay. */
+const HALLO_BYTES = 2048;
 async function mpHallo() {
   const mp = MP;
   if (!mp) return;
@@ -4514,7 +4517,10 @@ async function mpHallo() {
     const j = randBytes(1)[0] % (i + 1);
     const t = lijst[i]; lijst[i] = lijst[j]; lijst[j] = t;
   }
-  mpSend({ t: 'hallo', naam: P.name || 'kampioen', bewijzen: lijst, naEinde: naEindeStaat() });
+  const naam = String(P.name || 'kampioen').replace(/[<>&\x00-\x1f]/g, '').trim().slice(0, 14);
+  const h = { t: 'hallo', naam, bewijzen: lijst, naEinde: naEindeStaat() || null, vul: '' };
+  h.vul = 'x'.repeat(Math.max(0, HALLO_BYTES - utf8b(JSON.stringify(h)).length));
+  mpSend(h);
   vriendJaKlok();
 }
 async function mpHerkenVriend(bewijzen) {
