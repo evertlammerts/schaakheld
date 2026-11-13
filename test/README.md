@@ -190,7 +190,10 @@ reden; de app sluit zelf met 1005.
 `layout/run.mjs` serveert de build met `tools/dev.sh` op poort 8719, of op
 `LAYOUT_POORT` als twee bomen tegelijk draaien (`DEV_SH` wijst desgewenst
 een ander dev.sh aan), en draait elk geval in een verse pagina van de
-sessie `fd-layout-<poort>`. Geeft de browser op een geval geen antwoord,
+sessie `fd-layout-<poort>`. Met `LAYOUT_ALLEEN=<regexp>` draaien alleen
+de gevallen met een controle waarvan de naam past; `LAYOUT_FOTOS=<map>`
+bewaart daar een foto van elk scherm waar een geval `foto(naam)` voor
+vraagt. Geeft de browser op een geval geen antwoord,
 of doet een geval geen enkele controle, dan faalt de suite, ook voor
 gedrag dat nog niet gebouwd is. Een geval in `GEVALLEN` heeft de namen van
 zijn controles (`regels`) en de code die in de pagina draait:

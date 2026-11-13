@@ -1415,9 +1415,9 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       check(n, 'geen zijwaarts scrollen', (await pagina()).sw <= ${W});` });
 }
 
-/* De zinnen die na de foto's van de steekproef kwamen, op de kleinste maten en een tablet, met de langste naam die de
-   app toelaat (veertien tekens). Een potje met een vriend staat in de staat van het paar zoals dit apparaat die bewaart;
-   het kind heeft rol a en wit. */
+/* De zinnen van een potje op de staat (de vraag bij opgeven, een begin zonder antwoord, de regel over herhaling en
+   de eindkaarten), op de kleinste maten en een tablet, met de langste naam die de app toelaat (veertien tekens). Een
+   potje met een vriend staat in de staat van het paar zoals dit apparaat die bewaart; het kind heeft rol a en wit. */
 const LANG = 'Maximiliaantje', MAXI = 'vriendmaxi01';
 const metPaar = (stand, staat, extra) => Object.assign({ schaakheld1: profielMet(stand, [[MAXI, LANG]]),
   'schaakheld-paar': JSON.stringify(staat ? { [MAXI]: staat } : {}) }, extra || {});
