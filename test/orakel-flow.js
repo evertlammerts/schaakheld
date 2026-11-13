@@ -6,6 +6,10 @@
 var POTJE = 'schaakheld-potje', RONDJES = 'schaakheld-rondjes';
 var START_FEN_O = toFEN(newGame());
 /* twintig halve zetten zonder slag of herhaling, gelijk materiaal */
+/* Turbo vraagt pas bij een zet die ertoe doet, vanaf zijn vijfde zet (plan rule 5.11): na deze
+   acht halve zetten speelt wit 5.Pxe5, Turbo (niet Slaapkop, die zet vaak zomaar iets) slaat terug
+   met d6xe5, en zwart kan dan nog rokeren */
+var VOOR_VRAAG = ['e2e4', 'e7e5', 'g1f3', 'g8f6', 'f1c4', 'f8c5', 'd2d3', 'd7d6'];
 var TWINTIG = ['e2e4', 'e7e5', 'g1f3', 'g8f6', 'f1c4', 'f8c5', 'b1c3', 'b8c6', 'd2d3', 'd7d6',
   'c1g5', 'c8g4', 'h2h3', 'h7h6', 'g5h4', 'g4h5', 'a2a3', 'a7a6', 'b2b4', 'b7b5'];
 
@@ -1227,16 +1231,17 @@ async function orakelFlow() {
     const echt = Math.random;
     Math.random = function () { return 0.1; };
     try {
-      const a = maakApparaat('Mees');
+      const a = maakApparaat('Mees', { opslag: opslagMetPotje(2, VOOR_VRAAG) });
       a.ev('setPref("guard", false); setPref("predict", true)');
-      await startPotje(a, 1);
-      zet(a, 'e2e4');
+      a.tik('verderKaart');
+      await wacht();
+      zet(a, 'f3e5');
       await wacht(20000);
-      check('Turbo vraagt en wacht', a.get('session.S.hist.length') === 1);
+      check('Turbo vraagt en wacht', a.get('session.S.hist.length') === 9);
       check('"Speel maar" staat in beeld', kanTikken(a, 'Speel maar'));
       tikTekst(a, 'Speel maar');
       await wacht();
-      check('na "Speel maar" zet Turbo', a.get('session.S.hist.length') === 2);
+      check('na "Speel maar" zet Turbo', a.get('session.S.hist.length') === 10);
     } finally { Math.random = echt; }
   });
 
@@ -1244,15 +1249,16 @@ async function orakelFlow() {
     const echt = Math.random;
     Math.random = function () { return 0.1; };
     try {
-      const a = maakApparaat('Mees');
+      const a = maakApparaat('Mees', { opslag: opslagMetPotje(2, VOOR_VRAAG) });
       a.ev('setPref("guard", false); setPref("predict", true)');
-      await startPotje(a, 1);
-      zet(a, 'e2e4');
-      await wacht(20000);
-      check('Turbo vraagt en wacht', a.get('session.S.hist.length') === 1);
-      tikVeld(a, a.get('sqFromAlg("g8")'));
+      a.tik('verderKaart');
       await wacht();
-      check('na een tik op zijn paard zet Turbo', a.get('session.S.hist.length') === 2);
+      zet(a, 'f3e5');
+      await wacht(20000);
+      check('Turbo vraagt en wacht', a.get('session.S.hist.length') === 9);
+      tikVeld(a, a.get('sqFromAlg("b8")'));
+      await wacht();
+      check('na een tik op zijn paard zet Turbo', a.get('session.S.hist.length') === 10);
     } finally { Math.random = echt; }
   });
 
@@ -1286,11 +1292,13 @@ async function orakelFlow() {
     check('in de denkwolk weg', a.get('BD.spy.size') === 0);
   });
 
-  /* een potje met de voorspelvraag open: wit zet, Turbo vraagt welk stuk hij zet */
-  async function metVoorspelvraag(a) {
+  /* een potje met de voorspelvraag open: wit zet 5.Pxe5, Turbo vraagt welk stuk hij zet */
+  async function metVoorspelvraag(a, extra) {
     a.ev('setPref("predict", true); Math.random = function () { return 0.1; }');
-    await startPotje(a, 1);
-    await zetEnWacht(a, 'e2e4');
+    a.opslag.setItem(POTJE, opslagMetPotje(2, VOOR_VRAAG, extra).getItem(POTJE));
+    a.ev('hervatPotje()');
+    await wacht();
+    await zetEnWacht(a, 'f3e5');
     return await zagOoit(function () { return a.get('BD.mode') === 'predict'; }, 3000);
   }
 
@@ -1352,12 +1360,9 @@ async function orakelFlow() {
   });
 
   await regel('[2.3] de voorspelvraag en een rokade: een tik op de toren telt ook', async function (check) {
-    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5', 'g1f3', 'g8f6', 'f1c4', 'f8c5', 'd2d3']) });
-    /* met 0.1 stelt Turbo de vraag en wacht hij */
-    a.ev('setPref("predict", true); Math.random = function () { return 0.1; }');
-    a.tik('verderKaart');
-    await wacht();
-    /* Turbo is aan zet en gaat rokeren: de vraag staat open met die zet */
+    const a = nieuwKind();
+    check('testopzet: de vraag staat open', await metVoorspelvraag(a));
+    /* een rokade slaat niets en geeft geen schaak, dus Turbo vraagt er niet naar: de vraag krijgt die zet */
     a.ev('(function () { var m = legalMoves(session.S).find(function (x) { return x.flags === "K"; });' +
       'session.pending = m; BD.mode = "predict"; strookModus("predict"); })()');
     const voor = a.get('P.c.predictHits || 0');
@@ -1544,13 +1549,9 @@ async function orakelFlow() {
   });
 
   await regel('[2.3] zonder Speurbril over blijft de Speurbril uit, ook nadat de voorspelvraag dicht ging', async function (check) {
-    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'e7e5'], { tips: 0 }) });
-    a.ev('setPref("predict", true); Math.random = function () { return 0.1; }');
-    a.tik('verderKaart');
-    await wacht();
+    const a = nieuwKind();
+    check('testopzet: de vraag staat open', await metVoorspelvraag(a, { tips: 0 }));
     check('testopzet: de Speurbril is op', a.get('session.tips') === 0 && a.get('actionBtns.tip.disabled') === true);
-    await zetEnWacht(a, 'g1f3');
-    check('testopzet: de vraag staat open', await zagOoit(function () { return a.get('BD.mode') === 'predict'; }, 3000));
     tikVeld(a, a.get('session.pending.from'));
     await wacht();
     check('testopzet: het kind is aan zet', a.get('BD.mode') === 'move');

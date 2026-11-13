@@ -78,6 +78,16 @@ const HELPERS = `
   const startPotje = async () => { await klik('#spelTurbo', '.mode-card[data-mode="game"]'); await page.waitForTimeout(200);
     await klik('[data-lvl="1"]'); await page.waitForTimeout(500); };
   const startOefening = async (k) => { await klik('#oefen-' + k, '.mode-card[data-mode="' + k + '"]'); await page.waitForTimeout(1200); };
+  /* Turbo vraagt pas bij een zet die ertoe doet, vanaf zijn vijfde zet (plan rule 5.11): in dit
+     bewaarde potje speelt wit 5.Pxe5, en Turbo's d6xe5 krijgt de voorspelvraag; het blunderalarm
+     staat uit, anders houdt dat 5.Pxe5 eerst tegen */
+  const potjeVoorVraag = async (W, H) => {
+    const zonderAlarm = JSON.parse(DOC);
+    zonderAlarm.lww.guard = { v: false, t: 1 };
+    await vers(W, H, { schaakheld1: JSON.stringify(zonderAlarm), 'schaakheld-potje': JSON.stringify({ v: 1, level: 2, moves: ['e2e4', 'e7e5', 'g1f3', 'g8f6', 'f1c4', 'f8c5', 'd2d3', 'd7d6'],
+      tips: 3, drawAsked: null, started: Date.now() - 600000, updated: Date.now() - 60000 }) });
+    await klik('#verderKaart'); await page.waitForTimeout(500);
+  };
   const pagina = () => page.evaluate(() => ({ sh: document.documentElement.scrollHeight, sw: document.documentElement.scrollWidth,
     H: innerHeight, W: innerWidth }));
   const laatsteOnder = () => page.evaluate(() => { const o = document.getElementById('onder'); if (!o) return null;
@@ -127,15 +137,13 @@ for (const [W, H] of KLEIN) {
   GEVALLEN.push({ regels: ['[2.2] ' + W + 'x' + H + ': het bord blijft staan bij de voorspelvraag, een lange tip en een antwoord'],
     code: `
       const n = '[2.2] ${W}x${H}: het bord blijft staan bij de voorspelvraag, een lange tip en een antwoord';
-      await vers(${W}, ${H});
-      await page.evaluate(() => { Math.random = () => 0.1; });
-      await startPotje();
+      await potjeVoorVraag(${W}, ${H});
       let voor = await rect('#board');
       await klikTekst(/Speurbril/);
       await page.waitForTimeout(300);
       check(n, 'na een lange tip', gelijk(voor, await rect('#board')));
-      await zet('e2e4');
-      await page.waitForTimeout(400);
+      await zet('f3e5');
+      await page.waitForTimeout(1000);
       check(n, 'testopzet: de voorspelvraag staat er', await page.evaluate(() => /Welk stuk zet Turbo|Wat is Turbo van plan|Denk vooruit/.test(document.body.innerText)));
       check(n, 'bij de voorspelvraag', gelijk(voor, await rect('#board')));
       await klik('#backBtn');
@@ -724,10 +732,8 @@ for (const [W, H] of [[360, 640], [375, 553], [375, 647]]) {
   const n = '[2.2] ' + W + 'x' + H + ': een tik op een eigen stuk bij de voorspelvraag: de zin past in de strook naast Speel maar';
   GEVALLEN.push({ regels: [n], code: `
       const n = ${JSON.stringify(n)};
-      await vers(${W}, ${H});
-      await page.evaluate(() => { Math.random = () => 0.1; });
-      await startPotje();
-      await zet('e2e4');
+      await potjeVoorVraag(${W}, ${H});
+      await zet('f3e5');
       await page.waitForTimeout(1500);
       check(n, 'testopzet: de voorspelvraag staat er', await page.evaluate(() => BD.mode === 'predict'));
       await veld('e4');

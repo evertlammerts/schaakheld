@@ -7352,6 +7352,17 @@ function bewaarMoment(S) {
   (session.momenten = session.momenten || {})[S.hist.length] = { zet: moveKey(u.m), moment: momentVan(S, u.m) };
   makeMove(S, u.m);
 }
+/* De voorspelvraag alleen als Turbo's zet ertoe doet: hij slaat, geeft schaak of maakt een nieuwe
+   dreiging; nooit voor zijn vijfde zet, en hoogstens eens in vier zetten */
+function voorspelVraag(S, m) {
+  if (!P.predict || S.full < 5 || S.full - (session.laatsteVraag || -10) < 4) return false;
+  if (isCapture(S, m)) return true;
+  const voor = winnableCaptures(S).map(x => x.sq);
+  makeMove(S, m);
+  const schaak = inCheck(S), nieuw = !schaak && threatDetails(S).some(x => voor.indexOf(x.sq) < 0);
+  unmakeMove(S);
+  return schaak || nieuw;
+}
 function turboTurn() {
   if (!session || session.kind !== 'game' || session.over) return;
   const S = session.S;
@@ -7360,7 +7371,7 @@ function turboTurn() {
     bewaarMoment(S);
     const m = pickMove(S, session.level);
     if (!m) { const st = gameStatus(S); if (st.over) endGame(st); return; }
-    if (P.predict && legalMoves(S).length > 3 && Math.random() < 0.35) askPredict(m);
+    if (voorspelVraag(S, m)) { session.laatsteVraag = S.full; askPredict(m); }
     else doTurboMove(m);
   }, 80);
 }
@@ -7444,7 +7455,8 @@ function doTurboMove(m, stil) {
   if (!session || session.kind !== 'game' || !m) return;
   const S = session.S;
   const co = patternCallout(S, m);
-  const zin = co ? null : turboZin(S, m);
+  /* stil: in de strook staat al iets dat blijft, het antwoord op de voorspelvraag of op remise aanbieden */
+  const zin = co || stil ? null : turboZin(S, m);
   playMove(m, () => {
     if (!session || session.kind !== 'game') return;
     updateTrays();

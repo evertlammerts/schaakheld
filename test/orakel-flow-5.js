@@ -453,7 +453,7 @@ async function orakelFlow5() {
   /* Over een heel potje, wat Turbo ook zet: de vraag komt precies als zijn zet
      slaat, schaak geeft of een nieuwe dreiging maakt, vanaf zijn vijfde zet,
      en niet in de drie zetten na een vraag. */
-  await nogNiet('[5.11] de voorspelvraag komt alleen bij een zet die ertoe doet, vanaf Turbo\'s vijfde zet, en hoogstens eens in vier zetten', async function (check) {
+  await regel('[5.11] de voorspelvraag komt alleen bij een zet die ertoe doet, vanaf Turbo\'s vijfde zet, en hoogstens eens in vier zetten', async function (check) {
     const echt = Math.random;
     Math.random = vasteKans5(511);
     try {
