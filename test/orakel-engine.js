@@ -169,6 +169,58 @@
     check('en daarna zoekt de engine weer zonder grens', E.rootScores(S, 2).length > 0 && !!E.blunderCheck(S, m));
   });
 
+  /* het alarm: remise is geen betere zet, mat wel; en "kost minder" alleen als echt elke zet iets kost */
+  regel('[5.4] het alarm: een zet die pat geeft telt niet als beter, een zet die mat geeft wel', function (check) {
+    const P = E.parseFEN('8/8/1P6/8/8/2p1K3/2nQ4/k7 w - - 0 1');
+    check('testopzet: een andere zet geeft pat', E.legalMoves(P).some(function (x) { E.makeMove(P, x); const st = E.gameStatus(P); E.unmakeMove(P); return st.over && st.reason !== 'mat'; }));
+    check('Ke3-d3: alleen pat zou beter zijn, dus geen alarm', E.blunderCheck(P, zet(P, 'e3d3')) === null);
+    const M = E.parseFEN('7r/8/8/6n1/5R2/3p1Q2/6p1/5K1k w - - 0 1');
+    check('testopzet: een andere zet geeft mat', E.legalMoves(M).some(function (x) { E.makeMove(M, x); const st = E.gameStatus(M); E.unmakeMove(M); return st.reason === 'mat'; }));
+    const r = E.blunderCheck(M, zet(M, 'f1e1'));
+    check('Kf1-e1: mat is beter, dus het alarm (' + JSON.stringify(r && r.loss) + ')', !!r && r.anyway === false);
+  });
+  regel('[5.4] het alarm: "kost minder" niet als een latere zet niets kost, ook al kost de eerste betere zet wel iets', function (check) {
+    const S = E.parseFEN('2Q4r/5k1q/8/p3Pppp/PbPP3P/4n3/RP1NK1P1/2B2BNR w - - 4 31');
+    const r = E.blunderCheck(S, zet(S, 'h1h2'));
+    check('het alarm, zonder "kost minder" (' + JSON.stringify(r && { loss: r.loss, anyway: r.anyway }) + ')', !!r && r.anyway === false);
+  });
+
+  /* punten uit de tabel van de kinderen, ook op een veld en bij een goede of gemiste slag */
+  regel('[5.8] de punten van een slag komen uit de tabel: een loper is 3, ook als de engine 3,3 rekent', function (check) {
+    const S = E.parseFEN('6k1/8/8/3b4/8/2N5/8/6K1 w - - 0 1');
+    check('de ruil op d5 in de tabel (' + E.seeSquare(S, E.sqFromAlg('d5'), E.TABEL) + ')', E.seeSquare(S, E.sqFromAlg('d5'), E.TABEL) === 300);
+    const g = E.moveMoment(S, zet(S, 'c3d5'));
+    check('Pxd5 wint 3 punten (' + JSON.stringify(g) + ')', !!g && g.kind === 'goed' && g.winst === 300 && g.piece === 'loper');
+    const T = E.parseFEN('6k1/8/8/3b4/8/2N5/7P/6K1 w - - 0 1');
+    const m = E.moveMoment(T, zet(T, 'h2h3'));
+    check('h3 laat 3 punten liggen (' + JSON.stringify(m) + ')', !!m && m.kind === 'gemist' && m.winst === 300);
+  });
+  /* "je pakte mijn {stuk}" alleen als Turbo niet terugpakt */
+  regel('[5.8] sleutelmoment: een goede slag die Turbo terugpakt noemt geen stuk', function (check) {
+    const S = E.parseFEN('6k1/8/4p3/3q4/8/2N5/8/6K1 w - - 0 1');
+    const g = E.moveMoment(S, zet(S, 'c3d5'));
+    check('Pxd5 exd5: goed, 6 punten, geen stuk (' + JSON.stringify(g) + ')', !!g && g.kind === 'goed' && g.winst === 600 && g.piece === null);
+  });
+  /* een straf die slaat is alleen "een slag" als de winst op dat veld ligt */
+  regel('[5.8] sleutelmoment: een straf die slaat maar elders wint is een truc, geen slag', function (check) {
+    const S = E.parseFEN('2r4k/8/3P4/p4p1p/PbP3pP/R7/1PKNB1PR/2B3N1 w - - 7 41');
+    const k = E.moveMoment(S, zet(S, 'e2f3'));
+    check('Le2-f3, Lxa3 (' + JSON.stringify(k) + ')', !!k && k.kind === 'truc' && k.punish === 'b4a3');
+  });
+  /* "gemist" niet als het kind dat stuk zelf sloeg, ook als een ander stuk het beter had kunnen slaan */
+  regel('[5.8] sleutelmoment: wie de toren zelf slaat, heeft hem niet gemist', function (check) {
+    const S = E.parseFEN('6k1/8/1p6/2r5/3P4/8/8/2R3K1 w - - 0 1');
+    check('testopzet: d4xc5 wint de toren', E.winnableCaptures(S).some(function (x) { return E.alg(x.sq) === 'c5' && x.gain >= 300; }));
+    const k = E.moveMoment(S, zet(S, 'c1c5'));
+    check('Txc5 bxc5: geen "gemist" (' + JSON.stringify(k) + ')', !k || k.kind !== 'gemist');
+  });
+  /* een stuk dat hing is ook gebruikt als Turbo het met een ander stuk sloeg dan de straf */
+  regel('[5.8] sleutelmoment: een stuk dat hing is gebruikt als Turbo het op dat veld sloeg, ook met een ander stuk', function (check) {
+    const S = speel(E.newGame(), ['e2e4', 'd7d5', 'e4d5', 'd8d5']);
+    const k = E.chooseMoment([{ kind: 'hang', loss: 100, ply: 2, moveNo: 2, sq: 'd5', punish: 'g8f6' }], S);
+    check('Dxd5 op het veld van het stuk: gebruikt (' + JSON.stringify(k) + ')', !!k && k.used === true);
+  });
+
   /* Turbo's beste antwoord is zelf een slag: dan begint het verlies met die slag, ook als een andere slag meer wint */
   regel('[5.4] is Turbo\'s beste antwoord een slag, dan begint het verlies daar, ook als een andere slag meer wint', function (check) {
     const S = E.parseFEN('6k1/1b6/8/8/8/2n2N2/R7/6K1 b - - 0 1');
