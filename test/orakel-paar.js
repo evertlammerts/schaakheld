@@ -252,11 +252,11 @@ async function orakelPaar() {
     const w = await paarMeesFien();
     const bus = await paarAdres(w.mees, w.fm);
     const nieuwer = await w.mees.ev('(async function () { return b64url(await sealJSON(P.friends[' + J(w.fm) + '].k, "paar", vasteLengte({ v: 3, seq: 4 }, POTJE_LENGTE))); })()');
-    __server.potjes[bus] = { blob: nieuwer, tot: __busNu() + 30 * DAG, veranderd: __busNu() };
+    __server.potjes[bus] = { blob: nieuwer, tot: __busNu() + 30 * DAG };
     await doe(w.mees, w.fm, { soort: 'uitdaging', id: 'potjeeen0001', wit: w.rm, op: null });
     check('de nieuwere staat staat er nog', __server.potjes[bus].blob === nieuwer);
     check('de uitdaging wacht', bewaard(w.mees, w.fm).rij.length === 1);
-    __server.potjes[bus] = { blob: 'nietteopenen' + nieuwer.slice(12), tot: __busNu() + 30 * DAG, veranderd: __busNu() };
+    __server.potjes[bus] = { blob: 'nietteopenen' + nieuwer.slice(12), tot: __busNu() + 30 * DAG };
     await leesP(w.mees, w.fm);
     check('wat niet te openen is, staat er nog', __server.potjes[bus].blob.indexOf('nietteopenen') === 0 && bewaard(w.mees, w.fm).rij.length === 1);
   });
@@ -345,7 +345,7 @@ async function orakelPaar() {
   /* een staat op de server zetten zoals een ander apparaat hem geschreven kan hebben */
   const zetOpServer = async function (app, fid, staat) {
     const blob = await app.ev('staatNaarBlob(P.friends[' + J(fid) + '].k, ' + J(staat) + ')');
-    __server.potjes[await paarAdres(app, fid)] = { blob: blob, tot: __busNu() + 30 * DAG, veranderd: __busNu() };
+    __server.potjes[await paarAdres(app, fid)] = { blob: blob, tot: __busNu() + 30 * DAG };
   };
   const afgelopenBijAllebei = async function () {
     const w = await paarMeesFien();

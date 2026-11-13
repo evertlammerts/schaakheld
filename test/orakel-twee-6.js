@@ -354,7 +354,7 @@ async function orakelTwee6() {
     mees = await opent(mees);
     const na = __server.potjes[bus];
     check('na acht dagen opnieuw geschreven, dus langer bewaard', !!voor && !!na && na.tot > voor.tot);
-    check('met precies dezelfde bytes, dus niet veranderd', !!voor && !!na && na.blob === voor.blob && na.veranderd === voor.veranderd);
+    check('met precies dezelfde bytes', !!voor && !!na && typeof voor.blob === 'string' && voor.blob.length > 0 && na.blob === voor.blob);
   });
 
   await regel('[6.2] na het einde: de staat toont de uitslag, niemand haalt hem weg, hij wordt niet meer vernieuwd als allebei het weten, en een nieuwe uitdaging schrijft eroverheen', async function (check) {
@@ -1696,7 +1696,7 @@ async function orakelTwee6() {
     check('de aangevulde tekst is 2048 bytes', mees.get('new TextEncoder().encode(' + JSON.stringify(JSON.stringify(rauw)) + ').length') === 2048);
   });
 
-  await regel('[6.6] een tweede apparaat van wie remise aanbood, vernieuwt de bus met dezelfde bytes: de termijn loopt door, en na veertien dagen is het remise', async function (check) {
+  await regel('[6.6] een tweede apparaat van wie remise aanbood, vernieuwt de staat met dezelfde bytes: de termijn loopt door, en na veertien dagen is het remise', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     let mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
     const fid = await aanbodVanMees(mees, fien);
@@ -1709,8 +1709,8 @@ async function orakelTwee6() {
     schuifKlok(8 * DAG);
     tab = await opent(tab);
     const na = __server.potjes[busM];
-    check('de tablet vernieuwde de bus met dezelfde bytes: de server ziet hem als onveranderd', !!voor && !!na && na.tot > voor.tot &&
-      na.blob === voor.blob && na.veranderd === voor.veranderd);
+    check('de tablet schreef de staat opnieuw met dezelfde bytes: hij blijft langer staan, en de inhoud is dezelfde', !!voor && !!na && na.tot > voor.tot &&
+      typeof voor.blob === 'string' && voor.blob.length > 0 && na.blob === voor.blob);
     stopApparaat(tab);
     schuifKlok(7 * DAG);
     tab = await opent(tab);
@@ -2471,7 +2471,7 @@ async function orakelTwee6() {
     await biedRemise(tab);
     await tijd(10000);
     check('de strook zegt het eigen aanbod met de dag', /Je biedt Fien remise aan\./.test(zegt(tab)));
-    check('de bus is niet veranderd: geen tweede aanbod', __server.potjes[busM].blob === voor.blob && __server.potjes[busM].veranderd === voor.veranderd);
+    check('de staat is niet veranderd: geen tweede aanbod', typeof voor.blob === 'string' && voor.blob.length > 0 && __server.potjes[busM].blob === voor.blob);
     tab.tik('backBtn');
     await wacht();
     schuifKlok(DAG);
