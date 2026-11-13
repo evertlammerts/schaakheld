@@ -1775,6 +1775,9 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   var antw = vmaat.inbox.filter(function (m) { return m.t === 'vriend' && m.pub; })[0];
   var mK2 = await ecdhFinish(mKp2.kp, antw.pub);
   var fid2 = (await sha256hex(mK2)).slice(0, 16);
+  ok('vriend: wie ja zei, is pas vriend als wie vroeg het bevestigt', !P.friends[fid2] && !!MP.vriendWacht);
+  vmaat.send(JSON.stringify({ t: 'vriend', ok: true }));
+  await tikje();
   ok('vriend: als ja-zegger opgeslagen met rol b', !!P.friends[fid2] && P.friends[fid2].host === false && P.friends[fid2].k === mK2);
   closeModal();
   ok('vriend: kapotte sleutel wordt genegeerd', (function () { mpOnVriendVraag({ t: 'vriend?', pub: 'x<script>' }); return __els.overlay.classList.contains('hidden'); })());
@@ -1796,6 +1799,8 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
   for (i = 0; i < 30; i++) await null;
   await tikje();
   var dubAntw = vmaat.inbox.filter(function (m) { return m.t === 'vriend' && m.pub; })[0];
+  vmaat.send(JSON.stringify({ t: 'vriend', ok: true }));
+  await tikje();
   var dubK = dubAntw ? await ecdhFinish(dubKp.kp, dubAntw.pub) : null;
   var dubFid = dubK ? (await sha256hex(dubK)).slice(0, 16) : null;
   ok('vriend: zelf vragen is dan ja zeggen, één vriendschap met hetzelfde geheim',
@@ -1825,12 +1830,16 @@ ok('reset: oude profiel terugkoppelen brengt alles terug (epoch bleef 0)',
     /* het maatje is de kleinste: die antwoordt met zijn eigen sleutel op onze vraag */
     vmaat.send(JSON.stringify({ t: 'vriend', pub: kruisKp.pub }));
     await tikje();
+  } else {
+    vmaat.send(JSON.stringify({ t: 'vriend', ok: true }));
+    await tikje();
   }
   var kKruis = await ecdhFinish(kruisKp.kp, onzePub);
   var fidKruis = (await sha256hex(kKruis)).slice(0, 16);
   ok('vriend: gekruist levert aan beide kanten hetzelfde geheim, precies één nieuwe vriend',
     !!P.friends[fidKruis] && P.friends[fidKruis].k === kKruis && Object.keys(P.friends).length === voorKruis + 1 &&
-    P.friends[fidKruis].host === !wijKleiner);
+    P.friends[fidKruis].host === !wijKleiner &&
+    (wijKleiner || vmaat.inbox.some(function (m) { return m.t === 'vriend' && m.ok === true; })));
   closeModal();
   setFriend(fidKruis, Object.assign({}, P.friends[fidKruis], { weg: true }));
   mpStop();

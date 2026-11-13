@@ -3751,7 +3751,7 @@ function mpConnect() {
     if (!MP || MP.ws !== ws) return;
     MP.open = false;
     clearTimeout(MP.stabielTimer); /* deze verbinding hield het niet: budget blijft lopen */
-    naEindeTekenen();
+    naEindeEigenLijnWeg();
     if (MP.weg) return;
     /* de server zegt dat de kamer niet (meer) bestaat; geen netwerk geeft geen reden */
     if (ev && ev.code === 1008 && ev.reason === 'onbekend' && MP.S) {
@@ -3796,7 +3796,7 @@ function mpStop(stil) {
    buiten een potje, want anders blijft een wachtscherm eeuwig draaien */
 function mpVerbindingWeg() {
   const inSpel = !!(session && session.online);
-  mpStop();
+  if (MP && !MP.S) zonderPotjeStoppen(); else mpStop();
   if (inSpel) { session.over = true; BD.mode = 'off'; }
   naarHuisMelding('📡', 'De verbinding is weg', inSpel ?
     'Jammer! Maak samen een nieuwe code om verder te spelen.' :
@@ -3876,7 +3876,7 @@ function mpMsg(m) {
       if (samenInBeeld() && !session.over) {
         say(m.aan ? (mpNaam() + ' is er weer! 🎉') : anderWeg());
       } else if (samenInBeeld()) {
-        if (m.aan) { naEindeTekenen(); say(mpNaam() + ' is er weer! 🎉'); if ($('vrLijn')) $('vrLijn').textContent = ''; }
+        if (m.aan) { say(mpNaam() + ' is er weer! 🎉'); if ($('vrLijn')) $('vrLijn').textContent = ''; }
         else naEindeWeg(mpNaam(), !!MP.viaFriend, !!MP.ecdh && !MP.viaFriend, !!MP.revMine);
       }
       break;
@@ -3890,6 +3890,8 @@ function mpMsg(m) {
       MP.peerWeg = false;
       MP.peerGehoord = true;
       naEindeTekenen();
+      if (MP.lijnWasWeg && samenInBeeld() && session.over) { MP.lijnWasWeg = false; say(session.eindZin || ''); }
+      vriendJaOpnieuw();
       if (samenLoopt()) bewaarSamen();
       mpHerkenVriend(m.bewijzen);
       mpOnHallo();
@@ -4021,7 +4023,6 @@ function mpOnZet(m) {
   if (!zet) { mpSend({ t: 'sync?' }); return; }
   /* de zet hoort meteen bij het potje; het schuiven is alleen wat het kind ziet, ook als het intussen naar huis gaat */
   const inBeeld = samenInBeeld() && !session.over, wasCap = isCapture(S, zet);
-  MP.peerWeg = false;
   makeMove(S, zet);
   const gelukt = bewaarSamen();
   if (!inBeeld) { thuisVerversen(); return; }
@@ -4227,14 +4228,24 @@ function naEindeTekenen() {
   for (const id of ['mpRev', 'vrOk']) if ($(id)) $(id).classList.toggle('hidden', !er);
   if ($('mpVriend')) $('mpVriend').classList.toggle('hidden', !er || !!(MP.viaFriend || MP.ecdh || MP.hunVraag));
 }
-/* De ander is na het einde weg (naar huis, de app dicht of geen lijn): wat gevraagd was vervalt, en de strook
-   en het venster zeggen het. Komt de ander terug, dan staan de knoppen er weer, als nieuw. */
-function naEindeWeg(naam, vriend, vroeg, revanche) {
+/* De eigen lijn valt na het einde weg: wat gevraagd was vervalt hier net als bij de ander, zodat beide kanten
+   hetzelfde weten; een ja dat op bevestiging wacht, blijft en gaat opnieuw zodra de ander er weer is. */
+function naEindeEigenLijnWeg() {
+  if (!session || !session.online || !session.over || session.oud || !samenInBeeld()) { naEindeTekenen(); return; }
+  naEindeVervalt();
+  if (!MP.lijnWasWeg) { MP.lijnWasWeg = true; say(GEEN_NET_SPEL); }
+}
+function naEindeVervalt() {
   if ($('ekWacht')) $('ekWacht').textContent = '';
   if ($('ekVraag')) $('ekVraag').innerHTML = '';
   if (MP) { MP.revMine = MP.revTheirs = false; MP.ecdh = null; MP.hunVraag = null; }
   for (const id of ['mpRev', 'vrOk']) if ($(id)) { $(id).disabled = false; $(id).textContent = '🔁 Revanche!'; }
   naEindeTekenen();
+}
+/* De ander is na het einde weg (naar huis, de app dicht of geen lijn): wat gevraagd was vervalt, en de strook
+   en het venster zeggen het. Komt de ander terug, dan staan de knoppen er weer, als nieuw. */
+function naEindeWeg(naam, vriend, vroeg, revanche) {
+  naEindeVervalt();
   const later = vriend ? 'Nodig ' + naam + ' later weer uit bij Vrienden.' : 'Leuk dat jullie samen speelden!';
   const zin = vroeg ? naam + ' ging naar huis, dus vrienden worden lukt nu niet. Na een volgend potje kan het weer.' :
     revanche ? naam + ' ging naar huis, dus er komt nu geen revanche. ' + later : naam + ' ging naar huis. ' + later;
@@ -4335,9 +4346,7 @@ async function mpHostQR() {
     return;
   }
   mpStart(resp.room, resp.seat, true);
-  /* de naam van wie de code laat zien, als derde deel: zo kan de vraag na het scannen hem noemen; hij gaat nooit naar de server */
-  const url = location.origin + location.pathname + '#' + PLAY_PREFIX + resp.room + '.' + resp.guest +
-    (P.name ? '.' + encodeURIComponent(P.name) : '');
+  const url = location.origin + location.pathname + '#' + PLAY_PREFIX + resp.room + '.' + resp.guest;
   showModal('<div class="m-emoji">🤝</div><h2>Samen spelen</h2>' + samenKapotZin() +
     '<p>Laat je maatje deze code scannen in SchaakHeld: bij Vrienden, met 📷 Ik&nbsp;scan de code.</p>' +
     '<div style="width:190px;max-width:60vw;margin:8px auto">' + QR.qrSvg(url) + '</div>' +
@@ -4350,14 +4359,12 @@ async function mpHostQR() {
 /* verwerkt de inhoud van een speel-QR ("room.seat", het stuk na SHPLAY1:),
    uit het fragment of uit de in-app scanner */
 function handlePlayString(rest) {
-  const delen = rest.split('.');
-  if (delen.length < 2) return false;
-  const room = delen[0], seat = delen[1];
-  let naam = '';
-  try { naam = decodeURIComponent(delen.slice(2).join('.')).replace(/[<>&\x00-\x1f]/g, '').trim().slice(0, 14); } catch (e) {}
+  const dot = rest.indexOf('.');
+  if (dot < 0) return false;
+  const room = rest.slice(0, dot), seat = rest.slice(dot + 1);
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(room) || !/^[A-Za-z0-9_-]{8,64}$/.test(seat)) return false;
   showModal('<div class="m-emoji">🤝</div><h2>Meespelen?</h2>' + samenKapotZin() +
-    '<p>' + (naam ? escHtml(naam) : 'Je maatje') + ' wil een potje schaken. Doe je mee?</p>' +
+    '<p>Je maatje wil een potje schaken. Doe je mee?</p>' +
     '<div class="m-btns"><button class="btn sun" id="mpJa">Ja, spelen! 🤝</button>' +
     '<button class="btn plain" id="mpNee">Nee</button></div>', () => {
       $('mpJa').addEventListener('click', () => {
@@ -4512,9 +4519,9 @@ async function vriendJa() {
   try {
     const e = await ecdhStart();
     const k = await ecdhFinish(e.kp, pub);
+    /* vrienden pas als wie vroeg het bevestigt: anders kan maar één kant de ander als vriend hebben */
+    MP.vriendWacht = { k, pub: e.pub };
     mpSend({ t: 'vriend', pub: e.pub });
-    await bewaarVriend(k, false);
-    vriendKlaar(k);
   } catch (err) {
     /* wie vroeg, wacht anders voor altijd op een antwoord */
     mpSend({ t: 'vriend', mislukt: true });
@@ -4531,10 +4538,10 @@ function mpOnVriendVraag(m) {
     if (MP.ecdh.pub < m.pub) {
       const e = MP.ecdh;
       MP.ecdh = null;
-      ecdhFinish(e.kp, m.pub).then(async k => {
+      ecdhFinish(e.kp, m.pub).then(k => {
+        if (!MP) return;
+        MP.vriendWacht = { k, pub: e.pub };
         mpSend({ t: 'vriend', pub: e.pub });
-        await bewaarVriend(k, false);
-        vriendKlaar(k);
       }).catch(() => {});
     }
     return;
@@ -4548,7 +4555,7 @@ function mpOnVriendVraag(m) {
       '<button class="btn plain" id="ekVrNee">Nu niet</button></div>';
     /* zolang de vraag openstaat: één hoofdknop, en geen tweede knop voor hetzelfde */
     for (const id of ['mpVriend', 'mpRev']) if ($(id)) $(id).classList.add('hidden');
-    $('ekVrJa').addEventListener('click', () => { vak.innerHTML = ''; if ($('mpRev')) $('mpRev').classList.remove('hidden'); vriendJa(); });
+    $('ekVrJa').addEventListener('click', () => { vak.innerHTML = ''; naEindeTekenen(); vriendJa(); });
     $('ekVrNee').addEventListener('click', () => {
       vak.innerHTML = '';
       for (const id of ['mpVriend', 'mpRev']) if ($(id)) $(id).classList.remove('hidden');
@@ -4569,18 +4576,36 @@ function mpOnVriendVraag(m) {
       });
     }, false, 'vriendvraag');
 }
+/* Vrienden worden in twee stappen, zodat beide apparaten het hebben of geen van beide: wie ja zei, stuurt zijn
+   sleutel en wacht; wie vroeg, maakt de vriend en zegt ok, of zegt mislukt als zijn vraag er niet meer is. */
 async function mpOnVriend(m) {
-  if (!MP || !MP.ecdh) return;
+  if (!MP) return;
+  if (MP.vriendWacht && (m.ok === true || m.mislukt === true)) {
+    const w = MP.vriendWacht;
+    MP.vriendWacht = null;
+    if (m.ok === true) { await bewaarVriend(w.k, false); vriendKlaar(w.k); }
+    else { say('Dat lukte niet 😕'); vriendKnopTerug(); naEindeTekenen(); }
+    return;
+  }
+  if (!MP.ecdh) {
+    /* een ja dat opnieuw kwam omdat de lijn even weg was: was het al gelukt, dan nog eens ok */
+    if (geldigePub(m.pub)) mpSend(m.pub === MP.vriendKlaarPub ? { t: 'vriend', ok: true } : { t: 'vriend', mislukt: true });
+    return;
+  }
   if (m.nee === true) { MP.ecdh = null; say(mpNaam() + ' wil nu even niet 🙂'); vriendKnopTerug(); return; }
   if (m.mislukt === true) { MP.ecdh = null; say(mpNaam() + ' zei ja, maar het lukte niet. Probeer het nog eens.'); vriendKnopTerug(); return; }
   if (!geldigePub(m.pub)) return;
   try {
     const k = await ecdhFinish(MP.ecdh.kp, m.pub);
     MP.ecdh = null;
+    MP.vriendKlaarPub = m.pub;
     await bewaarVriend(k, true);
+    mpSend({ t: 'vriend', ok: true });
     vriendKlaar(k);
-  } catch (err) { MP.ecdh = null; say('Dat lukte niet 😕'); vriendKnopTerug(); }
+  } catch (err) { MP.ecdh = null; mpSend({ t: 'vriend', mislukt: true }); say('Dat lukte niet 😕'); vriendKnopTerug(); }
 }
+/* een ja dat nog op bevestiging wacht, gaat opnieuw zodra de ander er weer is */
+function vriendJaOpnieuw() { if (MP && MP.vriendWacht) mpSend({ t: 'vriend', pub: MP.vriendWacht.pub }); }
 /* na een nee of een fout kan het kind het opnieuw vragen; op het speelscherm staat geen melding, dus de zin staat in de strook */
 function vriendKnopTerug() {
   const b = $('mpVriend');
@@ -7825,7 +7850,8 @@ function endGameOnline(st, drawTxt, telt, doelGehaald) {
   const week = '<p>' + (!telt ? 'Dit potje telt niet mee: het was korter dan tien zetten.' :
     vriendDoel && doelGehaald ? 'Telt mee voor je weekdoel, en dat is nu gehaald: +' + GOAL_XP + ' XP! 🎯' :
     vriendDoel ? 'Telt mee voor je weekdoel. 🎯' : 'Een potje met een vriend geeft geen XP. Het telt wel voor een weekdoel met vrienden.') + '</p>';
-  say(vervallen ? 'Je laatste zet telt niet mee: het potje was al klaar.' : h);
+  session.eindZin = vervallen ? 'Je laatste zet telt niet mee: het potje was al klaar.' : h;
+  say(session.eindZin);
   toonEindkaart('<div class="ek-turbo">🐢</div><h2 id="ekKop">' + h + '</h2><p id="ekZin">' + p + '</p>' + vervallen + week + '<!--trofeeen-->' +
     '<div id="ekVraag"></div><p id="ekWacht"></p>' +
     '<div class="ek-btns">' + (oud ? '' : '<button class="btn sun" id="mpRev">🔁 Revanche!</button>') + vriendKnop +
