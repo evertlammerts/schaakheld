@@ -1508,6 +1508,22 @@ async function orakelTwee() {
     });
   }
 
+  await regel('[2.5] gaat de ander naar huis nadat een vriend terugging, dan noemt de strook de vriendenlijst niet: die vriend staat er niet meer in', async function (check) {
+    let { fien, daan } = await eenKantVriend();
+    tikTekst(daan, 'Revanche');
+    await tel(3);
+    globalThis.__blok = false;
+    daan = await terugInPotje(daan);
+    await tel(3);
+    check('testopzet: Daan nam de vriend midden in het potje terug', !geheimen(daan) && daan.get('!!(session && !session.over)'));
+    await geefOp(aanZet(fien, daan));
+    await tel(6);
+    tikTekst(fien, 'Naar huis');
+    await tel(40);
+    check('de strook van Daan zegt dat Fien naar huis ging, en niets over Vrienden', /Fien ging naar huis/.test(tekstVan(daan, 'bubble')) &&
+      !/bij Vrienden/.test(tekstVan(daan, 'bubble')));
+  });
+
   await regel('[2.5] wat een kind bij het einde nog moet lezen, blijft over een herlading heen: de regel over een vriend die terugging', async function (check) {
     let { fien, daan } = await eenKantVriend();
     tikTekst(daan, 'Revanche');
@@ -2148,6 +2164,31 @@ async function orakelTwee() {
       }
     }
     check('drie keer 30, dan 15 (' + kregen.join(', ') + ')', kregen.join() === '30/30,30/30,30/30,15/15');
+  });
+
+  await regel('[4.1] worden twee kinderen vrienden op de eindkaart van het derde potje en spelen ze die dag in een nieuwe kamer verder, dan geeft het vierde potje 15 XP', async function (check) {
+    zetDatum('2026-11-12T10:00:00');
+    const a = maakApparaat('Fien'), b = maakApparaat('Daan');
+    await samenSpelen(a, b);
+    for (let i = 0; i < 3; i++) {
+      if (i) await revanche(a, b);
+      for (const z of SNEL_MAT) await speel(a, b, z);
+      await wacht();
+    }
+    tikTekst(a, 'Vrienden worden');
+    await wacht(2000);
+    tikTekst(b, 'Ja, vrienden');
+    await wacht(3000);
+    check('testopzet: vrienden na het derde potje', !!geheimen(a) && geheimen(a) === geheimen(b));
+    a.ev('closeModal(); if (MP) mpStop(); goHome()');
+    b.ev('closeModal(); if (MP) mpStop(); goHome()');
+    await wacht();
+    await samenSpelen(a, b);
+    const xa = xpVan(a), xb = xpVan(b);
+    for (const z of SNEL_MAT) await speel(a, b, z);
+    await wacht();
+    check('het vierde potje van de dag, in een nieuwe kamer: 15 voor allebei (' + (xpVan(a) - xa) + '/' + (xpVan(b) - xb) + ')',
+      xpVan(a) === xa + 15 && xpVan(b) === xb + 15);
   });
 
   await regel('[4.1] een vriend die midden in het vierde potje van de dag bewaard wordt, verandert niet hoe dat potje telt, ook niet na een herlading: 15 XP', async function (check) {

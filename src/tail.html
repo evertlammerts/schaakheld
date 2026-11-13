@@ -1353,7 +1353,7 @@ function mpMsg(m) {
         say(m.aan ? (mpNaam() + ' is er weer! 🎉') : anderWeg());
       } else if (samenInBeeld()) {
         if (m.aan) { say(mpNaam() + ' is er weer! 🎉'); if ($('vrLijn')) $('vrLijn').textContent = ''; }
-        else naEindeWeg(mpNaam(), !!MP.viaFriend, vrVroeg(), !!MP.revMine);
+        else naEindeWeg(mpNaam(), vrIsVriend(), vrVroeg(), !!MP.revMine);
       }
       break;
     case 'hallo':
@@ -1683,7 +1683,7 @@ function mpMaybeRevanche() {
 function mpOnWeg() {
   const naam = mpNaam(), teZien = !!(MP && MP.result && !MP.shown), id = MP && MP.gameId;
   const afgelopen = !!(MP && MP.S && (MP.over || MP.result)), opKaart = samenInBeeld() && session.over;
-  const vriend = !!(MP && MP.viaFriend), vroeg = !!MP && vrVroeg(), revanche = !!(MP && MP.revMine);
+  const vriend = vrIsVriend(), vroeg = !!MP && vrVroeg(), revanche = !!(MP && MP.revMine);
   if (MP && !MP.S) {
     /* de ander stopte voordat er een potje was: ook dan komt het vervangen potje terug */
     zonderPotjeStoppen(true);
@@ -1751,7 +1751,7 @@ function naEindeOpnieuw() {
   if (!session || !session.online || !session.over || session.oud || !samenInBeeld()) return;
   if (MP.peerWeg) {
     MP.lijnWasWeg = false;
-    naEindeWeg(mpNaam(), !!MP.viaFriend, vrVroeg(), !!MP.revMine);
+    naEindeWeg(mpNaam(), vrIsVriend(), vrVroeg(), !!MP.revMine);
   } else if (MP.lijnWasWeg && MP.peerOn) { MP.lijnWasWeg = false; say(session.eindZin || ''); }
 }
 function naEindeVervalt() {
@@ -2053,6 +2053,10 @@ function vrKaart() {
 }
 /* een tik die op zijn sleutel wacht, ziet het kind al als tik; meetellen en versturen doet hij pas met de sleutel */
 const vrTikBezig = () => !!(MP && MP.vr && MP.vrSleutel && !MP.vr.kp);
+/* of het kind de ander nu in zijn vriendenlijst heeft; de soort van het lopende potje blijft wat hij was */
+function vrIsVriend() {
+  return !!MP && [MP.viaFriend, MP.kamer && MP.kamer.fid, MP.bewezenFid].some(id => !!id && !!P.friends[id] && !P.friends[id].weg);
+}
 function vrVroeg() { const k = vrKaart(); return vrTikBezig() || k === 'gevraagd' || k === 'wacht'; }
 function vrStaat() { const v = MP.vr; return { sessie: v.sessie, pub: v.pub, wil: v.wil, nee: v.nee, zag: v.zag, voor: v.voor }; }
 /* Wat een apparaat over deze vriendschap vasthoudt (sessie, toestand, bewijzen) gaat alleen met een groet mee, en
