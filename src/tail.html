@@ -886,72 +886,87 @@ function mpNaam() { return (MP && MP.peerName) || 'je maatje'; }
    (MP.S): het speelscherm is er alleen een blik op, zodat zetten ook thuis binnenkomen. */
 const SAMEN_KEY = 'schaakheld-samen';
 let samenWeg = null; /* de kamer bestaat niet meer: {naam, fid, gameId}, tot het kind het einde zag */
-/* alle bewaarde vriendenpotjes, of {kapot} als er een niet te lezen is */
+/* de kaart van potjes zoals hij bewaard staat; null als hij niet te lezen is */
+function samenRauw() {
+  let d;
+  try { d = JSON.parse(opslag(SAMEN_KEY)); } catch (e) { return null; }
+  if (d == null) return {};
+  return d && d.v === 1 && d.games && typeof d.games === 'object' && !Array.isArray(d.games) ? Object.assign({}, d.games) : null;
+}
+function schrijfSamen(games) {
+  return opslag(SAMEN_KEY, Object.keys(games).length ? JSON.stringify({ v: 1, games }) : null);
+}
+/* De bewaarde vriendenpotjes die te lezen zijn. Wat niet te lezen is, staat er nog en heet kapot: het
+   kind ziet het en haalt het zelf weg, en de andere potjes doen gewoon mee. */
 function leesSamenAlles() {
-  const ruw = opslag(SAMEN_KEY);
-  if (ruw == null) return [];
-  let d = null;
-  try { d = JSON.parse(ruw); } catch (e) {}
-  const ids = d && d.v === 1 && d.games && typeof d.games === 'object' ? Object.keys(d.games) : null;
-  if (!ids) return { kapot: true };
-  const id = x => typeof x === 'string' && ID_RE.test(x), uit = [];
-  for (const k of ids) {
-    const r = d.games[k];
-    const goed = !!r && typeof r === 'object' && r.gameId === k && id(r.gameId) && id(r.room) && id(r.seat) &&
-      typeof r.host === 'boolean' && (r.myColor === 'w' || r.myColor === 'b') && Number.isInteger(r.gameNo) &&
-      Array.isArray(r.moves) && typeof r.peerName === 'string' && (r.fid === null || id(r.fid)) &&
-      (r.result == null || !!geldigeUitslag(r.result)) && (r.offer == null || !!geldigAanbod(r.offer));
-    if (!goed) return { kapot: true };
-    const S = newGame();
-    for (const z of r.moves) {
-      const m = legalMoves(S).find(x => moveKey(x) === z);
-      if (!m) return { kapot: true };
-      makeMove(S, m);
-    }
-    uit.push({ r, S });
+  const g = samenRauw(), uit = [];
+  if (!g) { uit.kapot = true; return uit; }
+  for (const k in g) {
+    const b = leesSamenRecord(g[k], k);
+    if (b) uit.push(b); else uit.kapot = true;
   }
   return uit;
+}
+/* de vorm van een bewaard vriendenpotje, zonder de zetten na te spelen */
+function samenVorm(r, k) {
+  const id = x => typeof x === 'string' && ID_RE.test(x);
+  return !!r && typeof r === 'object' && r.gameId === k && id(r.gameId) && id(r.room) && id(r.seat) &&
+    typeof r.host === 'boolean' && (r.myColor === 'w' || r.myColor === 'b') && Number.isInteger(r.gameNo) &&
+    Array.isArray(r.moves) && typeof r.peerName === 'string' && (r.fid === null || id(r.fid)) &&
+    (r.result == null || !!geldigeUitslag(r.result)) && (r.offer == null || !!geldigAanbod(r.offer));
+}
+function leesSamenRecord(r, k) {
+  if (!samenVorm(r, k)) return null;
+  const S = newGame();
+  for (const z of r.moves) {
+    const m = legalMoves(S).find(x => moveKey(x) === z);
+    if (!m) return null;
+    makeMove(S, m);
+  }
+  return { r, S };
+}
+function samenKapot() { return !!leesSamenAlles().kapot; }
+/* Weghalen op de kaart: alleen wat niet te lezen is */
+function wisKapotteSamen() {
+  const g = samenRauw();
+  if (!g) { opslag(SAMEN_KEY, null); return; }
+  for (const k in g) if (!leesSamenRecord(g[k], k)) delete g[k];
+  schrijfSamen(g);
 }
 /* het potje van de verbinding: het lopende, anders het afgelopen potje dat het laatst veranderde */
 function leesSamen() {
   const alle = leesSamenAlles();
-  if (!Array.isArray(alle)) return alle;
   const af = alle.filter(b => b.r.result).sort((x, y) => (+y.r.updated || 0) - (+x.r.updated || 0));
   return alle.find(b => !b.r.result) || af[0] || null;
 }
-/* afgelopen potjes waarvan dit kind de eindkaart nog niet zag, zoals ze bewaard staan: niet nagespeeld,
-   want dit gebeurt na elke halve zet */
-function eindenRauw() {
-  let d = null;
-  try { d = JSON.parse(opslag(SAMEN_KEY)); } catch (e) {}
-  const g = d && d.v === 1 && d.games && typeof d.games === 'object' ? d.games : {};
-  return Object.keys(g).map(k => g[k]).filter(r => !!r && typeof r.gameId === 'string' && !!r.result && r.shown !== true);
-}
 /* Het bewaarde potje is ook wat de ander na een gat moet horen: de zetten, de uitslag en het laatste
    remise-aanbod, dat alleen geldt in de stand waarin het gedaan is. Een uitslag blijft bewaard tot dit
-   kind hem zag en de ander hem ook kent. Een einde van een eerder potje dat dit kind nog niet zag,
-   blijft ernaast staan. */
+   kind hem zag en de ander hem ook kent. Ernaast blijft alleen een einde dat dit kind nog niet zag; wat niet
+   te lezen is, haalt een nieuw potje weg, zoals het venster zegt. De zetten worden hier niet nagespeeld: dit
+   gebeurt na elke halve zet. */
 function bewaarSamen() {
   if (!MP || !MP.gameId || !MP.S) return true;
-  const games = {};
-  for (const r of eindenRauw()) if (r.gameId !== MP.gameId) games[r.gameId] = r;
+  const games = samenRauw() || {};
+  for (const k in games) {
+    const r = games[k];
+    if (k === MP.gameId || !samenVorm(r, k) || !(r.result && r.shown !== true)) delete games[k];
+  }
   if (!(MP.result && MP.shown && MP.bekend)) {
     games[MP.gameId] = { gameId: MP.gameId, fid: MP.viaFriend || null, room: MP.room, seat: MP.seat, host: MP.host,
       myColor: MP.myColor, gameNo: MP.gameNo, moves: MP.S.hist.map(u => moveKey(u.m)),
       peerName: MP.peerName || '', result: MP.result || null, offer: MP.offer || null,
       shown: !!MP.shown, updated: Date.now() };
   }
-  const gelukt = opslag(SAMEN_KEY, Object.keys(games).length ? JSON.stringify({ v: 1, games }) : null);
+  const gelukt = schrijfSamen(games);
   MP.nietBewaard = !gelukt;
   return gelukt;
 }
 /* één potje weg uit de kaart; de andere blijven */
 function vergeetSamen(gameId) {
-  const alle = leesSamenAlles();
-  if (!Array.isArray(alle)) return;
-  const games = {};
-  for (const b of alle) if (b.r.gameId !== gameId) games[b.r.gameId] = b.r;
-  opslag(SAMEN_KEY, Object.keys(games).length ? JSON.stringify({ v: 1, games }) : null);
+  const g = samenRauw();
+  if (!g || !(gameId in g)) return;
+  delete g[gameId];
+  schrijfSamen(g);
 }
 /* de uitslag zoals de games over dagen hem ook dragen: wat, door wie, na hoeveel halve zetten */
 const UITSLAG_SOORT = ['opgave', 'remise', 'mat', 'pat', '50', 'materiaal'];
@@ -998,6 +1013,7 @@ function samenStand() {
 function stuurStand() { if (MP && MP.S && MP.gameId) mpSend(samenStand()); }
 /* Verder: het potje op het scherm, met de verbinding die er al is of opnieuw */
 function openSamen() {
+  gezien();
   if (MP && !MP.S) mpStop(true);
   if (!MP) {
     const b = leesSamen();
@@ -1042,7 +1058,7 @@ function toonSamenScherm(S = MP.S, kleur = MP.myColor, naam = mpNaam()) {
 /* Het einde van een eerder vriendenpotje dat dit kind nog niet zag. Het hoort niet bij de verbinding van
    nu: de eindkaart komt uit het bewaarde potje, telt dan één keer, en het potje gaat uit de kaart. */
 function toonOudEinde(gameId) {
-  const alle = leesSamenAlles(), b = Array.isArray(alle) ? alle.find(x => x.r.gameId === gameId) : null;
+  const b = leesSamenAlles().find(x => x.r.gameId === gameId);
   const u = b && geldigeUitslag(b.r.result);
   if (!u || (MP && MP.gameId === gameId)) { renderVerder(); return; }
   const naam = b.r.peerName || 'je maatje';
@@ -1079,8 +1095,7 @@ function toonKamerWeg() {
 
 /* een vriendenpotje dat niet te lezen is, haalt een nieuw potje weg; dat hoort het kind eerst, zoals bij Turbo */
 function samenKapotZin() {
-  const b = leesSamen();
-  return b && b.kapot ? '<p>Je oude vriendenpotje kan ik niet meer openen. Een nieuw potje haalt het weg.</p>' : '';
+  return samenKapot() ? '<p>Je oude vriendenpotje kan ik niet meer openen. Een nieuw potje haalt het weg.</p>' : '';
 }
 /* er is nog een vriendenpotje: een nieuw zou het overschrijven */
 function samenBezet() {
@@ -1092,7 +1107,8 @@ function samenBezet() {
 function mpBezig() { return !!MP && (!MP.S || samenLoopt()); }
 function mpStart(room, seat, host) {
   dropModal('melding');
-  /* een nieuwe verbinding sluit de oude; een einde dat de ander nog niet hoorde, gaat zo verloren */
+  /* een nieuwe verbinding sluit de oude; wordt het geen potje, dan komt de oude terug */
+  samenTerug = MP && MP.S && MP.gameId ? MP.gameId : null;
   if (MP) mpStop(true);
   MP = { room, seat, host, ws: null, open: false, peerOn: false, peerName: '',
     myColor: null, gameNo: 0, revMine: false, revTheirs: false, hunVraag: null, bewijzenP: null,
@@ -1186,7 +1202,9 @@ function mpWachtOpMaatje(naam) {
   clearTimeout(mp.wachtTimer);
   mp.wachtTimer = setTimeout(() => {
     if (MP !== mp || mp.peerOn) return;
+    const terug = mp.S ? null : samenTerug;
     mpStop();
+    if (terug) samenWeerOp(terug);
     naarHuisMelding('🐢', escHtml(naam) + ' is er nu even niet',
       'Misschien staat SchaakHeld bij ' + escHtml(naam) + ' niet open. Zeg het even, en probeer het dan opnieuw!');
   }, MAATJE_WACHT);
@@ -1438,6 +1456,8 @@ function mpOnSync(m) {
     MP.S = S;
     bord = true;
   } else if (!MP.result && hun.length < ons.length && hun.every((k, i) => k === ons[i])) terug = true;
+  /* de eigen lijst na wat deze stand al bracht: een nieuwe zet en het einde komen samen in één stand */
+  const nu = bord ? hun : ons;
   /* de uitslag */
   const u = geldigeUitslag(m.result);
   let einde = false, allebeiOp = false;
@@ -1449,9 +1469,9 @@ function mpOnSync(m) {
       /* allebei opgegeven in één gat: beide opgaven staan, niemand wint */
       if (MP.result.kind === 'opgave' && u.kind === 'opgave' && u.by !== MP.result.by && !MP.allebeiOp) MP.allebeiOp = allebeiOp = true;
     }
-  } else if (u && u.ply === hun.length && hun.every((k, i) => k === ons[i]) && uitslagVanAnder(u)) {
+  } else if (u && u.ply === hun.length && hun.every((k, i) => k === nu[i]) && uitslagVanAnder(u)) {
     /* een zet die na de opgave of de remise van de ander kwam, telt niet, en het kind hoort dat */
-    if (hun.length < ons.length) { MP.S = S; bord = true; MP.zetVervallen = true; }
+    if (hun.length < nu.length) { MP.S = S; bord = true; MP.zetVervallen = true; }
     Object.assign(MP, { result: u, over: true, bekend: true });
     einde = true;
   }
@@ -1544,13 +1564,14 @@ function mpMaybeRevanche() {
 
 function mpOnWeg() {
   const naam = mpNaam(), teZien = !!(MP && MP.result && !MP.shown), id = MP && MP.gameId;
-  const afgelopen = !!(MP && MP.S && (MP.over || MP.result));
+  const afgelopen = !!(MP && MP.S && (MP.over || MP.result)), opKaart = samenInBeeld() && session.over;
+  const vriend = !!(MP && MP.viaFriend), vroeg = !!(MP && MP.ecdh && !MP.viaFriend), revanche = !!(MP && MP.revMine);
   mpStop(true);
   /* een einde dat dit kind nog niet zag, blijft voor de Verder-kaart */
   if (teZien) { thuisVerversen(); return; }
   vergeetSamen(id);
-  /* na het einde gaat de ander gewoon naar huis: de eindkaart blijft staan, alleen revanche kan niet meer */
-  if (afgelopen) { if ($('mpRev')) $('mpRev').classList.add('hidden'); thuisVerversen(); return; }
+  /* na het einde gaat de ander gewoon naar huis: de eindkaart blijft staan */
+  if (afgelopen) { if (opKaart) naVertrek(naam, vriend, vroeg, revanche); thuisVerversen(); return; }
   if (session && session.online) {
     session.over = true;
     BD.mode = 'off';
@@ -1565,11 +1586,33 @@ function mpOnWeg() {
   }
 }
 
+/* De ander ging na het einde naar huis: de eindkaart houdt alleen Naar huis, en de strook zegt het, ook
+   als het kind al om vrienden worden of revanche had gevraagd. */
+function naVertrek(naam, vriend, vroeg, revanche) {
+  for (const id of ['mpRev', 'mpVriend']) if ($(id)) $(id).classList.add('hidden');
+  if ($('ekWacht')) $('ekWacht').textContent = '';
+  if ($('ekVraag')) $('ekVraag').innerHTML = '';
+  const later = vriend ? 'Nodig ' + naam + ' later weer uit bij Vrienden.' : 'Leuk dat jullie samen speelden!';
+  say(vroeg ? naam + ' ging naar huis, dus vrienden worden lukt nu niet. Na een volgend potje kan het weer.' :
+    revanche ? naam + ' ging naar huis, dus er komt nu geen revanche. ' + later : naam + ' ging naar huis. ' + later);
+}
 function mpVerlaat() {
+  const terug = MP && !MP.S ? samenTerug : null;
   /* na het einde blijft de verbinding tot de ander de uitslag kent */
   if (!(MP && MP.result && !MP.bekend)) mpStop();
   if (session && session.online) session.over = true;
   goHome();
+  /* stoppen in een venster voor een nieuw potje stopt alleen wat dat venster begon */
+  if (terug) samenWeerOp(terug);
+}
+/* Weer verbinden met een bewaard vriendenpotje: bij het openen het potje van de verbinding, en na een
+   venster dat geen potje werd het potje dat dat venster verving. */
+let samenTerug = null;
+function samenWeerOp(gameId) {
+  samenTerug = null;
+  if (MP) return;
+  const sp = gameId ? leesSamenAlles().find(b => b.r.gameId === gameId) : leesSamen();
+  if (sp) samenHervat(sp);
 }
 
 /* midden in een online potje weglopen is opgeven; buiten een potje gewoon weg */
@@ -3185,7 +3228,7 @@ function vriendItems(alle) {
   const uit = [];
   if (samenWeg) uit.push({ rule: 'R1', title: 'Je potje met ' + samenWeg.naam + ' is gestopt', button: 'Bekijk',
     text: 'De verbinding viel weg. Dit potje telt voor niemand mee.', ook: 'je potje met ' + samenWeg.naam, action: { go: 'gestopt' } });
-  const lijst = Array.isArray(alle) ? alle.slice() : [];
+  const lijst = alle.slice();
   if (MP && MP.S && MP.gameId && !lijst.some(b => b.r.gameId === MP.gameId)) lijst.push({ r: { gameId: MP.gameId }, S: MP.S });
   for (const b of lijst) {
     if (samenWeg && b.r.gameId === samenWeg.gameId) continue;
@@ -3215,7 +3258,7 @@ function renderVerder() {
   const r = nextStep(P, { now: Date.now(), potje: b && !b.kapot ? b.r : null, rondjes: Object.keys(rj).length ? rj : null,
     samen: null, uitnodiging: uitnodigingOpKaart(), moment: null });
   const bezig = vriendItems(alle).concat(r.bezig);
-  const kapotKey = !Array.isArray(alle) ? SAMEN_KEY : potjeKapot() ? POTJE_KEY : null;
+  const kapotKey = alle.kapot ? SAMEN_KEY : potjeKapot() ? POTJE_KEY : null;
   const eerste = kapotKey || !bezig.length ? r : bezig[0];
   const ook = kapotKey ? bezig : bezig.slice(1);
   let h = kapotKey ?
@@ -3239,7 +3282,7 @@ function renderVerder() {
   /* het welkom hoort bij de groet, zodat de naam niet twee keer onder elkaar staat */
   const welkom = !kapotKey && eerste.rule === 'R3', naam = P.name ? (welkom ? ', ' : ' ') + P.name : '';
   $('groet').textContent = (welkom ? 'Welkom terug' : 'Hoi') + naam + '! 👋';
-  if (kapotKey) $('verderWeg').addEventListener('click', () => { if (kapotKey === POTJE_KEY) wisKapottePotjes(); else opslag(kapotKey, null); renderVerder(); });
+  if (kapotKey) $('verderWeg').addEventListener('click', () => { if (kapotKey === SAMEN_KEY) wisKapotteSamen(); else wisKapottePotjes(); renderVerder(); });
   else if (eerste.rule === 'R1i') {
     $('verderJa').addEventListener('click', () => doeActie(eerste.action));
     $('verderNee').addEventListener('click', uitnodigingNee);
@@ -5721,6 +5764,7 @@ function confirmReset() {
           stuurStand();
         }
         opslag(SAMEN_KEY, null);
+        samenWeg = null;
         if (MP) mpStop(true);
         /* wissen is lokaal: dit apparaat ontkoppelt en begint blanco.
            Andere apparaten en de server houden het profiel, dus een
@@ -5764,10 +5808,7 @@ function askName() {
 /* een profiel dat zijn level nooit bewaarde: het level van nu telt als gevierd */
 if (P.lastLevel == null) { P.lastLevel = levelIdx(P.xp); saveP(); }
 applyTheme();
-{
-  const sp = leesSamen();
-  if (sp && !sp.kapot) samenHervat(sp);
-}
+samenWeerOp();
 renderHome();
 showScreen('home');
 if (!checkPlayFragment() && !checkLinkFragment()) {
