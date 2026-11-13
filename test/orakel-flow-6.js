@@ -59,7 +59,7 @@ async function orakelFlow6() {
       'schaakheld-potje': turboPotjes({ 1: [['e2e4', 'e7e5'], nu - 2 * UUR], 2: [TWINTIG.slice(0, 8), nu - UUR] }),
       'schaakheld-rondjes': JSON.stringify({ scan: { round: 2, earned: 6 } }) }));
     const v = tekstVan(a, 'verder');
-    check('de kaart: het potje waarin het kind aan zet is', /Je potje met Fien/.test(v) && /Fien heeft gezet\. Jij bent aan zet\./.test(v));
+    check('de kaart: het potje waarin het kind aan zet is', /je potje met Fien/i.test(v) && /Fien heeft gezet\. Jij bent aan zet\./.test(v));
     check('de regel onder de kaart', /Je potje met Fien blijft staan, ook als jullie allebei de app dichtdoen\./.test(v));
     check('precies één regel Ook nog, die telt', JSON.stringify(ookNogRegels(a)) === JSON.stringify(['Ook nog 3 potjes en je rondje']));
     tikTekst(a, 'Ook nog');
@@ -74,7 +74,7 @@ async function orakelFlow6() {
     check('een rij opent zijn potje', opSpeelscherm(a) && a.get('session.S.hist.length') === 1);
   });
 
-  await nogNiet('[6.9] één ander ding bezig: de regel noemt het en opent het; niets anders: geen regel', async function (check) {
+  await regel('[6.9] één ander ding bezig: de regel noemt het en opent het; niets anders: geen regel', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const a = await kind(opslagMetVrienden([MET_FIEN_MEES_AAN_ZET], { 'schaakheld-rondjes': JSON.stringify({ scan: { round: 2, earned: 6 } }) }));
     check('de kaart: het vriendenpotje', /Fien heeft gezet\. Jij bent aan zet\./.test(tekstVan(a, 'verder')));
@@ -116,7 +116,7 @@ async function orakelFlow6() {
     if (kanTikken(b, 'Stop met wachten')) tikTekst(b, 'Stop met wachten');
   });
 
-  await nogNiet('[6.5] is de vriend er niet, dan zegt de strook dat het potje doorgaat: op je eigen beurt en na je zet', async function (check) {
+  await regel('[6.5] is de vriend er niet, dan zegt de strook dat het potje doorgaat: op je eigen beurt en na je zet', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const a = await kind(opslagMetVrienden([MET_FIEN_MEES_AAN_ZET]));
     const voor = tellers(a);
