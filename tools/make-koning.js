@@ -5,10 +5,10 @@
    soundness-controle is duur), dus dit gebeurt vooraf. Elke redding wordt
    hier nog eens dieper nagerekend (diepte 8, met tijdslimiet) dan in de
    generator zelf; puzzels met een lek worden weggegooid.
-   Een puzzel heeft minstens een zet die fout is (de schaakcoach): goed is een
+   Een puzzel heeft minstens een zet die fout is: goed is een
    antwoord of een zet die het potje meteen beëindigt, zoals de app oordeelt.
    Zonder foute zet krijgt een kind drie sterren voor de enige zet die er is.
-   Ook weg (de schaakcoach, na een diepere controle): een zet die remise
+   Ook weg (na een diepere controle): een zet die remise
    maakt terwijl wit een stuk of meer voor staat, want dan gooit "Gered!" een
    gewonnen stelling weg; en een foute zet die minder dan 1,5 punt slechter
    scoort dan het slechtste antwoord, want dan hoort een kind dat een even

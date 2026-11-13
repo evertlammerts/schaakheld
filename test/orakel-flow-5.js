@@ -1043,7 +1043,7 @@ async function orakelFlow5() {
     }
   }
 
-  /* fix list item 18: Pf3-e1 laat Dxh2 mat toe; het paard dekte h2 */
+  /* Pf3-e1 laat Dxh2 mat toe; het paard dekte h2 */
   for (const zei of ['Valstrik', 'Veilig']) {
     await regel('[5.5] Veilig of valstrik, een zet die mat toelaat, het kind zei ' + zei + ': "Turbo speelt dan {zet}: schaakmat." en "Je paard dekte h2. Nu niet meer."', async function (check) {
       const S = parseFEN('6k1/2b2ppp/3q4/8/8/5N2/PPP2PPP/3Q1RK1 w - - 0 1');
@@ -1094,7 +1094,7 @@ async function orakelFlow5() {
     check('de reden (' + redenen5(a).join(' / ') + ')', redenen5(a).indexOf('De loper op c3 is van Turbo. Tik jouw eigen stukken aan.') >= 0);
   });
 
-  /* ---------- 5.5: Speurogen, alle redenen (SG1 tot SG22) ---------- */
+  /* ---------- 5.5: Speurogen, alle redenen ---------- */
 
   /* Een Speurogen-opdracht op een vaste stelling, met de doelen zoals genScanTask ze maakt. */
   function speurOpdracht5(fen, type, stuk) {
@@ -1185,7 +1185,7 @@ async function orakelFlow5() {
     });
   }
 
-  /* ---------- 5.5: De Beste Zet, B1 en B2 ---------- */
+  /* ---------- 5.5: De Beste Zet, de uitleg bij de keuzes ---------- */
 
   /* De uitleg bij drie keuzes op een vaste stelling; deep zoals genBest3 hem rekent. */
   function besteUitleg5(a, fen, zetten, beste) {
@@ -1351,7 +1351,7 @@ async function orakelFlow5() {
     check('de zin (' + t + ')', t === 'Zet 5: je dame ging naar g5. Daar stond ze onbeschermd, en ik pakte haar (9 punten).');
   });
 
-  /* na Turbo's matzet: waarom de koning het stuk dat schaak geeft niet slaat (de regel van de schaakcoach) */
+  /* na Turbo's matzet: waarom de koning het stuk dat schaak geeft niet slaat */
   const MATUITLEG5 = [
     ['dubbelschaak', '1k1rr3/ppp2ppp/5q2/2b1p3/2Q1P3/N2P3P/PP2n1BP/R5KR w - - 0 1',
       'Dubbelschaak: het paard op e2 en de loper op c5 geven allebei schaak.'],
@@ -1371,7 +1371,7 @@ async function orakelFlow5() {
     });
   }
 
-  /* een valstrik: het stuk dat zette stond tussen Turbo's stuk en iets dat meer waard is (V9) */
+  /* een valstrik: het stuk dat zette stond tussen Turbo's stuk en iets dat meer waard is */
   await regel('[5.5] Veilig of valstrik: "Je paard stond tussen de loper op g4 en je dame. Nu niet meer: dat kost je 6 punten."', async function (check) {
     const a = nieuwKind();
     const z = a.get('(function () { var S = parseFEN("rn1qkb1r/ppp2ppp/4pn2/3p4/4P1b1/2NB1N2/PPPP1PPP/R1BQK2R w KQkq - 0 1");' +
@@ -1444,7 +1444,7 @@ async function orakelFlow5() {
     check('de strook (' + strook5(a) + ')', strook5(a) === 'Het was mijn pion. Ik pak je toren op c1 (5 punten). Pak je terug, dan pak ik nog eens.');
   });
 
-  /* het alarm in een potje gebruikt de grens: bij de zwaarste zet van de reviewer geen alarm, de zet gaat gewoon door */
+  /* het alarm in een potje gebruikt de grens: bij een zet die de grens opmaakt geen alarm, de zet gaat gewoon door */
   await regel('[5.4] het alarm in een potje heeft een grens aan posities: is die op, dan gaat de zet door zonder alarm', async function (check) {
     const a = nieuwKind();
     a.ev('setPref("guard", true)');
@@ -2149,7 +2149,7 @@ async function orakelFlow5() {
     } finally { genSafeTask = echt; }
   });
 
-  /* ---------- 5.5: Trucendoos, mat in twee (T9 tot T11) ---------- */
+  /* ---------- 5.5: Trucendoos, mat in twee ---------- */
 
   const MAT2_5 = 'k7/8/2K5/8/8/8/8/7R w - - 0 1';
   await regel('[5.5] Trucendoos, mat in twee gevonden: "Na je eerste zet kon Turbo de mat niet meer tegenhouden." en "Dat is een plan in twee stappen."', async function (check) {
@@ -2230,7 +2230,7 @@ async function orakelFlow5() {
 
   /* ---------- 5.5: na een foute poging zegt de zin wat Turbo's antwoord doet ---------- */
 
-  /* de coach: na Tb1-a1 antwoordt Turbo vaak rustig (Lf5-g4 pent de dame); wat hij ook speelt, de zin past erbij */
+  /* na Tb1-a1 antwoordt Turbo vaak rustig (Lf5-g4 pent de dame); wat hij ook speelt, de zin past erbij */
   /* de zetnaam zegt al wat Turbo slaat ("slaat dame"); de zin zegt het niet nog eens */
   await regel('[5.5] Red je stuk, een foute poging: pakt Turbo het stuk dat hing, dan "Turbo speelt {zet}: je {stuk} stond nog steeds aangevallen."; slaat hij iets anders, dan "Turbo speelt {zet}."; anders wat de zet van het kind deed', async function (check) {
     const a = nieuwKind();
@@ -2257,7 +2257,7 @@ async function orakelFlow5() {
     } else if (isCapture(S, m)) {
       check('Turbo slaat iets anders (' + onder5(a) + ')', onder5(a) === 'Turbo speelt ' + naam + '. Probeer nog een zet.');
     } else {
-      /* de volgorde van de schaakcoach: nog aangevallen en niet veilig, anders een echte redding, anders een betere zet */
+      /* de volgorde: nog aangevallen en niet veilig, anders een echte redding, anders een betere zet */
       const k = saveKind(parseFEN(fen), legalMoves(parseFEN(fen)).find(function (x) { return moveKey(x) === 'b1a1'; }), hing);
       const stuk = NAME_NL[parseFEN(fen).board[hing].toLowerCase()], at = sqFromAlg(k.sq);
       makeMove(S, m);

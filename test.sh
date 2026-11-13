@@ -96,8 +96,8 @@ fi
 node tools/compat/gate.mjs || exit 1
 node tools/compat/selftest.mjs || { echo "FAIL compat-selftest"; exit 1; }
 
-# Layoutcontroles in een echte browser-engine (plan.md: 1.13, 1.14, 2.1,
-# 2.2, 2.4, 3.3, 3.5). Zonder playwright-cli een waarschuwing, zoals bij go.
+# Layoutcontroles in een echte browser-engine, voor wat op schermmaten
+# hangt. Zonder playwright-cli een waarschuwing, zoals bij go.
 if command -v playwright-cli >/dev/null 2>&1; then
   node test/layout/run.mjs || { echo "FAIL layout"; exit 1; }
 else

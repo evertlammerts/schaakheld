@@ -177,7 +177,7 @@ for (const wantTrap of [true, false]) {
   check('best3 gen', ok, 5);
 }
 
-/* Trap tasks come with a capture as punishment, or with the mate (fix list item 18). */
+/* Trap tasks come with a capture as punishment, or with the mate. */
 {
   let seed = 1801;
   const rng = () => {
