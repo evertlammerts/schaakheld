@@ -2980,7 +2980,18 @@ function setFriend(id, f) {
   P.friends = DOC.friends;
   saveP();
   syncSoon();
+  vriendenVeranderd();
 }
+/* de vriendenlijst hoort bij wat een apparaat in een kamer vasthoudt: verandert hij, dan gelden de laatste bewijzen
+   van de ander opnieuw, en groet het apparaat opnieuw */
+function vriendenVeranderd() {
+  if (!MP || !MP.vr) return;
+  const mp = MP;
+  mp.bewijzenP = null;
+  if (mp.hunBewijzen) mpHerkenVriend(mp.hunBewijzen).then(() => { if (MP === mp) vrKijk(); });
+  vrMeld();
+}
+const vriendenNu = () => Object.keys(P.friends || {}).filter(id => !P.friends[id].weg).sort().join();
 
 /* Merge is idempotent, commutatief en associatief: heen en weer syncen of
    dezelfde overdracht twee keer toepassen kan nooit iets kwijtmaken. De
@@ -3043,13 +3054,14 @@ function mergeDoc(a, b) {
 function applyRemoteDoc(remote) {
   if (!remote || remote.v !== 2) return false;
   saveP();
-  const levelHier = levelIdx(P.xp), badgesHier = Object.assign({}, P.badges);
+  const levelHier = levelIdx(P.xp), badgesHier = Object.assign({}, P.badges), vriendenHier = vriendenNu();
   DOC = mergeDoc(DOC, normDoc(remote));
   P = viewFromDoc(DOC);
   if (P.lastLevel == null || P.lastLevel >= levelHier) P.lastLevel = levelIdx(P.xp);
   P.shownBadges = P.shownBadges.filter(id => P.badges[id]);
   for (const id in P.badges) if (!badgesHier[id] && !P.shownBadges.includes(id)) P.shownBadges.push(id);
   saveP();
+  if (vriendenNu() !== vriendenHier) vriendenVeranderd();
   return true;
 }
 
@@ -4018,7 +4030,7 @@ function mpMsg(m) {
         say(m.aan ? (mpNaam() + ' is er weer! 🎉') : vriendZonderKamer() ? zinWeg() : anderWeg());
       } else if (samenInBeeld()) {
         if (m.aan) { say(mpNaam() + ' is er weer! 🎉'); if ($('vrLijn')) $('vrLijn').textContent = ''; }
-        else naEindeWeg(mpNaam(), !!MP.viaFriend, vrVroeg(), !!MP.revMine);
+        else naEindeWeg(mpNaam(), vrIsVriend(), vrVroeg(), !!MP.revMine);
       }
       break;
     case 'hallo':
@@ -4038,6 +4050,7 @@ function mpMsg(m) {
       {
         const mp = MP;
         /* eerst wat de groet over vrienden bewijst: een vriend gaat pas terug op een groet waarvan de bewijzen gelezen zijn */
+        mp.hunBewijzen = Array.isArray(m.bewijzen) ? m.bewijzen.slice(0, MAX_FRIENDS) : null;
         mpHerkenVriend(m.bewijzen).then(() => {
           if (MP !== mp) return;
           /* de sessie in de groet is die van nu: wat de ander in een eerdere sessie wilde, is voorbij; zijn toestand komt mee */
@@ -4074,8 +4087,7 @@ function mpMsg(m) {
       if (!opStaat()) mpOnSync(m);
       break;
     case 'revanche':
-      MP.revTheirs = true;
-      mpMaybeRevanche();
+      if (!MP.revTheirs) { MP.revTheirs = true; mpMaybeRevanche(); }
       break;
     case 'vriend?':
       /* de vraag van een app die vrienden worden als toestand nog niet kent: geen antwoord, wel waarom */
@@ -4139,7 +4151,7 @@ function mpHostStart() {
    bewijs gaat mee, zodat de gast weet welke vriend; in de staat komt het potje pas als de gast zegt dat hij volgt
    (startGevolgd). */
 async function mpStuurStart() {
-  const mp = MP, fid = mp.bewezen, f = fid && P.friends[fid];
+  const mp = MP, fid = mp.bewezenFid, f = fid && P.friends[fid];
   let bewijs = null;
   if (f && !f.weg && mp.anderStaten && vriendOpStaat(fid)) {
     /* of de server staten met een versie kent, zegt een lezing in deze run */
@@ -4214,6 +4226,8 @@ function mpBeginGame(S0) {
   const kv = MP.kamer && P.friends[MP.kamer.fid];
   if (MP.viaFriend && (!P.friends[MP.viaFriend] || P.friends[MP.viaFriend].weg)) MP.viaFriend = null;
   if (!MP.viaFriend && kv && !kv.weg) MP.viaFriend = MP.kamer.fid;
+  const bv = MP.bewezenFid && P.friends[MP.bewezenFid];
+  if (!MP.viaFriend && bv && !bv.weg) MP.viaFriend = MP.bewezenFid;
   vrTelNaar(MP.viaFriend || 'naam:' + mpNaam());
   MP.revMine = MP.revTheirs = false;
   Object.assign(MP, { S: S0 || newGame(), over: false, result: null, offer: null, shown: false, bekend: false, vriendWeet: false });
@@ -4419,7 +4433,7 @@ function mpMaybeRevanche() {
 function mpOnWeg() {
   const naam = mpNaam(), teZien = !!(MP && MP.result && !MP.shown), id = MP && MP.gameId;
   const afgelopen = !!(MP && MP.S && (MP.over || MP.result)), opKaart = samenInBeeld() && session.over;
-  const vriend = !!(MP && MP.viaFriend), vroeg = !!MP && vrVroeg(), revanche = !!(MP && MP.revMine);
+  const vriend = vrIsVriend(), vroeg = !!MP && vrVroeg(), revanche = !!(MP && MP.revMine);
   if (MP && !MP.S) {
     /* de ander stopte voordat er een potje was: ook dan komt het vervangen potje terug */
     zonderPotjeStoppen(true);
@@ -4475,6 +4489,8 @@ function naEindeTekenen() {
    wat hij vasthoudt (mpOnNaEinde). Alleen wat op de ander wacht, gaat weg zolang er geen lijn is. */
 const GEEN_NET_EINDE = 'Er is nu geen verbinding. De uitslag van jullie potje is al bewaard.';
 function naEindeEigenLijnWeg() {
+  /* zonder eigen lijn weet dit apparaat niet meer of de ander revanche wil; de volgende groet zegt het weer */
+  if (MP) MP.revTheirs = false;
   naEindeTekenen();
   if (!session || !session.online || !session.over || session.oud || !samenInBeeld()) return;
   if (!MP.lijnWasWeg) { MP.lijnWasWeg = true; say(GEEN_NET_EINDE); }
@@ -4485,7 +4501,7 @@ function naEindeOpnieuw() {
   if (!session || !session.online || !session.over || session.oud || !samenInBeeld()) return;
   if (MP.peerWeg) {
     MP.lijnWasWeg = false;
-    naEindeWeg(mpNaam(), !!MP.viaFriend, vrVroeg(), !!MP.revMine);
+    naEindeWeg(mpNaam(), vrIsVriend(), vrVroeg(), !!MP.revMine);
   } else if (MP.lijnWasWeg && MP.peerOn) { MP.lijnWasWeg = false; say(session.eindZin || ''); }
 }
 function naEindeVervalt() {
@@ -4514,8 +4530,10 @@ function naEindeStaat() {
 function mpOnNaEinde(s) {
   if (!s || typeof s !== 'object' || !MP) return;
   if (!MP.S || !(MP.over || MP.result)) return;
+  /* wat de ander wil, zegt de strook als het verandert, niet omdat een groet het herhaalt */
+  const was = MP.revTheirs;
   MP.revTheirs = s.rev === true;
-  if (MP.revTheirs) mpMaybeRevanche();
+  if (MP.revTheirs && !was) mpMaybeRevanche();
 }
 function mpVerlaat() {
   /* stoppen in een venster voor een nieuw potje stopt alleen wat dat venster begon */
@@ -4751,8 +4769,10 @@ async function mpHerkenVriend(bewijzen) {
   if (MP !== mp) return;
   let fid = null;
   for (const b of bewijzen.slice(0, MAX_FRIENDS)) if (!fid && typeof b === 'string' && BEWIJS_RE.test(b) && mijn.has(b)) fid = mijn.get(b);
-  mp.bewezen = fid;
-  if (fid) mp.viaFriend = fid;
+  mp.bewezen = !!fid;
+  mp.bewezenFid = fid;
+  /* een lopend potje houdt de soort waarmee het begon; het volgende begint met wat de groeten nu bewijzen */
+  if (fid && !vrPotjeLoopt()) mp.viaFriend = fid;
 }
 /* rol a = de kant met de kleinste sleutel toen ze vrienden werden, b = de ander; elk heeft zijn eigen bus */
 function myRole(f) { return f.host ? 'a' : 'b'; }
@@ -5351,7 +5371,8 @@ const DEZE_RUN = b64url(randBytes(6));
    een uitdaging). voor is wat het kind ervoor zag. */
 function paarVeranderd(fid, voor, uitkomsten) {
   const f = P.friends[fid], na = zichtVan(fid);
-  if (!f || f.weg || !na) return;
+  /* een vriend die weg is, toont niets meer, behalve het potje dat nu op het bord staat: dat houdt zijn soort */
+  if (!f || (f.weg && !(MP && MP.paar === fid)) || !na) return;
   /* een zet die wachtte en nu geschreven is: wat de strook over de verbinding zei, klopt niet meer */
   if (MP && MP.paar === fid && MP.zinNet && (uitkomsten || []).some(u => (u.afloop === 'geschreven' || u.afloop === 'gedaan') && u.actie &&
     u.actie.id === MP.gameId)) {
@@ -5484,7 +5505,7 @@ function vriendOpStaat(fid) {
 /* de potjes die het kind van deze vriend ziet: het potje of de uitdaging van nu, en een einde dat het nog niet bekeek */
 function paarRecords(fid, staat, ookBekeken) {
   const f = P.friends[fid];
-  if (!vriendOpStaat(fid) || f.weg) return [];
+  if (!vriendOpStaat(fid) || (f.weg && !(MP && MP.paar === fid))) return [];
   const p = paarVan(fid), s = staat || zichtVan(fid), rol = myRole(f), ander = andereRol(rol), uit = [];
   if (!s) return uit;
   const ms = t => Number.isFinite(t) ? t * 1000 + (+p.verschil || 0) : null;
@@ -5635,6 +5656,10 @@ function vrKaart() {
 }
 /* een tik die op zijn sleutel wacht, ziet het kind al als tik; meetellen en versturen doet hij pas met de sleutel */
 const vrTikBezig = () => !!(MP && MP.vr && MP.vrSleutel && !MP.vr.kp);
+/* of het kind de ander nu in zijn vriendenlijst heeft; de soort van het lopende potje blijft wat hij was */
+function vrIsVriend() {
+  return !!MP && [MP.viaFriend, MP.kamer && MP.kamer.fid, MP.bewezenFid].some(id => !!id && !!P.friends[id] && !P.friends[id].weg);
+}
 function vrVroeg() { const k = vrKaart(); return vrTikBezig() || k === 'gevraagd' || k === 'wacht'; }
 function vrStaat() { const v = MP.vr; return { sessie: v.sessie, pub: v.pub, wil: v.wil, nee: v.nee, zag: v.zag, voor: v.voor }; }
 /* Wat een apparaat over deze vriendschap vasthoudt (sessie, toestand, bewijzen) gaat alleen met een groet mee, en
@@ -5701,9 +5726,10 @@ async function vrMaak(paar) {
   mp.kamer = { fid, paar, voor: mp.hun.sessie, mijn: v.sessie };
   vrTelNaar(fid);
   /* tijdens een potje niets over het bord: de drie plaatjes komen bij het volgende einde, ook na een herlading */
-  if (vrPotjeLoopt()) mp.vrNogTonen = fid; else vriendKlaar(k);
+  /* het venster blijft verschuldigd tot het kind erin tikte; tijdens een potje komt het bij het volgende einde */
+  mp.vrNogTonen = fid;
+  if (!vrPotjeLoopt()) vriendKlaar(k);
   bewaarSamen();
-  vrMeld();
 }
 function vrWeg(fid) {
   const f = P.friends[fid];
@@ -5715,18 +5741,16 @@ function vrTerug() {
   MP.vrNogTonen = null;
   dropModal('vriendklaar');
   if (MP.viaFriend === k.fid && !loopt) MP.viaFriend = null;
-  MP.bewijzenP = null;
   vrWeg(k.fid);
   if (loopt) MP.vrTerugZeggen = true; else say(terugZin());
   bewaarSamen();
-  vrMeld();
 }
 /* wat er tijdens het potje met de vriend van deze kamer gebeurde, ziet het kind bij het einde */
 function vrNaEinde() {
   if (!MP || !MP.vr) return;
   if (MP.vrTerugZeggen) { MP.vrTerugZeggen = false; say(terugZin()); }
   const f = MP.vrNogTonen && MP.kamer && MP.kamer.fid === MP.vrNogTonen && P.friends[MP.vrNogTonen];
-  MP.vrNogTonen = null;
+  if (!f || f.weg) MP.vrNogTonen = null;
   bewaarSamen();
   if (f && !f.weg) vriendKlaar(f.k);
 }
@@ -5791,7 +5815,7 @@ function bewaarVriend(id, k, host) {
   const oud = P.friends[id];
   setFriend(id, { k, naam: mpNaam(), host, weg: false, since: oud && oud.since ? oud.since : Date.now() });
   /* een potje houdt de soort waarmee het begon */
-  if (MP) { if (!vrPotjeLoopt()) MP.viaFriend = id; MP.bewijzenP = null; }
+  if (MP && !vrPotjeLoopt()) MP.viaFriend = id;
   dropModal('vriendvraag');
   renderFriends();
 }
@@ -5811,14 +5835,16 @@ function vriendKlaar(k) {
     '<button class="btn plain" id="vrEind">🏠 Naar huis</button></div>', () => {
       naEindeTekenen();
       $('vrOk').addEventListener('click', () => {
+        vrGezien();
         if (!anderBereikbaar()) { naEindeTekenen(); return; }
         $('vrOk').disabled = true;
         $('vrOk').textContent = '🔁 Wachten op ' + mpNaam() + '…';
         mpRevanche();
       });
-      $('vrEind').addEventListener('click', () => { closeModal(); mpVerlaat(); });
+      $('vrEind').addEventListener('click', () => { vrGezien(); closeModal(); mpVerlaat(); });
     }, false, 'vriendklaar');
 }
+function vrGezien() { if (MP && MP.vrNogTonen) { MP.vrNogTonen = null; bewaarSamen(); } }
 
 /* uitnodigen: kamer maken, briefje in de bus van de vriend, wachten */
 async function inviteFriend(fid) {
@@ -6225,7 +6251,8 @@ async function zegNee(f, bus, op) {
 function removeFriendAsk(fid) {
   const f = P.friends[fid], loopt = lopendMet(fid);
   if (!f) return;
-  if (loopt && loopt.state !== 'uitdaging') {
+  /* een potje op de staat van het paar kan zonder de vriend niet verder; een potje in de kamer wel */
+  if (loopt && loopt.paar && loopt.state !== 'uitdaging') {
     const naam = escHtml(f.naam);
     showModal('<div class="m-emoji">👋</div><h2>' + naam + ' weghalen?</h2><p>Je potje met ' + naam + ' loopt nog. ' +
       'Weghalen kan als het potje klaar is. Opgeven?</p><div class="m-btns"><button class="btn sun" id="rmLaat">Nee, laat staan</button>' +
@@ -6273,6 +6300,8 @@ function laatstePaarHandeling(fid) {
 }
 /* een weggehaalde vriend, of een paar van voor Alles wissen: is de laatste handeling bezorgd, dan gaat alles van dat paar */
 function vergeetAlsBezorgd(fid) {
+  /* het potje dat nu op het bord staat, houdt zijn paar tot het voorbij is */
+  if (MP && MP.paar === fid) return;
   if ((!P.friends[fid] || P.friends[fid].weg) && !teBezorgen(fid)) { vergeetPaar(fid); vergeetGeteld(fid); }
 }
 function teBezorgen(fid) {

@@ -3027,6 +3027,23 @@ async function orakelTwee6() {
     } finally { fetch = echt; }
   });
 
+  await regel('[6.8] W10 Mees haalde Fien op zijn tablet weg terwijl ze op de telefoon spelen: het potje op het bord loopt door tot het einde, met haar zetten en haar opgave', async function (check) {
+    const { mees, fien, fid } = await liveVriendenpotje(false);
+    await zetUit(RUSTIG, mees, fien);
+    await zetUit(RUSTIG, mees, fien);
+    /* het profiel van de tablet van Mees, waarop hij Fien weghaalde zonder dat er een potje liep, komt binnen */
+    mees.ev('(function () { var d = JSON.parse(JSON.stringify(DOC)); d.friends[' + JSON.stringify(fid) + '] = Object.assign({}, d.friends[' +
+      JSON.stringify(fid) + '], { weg: true, t: Date.now() + 1000 }); applyRemoteDoc(d); })()');
+    await tijd(20000);
+    check('testopzet: Fien is weg bij Mees, het potje staat nog op zijn bord', mees.get('P.friends[' + JSON.stringify(fid) + '].weg') === true && opSpeelscherm(mees));
+    await zetUit(RUSTIG, mees, fien);
+    await zetUit(RUSTIG, mees, fien);
+    check('de zetten komen nog aan', mees.get('session.S.hist.length') === 4 && fien.get('session.S.hist.length') === 4);
+    await geefOp(fien);
+    await tijd(5000);
+    check('de opgave van Fien komt aan: Mees wint', /JIJ WINT!/.test(tekstVan(mees, 'eindkaart')));
+  });
+
   await regel('[6.6] AA5 een zet in een potje dat live loopt krijgt een keer 429: binnen twee tellen staat hij er alsnog, en de strook zegt niets over verbinding', async function (check) {
     const { mees, fien, fid } = await liveVriendenpotje(false);
     await zetUit(RUSTIG, mees, fien);
