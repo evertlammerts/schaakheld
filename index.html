@@ -6704,6 +6704,10 @@ async function inviteFriend(fid) {
   } catch (e) {}
   if (bezet()) return;
   INV = { fid, id: invId, bus: to.bus, bewijs: to.bewijs, tot: Date.now() + INVITE_TTL };
+  laterTimer = setTimeout(() => {
+    INV.laterKan = true;
+    if ($('invLater')) $('invLater').classList.remove('hidden');
+  }, LATER_NA);
   mpStart(resp.room, resp.seat, true);
   MP.viaFriend = fid;
   wachtScherm();
@@ -6713,6 +6717,10 @@ async function inviteFriend(fid) {
    uitnodiging niet meer aankomen, dus houdt het wachtscherm ook op. */
 const INVITE_TTL = 10 * 60000;
 let inviteTimer = 0;
+/* Wie naast zijn vriend zit, wacht een paar tellen; een uitdaging voor later past pas als er na een halve minuut nog
+   geen antwoord is, anders maakt een tik op de verkeerde knop van een uitnodiging een uitdaging. */
+const LATER_NA = 30000;
+let laterTimer = 0;
 function inviteVerlopen() {
   const f = INV && P.friends[INV.fid];
   if (!f) return;
@@ -6853,9 +6861,10 @@ function wachtScherm() {
   clearTimeout(inviteTimer);
   inviteTimer = setTimeout(inviteVerlopen, Math.max(0, (INV.tot || 0) - Date.now()));
   showModal('<div class="m-emoji">🐢</div><h2>Wachten op ' + escHtml(f.naam) + '…</h2>' + samenKapotZin() +
-    '<p>Je uitnodiging staat klaar voor ' + escHtml(f.naam) + '. Zeg het gerust even!</p>' +
-    '<div class="m-btns">' + (vriendOpStaat(INV.fid) ? '<button class="btn sun" id="invLater">Daag ' + escHtml(f.naam) + ' uit voor later</button>' : '') +
-    '<button class="btn plain" id="invStop">Stop met wachten</button></div>', () => {
+    '<p>Je uitnodiging staat klaar voor ' + escHtml(f.naam) + '. Het kan een paar tellen duren. Zeg het gerust even!</p>' +
+    '<div class="m-btns"><button class="btn plain" id="invStop">Stop met wachten</button>' +
+    (vriendOpStaat(INV.fid) ? '<button class="btn plain' + (INV.laterKan ? '' : ' hidden') + '" id="invLater">Daag ' + escHtml(f.naam) + ' uit voor later</button>' : '') +
+    '</div>', () => {
       $('invStop').addEventListener('click', inviteCancel);
       if ($('invLater')) $('invLater').addEventListener('click', () => maakUitdaging(INV.fid));
     }, false, 'mpwacht');
@@ -6865,6 +6874,7 @@ async function inviteClear() {
   const inv = INV;
   INV = null;
   clearTimeout(inviteTimer);
+  clearTimeout(laterTimer);
   if (!inv || !netAvailable()) return;
   try {
     await fetch(SYNC_URL + '/v1/bus', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -6882,6 +6892,38 @@ function inviteCancel() {
 function friendPollSoon(ms) {
   clearTimeout(friendPollTimer);
   friendPollTimer = setTimeout(friendPoll, ms == null ? 15000 : ms);
+  snelKijken();
+}
+/* Met de app in beeld kijkt hij daarnaast elke vijf tellen in de eigen bussen, alleen naar uitnodigingen: een kind dat
+   naast zijn vriend zit, wacht niet langer dan dat. De staten van de paren leest alleen friendPoll, op zijn eigen tempo.
+   Wie zelf wacht, of speelt terwijl de vriend er niet is, leest alles al elke vijf tellen; dan staat er geen timer. */
+let snelKijkKlok = 0;
+function snelKijken() {
+  clearTimeout(snelKijkKlok);
+  snelKijkKlok = 0;
+  if (document.hidden || INV || wachtOpVriend()) return;
+  snelKijkKlok = setTimeout(async () => {
+    try { await leesUitnodigingen(); } catch (e) {}
+    snelKijken();
+  }, 5000);
+}
+async function leesUitnodigingen() {
+  if (!netAvailable() || modalOpen) return;
+  const ids = Object.keys(P.friends || {}).filter(id => !P.friends[id].weg);
+  if (!ids.length) return;
+  const mijn = await Promise.all(ids.map(id => busFor(P.friends[id], myRole(P.friends[id]))));
+  const buses = {}, blobs = {};
+  ids.forEach((id, i) => { buses[mijn[i].bus] = id; });
+  const lijst = Object.keys(buses);
+  try {
+    for (let i = 0; i < lijst.length; i += BUS_BATCH) {
+      const r = await fetch(SYNC_URL + '/v1/bus/check', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bussen: lijst.slice(i, i + BUS_BATCH) }) });
+      if (r.status === 200) { const data = await r.json(); Object.assign(blobs, (data && data.blobs) || {}); }
+    }
+  } catch (e) { return; }
+  /* tikte het kind intussen zelf op Uitnodigen, dan is het niet bezig: kruisende uitnodigingen gaan zoals in friendPoll */
+  await verwerkUitnodigingen(blobs, buses, !!session || (mpBezig() && !INV), false);
 }
 const BUS_BATCH = 64; /* maxBusCheck in bus.go */
 /* een uitnodiging en een "Nu niet" zijn op de lijn even lang, zodat de server ze niet uit elkaar kan houden */
@@ -6953,35 +6995,45 @@ async function friendPoll() {
       if (gelezen.has(paarAdres[id])) await staatGelezen(id, typeof blobs[paarAdres[id]] === 'string' ? blobs[paarAdres[id]] : null, nu);
     }
     if (pollVerversen) { pollVerversen = false; thuisVerversen(); }
-    for (const bus in blobs) {
-      const fid = buses[bus];
-      const bytes = fid ? b64urlBytes(String(blobs[bus])) : null;
-      if (!bytes) continue;
-      let inv = null;
-      try { inv = await openJSON(P.friends[fid].k, 'uitnodiging', bytes); } catch (e) {}
-      if (inv && inv.nee === true && typeof inv.id === 'string' && !seenInv.includes(inv.id) &&
-          INV && INV.fid === fid && INV.id === inv.op && Date.now() - +inv.ts < INVITE_TTL) {
-        markSeen(inv.id);
-        const naam = escHtml(P.friends[fid].naam);
-        inviteClear();
-        closeModal();
-        zonderPotjeStoppen();
-        naarHuisMelding('🙂', naam + ' kan nu even niet', 'Probeer het later nog eens.');
-        renderFriends();
-        break;
-      }
-      if (!geldigeUitnodiging(inv) || seenInv.includes(inv.id)) continue;
-      /* kruisende uitnodigingen tussen dezelfde twee: rol a houdt de zijne */
-      if (INV && INV.fid === fid && myRole(P.friends[fid]) === 'a') continue;
-      if (bezig || (uitnodigingWacht && uitnodigingWacht.inv.id === inv.id)) { uitnodigingWacht = { fid, inv }; thuisVerversen(); continue; }
-      const eigenWacht = !!INV && modalOpen && modalKey === 'mpwacht' && !modalQueue.length;
-      if (eigenWacht) closeModal();
-      if (showInvite(fid, inv)) break;
-      wachtScherm(); /* niet getoond: ons eigen scherm terug */
-    }
+    await verwerkUitnodigingen(blobs, buses, bezig, true);
   } catch (e) { potjesNetFout = true; thuisVerversen(); }
   /* wie op een antwoord wacht, kijkt vaker: "Nu niet" hoort snel aan te komen; ook wie speelt terwijl de vriend er niet is */
   friendPollSoon(INV || wachtOpVriend() ? 5000 : undefined);
+}
+async function verwerkUitnodigingen(blobs, buses, bezig, herteken) {
+  for (const bus in blobs) {
+    const fid = buses[bus];
+    const bytes = fid ? b64urlBytes(String(blobs[bus])) : null;
+    if (!bytes) continue;
+    let inv = null;
+    try { inv = await openJSON(P.friends[fid].k, 'uitnodiging', bytes); } catch (e) {}
+    if (inv && inv.nee === true && typeof inv.id === 'string' && !seenInv.includes(inv.id) &&
+        INV && INV.fid === fid && INV.id === inv.op && Date.now() - +inv.ts < INVITE_TTL) {
+      markSeen(inv.id);
+      const naam = escHtml(P.friends[fid].naam);
+      inviteClear();
+      closeModal();
+      zonderPotjeStoppen();
+      naarHuisMelding('🙂', naam + ' kan nu even niet', 'Probeer het later nog eens.');
+      renderFriends();
+      return;
+    }
+    if (!geldigeUitnodiging(inv) || seenInv.includes(inv.id)) continue;
+    /* kruisende uitnodigingen tussen dezelfde twee: rol a houdt de zijne */
+    if (INV && INV.fid === fid && myRole(P.friends[fid]) === 'a') continue;
+    if (bezig || (uitnodigingWacht && uitnodigingWacht.inv.id === inv.id)) {
+      /* de snelle blik tekent de kaart alleen voor een nieuwe uitnodiging: een kaart die elke vijf tellen opnieuw
+         opgebouwd wordt, laat een tik vallen */
+      const nieuw = !uitnodigingWacht || uitnodigingWacht.inv.id !== inv.id;
+      uitnodigingWacht = { fid, inv };
+      if (nieuw || herteken) thuisVerversen();
+      continue;
+    }
+    const eigenWacht = !!INV && modalOpen && modalKey === 'mpwacht' && !modalQueue.length;
+    if (eigenWacht) closeModal();
+    if (showInvite(fid, inv)) return;
+    wachtScherm(); /* niet getoond: ons eigen scherm terug */
+  }
 }
 let potjesNetFout = false; /* het lezen van de bussen lukte de laatste keer niet: er is nu geen verbinding */
 function wachtOpVriend() { return samenInBeeld() && !session.over && !MP.peerOn && vriendZonderKamer(); }
@@ -11805,6 +11857,8 @@ if (!checkPlayFragment() && !checkLinkFragment()) {
 if (ACC) meldApparaat();
 if (ACC) syncNow();
 friendPollSoon(1500);
+/* weer in beeld: meteen kijken; op de achtergrond stond de snelle blik naar uitnodigingen stil */
+document.addEventListener('visibilitychange', () => { if (!document.hidden) friendPollSoon(500); });
 
 /* PWA: op GitHub Pages cachet de service worker de app voor offline gebruik.
    In omgevingen zonder sw.js faalt dit stil. */

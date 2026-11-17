@@ -29,6 +29,8 @@ async function paarMeesFien() {
   zetDatum('2026-11-20T10:00:00');
   const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
   await wordenVrienden(mees, fien);
+  /* de snelle blik naar uitnodigingen leest geen staat van een paar; uit, anders loopt de klok bij elke wacht() vijf tellen door */
+  for (const x of [mees, fien]) x.ev('clearTimeout(snelKijkKlok); snelKijken = function () {}');
   const fm = mees.get('Object.keys(P.friends)[0]'), ff = fien.get('Object.keys(P.friends)[0]');
   return { mees, fien, fm, ff, rm: rolVan(mees, fm), rf: rolVan(fien, ff) };
 }

@@ -127,6 +127,7 @@ async function vriendErbij(a, b) {
 async function daagUit(van, fid, naam) {
   tikInRij(van, fid, 'Uitnodigen');
   await wacht();
+  await wacht(30000);
   tikTekst(van, 'Daag ' + naam + ' uit voor later');
   await wacht();
   if (kanTikken(van, 'Naar huis')) { tikTekst(van, 'Naar huis'); await wacht(); }
@@ -510,6 +511,7 @@ async function orakelTwee6() {
       stopApparaat(fien);
       tikInRij(mees, fid, 'Uitnodigen');
       await wacht();
+      await wacht(30000);
       await metVasteWillekeur(vul, async function () { tikTekst(mees, 'Daag Fien uit voor later'); await wacht(); });
       if (kanTikken(mees, 'Naar huis')) { tikTekst(mees, 'Naar huis'); await wacht(); }
       schuifKlok(DAG);
@@ -627,6 +629,7 @@ async function orakelTwee6() {
     try {
       await mees.ev('inviteFriend(' + JSON.stringify(fid) + ')');
       await wacht();
+      await wacht(30000);
       if (kanTikken(mees, 'Daag Fien uit voor later')) { tikTekst(mees, 'Daag Fien uit voor later'); await wacht(); }
       if (kanTikken(mees, 'Naar huis')) { tikTekst(mees, 'Naar huis'); await wacht(); }
     } finally { fetch = echt; }
@@ -657,7 +660,7 @@ async function orakelTwee6() {
     const bus = await potjesbus(mees, fid, true);
     tikInRij(mees, fid, 'Uitnodigen');
     await wacht(11 * 60000);
-    check('het bericht biedt de uitdaging aan', kanTikken(mees, 'Daag Fien uit voor later'));
+    check('het bericht biedt de uitdaging aan', /De uitnodiging is verlopen\./.test(mees.scherm()) && kanTikken(mees, 'Daag Fien uit voor later'));
     check('er is nog geen uitdaging', !__server.potjes[bus]);
     tikTekst(mees, 'Daag Fien uit voor later');
     await wacht();
@@ -2671,6 +2674,7 @@ async function orakelTwee6() {
     tikInRij(mees, fid, 'Uitnodigen');
     await wacht();
     check('testopzet: de uitnodiging staat op de server', !!(__server.buses[adres] && __server.buses[adres].blob));
+    await wacht(30000);
     tikTekst(mees, 'Daag Fien uit voor later');
     await tijd(5000);
     check('de uitnodiging is van de server', !(__server.buses[adres] && __server.buses[adres].blob));
@@ -3147,8 +3151,13 @@ async function orakelTwee6() {
     await wacht();
     const melding = meldingen(fien);
     const h = volgendeSchrijf(fien, 'houd');
+    /* een uitdaging komt pas na een halve minuut wachten; zonder netwerk ziet de ander de uitnodiging in die tijd niet */
+    geenNetwerk(mees);
     await daagUit(fien, fid, 'Mees');
+    weerNetwerk(mees);
+    geenNetwerk(fien);
     await daagUit(mees, fid, 'Fien');
+    weerNetwerk(fien);
     h.laat();
     await tijd(10000);
     fien.tik('tabSpelen');

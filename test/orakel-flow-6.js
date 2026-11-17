@@ -61,6 +61,7 @@ async function orakelFlow6() {
   const daagFienUit = async function (a) {
     tikInRij(a, 'vriendfien1', 'Uitnodigen');
     await wacht();
+    await wacht(30000);
     tikTekst(a, 'Daag Fien uit voor later');
     await wacht();
   };
@@ -497,12 +498,34 @@ async function orakelFlow6() {
     check('geen teller veranderd', tellers(a) === voor);
   });
 
+  await regel('[4.14] het wachtvenster zegt dat het een paar tellen kan duren, en biedt een uitdaging voor later pas na een halve minuut aan, niet als hoofdknop', async function (check) {
+    zetDatum('2026-11-14T10:00:00');
+    const a = await kind(opslagMetVrienden([{ fid: 'vriendfien1', naam: 'Fien' }]));
+    const later = function () { return kanTikken(a, 'Daag Fien uit voor later'); };
+    tikInRij(a, 'vriendfien1', 'Uitnodigen');
+    check('niet voor de halve minuut', !(await zagOoit(later, 29500)));
+    check('het venster', a.ziet('Wachten op Fien') && /Het kan een paar tellen duren\./.test(a.scherm()) && kanTikken(a, 'Stop met wachten'));
+    check('na een halve minuut wel', await zagOoit(later, 1500));
+    check('geen hoofdknop', !a.get("$('invLater').classList.contains('sun')"));
+    a.ev('closeModal(); wachtScherm()');
+    check('komt het wachtvenster terug, dan staat de knop er meteen', later());
+    tikTekst(a, 'Stop met wachten');
+    await wacht();
+    tikInRij(a, 'vriendfien1', 'Uitnodigen');
+    check('een nieuwe uitnodiging begint weer bij nul', !(await zagOoit(later, 10000)));
+    tikTekst(a, 'Stop met wachten');
+    await wacht();
+    tikInRij(a, 'vriendfien1', 'Uitnodigen');
+    check('wie na tien tellen stopt en opnieuw uitnodigt, wacht weer de hele halve minuut', !(await zagOoit(later, 29500)) && await zagOoit(later, 1500));
+  });
+
   await regel('[6.4] wie uitnodigt en niet wil wachten, maakt er een uitdaging voor later van: het venster, de kaart en de rij zeggen het', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const a = await kind(opslagMetVrienden([{ fid: 'vriendfien1', naam: 'Fien' }]));
     const voor = tellers(a), potjes = Object.keys(__server.potjes).length;
     tikInRij(a, 'vriendfien1', 'Uitnodigen');
     await wacht();
+    await wacht(30000);
     check('het wachtvenster biedt de uitdaging aan', a.ziet('Wachten op Fien') && kanTikken(a, 'Daag Fien uit voor later') && kanTikken(a, 'Stop met wachten'));
     tikTekst(a, 'Daag Fien uit voor later');
     await wacht();

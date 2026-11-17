@@ -530,6 +530,8 @@ async function alles() {
     await tik();
   }
 
+  /* de orakels beginnen zonder apparaten van hierboven: hun timers lopen anders door en zetten de klok van wacht() vooruit */
+  ORAKEL.apps.splice(0).forEach(stopApparaat);
   await orakelTwee();
   await orakelTwee6();
   await orakelPaar();

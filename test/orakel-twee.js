@@ -2622,7 +2622,7 @@ async function orakelTwee() {
     const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
     await wordenVrienden(fien, daan);
     await nodigUit(fien);
-    check('het venster', /Je uitnodiging staat klaar voor Daan\. Zeg het gerust even!/.test(fien.scherm()) && !/zodra de app open gaat/.test(fien.scherm()));
+    check('het venster', /Je uitnodiging staat klaar voor Daan\. Het kan een paar tellen duren\. Zeg het gerust even!/.test(fien.scherm()) && !/zodra de app open gaat/.test(fien.scherm()));
     check('de rij', /Wachten op Daan…/.test(tekstVan(fien, 'friendList')) && !/SchaakHeld opent/.test(tekstVan(fien, 'friendList')));
   });
 
@@ -3692,6 +3692,46 @@ async function orakelTwee() {
     tikTekst(daan, 'Nu niet');
     check('testopzet: Fien leest het', await zagOoit(function () { return /Daan kan nu even niet/.test(zegt(fien)); }, 30000));
     check('geen wachten en geen kamer meer', fien.get('INV') === null && !fien.get('!!MP'));
+  });
+
+  await regel('[4.14] een uitnodiging komt binnen vijf tellen aan bij een vriend die de app open heeft, ook als zijn app net in de bus keek, en die snelle blik leest geen staat van een paar', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await wordenVrienden(fien, daan);
+    const paar = await daan.ev('(async function () { return (await paarBus(paarVriend(Object.keys(P.friends)[0]))).bus; })()');
+    await daan.ev('friendPoll()');
+    const gelezen = [];
+    daan.netwerk.haak = function (url, o, f) { if (/\/v1\/bus\/check$/.test(url)) gelezen.push(JSON.parse(o.body).bussen); return f(url, o); };
+    fien.tik('tabVrienden');
+    tikTekst(fien, 'Uitnodigen');
+    check('Daan leest de uitnodiging binnen zes tellen', await zagOoit(function () { return /Fien wil een potje spelen!/.test(zegt(daan)); }, 6000));
+    check('Daan las zijn bus, niet de staat van het paar', !!paar && gelezen.length > 0 && gelezen.every(function (b) { return b.indexOf(paar) < 0; }));
+  });
+
+  await regel('[4.14] een app op de achtergrond kijkt niet elke vijf tellen: de uitnodiging komt bij de gewone ronde van vijftien tellen', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await wordenVrienden(fien, daan);
+    daan.ev('document.hidden = true');
+    await daan.ev('friendPoll()');
+    fien.tik('tabVrienden');
+    tikTekst(fien, 'Uitnodigen');
+    const ziet = function () { return /Fien wil een potje spelen!/.test(zegt(daan)); };
+    check('niet binnen zes tellen', !(await zagOoit(ziet, 6000)));
+    check('wel binnen vijftien tellen', await zagOoit(ziet, 10000));
+  });
+
+  await regel('[4.14] komt de app weer in beeld, dan kijkt hij meteen en daarna weer elke vijf tellen', async function (check) {
+    const fien = maakApparaat('Fien'), daan = maakApparaat('Daan');
+    await wordenVrienden(fien, daan);
+    const ziet = function () { return /Fien wil een potje spelen!/.test(zegt(daan)); };
+    daan.ev('document.hidden = true');
+    await daan.ev('friendPoll()');
+    fien.tik('tabVrienden');
+    tikTekst(fien, 'Uitnodigen');
+    check('testopzet: op de achtergrond nog niet', !(await zagOoit(ziet, 3000)));
+    daan.ev('document.hidden = false');
+    fire(daan.doc, 'visibilitychange');
+    check('weer in beeld: binnen een tel', await zagOoit(ziet, 1000));
+    check('en de snelle blik staat weer aan', daan.get('!!snelKijkKlok'));
   });
 
   await regel('[4.7] beide verbonden kaarten zeggen wie het potje start', async function (check) {
