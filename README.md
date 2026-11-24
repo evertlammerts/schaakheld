@@ -61,8 +61,12 @@ het terug, ook na het sluiten van de app.
   zetten), pat, te weinig materiaal, vijftig zetten zonder slag of
   pionzet, of de derde keer dezelfde stelling. Staat een stelling er voor
   de tweede keer, dan zegt de strook dat de derde keer remise is. Na een
-  potje tegen Turbo noemt de eindkaart het belangrijkste moment, of je
-  beste zet, met een tip voor de volgende keer.
+  potje tegen Turbo heeft de eindkaart een knop naar het belangrijkste
+  moment ("Leermoment", of "Dit was een topzet" bij je beste zet). Het
+  bord gaat dan terug naar vlak voor die zet, en stap voor stap zie je
+  wat je deed, wat Turbo deed of had kunnen doen, of wat jij had kunnen
+  spelen, met aan het eind een tip voor de volgende keer. Met "Bekijk
+  het bord" zie je het bord zoals het potje eindigde.
 - **Met een ander kind**, via een speel-QR of vier woorden. Wie pauzeert,
   herlaadt of even geen netwerk heeft, gaat verder waar het was. Geen
   blunder-alarm en geen hulp: het is een eerlijk potje.

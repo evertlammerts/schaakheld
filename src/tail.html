@@ -7920,36 +7920,37 @@ function sleutelMoment(S) {
   }
   return keyMoment(T, (B, m) => { const b = bekend[B.hist.length]; return b && b.zet === moveKey(m) ? b.moment : momentVan(B, m); });
 }
-/* De zin op de eindkaart per soort moment, en wat het kind de volgende keer kan nakijken. Een verlies
-   dat Turbo niet gebruikte, zegt wat hij had kunnen doen; geen moment: netjes gespeeld. */
+/* Per soort moment de samenvatting waarmee het leermoment begint, en wat het kind de volgende keer kan nakijken, waarmee
+   het eindigt. Een verlies dat Turbo niet gebruikte, zegt wat hij had kunnen doen; geen moment: netjes gespeeld, op de
+   kaart zelf. */
 function momentTekst(k) {
-  if (!k) return { kop: null, tekst: 'Netjes gespeeld: je gaf geen stuk weg.' };
-  const zet = 'Zet ' + k.moveNo + ': ', kop = 'Het belangrijkste moment', pt = p => ptsNL(p * 100);
+  if (!k) return { tekst: 'Netjes gespeeld: je gaf geen stuk weg.' };
+  const zet = 'Zet ' + k.moveNo + ': ', pt = p => ptsNL(p * 100);
   const verlies = ptsNL(k.verlies >= 100 ? k.verlies : k.loss);
   const pakte = () => k.used ? ', en ik pakte ' + hemVan(k.piece) + ' (' + pt(k.points) + ').' : '. Ik had ' + hemVan(k.piece) + ' kunnen pakken (' + pt(k.points) + ').';
   switch (k.kind) {
     case 'hang':
-      if (k.self) return { kop, tekst: zet + 'je ' + k.piece + ' ging naar ' + k.sq + '. Daar stond ' + hijVan(k.piece) + ' onbeschermd' + pakte(),
+      if (k.self) return { tekst: zet + 'je ' + k.piece + ' ging naar ' + k.sq + '. Daar stond ' + hijVan(k.piece) + ' onbeschermd' + pakte(),
         volgende: 'Volgende keer: kijk of je stuk daar gedekt is.' };
-      if (k.defender) return { kop, tekst: zet + 'je ' + k.stuk + ' ging naar ' + k.naar + '. Toen dekte niemand je ' + k.piece + ' op ' + k.sq + ' meer' + pakte(),
+      if (k.defender) return { tekst: zet + 'je ' + k.stuk + ' ging naar ' + k.naar + '. Toen dekte niemand je ' + k.piece + ' op ' + k.sq + ' meer' + pakte(),
         volgende: 'Volgende keer: kijk wat je stuk nog dekte, voor je het wegzet.' };
-      return { kop, tekst: zet + 'je ' + k.piece + ' op ' + k.sq + ' stond onbeschermd' + pakte(), volgende: 'Volgende keer: kijk voor elke zet welke stukken van jou aangevallen worden.' };
-    case 'truc': return { kop, tekst: zet + 'na je zet kon ik een ' + k.truc + ' zetten.' + (!k.used ? ' Ik zag het niet.' :
+      return { tekst: zet + 'je ' + k.piece + ' op ' + k.sq + ' stond onbeschermd' + pakte(), volgende: 'Volgende keer: kijk voor elke zet welke stukken van jou aangevallen worden.' };
+    case 'truc': return { tekst: zet + 'na je zet kon ik een ' + k.truc + ' zetten.' + (!k.used ? ' Ik zag het niet.' :
       k.doelen && k.doelen.length >= 2 ? ' Mijn ' + k.stukTurbo + ' viel je ' + k.doelen[0] + ' en je ' + k.doelen[1] + ' tegelijk aan.' : ''),
       volgende: 'Volgende keer: kijk wat ik na je zet kan aanvallen.' };
-    case 'slag': return { kop, tekst: zet + 'je ' + k.piece + ' op ' + k.sq + ' kon ik slaan met mijn ' + k.by + '.' +
+    case 'slag': return { tekst: zet + 'je ' + k.piece + ' op ' + k.sq + ' kon ik slaan met mijn ' + k.by + '.' +
       (!k.used ? ' Dat had je ' + verlies + ' gekost.' : k.terug ? ' Na het terugslaan was je ' + verlies + ' kwijt.' : ' Ook met terugslaan was je ' + verlies + ' kwijt.'),
       volgende: 'Volgende keer: tel eerst wie er terug kan slaan.' };
-    case 'mat': return { kop, tekst: zet + 'na je zet kon ik mat zetten, met ' + k.strafNaam + '.', volgende: 'Volgende keer: kijk eerst of ik schaak kan geven.' };
-    case 'ruil': return { kop, tekst: zet + 'je sloeg ' + hetNaam(k.geslagen || 'pion') + ' op ' + k.sq + ', maar die was gedekt.' +
+    case 'mat': return { tekst: zet + 'na je zet kon ik mat zetten, met ' + k.strafNaam + '.', volgende: 'Volgende keer: kijk eerst of ik schaak kan geven.' };
+    case 'ruil': return { tekst: zet + 'je sloeg ' + hetNaam(k.geslagen || 'pion') + ' op ' + k.sq + ', maar die was gedekt.' +
       (k.used ? ' Na het terugslaan was je ' + verlies + ' kwijt.' : ' Ik had kunnen terugslaan.'), volgende: 'Volgende keer: tel eerst wie er terug kan slaan.' };
-    case 'gemist': return k.mateWith ? { kop, tekst: zet + 'je kon mij schaakmat zetten met ' + k.matNaam + '.', volgende: 'Volgende keer: kijk eerst of jij schaak kunt geven.' } :
-      { kop, tekst: zet + 'je kon mijn ' + k.piece + ' op ' + k.sq + ' pakken. Dat had je ' + ptsNL(k.winst >= 100 ? k.winst : k.loss) + ' opgeleverd.',
+    case 'gemist': return k.mateWith ? { tekst: zet + 'je kon mij schaakmat zetten met ' + k.matNaam + '.', volgende: 'Volgende keer: kijk eerst of jij schaak kunt geven.' } :
+      { tekst: zet + 'je kon mijn ' + k.piece + ' op ' + k.sq + ' pakken. Dat had je ' + ptsNL(k.winst >= 100 ? k.winst : k.loss) + ' opgeleverd.',
         volgende: 'Volgende keer: kijk eerst wat jij kunt pakken.' };
-    case 'goed': return { kop: 'Jouw beste zet', tekst: k.doelen && k.doelen.length >= 2 ?
+    case 'goed': return { tekst: k.doelen && k.doelen.length >= 2 ?
       zet + 'je ' + k.stuk + ' viel mijn ' + k.doelen[0] + ' en mijn ' + k.doelen[1] + ' tegelijk aan. Een echte vork!' :
       k.piece ? zet + 'je pakte mijn ' + k.piece + ' (' + ptsNL(k.winst) + '). Goed gezien!' : zet + 'je won ' + ptsNL(k.winst >= 100 ? k.winst : k.gain) + '. Goed gezien!' };
-    default: return { kop: null, tekst: 'Netjes gespeeld: je gaf geen stuk weg.' };
+    default: return { tekst: 'Netjes gespeeld: je gaf geen stuk weg.' };
   }
 }
 function endGame(st, stil) {
@@ -8036,17 +8037,18 @@ function endGame(st, stil) {
   checkBadges();
   saveP();
   if (stil) return;
-  const lvl = session.level, mt = momentTekst(sleutelMoment(session.S));
+  const lvl = session.level, km = sleutelMoment(session.S), mt = momentTekst(km);
   later(() => {
     say(moe || h);
     toonEindkaart('<div class="ek-turbo">🐢</div><h2>' + h + '</h2><p>' + p + '</p>' +
-      '<div class="ek-moment">' + (mt.kop ? '<h3>' + mt.kop + '</h3>' : '') + '<p>' + mt.tekst + '</p>' +
-      (mt.volgende ? '<p class="ek-volgende">' + mt.volgende + '</p>' : '') + '</div>' +
+      '<div class="ek-moment">' + (km ? '<button class="btn plain" id="ekMoment">' +
+        (km.kind === 'goed' ? '👀 Dit was een topzet' : '👀 Leermoment') + '</button>' : '<p>' + mt.tekst + '</p>') + '</div>' +
       (xp ? '<p class="ek-xp">+' + xp + '\u00a0XP</p>' : '<p>Dit potje telt niet mee: het was korter dan tien zetten.</p>') + '<!--trofeeen-->' +
       '<div class="ek-btns twee"><button class="btn sun" id="mAgain">Revanche! 🔁</button>' +
       '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', () => {
         $('mAgain').addEventListener('click', () => startGame(lvl));
         $('mHome').addEventListener('click', goHome);
+        if ($('ekMoment')) $('ekMoment').addEventListener('click', () => bekijkMoment(km, mt));
       });
   }, 900);
 }
@@ -8206,7 +8208,82 @@ function sluitEindkaart() {
   k.style.display = '';
   k.innerHTML = '';
   wijzer = null;
+  momentLoop = null;
   if (actionBtns.bekijkBord || actionBtns.uitslag) setActions([]);
+}
+
+/* Na het einde wordt het bord van het potje niet meer bewaard, dus het leermoment mag erop terug- en vooruitspelen,
+   zolang Uitslag het terugzet zoals het eindigde. Een zetnaam ontstaat pas als het bord op zijn stap staat, zodat elke
+   zin klopt met het bord. */
+let momentLoop = null;
+function momentStappen(k, mt, zetten) {
+  const zet = zetten[k.ply], antwoord = zetten[k.ply + 1];
+  const opBord = sleutel => legalMoves(session.S).find(x => moveKey(x) === sleutel);
+  const eerste = { ply: k.ply, pijl: () => [zet, k.kind === 'goed' ? 'a-leaf' : 'a-sun'], zin: () => mt.tekst };
+  const volgende = st => ({ ply: st.ply, pijl: st.pijl, zin: () => mt.volgende });
+  /* de samenvatting zegt al wat de beste zet opleverde, en wat een gemiste kans had opgeleverd */
+  if (k.kind === 'goed') return [eerste, { ply: k.ply + 1, speel: zet, zin: () => mt.tekst }];
+  if (k.kind === 'gemist') {
+    const kans = { ply: k.ply, pijl: () => [opBord(k.mateWith || k.with), 'a-leaf'],
+      zin: () => 'Dit kon ook: ' + zetB(moveNameNL(session.S, opBord(k.mateWith || k.with))) };
+    return [eerste, kans, volgende(kans)];
+  }
+  if (k.used) {
+    return [eerste, { ply: k.ply + 1, speel: zet, pijl: () => [antwoord, 'a-coral'], zin: () => 'Toen speelde ik ' + zetB(moveNameNL(session.S, antwoord)) },
+      { ply: k.ply + 2, speel: antwoord, zin: () => mt.volgende }];
+  }
+  const kon = { ply: k.ply + 1, speel: zet, pijl: () => [opBord(k.punish), 'a-coral'],
+    zin: () => 'Dit had ik kunnen spelen: ' + zetB(moveNameNL(session.S, opBord(k.punish))) };
+  return [eerste, kon, volgende(kon)];
+}
+function bekijkMoment(k, mt) {
+  const zetten = session.S.hist.map(u => u.m);
+  momentLoop = { session, zetten, stappen: momentStappen(k, mt, zetten), voor: $('bubble').innerHTML };
+  $('eindkaart').style.display = 'none';
+  momentStap(0);
+}
+function momentBordOp(loop, ply) {
+  const S = session.S;
+  while (S.hist.length > ply) unmakeMove(S);
+  while (S.hist.length < ply) makeMove(S, loop.zetten[S.hist.length]);
+}
+/* Verder wacht tot de zet staat, anders vliegen er twee stukken; Uitslag midden in een zet laat die zet vallen, anders
+   kwam hij op het teruggezette bord */
+function momentStap(i) {
+  const loop = momentLoop, st = loop.stappen[i];
+  const nogDeze = () => momentLoop === loop && session === loop.session;
+  const toon = () => {
+    const S = session.S, p = st.pijl && st.pijl();
+    nieuweStand(S);
+    BD.arrows = p ? [{ from: p[0].from, to: p[0].to, cls: p[1] }] : [];
+    renderBoard();
+    updateTrays();
+    say(st.zin());
+    setActions(i === loop.stappen.length - 1 ?
+      [{ label: '↺ Nog eens', cls: 'plain', fn: () => momentStap(0), id: 'momentOpnieuw' }, { label: 'Uitslag ▶', cls: 'sun', fn: momentUitslag, id: 'uitslag' }] :
+      [{ label: 'Verder ▶', cls: 'sun', fn: () => momentStap(i + 1), id: 'momentVerder' }, { label: 'Uitslag', cls: 'plain', fn: momentUitslag, id: 'uitslag' }]);
+  };
+  if (!st.speel) { momentBordOp(loop, st.ply); toon(); return; }
+  momentBordOp(loop, st.ply - 1);
+  nieuweStand(session.S);
+  renderBoard();
+  if (actionBtns.momentVerder) actionBtns.momentVerder.disabled = true;
+  animateMove(st.speel, () => {
+    if (!nogDeze()) return;
+    if (isCapture(session.S, st.speel)) snd.cap(); else snd.move();
+    momentBordOp(loop, st.ply);
+    toon();
+  });
+}
+function momentUitslag() {
+  const loop = momentLoop;
+  momentLoop = null;
+  momentBordOp(loop, loop.zetten.length);
+  nieuweStand(session.S);
+  renderBoard();
+  updateTrays();
+  say(loop.voor);
+  toonUitslag();
 }
 
 /* verdiende trofeeën eerst; een tegel op slot zegt wat hij vraagt, een tik vertelt het hele verhaal */

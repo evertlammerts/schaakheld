@@ -427,14 +427,14 @@ async function orakelFlow5() {
     'a3a4', 'a6a5', 'c3c4', 'c6c5', 'b1c3', 'b8c6', 'a1b1', 'a8b8', 'b1a1', 'b8a8'];
   const STIL = ['e2e4', 'e7e5', 'g1f3', 'd7d6', 'a2a3', 'a7a6', 'b2b3', 'b7b6', 'c2c3', 'c7c6',
     'a3a4', 'a6a5', 'c3c4', 'c6c5', 'b1c3', 'b8c6', 'a1b1', 'a8b8', 'b1a1', 'b8a8', 'h2h3', 'h7h6'];
-  for (const g of [['het paard dat onbeschermd stond', MOMENT, 'Het belangrijkste moment', 'Zet 3: je paard ging naar g5. Daar stond het onbeschermd, en ik pakte het (3 punten).'],
-    ['een potje zonder moment', STIL, null, 'Netjes gespeeld: je gaf geen stuk weg.'],
+  /* de eindkaart heeft een knop naar het moment; de zin over het moment zegt de strook bij de eerste stap */
+  for (const g of [['het paard dat onbeschermd stond', MOMENT, 'Leermoment', 'Zet 3: je paard ging naar g5. Daar stond het onbeschermd, en ik pakte het (3 punten).'],
     /* 3.Dxe5+? Pxe5: de pion was gedekt */
-    ['een verloren ruil', ['e2e4', 'e7e5', 'd1h5', 'b8c6', 'h5e5', 'c6e5'], 'Het belangrijkste moment', 'Zet 3: je sloeg de pion op e5, maar die was gedekt. Na het terugslaan was je 8 punten kwijt.'],
+    ['een verloren ruil', ['e2e4', 'e7e5', 'd1h5', 'b8c6', 'h5e5', 'c6e5'], 'Leermoment', 'Zet 3: je sloeg de pion op e5, maar die was gedekt. Na het terugslaan was je 8 punten kwijt.'],
     /* 2...Dg5?? 3.d3: Pxg5 won de dame */
-    ['een gemiste dame', ['e2e4', 'e7e5', 'g1f3', 'd8g5', 'd2d3', 'g5g6'], 'Het belangrijkste moment', 'Zet 3: je kon mijn dame op g5 pakken. Dat had je 9 punten opgeleverd.'],
-    ['een gewonnen dame', ['e2e4', 'e7e5', 'g1f3', 'd8g5', 'f3g5', 'f8e7'], 'Jouw beste zet', 'Zet 3: je pakte mijn dame (9 punten). Goed gezien!']]) {
-    await regel('[5.8] de eindkaart na opgeven noemt ' + g[0] + ': "' + g[3] + '"', async function (check) {
+    ['een gemiste dame', ['e2e4', 'e7e5', 'g1f3', 'd8g5', 'd2d3', 'g5g6'], 'Leermoment', 'Zet 3: je kon mijn dame op g5 pakken. Dat had je 9 punten opgeleverd.'],
+    ['een gewonnen dame', ['e2e4', 'e7e5', 'g1f3', 'd8g5', 'f3g5', 'f8e7'], 'Dit was een topzet', 'Zet 3: je pakte mijn dame (9 punten). Goed gezien!']]) {
+    await regel('[5.8] na opgeven brengt ' + g[2] + ' op de kaart naar ' + g[0] + ': "' + g[3] + '"', async function (check) {
       const a = nieuwKind({ opslag: opslagMetPotje(2, g[1]) });
       a.tik('verderKaart');
       await wacht();
@@ -442,22 +442,38 @@ async function orakelFlow5() {
       await geefOp(a);
       const kaart = tekstVan(a, 'eindkaart');
       check('testopzet: de eindkaart staat er', zichtbaar(a, 'eindkaart') && /opgegeven|gaf op/i.test(kaart));
-      if (g[2]) check('de kop van het moment', kaart.indexOf(g[2]) >= 0);
-      check('de zin (' + kaart + ')', kaart.indexOf(g[3]) >= 0);
+      check('de knop ' + g[2] + ', en de zin staat niet op de kaart', kanTikken(a, g[2]) && kaart.indexOf(g[3]) < 0);
+      if (kanTikken(a, g[2])) { tikTekst(a, g[2]); await wacht(); }
+      check('de zin in de strook (' + strook5(a) + ')', strook5(a) === g[3]);
     });
   }
+  await regel('[5.8] de eindkaart na opgeven zonder moment: "Netjes gespeeld: je gaf geen stuk weg.", zonder knop naar een moment', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(2, STIL) });
+    a.tik('verderKaart');
+    await wacht();
+    await geefOp(a);
+    const kaart = tekstVan(a, 'eindkaart');
+    check('testopzet: de eindkaart staat er', zichtbaar(a, 'eindkaart') && /opgegeven|gaf op/i.test(kaart));
+    check('de zin (' + kaart + ')', kaart.indexOf('Netjes gespeeld: je gaf geen stuk weg.') >= 0);
+    check('geen knop naar een moment', !kanTikken(a, 'Leermoment') && !kanTikken(a, 'topzet'));
+  });
 
   /* 1.f3 e5 2.g4?? Dh4 mat: het einde zelf noemt de zet */
-  await regel('[5.8] de eindkaart na mat noemt het moment: "Zet 2: na je zet kon ik mat zetten, met Dame d8 → h4."', async function (check) {
+  await regel('[5.8] na mat noemt de eerste stap van het leermoment de zet: "Zet 2: na je zet kon ik mat zetten, met Dame d8 → h4.", daarna speelt Turbo hem en eindigt het op het matbord', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(3, ['f2f3', 'e7e5', 'g2g4']) });
     a.tik('verderKaart');
     await wacht();
     const uit = await totDat5(function () { return a.get('!!session && session.over'); }, 30000);
     await wacht(2000);
     if (!check('testopzet: Turbo zette mat', uit && a.get('gameStatus(session.S).reason') === 'mat')) return;
-    const kaart = tekstVan(a, 'eindkaart');
-    check('de kop', kaart.indexOf('Het belangrijkste moment') >= 0);
-    check('de zin (' + kaart + ')', norm5(kaart).indexOf('Zet 2: na je zet kon ik mat zetten, met Dame d8 → h4.') >= 0);
+    check('de knop Leermoment', kanTikken(a, 'Leermoment'));
+    if (kanTikken(a, 'Leermoment')) { tikTekst(a, 'Leermoment'); await wacht(); }
+    check('de zin in de strook (' + strook5(a) + ')', strook5(a) === 'Zet 2: na je zet kon ik mat zetten, met Dame d8 → h4.');
+    if (kanTikken(a, 'Verder')) { tikTekst(a, 'Verder'); await wacht(); }
+    check('stap 2: Turbo speelde de matzet (' + strook5(a) + ')', strook5(a) === 'Toen speelde ik Dame d8 → h4.' && a.get('session.S.hist.length') === 3);
+    if (kanTikken(a, 'Verder')) { tikTekst(a, 'Verder'); await wacht(); }
+    check('stap 3: het matbord en de regel voor de volgende keer (' + strook5(a) + ')', strook5(a) === 'Volgende keer: kijk eerst of ik schaak kan geven.' &&
+      a.get('session.S.hist.length') === 4 && a.get('gameStatus(session.S).reason') === 'mat' && kanTikken(a, 'Nog eens') && !kanTikken(a, 'Verder'));
   });
 
   /* ---------- 5.9: Red je stuk uit de voorraad, zonder te zoeken ---------- */
@@ -1372,7 +1388,7 @@ async function orakelFlow5() {
     await wacht(2000);
     check('de strook (' + strook5(a) + ')', strook5(a) === 'Mijn paard op e3 valt je dame op d1 aan. Je dekt haar, maar de ruil is goed voor mij.');
   });
-  await regel('[5.8] de eindkaart over een dame die onbeschermd stond: "Daar stond ze onbeschermd, en ik pakte haar"', async function (check) {
+  await regel('[5.8] het leermoment over een dame die onbeschermd stond: "Daar stond ze onbeschermd, en ik pakte haar"', async function (check) {
     const a = nieuwKind();
     const t = a.get('momentTekst({ kind: "hang", self: true, moveNo: 5, piece: "dame", sq: "g5", points: 9, used: true }).tekst');
     check('de zin (' + t + ')', t === 'Zet 5: je dame ging naar g5. Daar stond ze onbeschermd, en ik pakte haar (9 punten).');
@@ -1445,7 +1461,7 @@ async function orakelFlow5() {
   });
 
   /* een slag die Turbo gebruikte: "na het terugslaan" alleen als het kind terugsloeg */
-  await regel('[5.8] de eindkaart, een slag: "Na het terugslaan was je ... kwijt." als het kind terugsloeg, anders "Ook met terugslaan was je ... kwijt."', async function (check) {
+  await regel('[5.8] het leermoment, een slag: "Na het terugslaan was je ... kwijt." als het kind terugsloeg, anders "Ook met terugslaan was je ... kwijt."', async function (check) {
     const a = nieuwKind();
     for (const [terug, zin] of [[true, 'Zet 1: je dame op d3 kon ik slaan met mijn loper. Na het terugslaan was je 6 punten kwijt.'],
       [false, 'Zet 1: je dame op d3 kon ik slaan met mijn loper. Ook met terugslaan was je 6 punten kwijt.']]) {
@@ -1454,7 +1470,7 @@ async function orakelFlow5() {
     }
   });
   /* een stuk dat al onbeschermd stond, krijgt zijn eigen regel voor de volgende keer */
-  await regel('[5.8] de eindkaart, een stuk dat al onbeschermd stond: "Volgende keer: kijk voor elke zet welke stukken van jou aangevallen worden."', async function (check) {
+  await regel('[5.8] het leermoment, een stuk dat al onbeschermd stond: "Volgende keer: kijk voor elke zet welke stukken van jou aangevallen worden."', async function (check) {
     const a = nieuwKind();
     const v = a.get('momentTekst({ kind: "hang", moveNo: 5, piece: "paard", sq: "e5", points: 3, used: true }).volgende');
     check('de regel (' + v + ')', v === 'Volgende keer: kijk voor elke zet welke stukken van jou aangevallen worden.');
@@ -1502,7 +1518,7 @@ async function orakelFlow5() {
     check('zonder "kost minder" (' + a.scherm() + ')', !a.ziet('Een andere zet kost minder.'));
   });
   /* punten op de eindkaart uit de tabel: twee lopers voor een toren is 1 punt */
-  await regel('[5.8] de eindkaart rekent met de tabel van de kinderen: "1 punt", niet de 1,6 van de engine', async function (check) {
+  await regel('[5.8] het leermoment rekent met de tabel van de kinderen: "1 punt", niet de 1,6 van de engine', async function (check) {
     const a = nieuwKind();
     const s = a.get('momentTekst({ kind: "slag", moveNo: 7, piece: "loper", sq: "d3", by: "toren", verlies: 100, loss: 160, used: true, terug: true }).tekst');
     check('een slag (' + s + ')', s === 'Zet 7: je loper op d3 kon ik slaan met mijn toren. Na het terugslaan was je 1 punt kwijt.');
@@ -1510,7 +1526,7 @@ async function orakelFlow5() {
     check('gemist (' + g + ')', g === 'Zet 7: je kon mijn loper op d5 pakken. Dat had je 1 punt opgeleverd.');
   });
   /* een truc die Turbo speelde, met de twee stukken die hij aanviel */
-  await regel('[5.8] de eindkaart, een truc die Turbo speelde: "Mijn paard viel je dame en je toren tegelijk aan."', async function (check) {
+  await regel('[5.8] het leermoment, een truc die Turbo speelde: "Mijn paard viel je dame en je toren tegelijk aan."', async function (check) {
     const a = nieuwKind();
     const t = a.get('momentTekst({ kind: "truc", moveNo: 4, truc: "vork", used: true, doelen: ["dame", "toren"], stukTurbo: "paard" }).tekst');
     check('de zin (' + t + ')', t === 'Zet 4: na je zet kon ik een vork zetten. Mijn paard viel je dame en je toren tegelijk aan.');

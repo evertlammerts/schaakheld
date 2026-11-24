@@ -689,8 +689,8 @@
   .eindkaart p { margin: 0; font-size: var(--fs-sm); color: var(--text-quiet); }
   .eindkaart .ek-xp { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-md); color: var(--accent-text); }
   .eindkaart .ek-moment { width: min(100%, 320px); }
-  .eindkaart .ek-moment h3 { margin: 0 0 2px; font-size: var(--fs-sm); }
   .eindkaart .ek-moment p { color: var(--text); }
+  .eindkaart .ek-moment .btn { display: block; margin: 0 auto; min-height: 44px; padding: 0 18px; }
   .ek-trofee { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
   .ek-badge { display: flex; flex-direction: column; align-items: center; width: 88px; font-size: var(--fs-cap); font-weight: 700; }
   .ek-be { font-size: 40px; line-height: 1.1; }
@@ -702,18 +702,12 @@
   .eindkaart.klein .ek-be { font-size: 28px; }
   .eindkaart .ek-btns { display: flex; flex-direction: column; gap: 8px; width: min(100%, 280px); }
   /* op een klein bord: twee knoppen naast elkaar (ook de twee antwoorden op de vriendschapsvraag, want alleen zo past
-     die kaart), het moment als een alinea, kleinere trofeeën */
+     die kaart) en kleinere trofeeën */
   .eindkaart.klein .ek-btns.twee, .eindkaart.klein #ekVraag .ek-btns { flex-direction: row; width: 100%; }
   .eindkaart.klein .ek-btns.twee .btn, .eindkaart.klein #ekVraag .ek-btns .btn { flex: 1 1 0; min-width: 0; min-height: 48px; padding: 0 8px; white-space: nowrap; }
-  .eindkaart.klein .ek-moment h3 { display: inline; font-size: inherit; }
-  .eindkaart.klein .ek-moment h3::after { content: ': '; }
-  .eindkaart.klein .ek-moment p { display: inline; }
   .eindkaart.klein .ek-trofee { gap: 2px 12px; }
   .eindkaart.klein .ek-be { font-size: 24px; }
   .eindkaart.klein small { display: block; font-size: var(--fs-cap); line-height: 1.25; }
-  /* wat je de volgende keer nakijkt: een zachte regel in een eigen blok onder het moment; na de regels van een
-     klein bord, want die maken elke alinea van het moment even sterk inline */
-  .eindkaart .ek-moment p.ek-volgende { display: block; margin-top: 2px; font-size: var(--fs-cap); line-height: 1.25; color: var(--text-quiet); }
   .play-bottom {
     grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
     padding: 0 var(--g) 8px;

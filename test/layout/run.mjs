@@ -29,7 +29,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '2.9', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '5.5', '5.6', '5.11', '6.3', '6.4', '6.5', '6.8', '6.9', 'V2', 'V9']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '2.9', '2.10', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '5.5', '5.6', '5.11', '6.3', '6.4', '6.5', '6.8', '6.9', 'V2', 'V9']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -940,17 +940,20 @@ for (const [W, H] of [[360, 640], [375, 553]]) {
       }` });
 }
 
-/* het moment met de langste tekst, en dat met de langste regel voor de volgende keer */
-const VOLSTE_MOMENTEN = [['het langste moment', { kind: 'hang', moveNo: 23, stuk: 'loper', naar: 'f4', defender: 'loper', piece: 'paard', sq: 'e5', points: 3, used: true }],
+/* de momenten met de langste zin en de langste regel voor de volgende keer; die zinnen zegt de strook bij de eerste en
+   de laatste stap van het leermoment */
+const LANGSTE_MOMENTEN = [['het langste moment', { kind: 'hang', moveNo: 23, stuk: 'loper', naar: 'f4', defender: 'loper', piece: 'paard', sq: 'e5', points: 3, used: true }],
   ['de langste regel voor de volgende keer', { kind: 'hang', moveNo: 23, piece: 'paard', sq: 'e5', points: 3, used: true }]];
 /* de volste eindkaart van een potje tegen Turbo past op een klein bord: een winst op een niveau
-   waar Turbo moe is, drie nieuwe trofeeën, een nieuw level en het langste moment met de regel eronder; de zin
-   dat Turbo moe is staat in de strook, heel, en het bord blijft staan */
+   waar Turbo moe is, drie nieuwe trofeeën, een nieuw level en de knop naar het moment, met de langste tekst die hij
+   kan hebben; de zin dat Turbo moe is staat in de strook, heel, en het bord blijft staan */
+const KNOPPEN_NAAR_MOMENT = [['Leermoment', { kind: 'hang', moveNo: 23, piece: 'paard', sq: 'e5', points: 3, used: true }],
+  ['Dit was een topzet', { kind: 'goed', moveNo: 23, piece: 'dame', winst: 900, gain: 950, used: true }]];
 for (const [W, H] of [[375, 553], [360, 640], [375, 647]]) {
-  const n = '[2.5] ' + W + 'x' + H + ': de volste eindkaart tegen Turbo past: titel, moment, trofeeën en beide knoppen in beeld, Turbo\'s moe-zin heel in de strook';
+  const n = '[2.5] ' + W + 'x' + H + ': de volste eindkaart tegen Turbo past: titel, de knop naar het moment, trofeeën en beide knoppen in beeld, Turbo\'s moe-zin heel in de strook';
   GEVALLEN.push({ regels: [n], code: `
       const n = ${JSON.stringify(n)};
-      for (const [wat, moment] of ${JSON.stringify(VOLSTE_MOMENTEN)}) {
+      for (const [wat, moment] of ${JSON.stringify(KNOPPEN_NAAR_MOMENT)}) {
       await vers(${W}, ${H});
       await startPotje();
       const voor = await rect('#board');
@@ -966,20 +969,19 @@ for (const [W, H] of [[375, 553], [360, 640], [375, 647]]) {
         sleutelMoment = () => moment;
         endGame({ over: true, result: 'w', reason: 'mat' }); }, moment);
       await page.waitForTimeout(1600);
-      const k = await page.evaluate(() => { const e = document.getElementById('eindkaart'); if (!e || !e.getClientRects().length) return null;
+      const k = await page.evaluate(wat => { const e = document.getElementById('eindkaart'); if (!e || !e.getClientRects().length) return null;
         const r = x => { const b = x.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, w: b.width, h: b.height }; };
         const st = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble');
+        const leer = [...e.querySelectorAll('.btn')].find(x => x.textContent.includes(wat));
         return { sh: e.scrollHeight, ch: e.clientHeight, kaart: r(e), titel: r(e.querySelector('h2')), knoppen: [...e.querySelectorAll('.ek-btns .btn')].map(r),
-          trofeeen: e.querySelectorAll('.ek-badge').length, volgende: !!e.querySelector('.ek-volgende'), tekst: e.innerText,
-          eigenBlok: (() => { const v = e.querySelector('.ek-volgende'), t = v && v.previousElementSibling; return !!v && !!t && getComputedStyle(v).display === 'block' &&
-            v.getBoundingClientRect().top >= t.getBoundingClientRect().bottom - 0.5; })(),
-          strook: b.textContent, strookPast: st.scrollHeight <= st.clientHeight + 1 && b.getBoundingClientRect().bottom <= st.getBoundingClientRect().bottom + 0.5 }; });
-      check(n, wat + ', testopzet: de eindkaart met vier dingen erop en het moment met zijn regel', !!k && k.trofeeen === 4 && k.volgende);
+          leer: leer ? r(leer) : null, trofeeen: e.querySelectorAll('.ek-badge').length, tekst: e.innerText,
+          strook: b.textContent, strookPast: st.scrollHeight <= st.clientHeight + 1 && b.getBoundingClientRect().bottom <= st.getBoundingClientRect().bottom + 0.5 }; }, wat);
+      check(n, wat + ', testopzet: de eindkaart met vier dingen erop en de knop', !!k && k.trofeeen === 4 && !!k.leer);
       if (!k) continue;
       const binnenKaart = x => x.top >= k.kaart.top - 0.5 && x.bottom <= k.kaart.bottom + 0.5;
       check(n, wat + ': niets scrolt in de kaart (' + k.sh + ' in ' + k.ch + ')', k.sh <= k.ch + 1);
-      check(n, wat + ': de regel voor de volgende keer staat in een eigen blok onder het moment', k.eigenBlok);
       check(n, wat + ': de titel in beeld', binnen(k.titel, ${W}, ${H}) && binnenKaart(k.titel));
+      check(n, wat + ': de knop in de kaart, in beeld en minstens 44 hoog', !!k.leer && binnen(k.leer, ${W}, ${H}) && binnenKaart(k.leer) && k.leer.h >= 44);
       check(n, wat + ': beide knoppen in de kaart, in beeld en minstens 44 hoog', k.knoppen.length === 2 && k.knoppen.every(x => binnen(x, ${W}, ${H}) && binnenKaart(x) && x.h >= 44));
       check(n, wat + ': de moe-zin staat niet op de kaart', k.tekst.indexOf('Ik ben moe') < 0);
       check(n, wat + ': de moe-zin staat heel in de strook (' + k.strook + ')', /^Ik ben moe van al dat verliezen/.test(k.strook) && k.strookPast);
@@ -1030,6 +1032,82 @@ for (const [W, H] of KLEIN) {
       const ui2 = await knop('Uitslag'), bord2 = await rect('#board');
       check(n, 'na de les met het venster opzij: het bord heel in beeld, Uitslag in beeld, en niets scrolt', binnen(bord2, ${W}, ${H}) &&
         !!ui2 && binnen(ui2, ${W}, ${H}) && onder && !(await scrolt()));` });
+}
+
+/* het leermoment bekijken: de knop past op de kaart, en bij elke stap staat het hele bord op zijn plek, past de zin in de
+   strook en staan de twee knoppen onder het bord in beeld; ook de langste samenvattingen, regels voor de volgende keer
+   en zinnen van stap 2 passen. Hier loopt de animatie van een zet echt, dus ook een tweede tik op Verder en Uitslag
+   midden in een zet. */
+for (const [W, H] of KLEIN) {
+  const n = '[2.10] ' + W + 'x' + H + ': het leermoment bekijken: de knop op de kaart en bij elke stap het bord, de zin en de knoppen in beeld, zonder scrollen';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      await startPotje();
+      const voor = await rect('#board');
+      await page.evaluate(() => { const S = session.S;
+        for (const k of ['e2e4', 'f7f6', 'f1a6', 'b7a6', 'd2d4', 'g7g5', 'd1h5']) makeMove(S, legalMoves(S).find(x => moveKey(x) === k));
+        renderBoard();
+        endGame({ over: true, result: 'w', reason: 'mat' }); });
+      await page.waitForTimeout(1600);
+      const knopIn = (sel, t) => page.evaluate(([sel, t]) => { const b = [...document.querySelectorAll(sel)].find(x => x.textContent.includes(t));
+        if (!b || !b.getClientRects().length) return null;
+        const r = b.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height }; }, [sel, t]);
+      const tik = (sel, t) => page.evaluate(([sel, t]) => [...document.querySelectorAll(sel)].find(x => x.textContent.includes(t)).click(), [sel, t]);
+      const scrolt = () => page.evaluate(() => { const p = document.getElementById('play');
+        return p.scrollHeight > p.clientHeight + 0.5 || document.scrollingElement.scrollHeight > innerHeight + 0.5; });
+      const strookPast = () => page.evaluate(() => { const st = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble');
+        return st.scrollHeight <= st.clientHeight + 1 && b.getBoundingClientRect().bottom <= st.getBoundingClientRect().bottom + 0.5; });
+      await foto('2.10-${W}x${H}-kaart');
+      const bz = await knopIn('#eindkaart .btn', 'Leermoment');
+      check(n, 'Leermoment op de kaart, in beeld en minstens 44 hoog', !!bz && binnen(bz, ${W}, ${H}) && bz.h >= 44);
+      check(n, 'niets scrolt in de kaart', await page.evaluate(() => { const e = document.getElementById('eindkaart'); return e.scrollHeight <= e.clientHeight + 1; }));
+      await tik('#eindkaart .btn', 'Leermoment');
+      for (let stap = 1; stap <= 3; stap++) {
+        await page.waitForTimeout(stap === 1 ? 300 : 1500);
+        await foto('2.10-${W}x${H}-stap' + stap);
+        const bord = await rect('#board');
+        check(n, 'stap ' + stap + ': het hele bord in beeld en op zijn plek', binnen(bord, ${W}, ${H}) && gelijk(voor, bord));
+        check(n, 'stap ' + stap + ': de zin past heel in de strook', await strookPast());
+        const eerste = await knopIn('#actionRow .btn', stap < 3 ? 'Verder' : 'Nog eens'), ui = await knopIn('#actionRow .btn', 'Uitslag');
+        check(n, 'stap ' + stap + ': beide knoppen onder het bord in beeld en minstens 44 hoog', !!eerste && !!ui && [eerste, ui].every(x => binnen(x, ${W}, ${H}) && x.h >= 44));
+        check(n, 'stap ' + stap + ': niets scrolt', !(await scrolt()));
+        if (stap < 3) await tik('#actionRow .btn', 'Verder');
+      }
+      const lang = await page.evaluate(momenten => {
+        const zinnen = ['Dit had ik kunnen spelen: <b>Pion b2 → a1, slaat toren, promotie</b>.',
+          'Dit kon ook: <b>Pion b7 → a8, slaat toren, promotie</b>.',
+          momentTekst({ kind: 'truc', moveNo: 23, truc: 'aftrekaanval', used: true }).tekst,
+          momentTekst({ kind: 'truc', moveNo: 23, truc: 'vork', used: true, doelen: ['toren', 'dame'], stukTurbo: 'paard' }).tekst,
+          momentTekst({ kind: 'slag', moveNo: 23, piece: 'dame', sq: 'e5', by: 'paard', verlies: 600, loss: 600, used: true, terug: false }).tekst,
+          momentTekst({ kind: 'gemist', moveNo: 23, mateWith: 'b7a8', matNaam: 'Pion b7 → a8, slaat toren, promotie' }).tekst];
+        for (const m of momenten) zinnen.push(momentTekst(m[1]).tekst, momentTekst(m[1]).volgende);
+        const st = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble');
+        return zinnen.map(p => { say(p); return { p, past: st.scrollHeight <= st.clientHeight + 1 && b.getBoundingClientRect().bottom <= st.getBoundingClientRect().bottom + 0.5 }; });
+      }, ${JSON.stringify(LANGSTE_MOMENTEN)});
+      check(n, 'testopzet: tien zinnen', lang.length === 10);
+      for (const x of lang) check(n, 'past heel in de strook: ' + x.p, x.past);
+      const stand = () => page.evaluate(() => ({ zetten: session.S.hist.length, strook: document.getElementById('bubble').textContent, pijlen: BD.arrows.length,
+        kaart: !!document.getElementById('eindkaart').getClientRects().length, geesten: document.querySelectorAll('.ghost').length }));
+      await tik('#actionRow .btn', 'Uitslag');
+      await page.waitForTimeout(300);
+      const terug = await stand();
+      check(n, 'Uitslag: de kaart op het bord zoals het eindigde, en de strook zegt weer Gewonnen!', terug.kaart && terug.zetten === 7 && terug.strook === 'Gewonnen!' && terug.pijlen === 0);
+      await tik('#eindkaart .btn', 'Leermoment');
+      await page.waitForTimeout(300);
+      check(n, 'testopzet: de animatie loopt echt', await page.evaluate(() => !RM));
+      const vliegend = await page.evaluate(() => { const b = () => [...document.querySelectorAll('#actionRow .btn')].find(x => x.textContent.includes('Verder'));
+        b().click(); b().click(); return document.querySelectorAll('.ghost').length; });
+      check(n, 'twee tikken op Verder: één stuk vliegt (' + vliegend + ')', vliegend === 1);
+      await page.waitForTimeout(1500);
+      const twee = await stand();
+      check(n, 'en de zet staat één keer, bij stap 2 (' + twee.zetten + ', ' + twee.strook + ')', twee.zetten === 3 && /^Toen speelde ik /.test(twee.strook) && twee.geesten === 0);
+      await page.evaluate(() => { [...document.querySelectorAll('#actionRow .btn')].find(x => x.textContent.includes('Verder')).click();
+        [...document.querySelectorAll('#actionRow .btn')].find(x => x.textContent.includes('Uitslag')).click(); });
+      await page.waitForTimeout(1500);
+      const midden = await stand();
+      check(n, 'Uitslag midden in een zet: de zet valt weg en de kaart staat op het bord zoals het eindigde (' + midden.zetten + ')',
+        midden.kaart && midden.zetten === 7 && midden.strook === 'Gewonnen!' && midden.pijlen === 0 && midden.geesten === 0);` });
 }
 
 /* het speelscherm van een oefening is precies zo hoog als het venster, en het vak onder het bord past precies om

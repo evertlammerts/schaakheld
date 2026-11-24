@@ -23,6 +23,24 @@ function naSpelen(zetten) {
   return S;
 }
 
+/* het bord zoals het op het scherm staat: per veld de kleur en het stuk; en hetzelfde voor de stand na een rij zetten */
+function bordOpScherm(app) {
+  return app.get('(function () { var s = ""; for (var r = 7; r >= 0; r--) { for (var f = 0; f < 8; f++) {' +
+    ' var e = cellEls[r * 16 + f].querySelector(".pc"); s += e ? (/\\bw\\b/.test(e.className) ? "W" : "Z") + e.textContent : "."; } s += "/"; } return s; })()');
+}
+function bordVan(zetten) {
+  const S = naSpelen(zetten);
+  let s = '';
+  for (let r = 7; r >= 0; r--) {
+    for (let f = 0; f < 8; f++) { const p = S.board[r * 16 + f]; s += p ? (isWhitePiece(p) ? 'W' : 'Z') + GLYPH[p.toLowerCase()] : '.'; }
+    s += '/';
+  }
+  return s;
+}
+function pijlen(app) { return app.get('BD.arrows.map(function (x) { return alg(x.from) + alg(x.to) + ":" + x.cls; }).join(" ")'); }
+/* de zin in de strook zonder opmaak; de tekst van de shim zet na een vet stuk een spatie die een browser niet toont */
+function strookZin(app) { return app.get('$("bubble").innerHTML').replace(/<[^>]*>/g, ''); }
+
 /* een vers kind dat rustig speelt: geen voorspelvraag en geen blunderalarm,
    zodat Turbo nooit op een tik wacht en een zet altijd doorgaat */
 function nieuwKind(opties) {
@@ -1464,6 +1482,156 @@ async function orakelFlow() {
     await wacht();
     check('het venster is terug', venster() && kanTikken(a, 'Nog een keer!'));
     check('niets twee keer geteld', a.get('JSON.stringify(DOC.cnt)') === voor);
+  });
+
+  /* Het leermoment bekijken: vaste potjes waarvan de engine het moment kent. Zet 2 is 2.Lf1-a6, een loper die onbeschermd
+     staat; Turbo pakt hem met de pion, of laat hem staan. De kaart zegt het moment niet meer; de eerste stap zegt het. */
+  const LOPER_GEPAKT = ['e2e4', 'f7f6', 'f1a6', 'b7a6', 'd2d4', 'g7g5'], LOPER_BLEEF = ['e2e4', 'f7f6', 'f1a6', 'b8c6', 'd2d4', 'g7g5'];
+  const VOOR_ZET2 = ['e2e4', 'f7f6'];
+  const geenPotjeBewaard = function (a) { return a.get('!!(potjesRauw() || {})[1]') === false; };
+  /* op de kaart alleen de knop: geen kop, geen zin en geen regel voor de volgende keer */
+  const kaartZonderMoment = function (a) { return !/Het belangrijkste moment|Jouw beste zet|Zet \d+:|Volgende keer/.test(tekstVan(a, 'eindkaart')); };
+
+  await regel('[2.10] een stuk dat Turbo pakte: Leermoment zet het bord terug naar vlak voor de zet, de strook zegt eerst wat er gebeurde, en Verder laat stap voor stap jouw zet en wat Turbo deed zien', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, LOPER_GEPAKT) });
+    a.tik('verderKaart');
+    await wacht();
+    await zetEnWacht(a, 'd1h5');
+    const eind = bordVan(LOPER_GEPAKT.concat('d1h5'));
+    check('testopzet: de eindkaart staat er, op het bord zoals het eindigde', zichtbaar(a, 'eindkaart') && /Gewonnen!/.test(tekstVan(a, 'eindkaart')) && bordOpScherm(a) === eind);
+    check('de kaart noemt het moment niet, maar heeft de knop Leermoment', kaartZonderMoment(a) && kanTikken(a, 'Leermoment') && !kanTikken(a, 'topzet'));
+    const voor = a.get('JSON.stringify(DOC.cnt)');
+    tikTekst(a, 'Leermoment');
+    await wacht();
+    check('de kaart ligt opzij', !zichtbaar(a, 'eindkaart') && !kanTikken(a, 'Revanche!'));
+    check('stap 1: het bord vlak voor zet 2, met jouw zet als gele pijl', bordOpScherm(a) === bordVan(VOOR_ZET2) && pijlen(a) === 'f1a6:a-sun');
+    check('stap 1: de strook vat samen wat er gebeurde', strookZin(a) === 'Zet 2: je loper ging naar a6. Daar stond hij onbeschermd, en ik pakte hem (3 punten).');
+    tikVeld(a, 52);
+    check('het bord staat op slot: een tik op de pion op e4 kiest niets', a.get('BD.sel') === null && a.get('BD.dots.size') === 0 &&
+      bordOpScherm(a) === bordVan(VOOR_ZET2) && pijlen(a) === 'f1a6:a-sun');
+    check('onder het bord: Verder en Uitslag, niet Bekijk het bord', kanTikken(a, 'Verder') && kanTikken(a, 'Uitslag') && !kanTikken(a, 'Bekijk het bord'));
+    tikTekst(a, 'Verder');
+    await wacht();
+    check('stap 2: jouw zet staat, en wat Turbo toen deed als rode pijl', bordOpScherm(a) === bordVan(VOOR_ZET2.concat('f1a6')) && pijlen(a) === 'b7a6:a-coral');
+    check('stap 2: de strook', strookZin(a) === 'Toen speelde ik Pion b7 → a6, slaat loper.');
+    tikTekst(a, 'Verder');
+    await wacht();
+    check('stap 3: de zet van Turbo staat, zonder pijl', bordOpScherm(a) === bordVan(VOOR_ZET2.concat('f1a6', 'b7a6')) && pijlen(a) === '');
+    check('stap 3: de regel voor de volgende keer', strookZin(a) === 'Volgende keer: kijk of je stuk daar gedekt is.');
+    check('stap 3: Nog eens en Uitslag, geen Verder', kanTikken(a, 'Nog eens') && kanTikken(a, 'Uitslag') && !kanTikken(a, 'Verder'));
+    tikTekst(a, 'Nog eens');
+    await wacht();
+    check('Nog eens begint weer bij stap 1', bordOpScherm(a) === bordVan(VOOR_ZET2) && pijlen(a) === 'f1a6:a-sun' && /^Zet 2: je loper ging naar a6/.test(strookZin(a)));
+    tikTekst(a, 'Uitslag');
+    await wacht();
+    check('Uitslag: de kaart is terug, op het bord zoals het eindigde', zichtbaar(a, 'eindkaart') && bordOpScherm(a) === eind && pijlen(a) === '');
+    check('en de strook zegt weer wat hij bij het einde zei', strookZin(a) === 'Gewonnen!');
+    check('met Bekijk het bord eronder en Leermoment op de kaart, zonder Verder', kanTikken(a, 'Bekijk het bord') && kanTikken(a, 'Leermoment') && !kanTikken(a, 'Verder'));
+    check('niets geteld en geen potje bewaard', a.get('JSON.stringify(DOC.cnt)') === voor && geenPotjeBewaard(a));
+    tikTekst(a, 'Revanche!');
+    await wacht();
+    check('Revanche! begint een nieuw potje zonder de knoppen van het moment', opSpeelscherm(a) && !zichtbaar(a, 'eindkaart') && bordOpScherm(a) === bordVan([]) &&
+      !kanTikken(a, 'Verder') && !kanTikken(a, 'Uitslag') && !kanTikken(a, 'Bekijk het bord'));
+  });
+
+  await regel('[2.10] een stuk dat Turbo liet staan: stap 2 laat zien wat Turbo had kunnen doen, zonder het te spelen', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, LOPER_BLEEF) });
+    a.tik('verderKaart');
+    await wacht();
+    await zetEnWacht(a, 'd1h5');
+    check('testopzet: de kaart met Leermoment', zichtbaar(a, 'eindkaart') && kaartZonderMoment(a) && kanTikken(a, 'Leermoment'));
+    tikTekst(a, 'Leermoment');
+    await wacht();
+    check('stap 1: de samenvatting', strookZin(a) === 'Zet 2: je loper ging naar a6. Daar stond hij onbeschermd. Ik had hem kunnen pakken (3 punten).');
+    tikTekst(a, 'Verder');
+    await wacht();
+    check('stap 2: jouw zet staat, en de zet die Turbo had kunnen doen als rode pijl', bordOpScherm(a) === bordVan(VOOR_ZET2.concat('f1a6')) && pijlen(a) === 'b8a6:a-coral');
+    check('stap 2: de strook', strookZin(a) === 'Dit had ik kunnen spelen: Paard b8 → a6, slaat loper.');
+    tikTekst(a, 'Verder');
+    await wacht();
+    check('stap 3: Turbo speelde die zet niet, en de pijl blijft staan', bordOpScherm(a) === bordVan(VOOR_ZET2.concat('f1a6')) && pijlen(a) === 'b8a6:a-coral');
+    check('stap 3: de regel voor de volgende keer', strookZin(a) === 'Volgende keer: kijk of je stuk daar gedekt is.' && kanTikken(a, 'Nog eens'));
+  });
+
+  await regel('[2.10] een gemiste kans: het bord blijft vlak voor de zet, en stap 2 laat zien wat je had kunnen spelen', async function (check) {
+    const zetten = ['e2e4', 'e7e5', 'g1f3', 'd8h4', 'a2a3', 'h4h5'], voorZet3 = zetten.slice(0, 4);
+    const a = nieuwKind({ opslag: opslagMetPotje(1, zetten) });
+    a.tik('verderKaart');
+    await wacht();
+    await geefOp(a);
+    check('testopzet: de kaart met Leermoment', zichtbaar(a, 'eindkaart') && kaartZonderMoment(a) && kanTikken(a, 'Leermoment'));
+    tikTekst(a, 'Leermoment');
+    await wacht();
+    check('stap 1: het bord vlak voor zet 3, met jouw zet als gele pijl', bordOpScherm(a) === bordVan(voorZet3) && pijlen(a) === 'a2a3:a-sun');
+    check('stap 1: de samenvatting', strookZin(a) === 'Zet 3: je kon mijn dame op h4 pakken. Dat had je 9 punten opgeleverd.');
+    tikTekst(a, 'Verder');
+    await wacht();
+    check('stap 2: hetzelfde bord, met de zet die je had kunnen doen als groene pijl', bordOpScherm(a) === bordVan(voorZet3) && pijlen(a) === 'f3h4:a-leaf');
+    check('stap 2: de strook noemt de zet, de punten stonden al in de samenvatting', strookZin(a) === 'Dit kon ook: Paard f3 → h4, slaat dame.');
+    tikTekst(a, 'Verder');
+    await wacht();
+    check('stap 3: de regel voor de volgende keer, met de groene pijl', bordOpScherm(a) === bordVan(voorZet3) && pijlen(a) === 'f3h4:a-leaf' &&
+      strookZin(a) === 'Volgende keer: kijk eerst wat jij kunt pakken.' && kanTikken(a, 'Nog eens'));
+  });
+
+  await regel('[2.10] een gemiste mat: stap 2 laat de matzet zien', async function (check) {
+    const zetten = ['e2e4', 'f7f6', 'd2d4', 'g7g5', 'a2a3', 'a7a6'], voorZet3 = zetten.slice(0, 4);
+    const a = nieuwKind({ opslag: opslagMetPotje(1, zetten) });
+    a.tik('verderKaart');
+    await wacht();
+    await geefOp(a);
+    tikTekst(a, 'Leermoment');
+    await wacht();
+    check('stap 1: de samenvatting', strookZin(a) === 'Zet 3: je kon mij schaakmat zetten met Dame d1 → h5.');
+    tikTekst(a, 'Verder');
+    await wacht();
+    check('stap 2: de matzet als groene pijl', bordOpScherm(a) === bordVan(voorZet3) && pijlen(a) === 'd1h5:a-leaf');
+    check('stap 2: de strook', strookZin(a) === 'Dit kon ook: Dame d1 → h5.');
+  });
+
+  await regel('[2.10] je beste zet: Dit was een topzet, stap 1 laat hem als groene pijl zien met de samenvatting, stap 2 op het bord', async function (check) {
+    const zetten = ['e2e4', 'e7e5', 'g1f3', 'd8h4', 'f3h4', 'b8c6'], voorZet3 = zetten.slice(0, 4);
+    const a = nieuwKind({ opslag: opslagMetPotje(1, zetten) });
+    a.tik('verderKaart');
+    await wacht();
+    await geefOp(a);
+    check('de kaart noemt de zet niet, maar heeft de knop Dit was een topzet', zichtbaar(a, 'eindkaart') && kaartZonderMoment(a) && kanTikken(a, 'Dit was een topzet') && !kanTikken(a, 'Leermoment'));
+    tikTekst(a, 'Dit was een topzet');
+    await wacht();
+    const samen = 'Zet 3: je pakte mijn dame (9 punten). Goed gezien!';
+    check('stap 1: het bord vlak voor zet 3, met jouw zet als groene pijl', bordOpScherm(a) === bordVan(voorZet3) && pijlen(a) === 'f3h4:a-leaf');
+    check('stap 1: de samenvatting', strookZin(a) === samen);
+    tikTekst(a, 'Verder');
+    await wacht();
+    check('stap 2: jouw zet staat, zonder pijl', bordOpScherm(a) === bordVan(voorZet3.concat('f3h4')) && pijlen(a) === '');
+    check('stap 2: de strook houdt de samenvatting, en dit is de laatste stap', strookZin(a) === samen && kanTikken(a, 'Nog eens') && !kanTikken(a, 'Verder'));
+  });
+
+  await regel('[2.10] wie tijdens het bekijken naar huis gaat, begint het volgende potje gewoon: geen pijl, geen knoppen van het moment, het bord open', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, LOPER_GEPAKT) });
+    a.tik('verderKaart');
+    await wacht();
+    await zetEnWacht(a, 'd1h5');
+    tikTekst(a, 'Leermoment');
+    await wacht();
+    tikTekst(a, 'Verder');
+    await wacht();
+    a.tik('backBtn');
+    await wacht();
+    check('thuis, zonder bewaard potje', opThuis(a) && geenPotjeBewaard(a));
+    a.ev('startGame(1)');
+    await wacht();
+    check('een nieuw potje vanaf de beginstand, zonder pijl', opSpeelscherm(a) && bordOpScherm(a) === bordVan([]) && pijlen(a) === '');
+    check('geen Verder, Nog eens of Uitslag, en het kind kan zetten', !kanTikken(a, 'Verder') && !kanTikken(a, 'Nog eens') && !kanTikken(a, 'Uitslag') && a.get('BD.mode') === 'move');
+  });
+
+  await regel('[2.10] een potje zonder moment heeft geen knop voor een moment, en de kaart zegt dat het kind geen stuk weggaf', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
+    a.tik('verderKaart');
+    await wacht();
+    await zetEnWacht(a, 'd1h5');
+    check('de kaart zegt Netjes gespeeld', zichtbaar(a, 'eindkaart') && /Netjes gespeeld: je gaf geen stuk weg\./.test(tekstVan(a, 'eindkaart')));
+    check('geen Leermoment of topzet, wel Bekijk het bord', !kanTikken(a, 'Leermoment') && !kanTikken(a, 'topzet') && kanTikken(a, 'Bekijk het bord'));
   });
 
   await regel('[2.5] na het einde zegt het scherm niet meer dat het potje loopt: geen ✔ bewaard en geen hulpjes', async function (check) {
