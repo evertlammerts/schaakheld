@@ -1973,6 +1973,7 @@ function naEindeTekenen() {
     '<button class="btn plain" id="ekVrNee">Nu niet</button></div>';
   $('ekVrJa').addEventListener('click', vrWil);
   $('ekVrNee').addEventListener('click', vrNee);
+  if (kaartOpzij()) wijsNaarUitslag(escHtml(VRAAG_ZIN(naam)));
 }
 /* De eigen lijn valt na het einde weg: wat gevraagd was blijft staan, want bij de volgende groet zegt elke kant
    wat hij vasthoudt (mpOnNaEinde). Alleen wat op de ander wacht, gaat weg zolang er geen lijn is. */
@@ -2705,6 +2706,7 @@ function eindkaartTelling(fid, id) {
   const regel = telRegelVan(fid, id, session.eindeOpKaart);
   if (!regel) return;
   el.innerHTML = regel;
+  if (kaartOpzij()) wijsNaarUitslag(regel.replace(/<[^>]*>/g, '').trim());
   telKaartGezegd(fid, id, session.eindeOpKaart);
 }
 /* met een weggehaalde vriend gaat ook de lijst van wat dit apparaat met hem telde */
@@ -6739,16 +6741,27 @@ function openingEnd() {
   if (top) { snd.win(); celebrate(); bumpWeek('top.opening', 1); } else snd.good();
   const pad = session.pad;
   if (pad && session.mode === 'pad') bump('c.pad.' + pad.id, 1);
+  /* de strook vraagt geen zet meer op een bord dat op slot zit; onder het bord gaan de hulp en het oordeel over de
+     laatste zet weg, anders past het vak met Uitslag niet, en het venster vat de les samen */
+  opdracht('Klaar! Zo staat het bord na de laatste zet.', '');
+  openingUitslag();
+}
+/* het venster na een les; Bekijk het bord legt het opzij, en Uitslag toont het opnieuw zonder iets nog eens te tellen */
+function openingUitslag() {
+  if (!session || session.kind !== 'opening') return;
+  const e = session.earned, max = session.maxMoves * 3, top = e >= Math.round(max * .8), pad = session.pad;
   const pr = principles(session.S, session.color);
   showModal('<div class="m-emoji">' + (top ? '🤩' : '📖') + '</div><h2>' + (pad ? 'Pad uitgespeeld!' : 'Opening klaar!') + '</h2>' +
     '<p>Je verdiende <b>' + e + '</b> van de ' + max + ' sterren.<br>' +
     (pad && session.mode === 'pad' ? 'Je kent de ' + pad.naam + ' nu al een stuk beter. Probeer hem in een potje!' :
       'Centrum ' + pr.centrum + '/12, ' + pr.dev + ' van je 4 lichte stukken naar buiten, koning ' + (session.castled ? 'veilig' : 'nog niet gerokeerd') + '.') + '</p>' +
     '<div class="m-btns"><button class="btn sun" id="opAgain">Nog een keer! 🔁</button>' +
+    '<button class="btn plain" id="opBord">👀 Bekijk het bord</button>' +
     '<button class="btn plain" id="opOther">📖 Iets anders kiezen</button>' +
     '<button class="btn plain" id="mHome">🏠 Naar huis</button></div>', () => {
       const mode = pad ? 'pad' : 'coach';
       $('opAgain').addEventListener('click', () => { closeModal(); startOpening(mode, pad); });
+      $('opBord').addEventListener('click', () => { closeModal(); setActions([{ label: 'Uitslag ▶', cls: 'sun', fn: openingUitslag, id: 'uitslag' }]); });
       $('opOther').addEventListener('click', () => { closeModal(); goHome(); openingChooser(); });
       $('mHome').addEventListener('click', goHome);
     });
@@ -8157,9 +8170,43 @@ function toonEindkaart(html, setup) {
   /* de kaart ligt op het bord; onder 400 px past de volle kaart daar niet in (de opmaak kan het bord niet meten) */
   k.classList.toggle('klein', $('board').getBoundingClientRect().height < 400);
   k.classList.remove('hidden');
+  k.style.display = '';
+  wijzer = null;
+  setActions([{ label: '👀 Bekijk het bord', cls: 'plain', fn: bekijkBord, id: 'bekijkBord' }]);
   if (setup) setup();
 }
-function sluitEindkaart() { $('eindkaart').classList.add('hidden'); $('eindkaart').innerHTML = ''; }
+/* Het bord zoals het eindigde: de kaart gaat opzij en Uitslag haalt hem terug. Niet met hidden, want daaraan ziet de code
+   dat er geen kaart is; een kaart die opzij ligt, krijgt zijn updates gewoon. */
+function bekijkBord() {
+  $('eindkaart').style.display = 'none';
+  setActions([{ label: 'Uitslag ▶', cls: 'sun', fn: toonUitslag, id: 'uitslag' }]);
+}
+function toonUitslag() {
+  $('eindkaart').style.display = '';
+  setActions([{ label: '👀 Bekijk het bord', cls: 'plain', fn: bekijkBord, id: 'bekijkBord' }]);
+  wijzerWeg();
+}
+/* wat op een kaart komt die opzij ligt, zegt de strook, anders ziet het kind het niet */
+function kaartOpzij() { const k = $('eindkaart'); return !!k && !k.classList.contains('hidden') && k.style.display === 'none'; }
+let wijzer = null; /* {voor, tekst}: wat de strook zei voor de wijzer naar Uitslag, en de wijzer zelf */
+function wijsNaarUitslag(zin) {
+  const tekst = zin + (/[A-Za-z0-9]$/.test(zin) ? '.' : '') + ' Kijk bij Uitslag.';
+  wijzer = { voor: wijzer ? wijzer.voor : $('bubble').innerHTML, tekst };
+  say(tekst);
+}
+function wijzerWeg() {
+  /* alleen als de strook nog de wijzer zegt: een nieuwere zin blijft staan */
+  if (wijzer && $('bubble').innerHTML === wijzer.tekst) say(wijzer.voor);
+  wijzer = null;
+}
+function sluitEindkaart() {
+  const k = $('eindkaart');
+  k.classList.add('hidden');
+  k.style.display = '';
+  k.innerHTML = '';
+  wijzer = null;
+  if (actionBtns.bekijkBord || actionBtns.uitslag) setActions([]);
+}
 
 /* verdiende trofeeën eerst; een tegel op slot zegt wat hij vraagt, een tik vertelt het hele verhaal */
 function renderBadges() {

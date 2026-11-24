@@ -3734,6 +3734,23 @@ async function orakelTwee() {
     check('en de snelle blik staat weer aan', daan.get('!!snelKijkKlok'));
   });
 
+  await regel('[2.9] een eindkaart tussen vrienden die opzij ligt, krijgt de vraag om vrienden te worden, en Uitslag toont hem', async function (check) {
+    const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
+    await samenSpelen(daan, fien);
+    await geefOp(aanZet(daan, fien));
+    check('testopzet: allebei een kaart met Bekijk het bord', zichtbaar(daan, 'eindkaart') && kanTikken(daan, 'Bekijk het bord') && kanTikken(fien, 'Vrienden worden'));
+    tikTekst(daan, 'Bekijk het bord');
+    await wacht();
+    check('testopzet: Daan kijkt naar het bord', !zichtbaar(daan, 'eindkaart') && kanTikken(daan, 'Uitslag') && !daan.open());
+    tikTekst(fien, 'Vrienden worden');
+    await wacht();
+    check('geen venster over het bord van Daan', !daan.open() && !zichtbaar(daan, 'eindkaart'));
+    check('de strook zegt het', /Fien wil vrienden worden! Kijk bij Uitslag\./.test(tekstVan(daan, 'bubble')));
+    tikTekst(daan, 'Uitslag');
+    await wacht();
+    check('de kaart is terug, met de vraag van Fien', zichtbaar(daan, 'eindkaart') && kanTikken(daan, 'Ja, vrienden!'));
+  });
+
   await regel('[4.7] beide verbonden kaarten zeggen wie het potje start', async function (check) {
     const daan = maakApparaat('Daan'), fien = maakApparaat('Fien');
     await daan.ev('mpHostQR()');

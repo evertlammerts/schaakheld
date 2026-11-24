@@ -3106,6 +3106,7 @@ async function orakelTwee6() {
     check('testopzet: het potje loopt door met de zet van de telefoon', ((await busZegt(mees, fid)) || {}).zetten === 3);
     check('de tablet: geen eindkaart, het bord met de zet van de telefoon', !zichtbaar(tab, 'eindkaart') && opSpeelscherm(tab) &&
       tab.get('session.S.hist.length') === 3 && !tab.get('session.over'));
+    check('en geen Bekijk het bord of Uitslag onder een potje dat doorloopt', !kanTikken(tab, 'Bekijk het bord') && !kanTikken(tab, 'Uitslag'));
     check('de strook zegt waarom', tekstVan(tab, 'bubble').indexOf('Je speelde al verder op je andere apparaat, dus het potje gaat door.') >= 0);
   });
 

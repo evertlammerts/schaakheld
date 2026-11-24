@@ -29,7 +29,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '5.5', '5.6', '5.11', '6.3', '6.4', '6.5', '6.8', '6.9', 'V2', 'V9']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '2.9', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '5.5', '5.6', '5.11', '6.3', '6.4', '6.5', '6.8', '6.9', 'V2', 'V9']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -987,6 +987,51 @@ for (const [W, H] of [[375, 553], [360, 640], [375, 647]]) {
       }` });
 }
 
+/* het bord bekijken na het einde: de knop onder het bord past zonder dat het scherm scrolt, met de kaart opzij staat het
+   hele bord op zijn plek met Uitslag eronder, en het venster na een openingsles past met zijn vier knoppen */
+for (const [W, H] of KLEIN) {
+  const n = '[2.9] ' + W + 'x' + H + ': na het einde passen Bekijk het bord en Uitslag onder het bord, het bord staat heel in beeld, en het venster na een les past';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      await startPotje();
+      const voor = await rect('#board');
+      await page.evaluate(() => endGame({ over: true, result: 'w', reason: 'mat' }));
+      await page.waitForTimeout(1600);
+      const knop = tekst => page.evaluate(t => { const b = [...document.querySelectorAll('#actionRow .btn')].find(x => x.textContent.includes(t));
+        if (!b || !b.getClientRects().length) return null;
+        const r = b.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height }; }, tekst);
+      const scrolt = () => page.evaluate(() => { const p = document.getElementById('play');
+        return p.scrollHeight > p.clientHeight + 0.5 || document.scrollingElement.scrollHeight > innerHeight + 0.5; });
+      await foto('2.9-${W}x${H}-kaart');
+      const bk = await knop('Bekijk het bord');
+      check(n, 'Bekijk het bord onder het bord, in beeld en minstens 44 hoog', !!bk && binnen(bk, ${W}, ${H}) && bk.h >= 44);
+      check(n, 'met de kaart scrolt er niets', !(await scrolt()));
+      await page.evaluate(() => bekijkBord());
+      await page.waitForTimeout(100);
+      await foto('2.9-${W}x${H}-bord');
+      check(n, 'de kaart ligt opzij', await page.evaluate(() => !document.getElementById('eindkaart').getClientRects().length));
+      const bord = await rect('#board'), ui = await knop('Uitslag');
+      check(n, 'het hele bord in beeld en op zijn plek', binnen(bord, ${W}, ${H}) && gelijk(voor, bord));
+      check(n, 'Uitslag in beeld en minstens 44 hoog', !!ui && binnen(ui, ${W}, ${H}) && ui.h >= 44);
+      check(n, 'met het bord scrolt er niets', !(await scrolt()));
+      await page.evaluate(() => { goHome(); startOpening('coach'); });
+      await page.waitForTimeout(300);
+      await page.evaluate(() => openingEnd());
+      await page.waitForTimeout(600);
+      await foto('2.9-${W}x${H}-les');
+      const v = await page.evaluate(() => [...document.querySelectorAll('#modalBox .m-btns .btn')].map(b => { const r = b.getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height }; }));
+      check(n, 'het venster na een les: vier knoppen, allemaal in beeld en minstens 44 hoog', v.length === 4 && v.every(x => binnen(x, ${W}, ${H}) && x.h >= 44));
+      await page.evaluate(() => document.getElementById('opBord').click());
+      await page.waitForTimeout(200);
+      await foto('2.9-${W}x${H}-lesbord');
+      const onder = await page.evaluate(() => { const o = document.getElementById('onder'); return o.scrollHeight <= o.clientHeight + 0.5; });
+      const ui2 = await knop('Uitslag'), bord2 = await rect('#board');
+      check(n, 'na de les met het venster opzij: het bord heel in beeld, Uitslag in beeld, en niets scrolt', binnen(bord2, ${W}, ${H}) &&
+        !!ui2 && binnen(ui2, ${W}, ${H}) && onder && !(await scrolt()));` });
+}
+
 /* het speelscherm van een oefening is precies zo hoog als het venster, en het vak onder het bord past precies om
    een uitleg van drie regels met de knoppen eronder (op een kort scherm is dat vak 120 hoog) */
 for (const [W, H] of KLEIN) {
@@ -1656,6 +1701,12 @@ function main() {
   const start = spawnSync('sh', [DEV, 'start', ROOT, String(POORT)], { encoding: 'utf8' });
   if (start.status !== 0) {
     console.log('FAIL layout: tools/dev.sh start op poort ' + POORT + ' lukte niet\n' + start.stdout + start.stderr);
+    process.exit(1);
+  }
+  /* elke run begint met een lege server: een staat van een eerdere run is ouder dan wat een regel klaarzet, en wint dan */
+  const leeg = spawnSync('sh', [DEV, 'reset', String(POORT)], { encoding: 'utf8' });
+  if (leeg.status !== 0) {
+    console.log('FAIL layout: tools/dev.sh reset op poort ' + POORT + ' lukte niet\n' + leeg.stdout + leeg.stderr);
     process.exit(1);
   }
   try {

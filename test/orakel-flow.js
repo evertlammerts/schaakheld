@@ -1408,6 +1408,64 @@ async function orakelFlow() {
     }));
   });
 
+  await regel('[2.9] na het einde kan het kind het bord bekijken zoals het eindigde, en Uitslag haalt de kaart terug', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
+    a.tik('verderKaart');
+    await wacht();
+    await zetEnWacht(a, 'd1h5');
+    check('testopzet: de kaart ligt over het bord', zichtbaar(a, 'eindkaart') && /Gewonnen!/.test(tekstVan(a, 'eindkaart')));
+    check('onder het bord: Bekijk het bord', kanTikken(a, 'Bekijk het bord'));
+    tikTekst(a, 'Bekijk het bord');
+    await wacht();
+    check('de kaart ligt opzij en het bord is te zien', !zichtbaar(a, 'eindkaart') && zichtbaar(a, 'board') && !kanTikken(a, 'Revanche!'));
+    check('Uitslag staat onder het bord', kanTikken(a, 'Uitslag'));
+    tikTekst(a, 'Uitslag');
+    await wacht();
+    check('de kaart is terug, met Revanche! en Bekijk het bord', zichtbaar(a, 'eindkaart') && kanTikken(a, 'Revanche!') && kanTikken(a, 'Bekijk het bord'));
+    tikTekst(a, 'Revanche!');
+    await wacht();
+    check('Revanche! werkt nog, en de knoppen van het einde zijn weg', !zichtbaar(a, 'eindkaart') && opSpeelscherm(a) && !kanTikken(a, 'Bekijk het bord') && !kanTikken(a, 'Uitslag'));
+  });
+
+  await regel('[2.9] een wijzer naar Uitslag in de strook is een hele zin, en wat de strook ervoor zei komt terug met de kaart', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
+    a.tik('verderKaart');
+    await wacht();
+    await zetEnWacht(a, 'd1h5');
+    tikTekst(a, 'Bekijk het bord');
+    await wacht();
+    const voor = tekstVan(a, 'bubble');
+    a.ev("wijsNaarUitslag('+30\\u00a0XP')");
+    check('een punt na de XP', /^\+30\s+XP\. Kijk bij Uitslag\.$/.test(tekstVan(a, 'bubble')));
+    a.ev("wijsNaarUitslag('Fien wil vrienden worden!')");
+    check('geen tweede punt na een uitroepteken', tekstVan(a, 'bubble') === 'Fien wil vrienden worden! Kijk bij Uitslag.');
+    tikTekst(a, 'Uitslag');
+    await wacht();
+    check('met de kaart komt de zin van daarvoor terug', zichtbaar(a, 'eindkaart') && tekstVan(a, 'bubble') === voor && voor.length > 0);
+  });
+
+  await regel('[2.9] na een openingsles kan het kind het bord bekijken, en Uitslag toont het venster opnieuw zonder iets nog eens te tellen', async function (check) {
+    const a = nieuwKind();
+    a.ev('bump("xp", 140)');
+    await startOefening(a, 'opening');
+    const pad = a.el('modalBox').querySelectorAll('[data-pad]')[0];
+    if (pad) tikEl(a, pad, 'een openingspad');
+    await wacht();
+    a.ev('openingEnd()');
+    await wacht();
+    const voor = a.get('JSON.stringify(DOC.cnt)');
+    const venster = function () { return a.open() && /Pad uitgespeeld!|Opening klaar!/.test(a.scherm()); };
+    check('testopzet: het venster na de les', venster() && kanTikken(a, 'Bekijk het bord'));
+    tikTekst(a, 'Bekijk het bord');
+    await wacht();
+    check('het bord, zonder venster, met Uitslag eronder', !a.open() && zichtbaar(a, 'board') && kanTikken(a, 'Uitslag'));
+    check('de strook vraagt geen zet meer', /Klaar! Zo staat het bord na de laatste zet\./.test(tekstVan(a, 'bubble')));
+    tikTekst(a, 'Uitslag');
+    await wacht();
+    check('het venster is terug', venster() && kanTikken(a, 'Nog een keer!'));
+    check('niets twee keer geteld', a.get('JSON.stringify(DOC.cnt)') === voor);
+  });
+
   await regel('[2.5] na het einde zegt het scherm niet meer dat het potje loopt: geen ✔ bewaard en geen hulpjes', async function (check) {
     const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'f7f6', 'd2d4', 'g7g5']) });
     a.tik('verderKaart');
