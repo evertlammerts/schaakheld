@@ -439,7 +439,7 @@ async function orakelFlow6() {
     check('op je eigen beurt', tekstVan(a, 'bubble').indexOf('Doe gerust je zet. Fien ziet hem zodra Fien het potje opent.') >= 0 && !/is er nu niet/.test(tekstVan(a, 'bubble')));
     zet(a, 'g1f3');
     await wacht(5000);
-    check('na je zet', tekstVan(a, 'bubble').indexOf('Je zet is bewaard. Fien ziet hem zodra Fien het potje opent.') >= 0 && !/is er nu niet/.test(tekstVan(a, 'bubble')));
+    check('na je zet', tekstVan(a, 'bubble').indexOf('Je zet is bewaard. Nu Fien… 💭') >= 0 && !/is er nu niet/.test(tekstVan(a, 'bubble')));
     check('✔ bewaard in de balk', zichtbaar(a, 'bewaard') && /✔ bewaard/.test(tekstVan(a, 'bewaard')));
     check('geen einde en geen teller veranderd', !a.get('session.over') && !/gestopt|telt voor niemand/.test(a.scherm()) && tellers(a) === voor);
   });

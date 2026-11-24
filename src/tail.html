@@ -3230,16 +3230,17 @@ function zinOpenen() {
 /* een zet zonder verbinding: hij staat hier, en de staat krijgt hem zodra er weer verbinding is */
 function zinBodZonderNet() { return 'Je remise-aanbod is bewaard. Heb je weer verbinding, dan gaat het naar ' + mpNaam() + '.'; }
 function zinZonderNet() { return 'Je zet is bewaard op ' + ditApparaat() + '. Heb je weer verbinding, dan gaat hij naar ' + mpNaam() + '.'; }
-/* in een potje op de staat weet het apparaat alleen dat de vriend niet in dit potje is: de strook zegt wat er met de zet
-   gebeurt, op de eigen beurt en daarna */
+/* In een potje op de staat ziet het apparaat alleen dat de lijn van de vriend weg is, en de telefoon van de vriend verliest
+   die ook als hij op slot gaat. Na een zet zegt de strook daarom alleen wie aan zet is. Op de eigen beurt zegt hij dat het
+   kind gerust kan zetten: een kind dat alleen in een potje over dagen zit, moet dat weten. */
 function zinWeg() {
-  const naam = mpNaam(), straks = naam + ' ziet hem zodra ' + naam + ' het potje opent.';
+  const naam = mpNaam();
   if (!potjeOpStaat()) {
     return MP.S.turn === MP.myColor ? 'Jij bent aan zet! 💭' : MP.S.hist.length ? 'Je zet staat klaar. Het potje begint als ' + naam + ' meedoet.' :
       naam + ' is aan zet… ⏳';
   }
-  if (MP.S.turn === MP.myColor) return 'Doe gerust je zet. ' + straks;
-  return MP.S.hist.length ? 'Je zet is bewaard. ' + straks : naam + ' is aan zet… ⏳';
+  if (MP.S.turn === MP.myColor) return 'Doe gerust je zet. ' + naam + ' ziet hem zodra ' + naam + ' het potje opent.';
+  return MP.S.hist.length ? 'Je zet is bewaard. Nu ' + naam + '… 💭' : naam + ' is aan zet… ⏳';
 }
 /* een potje met een vriend gaat door als de kamer weg is: dan via de staat van het paar */
 function vriendZonderKamer() {

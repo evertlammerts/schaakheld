@@ -3368,7 +3368,26 @@ async function orakelTwee6() {
 
   /* de strook in een potje op de staat: wat er met de zet gebeurt, nooit waar de vriend is */
   const STRAKS = function (naam) { return 'Doe gerust je zet. ' + naam + ' ziet hem zodra ' + naam + ' het potje opent.'; };
-  const BEWAARD = function (naam) { return 'Je zet is bewaard. ' + naam + ' ziet hem zodra ' + naam + ' het potje opent.'; };
+  const BEWAARD = function (naam) { return 'Je zet is bewaard. Nu ' + naam + '… 💭'; };
+
+  await regel('[6.5] de telefoon van Fien gaat op slot terwijl zij aan zet is: de strook van Mees zegt dat zijn zet bewaard is en wie aan zet is, niet dat Fien het potje niet open heeft, en Fien speelt gewoon verder', async function (check) {
+    zetDatum('2026-11-16T10:00:00');
+    const mees = maakApparaat('Mees'), fien = maakApparaat('Fien');
+    await vriendenpotje(mees, fien);
+    await potjeTot(mees, fien, 4, mees);
+    await zetUit(RUSTIG, mees);
+    check('testopzet: Fien is in het potje en aan zet', magZetten(fien) && /Nu Fien… 💭/.test(zegt(mees)) && !/bewaard/.test(zegt(mees)));
+    geenNetwerk(fien);
+    await tijd(5000);
+    check('testopzet: de kamer zei Mees dat de lijn van Fien weg is', mees.get('MP.peerOn') === false);
+    check('de strook van Mees', zegt(mees).indexOf(BEWAARD('Fien')) >= 0 && !/het potje opent|is er nu niet/.test(zegt(mees)));
+    weerNetwerk(fien);
+    await tijd(20000);
+    const n = mees.get('session.S.hist.length');
+    await zetUit(RUSTIG, fien);
+    await tijd(10000);
+    check('Fien zet en Mees ziet de zet', mees.get('session.S.hist.length') === n + 1 && magZetten(mees));
+  });
 
   await regel('[6.5] Mees zette en staat met de app open thuis: Fien opent het potje en leest wat er met haar zet gebeurt, niet dat Mees er niet is', async function (check) {
     zetDatum('2026-11-16T10:00:00');
