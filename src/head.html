@@ -610,9 +610,21 @@
   }
   .tegen-naam { max-width: 100%; font-family: var(--font-display); font-weight: 700; font-size: 17px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tegen-sub { max-width: 100%; font-size: 13px; color: var(--text-quiet); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tegen-sub .hidden { display: none; }
-  .tegen-sub > span:not(:empty):not(.hidden) ~ span:not(:empty):not(.hidden)::before { content: ' · '; }
+  .tegen-sub { display: flex; align-items: center; max-width: 100%; font-size: 13px; color: var(--text-quiet); white-space: nowrap; overflow: hidden; }
+  .tegen-sub > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .tegen-sub .hidden, .tegen-sub > span:empty { display: none; }
+  .tegen-sub > .bewaard { flex: none; }
+  /* pre: in een flexregel valt een spatie aan het begin van een stuk anders weg */
+  .tegen-sub > span:not(:empty):not(.hidden) ~ span:not(:empty):not(.hidden)::before { content: ' · '; white-space: pre; }
+  /* het hele blok is de knop; aan het puntenverschil als knopje ziet een kind dat er iets opengaat. Wordt het te lang,
+     dan wijkt alleen de naam, die voluit in de regel erboven staat */
+  .tegen-sub #verschil.knopje { display: flex; align-items: center; gap: .3em; padding: 1px 7px; border-radius: var(--r-pill);
+    background: var(--sun-soft); box-shadow: inset 0 0 0 1px var(--sun); color: var(--ink); font-weight: 700; }
+  .tegen-sub #verschil.knopje > span { flex: none; }
+  .tegen-sub #verschil.knopje > .kn-wie { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .tegen-sub #verschil.knopje::before { content: none; }
+  .tegen-sub #verschil.knopje::after { content: '›'; }
+  .tegen-sub > span:not(:empty):not(.hidden) ~ #verschil.knopje { margin-left: 6px; }
   .meer-btn {
     flex: none; width: 44px; height: 44px; border: 1.5px solid rgba(23, 69, 111, .25); border-radius: 50%;
     background: var(--surface); font-size: 20px; font-weight: 700; cursor: pointer;

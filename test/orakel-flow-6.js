@@ -250,6 +250,17 @@ async function orakelFlow6() {
     check('Ook nog een potje, een uitdaging en je rondje', JSON.stringify(ookNogRegels(b)) === JSON.stringify(['Ook nog een potje, een uitdaging en je rondje']));
   });
 
+  /* het woord opent geen blad over het aanbod, dus het ziet er niet uit als een knopje */
+  await regel('[2.3] met het eigen remise-aanbod staat in de balk geen knopje, ook als er een verschil in punten is', async function (check) {
+    const a = await kind(opslagMetPotjes([fien], [{ gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien',
+      moves: ['e2e4', 'd7d5', 'e4d5', 'g8f6', 'b1c3'], offer: { by: 'w', ply: 5, answer: null, t: Date.now() - UUR } }]));
+    a.tik('verderKaart');
+    await wacht();
+    check('testopzet: Mees staat een pion voor', a.get('session.verschil') === 1);
+    check('de balk zegt het aanbod', /½ aangeboden/.test(tekstVan(a, 'verschil')));
+    check('geen knopje', !a.get('$("verschil").classList.contains("knopje")'));
+  });
+
   await regel('[6.6] een potje met het eigen aanbod openen: de strook zegt het aanbod met de dag, en de balk "✔ bewaard · ½ aangeboden"', async function (check) {
     zetDatum('2026-11-14T10:00:00');
     const a = await kind(opslagMetPotjes([fien], [{ gameId: 'potjevanfien1', fid: 'vriendfien1', peerName: 'Fien',

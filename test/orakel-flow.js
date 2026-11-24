@@ -1240,6 +1240,7 @@ async function orakelFlow() {
       a.tik('verderKaart');
       await wacht();
       check('de balk zegt het', zichtbaar(a, 'materiaal') && geval[2].test(tekstVan(a, 'materiaal')));
+      check('het verschil is een knopje', a.get('$("verschil").classList.contains("knopje")'));
       a.tik('materiaal');
       await wacht();
       check('tikken laat de geslagen stukken zien, met wat het verschil betekent', a.open() && geval[3].test(a.scherm()));
@@ -1252,6 +1253,67 @@ async function orakelFlow() {
     await wacht();
     check('in een potje, met een plek voor het materiaal', opSpeelscherm(a) && 'materiaal' in a.els);
     check('verborgen bij gelijk', !zichtbaar(a, 'materiaal') || !/\+\d/.test(tekstVan(a, 'materiaal')));
+    check('en geen knopje', !a.get('$("verschil").classList.contains("knopje")'));
+  });
+
+  /* het potje met Sem is de verbinding (de kamer blijkt weg), dus het einde met Fien opent zonder verbinding */
+  await regel('[2.3] het einde van een potje met een ander kind dat afliep terwijl Mees weg was: het knopje en het blad noemen het kind bij naam', async function (check) {
+    const o = maakOpslag(), potje = (id, naam, zetten, uitslag) => ({ gameId: id, room: 'kamer' + id, seat: 'stoel' + id, host: true, myColor: 'w',
+      gameNo: 1, moves: zetten, peerName: naam, fid: null, result: uitslag, offer: null, shown: false, updated: 1794700000000 });
+    o.setItem('schaakheld-samen', JSON.stringify({ v: 1, games: {
+      potjeoud0001: potje('potjeoud0001', 'Fien', ['e2e4', 'd7d5', 'd2d3', 'd5e4'], { kind: 'opgave', by: 'w', ply: 4 }),
+      potjesem0001: potje('potjesem0001', 'Sem', ['e2e4'], null) } }));
+    const a = nieuwKind({ opslag: o });
+    await wacht();
+    check('testopzet: de kaart is het gestopte potje met Sem, en Ook nog het einde met Fien',
+      /Je potje met Sem is gestopt/.test(tekstVan(a, 'verder')) && /Ook nog: je potje met Fien/.test(tekstVan(a, 'verder')));
+    tikTekst(a, 'Ook nog');
+    await wacht();
+    check('testopzet: het einde van het potje met Fien', a.get('!!session && !!session.oud') && /Fien/.test(tekstVan(a, 'modeTitle')));
+    check('het knopje zegt Fien +1', /Fien \+1/.test(tekstVan(a, 'verschil')) && !/maatje/.test(tekstVan(a, 'verschil')));
+    a.tik('materiaal');
+    await wacht();
+    check('het blad zegt dat Fien voorstaat', /Fien staat 1 punt voor\./.test(a.scherm()));
+  });
+
+  /* in de denkwolk staat een droomkopie op het bord */
+  await regel('[2.3] in de denkwolk gaan het knopje en het blad over het echte potje, ook na een slag in de droom', async function (check) {
+    const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'd7d5', 'e4d5', 'g8f6']) });
+    a.tik('verderKaart');
+    await wacht();
+    tikTekst(a, 'Denkwolk');
+    await wacht();
+    zet(a, 'c2c4');
+    await wacht();
+    zet(a, 'f6d5');
+    await wacht();
+    check('testopzet: in de droom pakt Turbo de pion terug', a.get('!!session.cloud && session.S.hist.length === 2 && !!session.S.hist[1].cap'));
+    a.tik('materiaal');
+    await wacht();
+    check('het blad: jij staat 1 punt voor en pakte een pion', /Jij staat 1 punt voor\./.test(a.scherm()) && !/Jij pakte:\s*nog niks/.test(a.scherm()));
+    tikTekst(a, 'Oké');
+    await wacht();
+    check('het knopje zegt nog Jij +1', /Jij \+1/.test(tekstVan(a, 'verschil')));
+    tikTekst(a, 'Terug naar echt');
+    await wacht();
+    check('terug naar echt: Jij +1', /Jij \+1/.test(tekstVan(a, 'verschil')) && !a.get('session.cloud'));
+  });
+
+  /* het getal hoort bij het potje op het scherm; een tik erop doet in een oefening niets */
+  await regel('[2.3] een oefening of de openingsschool na een potje heeft geen puntenverschil in de balk', async function (check) {
+    for (const id of ['oefen-scan', 'oefen-opening']) {
+      const a = nieuwKind({ opslag: opslagMetPotje(1, ['e2e4', 'd7d5', 'e4d5', 'g8f6']) });
+      a.tik('verderKaart');
+      await wacht();
+      check('testopzet: in het potje Jij +1', /Jij \+1/.test(tekstVan(a, 'verschil')));
+      a.tik('backBtn');
+      await wacht();
+      a.tik(id);
+      await wacht();
+      if (id === 'oefen-opening') { a.tik('opCoach'); await wacht(); }
+      check(id + ': op het speelscherm, niet in een potje', opSpeelscherm(a) && a.get('session.kind') !== 'game');
+      check(id + ': geen verschil en geen knopje', !/\+\d/.test(tekstVan(a, 'materiaal')) && !a.get('$("verschil").classList.contains("knopje")'));
+    }
   });
 
   /* per soort opdracht de afgesproken vraag in de strook en de zin onder het bord */

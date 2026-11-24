@@ -29,7 +29,7 @@ const DOC = JSON.stringify({ v: 2, epoch: 0, cnt: {}, set: { badges: {} }, lww: 
 
 /* Regelnummers die gebouwd zijn: hun controles zijn gewone controles. Een
    regel bouwen = zijn nummer hier toevoegen, in dezelfde commit. */
-const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.4', '2.5', '2.6', '2.9', '2.10', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '5.5', '5.6', '5.11', '6.3', '6.4', '6.5', '6.8', '6.9', 'V2', 'V9']);
+const GEBOUWD = new Set(['1.8', '1.13', '1.14', '2.1', '2.2', '2.3', '2.4', '2.5', '2.6', '2.9', '2.10', '3.3', '3.4', '3.5', '3.11', '4.5', '4.7', '4.8', '4.12', '5.5', '5.6', '5.11', '6.3', '6.4', '6.5', '6.8', '6.9', 'V2', 'V9']);
 
 /* het oordeel over een controle: wat nog niet gebouwd is moet falen */
 function oordeel(regel, fouten, gebouwd) {
@@ -743,9 +743,19 @@ for (const [W, H] of KLEIN) {
       await page.evaluate(() => { session.task.targets.forEach(sq => BD.marks.add(sq)); });
       await klikTekst(/Klaar/);
       await page.waitForTimeout(500);
-      const k = await page.evaluate(() => { const e = document.querySelector('.tegen-sub'); return { sw: e.scrollWidth, cw: e.clientWidth, t: e.innerText }; });
-      check(n, 'testopzet: bewaard staat erin', /bewaard/.test(k.t));
-      check(n, 'niet afgeknipt', k.sw <= k.cw + 1);`
+      /* elk deel van de regel kort zichzelf in met "…", dus afgeknipt meet je per deel; de " · " ervoor houdt zijn spaties */
+      const k = await page.evaluate(() => { const e = document.querySelector('.tegen-sub');
+        const delen = [...e.children].filter(c => c.getClientRects().length && c.textContent);
+        const tekst = el => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect(); };
+        const ref = document.createElement('span'), cs = getComputedStyle(e);
+        ref.style.cssText = 'position: fixed; left: 0; top: 0; white-space: pre; font-family: ' + cs.fontFamily + '; font-size: ' + cs.fontSize;
+        ref.textContent = ' · '; document.body.appendChild(ref); const punt = ref.getBoundingClientRect().width; ref.remove();
+        return { t: e.innerText, delen: delen.length, heel: delen.every(c => c.scrollWidth <= c.clientWidth + 1),
+          gaten: delen.slice(1).map((c, i) => tekst(c).left - tekst(delen[i]).right), punt }; });
+      check(n, 'testopzet: bewaard staat erin, met 1 van 5 en de sterren', /bewaard/.test(k.t) && k.delen === 3);
+      check(n, 'niet afgeknipt', k.heel);
+      check(n, 'tussen de delen " · " met een spatie aan beide kanten (' + k.gaten.map(Math.round) + ' voor ' + Math.round(k.punt) + ')',
+        k.gaten.length === 2 && k.gaten.every(g => g >= k.punt - 1));`
   });
 }
 
@@ -1600,6 +1610,48 @@ const LANG = 'Maximiliaantje', MAXI = 'vriendmaxi01';
 const metPaar = (stand, staat, extra) => Object.assign({ schaakheld1: profielMet(stand, [[MAXI, LANG]]),
   'schaakheld-paar': JSON.stringify(staat ? { [MAXI]: staat } : {}) }, extra || {});
 const AF_MATEN = [[360, 640], [375, 553], [768, 1004]];
+
+/* het puntenverschil in de balk ziet eruit als een knopje, want een tik erop laat de geslagen stukken zien; met
+   de langste naam van een vriend en "✔ bewaard" ervoor staat het knopje nog heel in de regel */
+const PIL = `(() => { const e = document.getElementById('verschil'); if (!e || !e.textContent || !e.getClientRects().length) return null;
+  const r = e.getBoundingClientRect(), s = e.parentElement.getBoundingClientRect(), cs = getComputedStyle(e);
+  return { tekst: e.textContent, na: getComputedStyle(e, '::after').content, bg: cs.backgroundColor, rond: parseFloat(cs.borderTopLeftRadius) || 0,
+    x: r.left + r.width / 2, y: r.top + r.height / 2, heel: e.scrollWidth <= e.clientWidth + 1,
+    inRegel: r.left >= s.left - 0.5 && r.right <= s.right + 0.5 && r.top >= s.top - 0.5 && r.bottom <= s.bottom + 0.5,
+    delen: [...e.children].map(c => ({ naam: c.classList.contains('kn-wie'), w: c.getBoundingClientRect().width, heel: c.scrollWidth <= c.clientWidth + 1 })) }; })()`;
+for (const [W, H] of [[360, 640], [375, 553], [390, 844], [768, 1004], [1024, 748]]) {
+  const n = '[2.3] ' + W + 'x' + H + ': het puntenverschil in de balk is een knopje met ›, heel in beeld ook met de langste naam, en een tik erop laat de geslagen stukken zien; het bord blijft staan';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      const pil = () => page.evaluate(${JSON.stringify(PIL)});
+      const knopje = p => !!p && !/^(transparent|rgba\\(0, 0, 0, 0\\))$/.test(p.bg) && p.rond >= 8 && /›/.test(p.na);
+      /* het stukje en het getal blijven heel; de naam mag korter, maar er blijven een paar letters van over */
+      const delenHeel = (p, naamMagKorter) => !!p && p.delen.length === 3 && p.delen.every(d => (d.naam && naamMagKorter) ? d.w > 20 : (d.w > 0 && d.heel));
+      const potje = zetten => ({ 'schaakheld-potje': JSON.stringify({ v: 2, games: { 1: { level: 1, moves: zetten, tips: 3, drawAsked: null, started: 1, updated: 1, patXP: 0 } } }) });
+      await vers(${W}, ${H}, potje(['e2e4', 'e7e5']));
+      await klik('#verderKaart'); await page.waitForTimeout(800);
+      const bord = await rect('#board'), balk = await rect('.play-bar');
+      check(n, 'bij gelijke stand geen knopje', !(await pil()));
+      await vers(${W}, ${H}, potje(['e2e4', 'd7d5', 'e4d5', 'g8f6']));
+      await klik('#verderKaart'); await page.waitForTimeout(800);
+      const p = await pil();
+      check(n, 'Jij +1 is een knopje met › (' + JSON.stringify(p) + ')', knopje(p) && /♟ Jij \\+1/.test(p.tekst));
+      check(n, 'het knopje staat heel in de regel, en niets erin is afgeknipt', !!p && p.inRegel && p.heel && delenHeel(p, false));
+      check(n, 'het bord en de balk staan waar ze stonden', gelijk(bord, await rect('#board')) && gelijk(balk, await rect('.play-bar')));
+      if (p) await page.mouse.click(p.x, p.y);
+      await page.waitForTimeout(400);
+      check(n, 'een tik op het knopje laat de geslagen stukken zien', /Jij pakte:/.test(await page.evaluate(() => document.getElementById('modalBox').textContent)));
+      await klik('#matOk');
+      await vers(${W}, ${H}, ${JSON.stringify(metPaar('knopje', paarStaat('potjemaxi001', { zetten: ['e2e4', 'e7e5', 'd1h5', 'b8c6', 'h5f7', 'e8f7'] })))});
+      await klik('#verderKaart'); await page.waitForTimeout(1500);
+      const v = await pil(), bewaard = await page.evaluate(() => { const b = document.getElementById('bewaard');
+        return { te_zien: b.getClientRects().length > 0, heel: b.scrollWidth <= b.clientWidth + 1 }; });
+      check(n, 'testopzet: het potje met ${LANG} staat bewaard', bewaard.te_zien);
+      check(n, '✔ bewaard staat heel naast het knopje', bewaard.heel);
+      check(n, '${LANG} +8 is een knopje met › dat heel in de regel staat (' + JSON.stringify(v) + ')', knopje(v) && /♟ ${LANG} \\+8/.test(v.tekst) && v.inRegel && v.heel);
+      check(n, 'met ${LANG}: het stukje en +8 heel, en van de naam een paar letters', delenHeel(v, true));
+      await foto('knopje-${W}x${H}');` });
+}
 /* het vak van de strook: past de zin, zonder scrollen, en in hoeveel regels */
 const STROOK = `(() => { const st = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble');
   const lh = parseFloat(getComputedStyle(b).lineHeight) || 20;

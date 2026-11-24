@@ -1243,7 +1243,6 @@ function toonSamenScherm(S = MP.S, kleur = MP.myColor, naam = mpNaam()) {
   $('drillStars').classList.add('hidden');
   $('patience').classList.add('hidden');
   strookModus(null);
-  updateTrays();
   setActions([]);
 }
 /* Het einde van een eerder vriendenpotje dat dit kind nog niet zag. Het hoort niet bij de verbinding van
@@ -4622,6 +4621,7 @@ function showScreen(name) {
   if (name === 'play') {
     $('backBtn').textContent = '‹ Pauze';
     $('bewaard').classList.add('hidden');
+    updateTrays();
   }
 }
 
@@ -6822,7 +6822,6 @@ function startGame(level, bewaard) {
   $('drillStars').classList.add('hidden');
   $('patience').classList.remove('hidden');
   strookModus(null);
-  updateTrays();
   gameActions();
   nieuweStand(session.S);
   renderBoard();
@@ -7637,8 +7636,10 @@ function useTip() {
 
 const PTS = { p: 1, n: 3, b: 3, r: 5, q: 9 };
 function updateTrays() {
-  if (!session || session.kind !== 'game') return;
-  const S = session.S;
+  const v = $('verschil');
+  if (!session || session.kind !== 'game') { v.textContent = ''; v.classList.remove('knopje'); return; }
+  /* in de denkwolk staat een droomkopie op het bord; de balk en het blad gaan over het echte potje */
+  const S = session.cloud ? session.cloud.realS : session.S;
   /* online kan het kind ook zwart zijn; "jij" is dan wie zwart pakt */
   const mijnWit = !session.online || session.myColor === 'w';
   let kid = '', tur = '', dk = 0, dt = 0;
@@ -7658,8 +7659,10 @@ function updateTrays() {
   }
   session.verschil = mat;
   /* zolang het eigen remise-aanbod aan een vriend staat, zegt de balk dat in plaats van het materiaal */
-  $('verschil').textContent = eigenBodStaat() ? '½ aangeboden' :
-    mat > 0 ? '♟ Jij +' + mat : mat < 0 ? '♟ ' + tegenNaam() + ' +' + (-mat) : '';
+  const bod = eigenBodStaat(), knopje = !bod && mat !== 0;
+  v.classList.toggle('knopje', knopje);
+  if (knopje) v.innerHTML = '<span>♟</span> <span class="kn-wie">' + escHtml(mat > 0 ? 'Jij' : tegenNaam()) + '</span> <span>+' + Math.abs(mat) + '</span>';
+  else v.textContent = bod ? '½ aangeboden' : '';
 }
 function eigenBodStaat() { return samenInBeeld() && vriendZonderKamer() && aanbodOpen() && MP.offer.by === MP.myColor && !MP.offer.answer; }
 /* Een remise-aanbod aan een vriend staat veertien dagen. Het kind leest de laatste hele dag waarop de vriend nog
@@ -7673,7 +7676,9 @@ function zinEigenBod() {
   const naam = mpNaam();
   return 'Je biedt ' + naam + ' remise aan. Doet ' + naam + ' tot en met ' + antwoordDag(MP.offer.t || Date.now()) + ' geen zet, dan is het remise.';
 }
-function tegenNaam() { return session && session.online ? mpNaam() : 'Turbo'; }
+/* bij een potje met een ander kind dat afliep terwijl dit kind weg was, hoort MP niet (er is er geen, of hij hoort bij
+   een ander potje): de naam staat bij het potje */
+function tegenNaam() { return !session || !session.online ? 'Turbo' : session.oud ? session.oud.naam : mpNaam(); }
 function punten(n) { return n + (n === 1 ? ' punt' : ' punten'); }
 /* het blad met geslagen stukken: wat het getal in de balk betekent */
 function openMateriaal() {

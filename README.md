@@ -36,6 +36,8 @@ Turbo zegt of wat de opdracht vraagt, daaronder het hele bord, en onder het
 bord de uitleg en de knoppen. Niets schuift boven het bord en de pagina
 scrolt niet, ook niet op een kleine telefoon. Remise aanbieden, opgeven en
 de puntenwijzer (pion 1, paard 3, loper 3, toren 5, dame 9) staan onder ⋯.
+In een potje staat in de balk wie er in punten voorstaat, als een knopje
+("♟ Jij +3 ›"); een tik erop laat de geslagen stukken zien.
 
 Alles wat loopt blijft bewaard, na elke halve zet: een potje tegen Turbo
 (één per sterkte), een rondje oefenen (per oefening) en een potje met een
