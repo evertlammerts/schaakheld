@@ -1652,6 +1652,45 @@ for (const [W, H] of [[360, 640], [375, 553], [390, 844], [768, 1004], [1024, 74
       check(n, 'met ${LANG}: het stukje en +8 heel, en van de naam een paar letters', delenHeel(v, true));
       await foto('knopje-${W}x${H}');` });
 }
+/* het blad met de geslagen stukken na een potje met veel slagen: een potje dat elke halve zet slaat als dat kan, met
+   een vast zaad, zodat van elke kant bijna alles geslagen is. De rij Oké blijft onderaan het venster staan met een
+   zachte rand erboven; geen stuk mag daaronder vallen. */
+const VEEL_SLAGEN = `(() => { let z = 7; const r = n => { z = (z * 16807) % 2147483647; return z % n; };
+  const S = newGame(), uit = [], eindigt = m => { makeMove(S, m); const o = gameStatus(S).over; unmakeMove(S); return o; };
+  for (let i = 0; i < 160; i++) {
+    const ms = legalMoves(S).filter(m => !m.promo && !eindigt(m)); if (!ms.length) break;
+    const slagen = ms.filter(m => isCapture(S, m)), lijst = slagen.length ? slagen : ms, m = lijst[r(lijst.length)];
+    makeMove(S, m); uit.push(moveKey(m));
+  }
+  return uit; })()`;
+for (const [W, H] of [[375, 553], [360, 640], [390, 844], [768, 1004], [1024, 748]]) {
+  const n = '[2.3] ' + W + 'x' + H + ': het blad met de geslagen stukken na een potje met veel slagen: elk stuk heel, groot genoeg, boven de rij met Oké, zonder scrollen';
+  GEVALLEN.push({ regels: [n], code: `
+      const n = ${JSON.stringify(n)};
+      await vers(${W}, ${H});
+      const zetten = await page.evaluate(${JSON.stringify(VEEL_SLAGEN)});
+      await vers(${W}, ${H}, { 'schaakheld-potje': JSON.stringify({ v: 2, games: { 1: { level: 1, moves: zetten, tips: 3, drawAsked: null, started: 1, updated: 1, patXP: 0 } } }) });
+      await klik('#verderKaart'); await page.waitForTimeout(800);
+      await klik('#materiaal'); await page.waitForTimeout(600);
+      const b = await page.evaluate(() => { const box = document.getElementById('modalBox'), ov = document.getElementById('overlay');
+        /* het vak binnen de opvulling van het venster, en de zachte rand zo hoog als de opmaak hem maakt */
+        const m = box.getBoundingClientRect(), cs = getComputedStyle(box), rij = box.querySelector('.m-btns:last-child');
+        const links = m.left + parseFloat(cs.paddingLeft), rechts = m.right - parseFloat(cs.paddingRight);
+        const rand = parseFloat(getComputedStyle(rij, '::before').height) || 0, knoppen = rij.getBoundingClientRect();
+        const rijen = [...box.querySelectorAll('.tray-pcs')].map(t => t.querySelectorAll('.pc').length);
+        const stukken = [...box.querySelectorAll('.tray-pcs .pc')].map(p => { const r = p.getBoundingClientRect();
+          return { binnen: r.left >= links - 0.5 && r.right <= rechts + 0.5 && r.top >= m.top - 0.5, boven: r.bottom <= knoppen.top - rand + 0.5,
+            px: parseFloat(getComputedStyle(p).fontSize) }; });
+        return { rijen, stukken, rand, scrolt: ov.scrollHeight > ov.clientHeight + 1, ok: (() => { const r = document.getElementById('matOk').getBoundingClientRect();
+          return r.top >= 0 && r.bottom <= innerHeight + 0.5; })() }; });
+      check(n, 'testopzet: van elke kant minstens twaalf stukken geslagen (' + b.rijen + '), en de rij met Oké heeft een zachte rand (' + b.rand + ')',
+        b.rijen.length === 2 && b.rijen.every(x => x >= 12) && b.rand > 0);
+      check(n, 'elk stuk binnen de opvulling van het venster', b.stukken.every(s => s.binnen));
+      check(n, 'geen stuk onder de rij met Oké of de zachte rand erboven (' + b.stukken.filter(s => !s.boven).length + ' wel)', b.stukken.every(s => s.boven));
+      check(n, 'de stukken zijn minstens 24 px (' + (b.stukken[0] && b.stukken[0].px) + ')', b.stukken.length > 0 && b.stukken.every(s => s.px >= 24));
+      check(n, 'het venster past zonder scrollen, met Oké in beeld', !b.scrolt && b.ok);
+      await foto('blad-${W}x${H}');` });
+}
 /* het vak van de strook: past de zin, zonder scrollen, en in hoeveel regels */
 const STROOK = `(() => { const st = document.querySelector('#strook .s-txt'), b = document.getElementById('bubble');
   const lh = parseFloat(getComputedStyle(b).lineHeight) || 20;
